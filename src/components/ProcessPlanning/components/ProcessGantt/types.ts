@@ -1,0 +1,15 @@
+export interface ProcessItem {
+  id: number
+  title: string
+  start_date: string
+  end_date: string
+}
+
+export interface ProcessGanttProps {
+  dayZero: Date | number | null
+  totalDays: number
+  projectCode?: string
+  processes: ProcessItem[]
+  groupStartDate?: string
+  groupEndDate?: string
+}

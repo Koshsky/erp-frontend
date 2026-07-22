@@ -1,0 +1,11 @@
+.git
+.gitignore
+.env
+.env.example
+Dockerfile
+.dockerignore
+node_modules
+dist
+storybook-static
+README.md
+*.md
