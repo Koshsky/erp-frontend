@@ -1,17 +1,18 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { computed } from 'vue'
 import CalendarHeader from '../CalendarHeader/CalendarHeader.vue'
 import ProjectBar from './components/ProjectBar/ProjectBar.vue'
-import type { ProjectItem, PlanningPeriod } from './types'
+import type { DtoProject } from '@/api'
+import type { PlanningPeriod } from './types'
 
 const props = withDefaults(defineProps<{
-  projects?: ProjectItem[] | null
+  projects?: DtoProject[] | null
   period?: PlanningPeriod
 }>(), {
   period: 'quarter',
 })
 
-const projects = ref<ProjectItem[]>(props.projects || [])
+const projects = computed<DtoProject[]>(() => props.projects || [])
 
 // Длина (в днях) для каждого периода
 const PERIOD_DAYS: Record<PlanningPeriod, number> = {
@@ -24,6 +25,7 @@ const PERIOD_DAYS: Record<PlanningPeriod, number> = {
 const calendarStart = computed<Date>(() => {
   let min = Infinity
   for (const p of projects.value) {
+    if (!p.start_date) continue
     const ts = new Date(p.start_date).getTime()
     if (ts < min) min = ts
   }
@@ -62,15 +64,15 @@ const dayZero = computed<Date | null>(() => dayList.value.length ? dayList.value
 
         <template v-for="project in projects" :key="'proj'+project.id">
           <div class="c lc ph">
-            <span class="ph-code">{{ project.project_code }}</span>
+            <span class="ph-code">{{ project.project_code || '' }}</span>
           </div>
           <div class="bar-cell" style="gridColumn:2/-1">
             <ProjectBar
               :dayZero="dayZero!"
               :totalDays="dayList.length"
-              :startDate="project.start_date"
-              :endDate="project.end_date"
-              :projectCode="project.project_code"
+              :startDate="project.start_date || ''"
+              :endDate="project.end_date || ''"
+              :projectCode="project.project_code || ''"
             />
           </div>
         </template>
