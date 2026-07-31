@@ -6,6 +6,8 @@
   "scripts": {
     "storybook": "storybook dev -p 6006",
     "dev": "storybook dev -p 6006 --no-open",
+    "start": "vite --port 5173",
+    "stop": "kill \\$(lsof -ti tcp:5173)",
     "build": "vite build",
     "build-storybook": "storybook build",
     "check": "vue-tsc --noEmit",

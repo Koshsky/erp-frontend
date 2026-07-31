@@ -35,10 +35,6 @@ export interface AssignmentPost201Response {
     'data'?: DtoAssignmentResponse;
     'error'?: string;
 }
-export interface AuthChangePasswordPost200Response {
-    'data'?: DtoChangePasswordResponse;
-    'error'?: string;
-}
 export interface AuthLoginPost200Response {
     'data'?: DtoAuthResponse;
     'error'?: string;
@@ -324,6 +320,10 @@ export interface TaskGet200Response {
 }
 export interface TaskPost201Response {
     'data'?: DtoTaskResponse;
+    'error'?: string;
+}
+export interface UserChangePasswordPost200Response {
+    'data'?: DtoChangePasswordResponse;
     'error'?: string;
 }
 export interface UserGet200Response {
@@ -782,44 +782,6 @@ export class AssignmentsApi extends BaseAPI implements AssignmentsApiInterface {
 export const AuthApiAxiosParamCreator = function (configuration?: Configuration) {
     return {
         /**
-         * Change password (requires old password)
-         * @summary Change Password
-         * @param {DtoChangePasswordRequest} request Old and new password
-         * @param {*} [options] Override http request option.
-         * @throws {RequiredError}
-         */
-        authChangePasswordPost: async (request: DtoChangePasswordRequest, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
-            // verify required parameter 'request' is not null or undefined
-            assertParamExists('authChangePasswordPost', 'request', request)
-            const localVarPath = `/auth/change-password`;
-            // use dummy base URL string because the URL constructor only accepts absolute URLs.
-            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
-            let baseOptions;
-            if (configuration) {
-                baseOptions = configuration.baseOptions;
-            }
-
-            const localVarRequestOptions = { method: 'POST', ...baseOptions, ...options};
-            const localVarHeaderParameter = {} as any;
-            const localVarQueryParameter = {} as any;
-
-            // authentication ApiKeyAuth required
-            await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
-
-            localVarHeaderParameter['Content-Type'] = 'application/json';
-            localVarHeaderParameter['Accept'] = '*/*';
-
-            setSearchParams(localVarUrlObj, localVarQueryParameter);
-            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
-            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
-            localVarRequestOptions.data = serializeDataIfNeeded(request, localVarRequestOptions, configuration)
-
-            return {
-                url: toPathString(localVarUrlObj),
-                options: localVarRequestOptions,
-            };
-        },
-        /**
          * Authenticate user and return JWT token
          * @summary Login
          * @param {DtoLoginRequest} request Login credentials
@@ -934,19 +896,6 @@ export const AuthApiFp = function(configuration?: Configuration) {
     const localVarAxiosParamCreator = AuthApiAxiosParamCreator(configuration)
     return {
         /**
-         * Change password (requires old password)
-         * @summary Change Password
-         * @param {DtoChangePasswordRequest} request Old and new password
-         * @param {*} [options] Override http request option.
-         * @throws {RequiredError}
-         */
-        async authChangePasswordPost(request: DtoChangePasswordRequest, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<AuthChangePasswordPost200Response>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.authChangePasswordPost(request, options);
-            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
-            const localVarOperationServerBasePath = operationServerMap['AuthApi.authChangePasswordPost']?.[localVarOperationServerIndex]?.url;
-            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
-        },
-        /**
          * Authenticate user and return JWT token
          * @summary Login
          * @param {DtoLoginRequest} request Login credentials
@@ -995,16 +944,6 @@ export const AuthApiFactory = function (configuration?: Configuration, basePath?
     const localVarFp = AuthApiFp(configuration)
     return {
         /**
-         * Change password (requires old password)
-         * @summary Change Password
-         * @param {DtoChangePasswordRequest} request Old and new password
-         * @param {*} [options] Override http request option.
-         * @throws {RequiredError}
-         */
-        authChangePasswordPost(request: DtoChangePasswordRequest, options?: RawAxiosRequestConfig): AxiosPromise<AuthChangePasswordPost200Response> {
-            return localVarFp.authChangePasswordPost(request, options).then((request) => request(axios, basePath));
-        },
-        /**
          * Authenticate user and return JWT token
          * @summary Login
          * @param {DtoLoginRequest} request Login credentials
@@ -1042,15 +981,6 @@ export const AuthApiFactory = function (configuration?: Configuration, basePath?
  */
 export interface AuthApiInterface {
     /**
-     * Change password (requires old password)
-     * @summary Change Password
-     * @param {DtoChangePasswordRequest} request Old and new password
-     * @param {*} [options] Override http request option.
-     * @throws {RequiredError}
-     */
-    authChangePasswordPost(request: DtoChangePasswordRequest, options?: RawAxiosRequestConfig): AxiosPromise<AuthChangePasswordPost200Response>;
-
-    /**
      * Authenticate user and return JWT token
      * @summary Login
      * @param {DtoLoginRequest} request Login credentials
@@ -1083,17 +1013,6 @@ export interface AuthApiInterface {
  * AuthApi - object-oriented interface
  */
 export class AuthApi extends BaseAPI implements AuthApiInterface {
-    /**
-     * Change password (requires old password)
-     * @summary Change Password
-     * @param {DtoChangePasswordRequest} request Old and new password
-     * @param {*} [options] Override http request option.
-     * @throws {RequiredError}
-     */
-    public authChangePasswordPost(request: DtoChangePasswordRequest, options?: RawAxiosRequestConfig) {
-        return AuthApiFp(this.configuration).authChangePasswordPost(request, options).then((request) => request(this.axios, this.basePath));
-    }
-
     /**
      * Authenticate user and return JWT token
      * @summary Login
@@ -3596,6 +3515,44 @@ export class TasksApi extends BaseAPI implements TasksApiInterface {
 export const UsersApiAxiosParamCreator = function (configuration?: Configuration) {
     return {
         /**
+         * Change password (requires old password)
+         * @summary Change Password
+         * @param {DtoChangePasswordRequest} request Old and new password
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        userChangePasswordPost: async (request: DtoChangePasswordRequest, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'request' is not null or undefined
+            assertParamExists('userChangePasswordPost', 'request', request)
+            const localVarPath = `/user/change-password`;
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'POST', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication ApiKeyAuth required
+            await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
+
+            localVarHeaderParameter['Content-Type'] = 'application/json';
+            localVarHeaderParameter['Accept'] = '*/*';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+            localVarRequestOptions.data = serializeDataIfNeeded(request, localVarRequestOptions, configuration)
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
          * Returns all users in the system
          * @summary List all users
          * @param {*} [options] Override http request option.
@@ -3754,6 +3711,19 @@ export const UsersApiFp = function(configuration?: Configuration) {
     const localVarAxiosParamCreator = UsersApiAxiosParamCreator(configuration)
     return {
         /**
+         * Change password (requires old password)
+         * @summary Change Password
+         * @param {DtoChangePasswordRequest} request Old and new password
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async userChangePasswordPost(request: DtoChangePasswordRequest, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<UserChangePasswordPost200Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.userChangePasswordPost(request, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['UsersApi.userChangePasswordPost']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
          * Returns all users in the system
          * @summary List all users
          * @param {*} [options] Override http request option.
@@ -3815,6 +3785,16 @@ export const UsersApiFactory = function (configuration?: Configuration, basePath
     const localVarFp = UsersApiFp(configuration)
     return {
         /**
+         * Change password (requires old password)
+         * @summary Change Password
+         * @param {DtoChangePasswordRequest} request Old and new password
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        userChangePasswordPost(request: DtoChangePasswordRequest, options?: RawAxiosRequestConfig): AxiosPromise<UserChangePasswordPost200Response> {
+            return localVarFp.userChangePasswordPost(request, options).then((request) => request(axios, basePath));
+        },
+        /**
          * Returns all users in the system
          * @summary List all users
          * @param {*} [options] Override http request option.
@@ -3862,6 +3842,15 @@ export const UsersApiFactory = function (configuration?: Configuration, basePath
  */
 export interface UsersApiInterface {
     /**
+     * Change password (requires old password)
+     * @summary Change Password
+     * @param {DtoChangePasswordRequest} request Old and new password
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    userChangePasswordPost(request: DtoChangePasswordRequest, options?: RawAxiosRequestConfig): AxiosPromise<UserChangePasswordPost200Response>;
+
+    /**
      * Returns all users in the system
      * @summary List all users
      * @param {*} [options] Override http request option.
@@ -3903,6 +3892,17 @@ export interface UsersApiInterface {
  * UsersApi - object-oriented interface
  */
 export class UsersApi extends BaseAPI implements UsersApiInterface {
+    /**
+     * Change password (requires old password)
+     * @summary Change Password
+     * @param {DtoChangePasswordRequest} request Old and new password
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    public userChangePasswordPost(request: DtoChangePasswordRequest, options?: RawAxiosRequestConfig) {
+        return UsersApiFp(this.configuration).userChangePasswordPost(request, options).then((request) => request(this.axios, this.basePath));
+    }
+
     /**
      * Returns all users in the system
      * @summary List all users
