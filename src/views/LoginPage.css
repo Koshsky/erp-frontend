@@ -1,0 +1,236 @@
+.lp {
+  width: 860px;
+  max-width: calc(100vw - 32px);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  background: #fff;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+/* === Левая брендовая панель === */
+.lp-brand {
+  background: linear-gradient(160deg, #1a73e8 0%, #0d47a1 100%);
+  color: #fff;
+  padding: 44px 36px;
+  display: flex;
+  flex-direction: column;
+}
+
+.lp-logo {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.18);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  margin-bottom: 28px;
+}
+
+.lp-btitle {
+  font-size: 30px;
+  font-weight: 800;
+  line-height: 1.2;
+  margin-bottom: 6px;
+}
+
+.lp-bsub {
+  font-size: 15px;
+  opacity: 0.85;
+  margin-bottom: 36px;
+}
+
+.lp-features {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  margin-top: auto;
+}
+
+.feature {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.feature-icon {
+  font-size: 22px;
+  line-height: 1.2;
+}
+
+.feature-body {
+  display: flex;
+  flex-direction: column;
+}
+
+.feature-body strong {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.feature-body em {
+  font-style: normal;
+  font-size: 13px;
+  opacity: 0.8;
+}
+
+/* === Правая форма === */
+.lp-form-side {
+  padding: 40px 44px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.lp-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: #1a73e8;
+  margin-bottom: 6px;
+}
+
+.lp-subtitle {
+  color: #888;
+  margin-bottom: 28px;
+  font-size: 14px;
+}
+
+/* === Вкладки === */
+.lp-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 20px;
+  background: #f1f4f9;
+  border-radius: 10px;
+  padding: 4px;
+}
+
+.lp-tab {
+  flex: 1;
+  padding: 9px 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 600;
+  color: #666;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.lp-tab.active {
+  background: #fff;
+  color: #1a73e8;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+}
+
+.lp-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.lp-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #444;
+}
+
+.lp-field input {
+  padding: 12px 14px;
+  border: 1px solid #d0d4da;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 400;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.lp-field input::placeholder {
+  color: #bbb;
+}
+
+.lp-field input:focus {
+  outline: none;
+  border-color: #1a73e8;
+  box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.15);
+}
+
+.lp-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.lp-input-wrap input {
+  width: 100%;
+  padding-right: 46px;
+}
+
+.lp-eye {
+  position: absolute;
+  right: 6px;
+  width: 36px;
+  height: 36px;
+  border: none;
+  background: transparent;
+  font-size: 16px;
+  cursor: pointer;
+  border-radius: 8px;
+}
+
+.lp-eye:hover {
+  background: #f1f4f9;
+}
+
+.lp-error {
+  color: #d93025;
+  font-size: 13px;
+}
+
+.lp-btn {
+  margin-top: 4px;
+  padding: 13px;
+  border: none;
+  border-radius: 10px;
+  background: #1a73e8;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+}
+
+.lp-btn:hover:not(:disabled) {
+  background: #1765cc;
+}
+
+.lp-btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.lp-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+@media (max-width: 760px) {
+  .lp {
+    grid-template-columns: 1fr;
+    width: 400px;
+  }
+  .lp-brand {
+    padding: 28px 28px;
+  }
+  .lp-features {
+    display: none;
+  }
+}
