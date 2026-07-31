@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/vue3-vite'
 import ProcessPlanning from './ProcessPlanning.vue'
+import type { DtoDetailedProject } from '@/api'
 
 const now = new Date()
 const y = now.getFullYear()
@@ -9,16 +10,19 @@ const iso = (d: Date) => d.toISOString().slice(0, 10)
 let projectSeq = 0
 
 /**
- * Создаёт проект, границы которого (start_date/end_date) сознательно шире,
- * чем границы его процессов — чтобы наглядно показать подложку проекта.
+ * Создаёт проект, границы которого сознательно шире, чем границы его процессов.
  * Процессы расположены с отступом от краёв проекта.
  */
-const project = (code: string, pStart: [number, number], pEnd: [number, number], p1: [number, number], p1End: [number, number], p2: [number, number], p2End: [number, number]) => {
+const project = (
+  code: string,
+  pStart: [number, number], pEnd: [number, number],
+  p1: [number, number], p1End: [number, number],
+  p2: [number, number], p2End: [number, number],
+): DtoDetailedProject => {
   projectSeq += 1
   return {
     id: projectSeq,
     project_code: code,
-    // Границы проекта — шире, чем у процессов
     start_date: iso(day(pStart[0], pStart[1])),
     end_date: iso(day(pEnd[0], pEnd[1])),
     processes: [
@@ -45,14 +49,13 @@ export default meta
 type Story = StoryObj<typeof meta>
 
 export const SingleProject: Story = {
-  // Проект: 10 июл — 25 авг (широкий), процессы внутри с отступами
   args: {
-    mockProjects: [
+    projects: [
       project(
         'КО_505',
-        [7, 10], [8, 25],          // границы проекта (шире)
-        [7, 15], [8, 10],          // производство
-        [7, 30], [8, 20],          // инсталляция
+        [7, 10], [8, 25],
+        [7, 15], [8, 10],
+        [7, 30], [8, 20],
       ),
     ],
   },
@@ -60,7 +63,7 @@ export const SingleProject: Story = {
 
 export const MultipleProjects: Story = {
   args: {
-    mockProjects: [
+    projects: [
       project('КО_505', [7, 5], [8, 28], [7, 15], [8, 15], [8, 1], [8, 25]),
       project('КО_506', [8, 1], [9, 12], [8, 10], [9, 2], [8, 20], [9, 8]),
       project('КО_512', [7, 20], [9, 5], [7, 25], [8, 25], [8, 15], [9, 1]),

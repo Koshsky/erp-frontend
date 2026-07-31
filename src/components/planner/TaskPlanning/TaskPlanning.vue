@@ -1,32 +1,60 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { getAllResources } from '../../../api.js'
+import { computed } from 'vue'
 import CalendarHeader from '../CalendarHeader/CalendarHeader.vue'
 import ResourceHeader from './components/ResourceHeader/ResourceHeader.vue'
 import TaskGantt from './components/TaskGantt/TaskGantt.vue'
+import type { DtoDetailedProcess, DtoResource } from '@/api'
 import type { Resource } from './components/ResourceHeader/types'
 import type { Process } from './types'
 
 const props = defineProps<{
-  mockProcesses?: Process[] | null
-  mockResources?: Resource[] | null
+  processes?: DtoDetailedProcess[] | null
+  resources?: DtoResource[] | null
+  loading?: boolean
+  error?: string | null
 }>()
 
-const resources = ref<Resource[]>([])
-const processes = ref<Process[]>([])
-const loading = ref(false)
-const error = ref<string | null>(null)
+// Маппим DTO (из /planning/tasks) во внутренние типы планировщика.
+const displayProcesses = computed<Process[]>(() =>
+  (props.processes || []).map((dto) => ({
+    id: dto.id ?? 0,
+    title: dto.title ?? '',
+    start_date: dto.start_date ?? '',
+    end_date: dto.end_date ?? '',
+    project_code: '',
+    tasks: (dto.tasks || []).map((t) => ({
+      id: t.id ?? 0,
+      title: t.title ?? '',
+      start_date: t.start_date ?? '',
+      end_date: t.end_date ?? '',
+      resources: (t.resources || []).map((r) => ({
+        resource_id: r.id ?? 0,
+        quantity: r.quantity ?? 0,
+        code: r.code ?? '',
+      })),
+    })),
+  })),
+)
+
+const displayResources = computed<Resource[]>(() =>
+  (props.resources || []).map((r) => ({
+    id: r.id ?? 0,
+    code: r.code ?? '',
+    title: r.title ?? '',
+    quantity: r.quantity ?? 0,
+  })),
+)
 
 const dayList = computed(() => {
-  if (!processes.value.length) return []
+  if (!displayProcesses.value.length) return []
   // Длина календаря определяется по границам всех процессов
   let min = Infinity, max = -Infinity
-  for (const proc of processes.value) {
+  for (const proc of displayProcesses.value) {
     const ts = new Date(proc.start_date).getTime()
     const te = new Date(proc.end_date).getTime()
-      if (ts < min) min = ts
-      if (te > max) max = te
-    }
+    if (ts < min) min = ts
+    if (te > max) max = te
+  }
   if (!isFinite(min) || !isFinite(max)) return []
   const days: Date[] = []
   const cur = new Date(min)
@@ -40,12 +68,12 @@ const dayList = computed(() => {
 
 function usageForDay(resourceId: number, day: Date): number {
   let used = 0
-  for (const proc of processes.value) {
+  for (const proc of displayProcesses.value) {
     if (!proc.tasks) continue
     for (const t of proc.tasks) {
       const d = day.getTime()
       if (d < new Date(t.start_date).getTime() || d >= new Date(t.end_date).getTime()) continue
-      const a = (t.resources || []).find(r => r.resource_id === resourceId)
+      const a = (t.resources || []).find((r) => r.resource_id === resourceId)
       if (a) used += a.quantity
     }
   }
@@ -58,20 +86,6 @@ const gridCols = computed(() => {
 })
 
 const dayZero = computed<Date | null>(() => dayList.value.length ? dayList.value[0] : null)
-
-onMounted(async () => {
-  if (props.mockProcesses) {
-    processes.value = props.mockProcesses
-    resources.value = props.mockResources || []
-    return
-  }
-  loading.value = true
-  try {
-    const resRes = await getAllResources()
-    resources.value = resRes?.data || []
-  } catch (e: any) { error.value = e.message }
-  finally { loading.value = false }
-})
 </script>
 
 <template>
@@ -79,20 +93,20 @@ onMounted(async () => {
     <div v-if="loading" class="st">Загрузка...</div>
     <div v-else-if="error" class="st er">{{ error }}</div>
 
-    <template v-else-if="processes.length && dayList.length">
+    <template v-else-if="displayProcesses.length && dayList.length">
       <div class="gg" :style="{ gridTemplateColumns: gridCols }">
 
         <CalendarHeader :startDate="dayList[0]" :endDate="dayList[dayList.length-1]" />
 
         <ResourceHeader
           :dayList="dayList"
-          :resources="resources"
+          :resources="displayResources"
           :usageFn="usageForDay"
         />
 
         <div class="sep" style="gridColumn:1/-1"></div>
 
-        <template v-for="(proc, pi) in processes" :key="'proc'+proc.id">
+        <template v-for="(proc, pi) in displayProcesses" :key="'proc'+proc.id">
           <TaskGantt
             :dayZero="dayZero"
             :totalDays="dayList.length"

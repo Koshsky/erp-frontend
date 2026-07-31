@@ -1,11 +1,13 @@
 import type { Meta, StoryObj } from '@storybook/vue3-vite'
 import TaskPlanning from './TaskPlanning.vue'
+import type { DtoDetailedProcess, DtoResource } from '@/api'
 
 const now = new Date()
 const y = now.getFullYear()
 const day = (month: number, d: number) => new Date(y, month - 1, d)
 const iso = (d: Date) => d.toISOString().slice(0, 10)
-const resources = [
+
+const resources: DtoResource[] = [
   { id: 1, code: 'И', title: 'Инженер', quantity: 7 },
   { id: 2, code: 'М', title: 'Монтажник', quantity: 4 },
   { id: 3, code: 'ПР', title: 'Производитель работ', quantity: 2 },
@@ -25,20 +27,25 @@ const taskTitles = [
   'Осмотр объекта',
 ]
 
-const processes = (startM: number, startD: number, endM: number, endD: number, code: string, offset: number) => ({
-  id: 1,
+const process = (startM: number, startD: number, endM: number, endD: number, id: number, offset: number): DtoDetailedProcess => ({
+  id,
   title: 'Инсталляция',
-  project_code: code,
+  project_id: id,
   start_date: iso(day(startM, startD)),
   end_date: iso(day(endM, endD)),
-  tasks: taskTitles.map((title, i) => ({
-    id: i + 1 + offset,
-    title,
-    start_date: iso(day(startM, startD + i * 2)),
-    end_date: iso(day(startM, startD + i * 2 + 5)),
-    resources: [{ resource_id: (i % 5) + 1, quantity: (i % 3) + 1, code: resources[i % 5].code }],
-  })),
+  tasks: taskTitles.map((title, i) => {
+    const res = resources[(i % 5)]
+    return {
+      id: i + 1 + offset,
+      title,
+      process_id: id,
+      start_date: iso(day(startM, startD + i * 2)),
+      end_date: iso(day(startM, startD + i * 2 + 5)),
+      resources: [{ id: res.id, code: res.code, title: res.title, quantity: (i % 3) + 1 }],
+    }
+  }),
 })
+
 const meta: Meta<typeof TaskPlanning> = {
   title: 'Components/Planner/TaskPlanning',
   component: TaskPlanning,
@@ -48,20 +55,20 @@ const meta: Meta<typeof TaskPlanning> = {
 
 export default meta
 type Story = StoryObj<typeof meta>
+
 export const SingleProject: Story = {
   args: {
-    mockProcesses: [processes(7, 15, 8, 22, 'KO-1001', 0)],
-    mockResources: resources,
+    processes: [process(7, 15, 8, 22, 1, 0)],
+    resources,
   },
 }
 
 export const MultipleProjects: Story = {
   args: {
-    mockProcesses: [
-      processes(7, 15, 8, 22, 'KO-1001', 0),
-      processes(8, 5, 9, 18, 'KO-1002', 100),
+    processes: [
+      process(7, 15, 8, 22, 1, 0),
+      process(8, 5, 9, 18, 2, 100),
     ],
-    mockResources: resources,
+    resources,
   },
 }
-

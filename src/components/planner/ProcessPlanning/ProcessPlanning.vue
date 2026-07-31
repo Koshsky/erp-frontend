@@ -1,20 +1,36 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { computed } from 'vue'
 import CalendarHeader from '../CalendarHeader/CalendarHeader.vue'
 import ProcessGantt from './components/ProcessGantt/ProcessGantt.vue'
+import type { DtoDetailedProject } from '@/api'
 import type { ProcessPlanningProject } from './types'
 
 const props = defineProps<{
-  mockProjects?: ProcessPlanningProject[] | null
+  projects?: DtoDetailedProject[] | null
+  loading?: boolean
+  error?: string | null
 }>()
 
-const projects = ref<ProcessPlanningProject[]>(props.mockProjects || [])
+// Маппим DTO (из /planning/processes) во внутренний тип планировщика.
+const displayProjects = computed<ProcessPlanningProject[]>(() =>
+  (props.projects || []).map((dto) => ({
+    id: dto.id ?? 0,
+    project_code: dto.project_code ?? '',
+    start_date: dto.start_date ?? '',
+    end_date: dto.end_date ?? '',
+    processes: (dto.processes || []).map((p) => ({
+      id: p.id ?? 0,
+      title: p.title ?? '',
+      start_date: p.start_date ?? '',
+      end_date: p.end_date ?? '',
+    })),
+  })),
+)
 
 const dayList = computed(() => {
-  if (!projects.value.length) return []
-  // Длина календаря определяется по собственным границам всех проектов
+  if (!displayProjects.value.length) return []
   let min = Infinity, max = -Infinity
-  for (const project of projects.value) {
+  for (const project of displayProjects.value) {
     const ts = new Date(project.start_date).getTime()
     const te = new Date(project.end_date).getTime()
     if (ts < min) min = ts
@@ -41,19 +57,21 @@ const dayZero = computed<Date | null>(() => dayList.value.length ? dayList.value
 
 <template>
   <div class="pg">
-    <template v-if="projects.length && dayList.length">
+    <div v-if="loading" class="st">Загрузка...</div>
+    <div v-else-if="error" class="st er">{{ error }}</div>
+    <template v-else-if="displayProjects.length && dayList.length">
       <div class="gg" :style="{ gridTemplateColumns: gridCols }">
 
         <CalendarHeader :startDate="dayList[0]" :endDate="dayList[dayList.length-1]" />
 
         <div class="sep" style="gridColumn:1/-1"></div>
 
-        <template v-for="(project, pi) in projects" :key="'proj'+project.id">
+        <template v-for="project in displayProjects" :key="'proj'+project.id">
           <ProcessGantt
             :dayZero="dayZero"
             :totalDays="dayList.length"
             :projectCode="project.project_code"
-            :processes="project.processes || []"
+            :processes="project.processes"
             :groupStartDate="project.start_date"
             :groupEndDate="project.end_date"
           />
@@ -71,7 +89,7 @@ const dayZero = computed<Date | null>(() => dayList.value.length ? dayList.value
   box-shadow: 0 1px 6px rgba(0,0,0,.08); overflow-x: auto;
 }
 .st { text-align:center; padding:30px; color:#666; font-size:14px; }
+.er { color:#d93025; }
 .gg { display: grid; min-width: 600px; }
 .sep { border: none; border-bottom: 2px solid #1a73e8; margin: 4px 0; height: 0; }
 </style>
-
