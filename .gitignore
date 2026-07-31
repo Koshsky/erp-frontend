@@ -1,3 +1,10 @@
+src/api/.gitignore
+src/api/.npmignore
+src/api/.openapi-generator-ignore
+src/api/.openapi-generator/
+src/api/git_push.sh
+src/api/docs/
+
 tmp/
 
 node_modules/
@@ -22,6 +29,7 @@ storybook-static
 *.swp
 *.swo
 *~
+.continue/
 
 .cache/
 .parcel-cache/
