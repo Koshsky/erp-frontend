@@ -11,7 +11,7 @@ function apiConfig(): Configuration {
   return new Configuration({
     basePath: import.meta.env.VITE_API_URL,
     baseOptions: { headers: { 'Content-Type': 'application/json' } },
-    accessToken: localStorage.getItem(TOKEN_KEY) ?? '',
+    apiKey: () => `Bearer ${localStorage.getItem(TOKEN_KEY) ?? ''}`,
   })
 }
 
@@ -83,8 +83,8 @@ export const useAuthStore = defineStore('auth', () => {
     loading.value = true
     error.value = null
     try {
-      const api = new AuthApi(apiConfig())
-      const resp = await api.authChangePasswordPost({
+      const api = new UsersApi(apiConfig())
+      const resp = await api.userChangePasswordPost({
         old_password: oldPassword,
         new_password: newPassword,
       })
