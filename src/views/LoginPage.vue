@@ -7,7 +7,7 @@ const router = useRouter()
 const route = useRoute()
 const auth = useAuthStore()
 
-const mode = ref<'login' | 'register' | 'change'>('login')
+const mode = ref<'login' | 'register'>('login')
 
 // Поля для входа
 const username = ref('')
@@ -18,11 +18,7 @@ const showPassword = ref(false)
 const regName = ref('')
 const regUsername = ref('')
 const regPassword = ref('')
-
-// Поля для смены пароля
-const oldPassword = ref('')
-const newPassword = ref('')
-const showNewPassword = ref(false)
+const regPasswordConfirm = ref('')
 
 const localError = ref<string | null>(null)
 
@@ -35,7 +31,6 @@ const features = [
 const modeTabs = [
   { value: 'login', label: 'Вход' },
   { value: 'register', label: 'Регистрация' },
-  { value: 'change', label: 'Смена пароля' },
 ] as const
 
 function getError(): string | null {
@@ -53,23 +48,16 @@ async function onSubmit() {
     const ok = await auth.login(username.value, password.value)
     if (ok) goToRedirect()
   } else if (mode.value === 'register') {
-    if (!regName.value || !regUsername.value || !regPassword.value) {
+    if (!regName.value || !regUsername.value || !regPassword.value || !regPasswordConfirm.value) {
       localError.value = 'Заполните все поля'
+      return
+    }
+    if (regPassword.value !== regPasswordConfirm.value) {
+      localError.value = 'Пароли не совпадают'
       return
     }
     const ok = await auth.register(regUsername.value, regPassword.value, regName.value)
     if (ok) goToRedirect()
-  } else {
-    if (!oldPassword.value || !newPassword.value) {
-      localError.value = 'Заполните все поля'
-      return
-    }
-    await auth.changePassword(oldPassword.value, newPassword.value)
-    if (!auth.error) {
-      localError.value = null
-      oldPassword.value = ''
-      newPassword.value = ''
-    }
   }
 }
 
@@ -162,35 +150,17 @@ function goToRedirect() {
               </button>
             </div>
           </label>
-        </template>
-
-        <!-- СМЕНА ПАРОЛЯ -->
-        <template v-else>
           <label class="lp-field">
-            <span>Старый пароль</span>
+            <span>Подтверждение пароля</span>
             <div class="lp-input-wrap">
               <input
-                v-model="oldPassword"
+                v-model="regPasswordConfirm"
                 :type="showPassword ? 'text' : 'password'"
-                autocomplete="current-password"
+                autocomplete="new-password"
                 placeholder="••••••••"
               />
               <button type="button" class="lp-eye" @click="showPassword = !showPassword">
                 {{ showPassword ? '🙈' : '👁' }}
-              </button>
-            </div>
-          </label>
-          <label class="lp-field">
-            <span>Новый пароль</span>
-            <div class="lp-input-wrap">
-              <input
-                v-model="newPassword"
-                :type="showNewPassword ? 'text' : 'password'"
-                autocomplete="new-password"
-                placeholder="••••••••"
-              />
-              <button type="button" class="lp-eye" @click="showNewPassword = !showNewPassword">
-                {{ showNewPassword ? '🙈' : '👁' }}
               </button>
             </div>
           </label>
@@ -199,7 +169,7 @@ function goToRedirect() {
         <p v-if="getError()" class="lp-error">{{ getError() }}</p>
 
         <button type="submit" class="lp-btn" :disabled="auth.loading">
-          {{ auth.loading ? 'Подождите…' : (mode === 'login' ? 'Войти →' : mode === 'register' ? 'Создать аккаунт' : 'Сменить пароль') }}
+          {{ auth.loading ? 'Подождите…' : (mode === 'login' ? 'Войти →' : 'Создать аккаунт') }}
         </button>
       </form>
     </div>
