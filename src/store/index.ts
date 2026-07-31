@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { AuthApi, ProjectsApi, ResourcesApi, PlanningApi, Configuration } from '@/api'
+import { AuthApi, ProjectsApi, ResourcesApi, PlanningApi, UsersApi, Configuration } from '@/api'
 import type { DtoAuthResponse, DtoUserInfo, DtoProject, DtoResource } from '@/api'
 
 const TOKEN_KEY = 'mvs_erp_access_token'
@@ -107,6 +107,25 @@ export const useAuthStore = defineStore('auth', () => {
     isAuthenticated.value = false
   }
 
+  /** Получает свежие данные пользователя по id через UsersApi.userIdGet */
+  async function fetchProfile(userId: number) {
+    error.value = null
+    try {
+      const api = new UsersApi(apiConfig())
+      const resp = await api.userIdGet(userId)
+      const body = resp.data
+      if (body?.error) throw new Error(body.error)
+      if (body?.data) {
+        user.value = body.data as DtoUserInfo
+        localStorage.setItem(USER_KEY, JSON.stringify(user.value))
+      }
+      return true
+    } catch (e: any) {
+      error.value = e.message || String(e)
+      return false
+    }
+  }
+
   return {
     user,
     isAuthenticated,
@@ -115,6 +134,7 @@ export const useAuthStore = defineStore('auth', () => {
     login,
     register,
     changePassword,
+    fetchProfile,
     logout,
   }
 })
