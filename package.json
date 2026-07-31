@@ -16,7 +16,10 @@
   "license": "ISC",
   "type": "module",
   "dependencies": {
-    "vue": "^3.5.40"
+    "axios": "^1.19.0",
+    "pinia": "^4.0.2",
+    "vue": "^3.5.40",
+    "vue-router": "^4.6.4"
   },
   "devDependencies": {
     "@chromatic-com/storybook": "^5.2.1",
@@ -36,4 +39,3 @@
     "vue-tsc": "^3.3.7"
   }
 }
-
