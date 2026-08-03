@@ -129,6 +129,8 @@ function cellIndexOf(cells: CalendarCell[], t: number): number {
 /**
  * Ячейки интервала [start, end) на шкале: end не включается (эксклюзивная граница).
  * endCell — эксклюзивная граница. Результат зажат в [0, cellCount].
+ * Возвращает null, если интервал некорректен (end <= start) или не пересекает
+ * диаграмму целиком (все дни левее или правее календаря) — бар скрывается.
  */
 export function barCells(
   anchor: Date | string | number,
@@ -136,10 +138,20 @@ export function barCells(
   unit: PlanningUnit,
   start: Date | string | number,
   end: Date | string | number,
-): CellSpan {
+): CellSpan | null {
   const cells = buildCells(anchor, mode, unit)
   const len = cells.length
-  const startCell = cellIndexOf(cells, toDayStart(start).getTime())
-  const endCell = clamp(cellIndexOf(cells, dayBefore(end)) + 1, startCell + 1, len)
+  if (!len) return null
+  const s = toDayStart(start)
+  const e = toDayStart(end)
+  if (e.getTime() <= s.getTime()) return null
+  const sT = s.getTime()
+  const eT = dayBefore(end)
+  const first = cells[0].start.getTime()
+  const last = cells[len - 1].end.getTime()
+  if (eT < first) return null
+  if (sT > last) return null
+  const startCell = cellIndexOf(cells, sT)
+  const endCell = clamp(cellIndexOf(cells, eT) + 1, startCell + 1, len)
   return { startCell, endCell }
 }

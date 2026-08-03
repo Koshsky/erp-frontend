@@ -113,5 +113,6 @@ const gridCols = computed(() => {
 .bar-cell {
   position: relative; min-height: 36px;
   border: 1px solid #e8e8e8; border-top: none; background: #fff;
+  overflow: hidden;
 }
 </style>

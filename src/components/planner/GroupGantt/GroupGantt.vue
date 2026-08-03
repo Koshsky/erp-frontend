@@ -18,11 +18,12 @@ function fmt(d: string | Date | number | null | undefined): string {
 /** Полупрозрачная подложка границ группы */
 const groupOverlayStyle = computed(() => {
   if (!props.groupStartDate || !props.groupEndDate || !props.anchor) return null
-  const { startCell, endCell } = barCells(props.anchor, props.mode, props.unit, props.groupStartDate, props.groupEndDate)
+  const span = barCells(props.anchor, props.mode, props.unit, props.groupStartDate, props.groupEndDate)
+  if (!span) return null
   const total = cellCount(props.anchor, props.mode, props.unit)
   return {
-    left: (startCell / total) * 100 + '%',
-    width: Math.max(((endCell - startCell) / total) * 100, 0.5) + '%',
+    left: (span.startCell / total) * 100 + '%',
+    width: Math.max(((span.endCell - span.startCell) / total) * 100, 0.5) + '%',
   }
 })
 </script>
@@ -87,11 +88,13 @@ const groupOverlayStyle = computed(() => {
 .header-bar-row {
   position: relative; min-height: 4px;
   border: 1px solid #e8e8e8; border-top: none;
+  overflow: hidden;
 }
 
 .bar-cell {
   position: relative; min-height: 36px;
   border: 1px solid #e8e8e8; border-top: none; background: #fff;
+  overflow: hidden;
 }
 .bar-cell.ta { background: #fafafa; }
 
