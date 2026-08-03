@@ -31,7 +31,7 @@ const barStyle = computed<Record<string, string | number> | null>(() => {
 </script>
 
 <template>
-  <div v-if="barStyle" class="process-bar" :style="barStyle">
+  <div v-if="barStyle" class="process-bar" :style="barStyle" :title="title">
     <div class="pb-content">
       <span class="pb-title">{{ title }}</span>
       <span v-if="projectCode" class="pb-code">{{ projectCode }}</span>

@@ -8,6 +8,8 @@ export interface ProcessPlanningProject {
   /** Собственные временные границы проекта */
   start_date: string
   end_date: string
+  owner_id?: number
+  priority?: number
   processes: ProcessItem[]
 }
 

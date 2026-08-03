@@ -29,11 +29,15 @@ const displayProjects = computed<ProcessPlanningProject[]>(() =>
     project_code: dto.project_code ?? '',
     start_date: dto.start_date ?? '',
     end_date: dto.end_date ?? '',
+    owner_id: dto.owner_id,
+    priority: dto.priority,
     processes: (dto.processes || []).map((p) => ({
       id: p.id ?? 0,
       title: p.title ?? '',
       start_date: p.start_date ?? '',
       end_date: p.end_date ?? '',
+      owner_id: p.owner_id,
+      project_id: p.project_id,
     })),
   })),
 )

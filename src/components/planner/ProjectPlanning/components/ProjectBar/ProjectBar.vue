@@ -13,7 +13,6 @@ defineProps<ProjectBarProps>()
     :startDate="startDate"
     :endDate="endDate"
     :title="projectCode"
-    :projectCode="projectCode"
     :color="color"
     :opacity="opacity"
   />
