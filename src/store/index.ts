@@ -1,11 +1,15 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { AuthApi, ProjectsApi, ResourcesApi, PlanningApi, UsersApi, Configuration } from '@/api'
-import type { DtoAuthResponse, DtoUserInfo, DtoProject, DtoResource } from '@/api'
+import type { DtoUserInfo, DtoProject, DtoResource, JwtTokenPair } from '@/api'
 
 const TOKEN_KEY = 'mvs_erp_access_token'
 const REFRESH_KEY = 'mvs_erp_refresh_token'
 const USER_KEY = 'mvs_erp_user'
+
+/** Сколько времени до истечения токена, когда начинаем проактивный refresh */
+const REFRESH_MARGIN_MS = 60 * 1000
+const REFRESH_INTERVAL_MS = 30 * 1000
 
 function apiConfig(): Configuration {
   return new Configuration({
@@ -24,14 +28,47 @@ function readStoredUser(): DtoUserInfo | null {
   }
 }
 
+function base64UrlDecode(input: string): string {
+  const b64 = input.replace(/-/g, '+').replace(/_/g, '/')
+  return atob(b64.padEnd(b64.length + ((4 - (b64.length % 4)) % 4), '='))
+}
+
+/** Время истечения (epoch ms) из payload access-токена или null, если разобрать нельзя */
+function decodeTokenExp(token: string | null): number | null {
+  if (!token) return null
+  try {
+    const payload = token.split('.')[1]
+    if (!payload) return null
+    const data = JSON.parse(base64UrlDecode(payload)) as { exp?: number }
+    return typeof data.exp === 'number' ? data.exp * 1000 : null
+  } catch {
+    return null
+  }
+}
+
+/** Протух ли access-токен: отсутствует, не парсится или exp уже прошёл */
+function accessTokenExpired(): boolean {
+  const exp = decodeTokenExp(localStorage.getItem(TOKEN_KEY))
+  if (exp == null) return true
+  return exp - Date.now() <= 0
+}
+
+/** Не пора ли продлить токен заранее (до истечения меньше запаса) */
+function accessTokenExpiring(): boolean {
+  const exp = decodeTokenExp(localStorage.getItem(TOKEN_KEY))
+  if (exp == null) return true
+  return exp - Date.now() <= REFRESH_MARGIN_MS
+}
+
 // === Auth ===
 export const useAuthStore = defineStore('auth', () => {
   const user = ref<DtoUserInfo | null>(readStoredUser())
   const isAuthenticated = ref<boolean>(Boolean(localStorage.getItem(TOKEN_KEY)))
+  const accessExpired = computed<boolean>(() => accessTokenExpired())
   const loading = ref(false)
   const error = ref<string | null>(null)
 
-  function applySession(data: DtoAuthResponse | undefined) {
+  function applySession(data: { tokens?: JwtTokenPair; user?: DtoUserInfo } | undefined) {
     const token = data?.tokens?.access_token
     const refresh = data?.tokens?.refresh_token
     if (token) localStorage.setItem(TOKEN_KEY, token)
@@ -41,6 +78,7 @@ export const useAuthStore = defineStore('auth', () => {
       user.value = data.user
     }
     isAuthenticated.value = Boolean(token)
+    scheduleProactiveRefresh()
   }
 
   async function login(username: string, password: string) {
@@ -99,7 +137,75 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  let proactiveTimer: number | null = null
+  let onVisibilityChange: (() => void) | null = null
+  let refreshInFlight: Promise<boolean> | null = null
+
+  /** Проактивный refresh: таймер + возврат вкладки, чтобы access-токен не успевал протухнуть */
+  function scheduleProactiveRefresh() {
+    if (proactiveTimer != null) return
+    proactiveTimer = window.setInterval(() => {
+      if (accessTokenExpiring() && localStorage.getItem(REFRESH_KEY)) {
+        void refreshSession()
+      }
+    }, REFRESH_INTERVAL_MS)
+    onVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && accessTokenExpiring()) {
+        void refreshSession()
+      }
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange)
+  }
+
+  function stopProactiveRefresh() {
+    if (proactiveTimer != null) {
+      clearInterval(proactiveTimer)
+      proactiveTimer = null
+    }
+    if (onVisibilityChange) {
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+      onVisibilityChange = null
+    }
+  }
+
+  /** Обновляет access-токен по refresh-токену; при неудаче разлогинивает.
+   *  Параллельные вызовы (таймер/guard/интерцептор) дедуплицируются в один запрос */
+  async function refreshSession(): Promise<boolean> {
+    if (refreshInFlight) return refreshInFlight
+    refreshInFlight = doRefresh()
+    try {
+      return await refreshInFlight
+    } finally {
+      refreshInFlight = null
+    }
+  }
+
+  async function doRefresh(): Promise<boolean> {
+    const refresh = localStorage.getItem(REFRESH_KEY)
+    if (!refresh) {
+      logout()
+      return false
+    }
+    loading.value = true
+    error.value = null
+    try {
+      const api = new AuthApi(apiConfig())
+      const resp = await api.authRefreshPost({ refresh_token: refresh })
+      const body = resp.data
+      if (body?.error) throw new Error(body.error)
+      applySession(body?.data)
+      return true
+    } catch (e: any) {
+      error.value = e.message || String(e)
+      logout()
+      return false
+    } finally {
+      loading.value = false
+    }
+  }
+
   function logout() {
+    stopProactiveRefresh()
     localStorage.removeItem(TOKEN_KEY)
     localStorage.removeItem(REFRESH_KEY)
     localStorage.removeItem(USER_KEY)
@@ -126,14 +232,19 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  // После перезагрузки страницы с сохранёнными токенами продолжаем проактивный refresh
+  if (isAuthenticated.value) scheduleProactiveRefresh()
+
   return {
     user,
     isAuthenticated,
+    accessExpired,
     loading,
     error,
     login,
     register,
     changePassword,
+    refreshSession,
     fetchProfile,
     logout,
   }
