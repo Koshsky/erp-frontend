@@ -72,3 +72,16 @@ export const MultipleProjects: Story = {
     resources,
   },
 }
+
+/** Год с декадами — процессы растянуты на несколько декад */
+export const YearDecades: Story = {
+  args: {
+    processes: [
+      process(1, 5, 3, 20, 1, 0),
+      process(2, 10, 5, 25, 2, 100),
+    ],
+    resources,
+    mode: 'year',
+    unit: 'decade',
+  },
+}

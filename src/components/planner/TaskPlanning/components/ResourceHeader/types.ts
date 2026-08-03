@@ -1,3 +1,5 @@
+import type { PlanningMode, PlanningUnit } from '../../../calendar'
+
 export interface Resource {
   id: number
   code: string
@@ -6,7 +8,9 @@ export interface Resource {
 }
 
 export interface ResourceHeaderProps {
-  dayList: Date[]
+  anchor: Date | number
+  mode: PlanningMode
+  unit: PlanningUnit
   resources: Resource[]
   usageFn: (resourceId: number, day: Date) => number
 }

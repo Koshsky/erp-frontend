@@ -11,8 +11,9 @@ const groupItems = computed(() => props.tasks)
 
 <template>
   <GroupGantt
-    :dayZero="dayZero"
-    :totalDays="totalDays"
+    :anchor="anchor"
+    :mode="mode"
+    :unit="unit"
     :items="groupItems"
     :groupStartDate="groupStartDate"
     :groupEndDate="groupEndDate"
@@ -20,14 +21,13 @@ const groupItems = computed(() => props.tasks)
     <template #header>
       <span class="header-title">{{ title }}</span>
       <span v-if="projectCode" class="header-code">{{ projectCode }}</span>
-  </template>
+    </template>
 
     <template #bar="{ item }">
-      <TaskBar :dayZero="dayZero" :totalDays="totalDays" :task="item" />
-</template>
+      <TaskBar :anchor="anchor" :mode="mode" :unit="unit" :task="item" />
+    </template>
   </GroupGantt>
 </template>
 
 <style scoped>
 </style>
-

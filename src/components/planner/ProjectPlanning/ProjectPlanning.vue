@@ -3,26 +3,26 @@ import { computed } from 'vue'
 import CalendarHeader from '../CalendarHeader/CalendarHeader.vue'
 import ProjectBar from './components/ProjectBar/ProjectBar.vue'
 import type { DtoProject } from '@/api'
-import type { PlanningPeriod } from './types'
+import type { PlanningMode, PlanningUnit } from '../calendar'
+import { buildCells } from '../calendar'
 
 const props = withDefaults(defineProps<{
   projects?: DtoProject[] | null
-  period?: PlanningPeriod
+  /** Якорь шкалы (первая ячейка); по умолчанию — самая ранняя дата старта проекта */
+  anchor?: string | Date | number | null
+  /** Период календаря: квартал, полугодие или год */
+  mode?: PlanningMode
+  /** Единица ячейки: день, неделя или декада */
+  unit?: PlanningUnit
 }>(), {
-  period: 'quarter',
+  mode: 'quarter',
+  unit: 'day',
 })
 
 const projects = computed<DtoProject[]>(() => props.projects || [])
 
-// Длина (в днях) для каждого периода
-const PERIOD_DAYS: Record<PlanningPeriod, number> = {
-  quarter: 92, // ~3 месяца
-  half: 183,   // ~полгода
-  year: 365,   // год
-}
-
-// Отправная точка календаря — самый ранний старт проекта (или текущая дата)
-const calendarStart = computed<Date>(() => {
+// Отправная точка календаря по умолчанию — самый ранний старт проекта (или текущая дата)
+const defaultAnchor = computed<Date>(() => {
   let min = Infinity
   for (const p of projects.value) {
     if (!p.start_date) continue
@@ -33,32 +33,26 @@ const calendarStart = computed<Date>(() => {
   return new Date(min)
 })
 
-// Календарь фиксированной длины в зависимости от выбранного периода
-const dayList = computed<Date[]>(() => {
-  const days = PERIOD_DAYS[props.period]
-  const list: Date[] = []
-  const cur = new Date(calendarStart.value)
-  for (let i = 0; i < days; i++) {
-    list.push(new Date(cur))
-    cur.setDate(cur.getDate() + 1)
-  }
-  return list
+const anchor = computed<Date>(() => {
+  if (props.anchor == null) return defaultAnchor.value
+  return props.anchor instanceof Date ? props.anchor : new Date(props.anchor)
 })
+
+// Ячейки календаря фиксированной длины в зависимости от периода и единицы
+const cells = computed(() => buildCells(anchor.value, props.mode, props.unit))
 
 const gridCols = computed(() => {
-  if (!dayList.value.length) return '180px'
-  return `180px repeat(${dayList.value.length}, 1fr)`
+  if (!cells.value.length) return '180px'
+  return `180px repeat(${cells.value.length}, 1fr)`
 })
-
-const dayZero = computed<Date | null>(() => dayList.value.length ? dayList.value[0] : null)
 </script>
 
 <template>
   <div class="pg">
-    <template v-if="projects.length && dayList.length">
+    <template v-if="projects.length && cells.length">
       <div class="gg" :style="{ gridTemplateColumns: gridCols }">
 
-        <CalendarHeader :startDate="dayList[0]" :endDate="dayList[dayList.length-1]" />
+        <CalendarHeader :anchor="anchor" :mode="mode" :unit="unit" />
 
         <div class="sep" style="gridColumn:1/-1"></div>
 
@@ -68,8 +62,9 @@ const dayZero = computed<Date | null>(() => dayList.value.length ? dayList.value
           </div>
           <div class="bar-cell" style="gridColumn:2/-1">
             <ProjectBar
-              :dayZero="dayZero!"
-              :totalDays="dayList.length"
+              :anchor="anchor!"
+              :mode="mode"
+              :unit="unit"
               :startDate="project.start_date || ''"
               :endDate="project.end_date || ''"
               :projectCode="project.project_code || ''"
@@ -120,4 +115,3 @@ const dayZero = computed<Date | null>(() => dayList.value.length ? dayList.value
   border: 1px solid #e8e8e8; border-top: none; background: #fff;
 }
 </style>
-

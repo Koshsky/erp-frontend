@@ -4,12 +4,23 @@ import CalendarHeader from '../CalendarHeader/CalendarHeader.vue'
 import ProcessGantt from './components/ProcessGantt/ProcessGantt.vue'
 import type { DtoDetailedProject } from '@/api'
 import type { ProcessPlanningProject } from './types'
+import { buildCells } from '../calendar'
+import type { PlanningMode, PlanningUnit } from '../calendar'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   projects?: DtoDetailedProject[] | null
   loading?: boolean
   error?: string | null
-}>()
+  /** Якорь шкалы (первая ячейка); по умолчанию — самая ранняя дата старта проекта */
+  anchor?: string | Date | number | null
+  /** Период календаря: квартал, полугодие или год */
+  mode?: PlanningMode
+  /** Единица ячейки: день, неделя или декада */
+  unit?: PlanningUnit
+}>(), {
+  mode: 'quarter',
+  unit: 'day',
+})
 
 // Маппим DTO (из /planning/processes) во внутренний тип планировщика.
 const displayProjects = computed<ProcessPlanningProject[]>(() =>
@@ -27,49 +38,45 @@ const displayProjects = computed<ProcessPlanningProject[]>(() =>
   })),
 )
 
-const dayList = computed(() => {
-  if (!displayProjects.value.length) return []
-  let min = Infinity, max = -Infinity
+/** Якорь по умолчанию — самая ранняя дата старта среди проектов */
+const defaultAnchor = computed<Date>(() => {
+  let min = Infinity
   for (const project of displayProjects.value) {
     const ts = new Date(project.start_date).getTime()
-    const te = new Date(project.end_date).getTime()
     if (ts < min) min = ts
-    if (te > max) max = te
   }
-  if (!isFinite(min) || !isFinite(max)) return []
-  const days: Date[] = []
-  const cur = new Date(min)
-  const end = new Date(max)
-  while (cur <= end) {
-    days.push(new Date(cur))
-    cur.setDate(cur.getDate() + 1)
-  }
-  return days
+  return isFinite(min) ? new Date(min) : new Date()
 })
+
+const anchor = computed<Date>(() => {
+  if (props.anchor == null) return defaultAnchor.value
+  return props.anchor instanceof Date ? props.anchor : new Date(props.anchor)
+})
+
+const cells = computed(() => buildCells(anchor.value, props.mode, props.unit))
 
 const gridCols = computed(() => {
-  if (!dayList.value.length) return '180px'
-  return `180px repeat(${dayList.value.length}, 1fr)`
+  if (!cells.value.length) return '180px'
+  return `180px repeat(${cells.value.length}, 1fr)`
 })
-
-const dayZero = computed<Date | null>(() => dayList.value.length ? dayList.value[0] : null)
 </script>
 
 <template>
   <div class="pg">
     <div v-if="loading" class="st">Загрузка...</div>
     <div v-else-if="error" class="st er">{{ error }}</div>
-    <template v-else-if="displayProjects.length && dayList.length">
+    <template v-else-if="displayProjects.length && cells.length">
       <div class="gg" :style="{ gridTemplateColumns: gridCols }">
 
-        <CalendarHeader :startDate="dayList[0]" :endDate="dayList[dayList.length-1]" />
+        <CalendarHeader :anchor="anchor" :mode="mode" :unit="unit" />
 
         <div class="sep" style="gridColumn:1/-1"></div>
 
         <template v-for="project in displayProjects" :key="'proj'+project.id">
           <ProcessGantt
-            :dayZero="dayZero"
-            :totalDays="dayList.length"
+            :anchor="anchor"
+            :mode="mode"
+            :unit="unit"
             :projectCode="project.project_code"
             :processes="project.processes"
             :groupStartDate="project.start_date"

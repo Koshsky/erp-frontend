@@ -1,3 +1,5 @@
+import type { PlanningMode, PlanningUnit } from '../calendar'
+
 export interface GroupGanttItem {
   id: number
   title: string
@@ -6,8 +8,9 @@ export interface GroupGanttItem {
 }
 
 export interface GroupGanttProps {
-  dayZero: Date | number | null
-  totalDays: number
+  anchor: Date | number | null
+  mode: PlanningMode
+  unit: PlanningUnit
   items: GroupGanttItem[]
   /** Границы группы (опционально — для подсветки на шкале) */
   groupStartDate?: string

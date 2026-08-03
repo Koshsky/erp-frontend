@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/vue3-vite'
 import TaskGantt from './TaskGantt.vue'
+import { cellCount } from '../../../calendar'
 
 const now = new Date()
 const day = (m: number) => new Date(now.getFullYear(), now.getMonth(), m)
@@ -14,8 +15,8 @@ const meta: Meta<typeof TaskGantt> = {
 export default meta
 type Story = StoryObj<typeof meta>
 
-const dayZero = day(1)
-const totalDays = 31
+const anchor = day(1)
+const cells = cellCount(anchor, 'quarter', 'day')
 
 const tasks = [
   { id: 1, title: 'Осмотр объекта', start_date: iso(day(2)), end_date: iso(day(5)), resources: [{ resource_id: 1, quantity: 2, code: 'И' }] },
@@ -26,10 +27,10 @@ const tasks = [
 export const Default: Story = {
   render: () => ({
     components: { TaskGantt },
-    data: () => ({ dayZero, totalDays, tasks, title: 'Инсталляция', projectCode: 'KO-1001' }),
+    data: () => ({ anchor, cells, tasks, title: 'Инсталляция', projectCode: 'KO-1001', mode: 'quarter' as const, unit: 'day' as const }),
     template: `
-      <div :style="{ display: 'grid', gridTemplateColumns: '180px repeat(' + totalDays + ', 1fr)', background: '#fff', borderRadius: '10px', padding: '12px', boxShadow: '0 1px 6px rgba(0,0,0,.08)', overflowX: 'auto', minWidth: '600px' }">
-        <TaskGantt :dayZero="dayZero" :totalDays="totalDays" :title="title" :projectCode="projectCode" :tasks="tasks" />
+      <div :style="{ display: 'grid', gridTemplateColumns: '180px repeat(' + cells + ', 1fr)', background: '#fff', borderRadius: '10px', padding: '12px', boxShadow: '0 1px 6px rgba(0,0,0,.08)', overflowX: 'auto', minWidth: '600px' }">
+        <TaskGantt :anchor="anchor" :mode="mode" :unit="unit" :title="title" :projectCode="projectCode" :tasks="tasks" />
       </div>
     `,
   }),
@@ -39,22 +40,23 @@ export const WithGroupRange: Story = {
   render: () => ({
     components: { TaskGantt },
     data: () => ({
-      dayZero,
-      totalDays,
+      anchor,
+      cells,
       tasks,
       title: 'Монтаж',
       projectCode: 'KO-2002',
       groupStartDate: iso(day(3)),
       groupEndDate: iso(day(26)),
+      mode: 'quarter' as const,
+      unit: 'day' as const,
     }),
     template: `
-      <div :style="{ display: 'grid', gridTemplateColumns: '180px repeat(' + totalDays + ', 1fr)', background: '#fff', borderRadius: '10px', padding: '12px', boxShadow: '0 1px 6px rgba(0,0,0,.08)', overflowX: 'auto', minWidth: '600px' }">
+      <div :style="{ display: 'grid', gridTemplateColumns: '180px repeat(' + cells + ', 1fr)', background: '#fff', borderRadius: '10px', padding: '12px', boxShadow: '0 1px 6px rgba(0,0,0,.08)', overflowX: 'auto', minWidth: '600px' }">
         <TaskGantt
-          :dayZero="dayZero" :totalDays="totalDays" :title="title" :projectCode="projectCode"
+          :anchor="anchor" :mode="mode" :unit="unit" :title="title" :projectCode="projectCode"
           :tasks="tasks" :groupStartDate="groupStartDate" :groupEndDate="groupEndDate"
         />
       </div>
     `,
   }),
 }
-

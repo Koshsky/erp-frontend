@@ -1,3 +1,5 @@
+import type { DtoDetailedProject } from '@/api'
+import type { PlanningMode, PlanningUnit } from '../calendar'
 import type { ProcessItem } from './components/ProcessGantt/types'
 
 export interface ProcessPlanningProject {
@@ -10,7 +12,10 @@ export interface ProcessPlanningProject {
 }
 
 export interface ProcessPlanningProps {
-  mockProjects?: ProcessPlanningProject[] | null
+  projects?: DtoDetailedProject[] | null
+  loading?: boolean
+  error?: string | null
+  anchor?: string | Date | number | null
+  mode?: PlanningMode
+  unit?: PlanningUnit
 }
-
-

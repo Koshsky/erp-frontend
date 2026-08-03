@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { GroupGanttProps } from './types'
+import { barCells, cellCount } from '../calendar'
 
 const props = defineProps<GroupGanttProps>()
 
@@ -16,16 +17,12 @@ function fmt(d: string | Date | number | null | undefined): string {
 
 /** Полупрозрачная подложка границ группы */
 const groupOverlayStyle = computed(() => {
-  if (!props.groupStartDate || !props.groupEndDate || !props.dayZero || !props.totalDays) return null
-  const dayZero = props.dayZero instanceof Date ? props.dayZero : new Date(props.dayZero)
-  const start = new Date(props.groupStartDate)
-  const end = new Date(props.groupEndDate)
-  const offset = (start.getTime() - dayZero.getTime()) / (1000 * 60 * 60 * 24)
-  const width = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)
-  const total = props.totalDays
+  if (!props.groupStartDate || !props.groupEndDate || !props.anchor) return null
+  const { startCell, endCell } = barCells(props.anchor, props.mode, props.unit, props.groupStartDate, props.groupEndDate)
+  const total = cellCount(props.anchor, props.mode, props.unit)
   return {
-    left: (offset / total) * 100 + '%',
-    width: Math.max((width / total) * 100, 0.5) + '%',
+    left: (startCell / total) * 100 + '%',
+    width: Math.max(((endCell - startCell) / total) * 100, 0.5) + '%',
   }
 })
 </script>
@@ -119,4 +116,3 @@ const groupOverlayStyle = computed(() => {
   border-bottom: 1px solid #ddd;
 }
 </style>
-

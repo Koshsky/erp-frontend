@@ -3,17 +3,24 @@ import { ref, onMounted } from 'vue'
 import { storeToRefs } from 'pinia'
 import ProjectPlanning from '../components/planner/ProjectPlanning/ProjectPlanning.vue'
 import { usePlanningStore } from '../store'
-import type { PlanningPeriod } from '../components/planner/ProjectPlanning/types'
+import type { PlanningMode, PlanningUnit } from '../components/planner/calendar'
 
 const store = usePlanningStore()
 const { projectPlanning, loading, error } = storeToRefs(store)
 
-const period = ref<PlanningPeriod>('quarter')
+const mode = ref<PlanningMode>('quarter')
+const unit = ref<PlanningUnit>('day')
+const anchor = ref<Date | null>(null)
 
-const periodOptions: { value: PlanningPeriod; label: string }[] = [
+const modeOptions: { value: PlanningMode; label: string }[] = [
   { value: 'quarter', label: '3 месяца' },
   { value: 'half', label: 'Полгода' },
   { value: 'year', label: 'Год' },
+]
+
+const unitOptions: { value: PlanningUnit; label: string }[] = [
+  { value: 'day', label: 'День' },
+  { value: 'decade', label: 'Декада' },
 ]
 
 onMounted(() => {
@@ -27,12 +34,24 @@ onMounted(() => {
     <h2 class="pp-title">Проекты</h2>
       <div class="pp-period">
         <button
-          v-for="opt in periodOptions"
+          v-for="opt in modeOptions"
           :key="opt.value"
           class="pp-period-btn"
-          :class="{ active: period === opt.value }"
+          :class="{ active: mode === opt.value }"
           type="button"
-          @click="period = opt.value"
+          @click="mode = opt.value"
+        >
+          {{ opt.label }}
+        </button>
+      </div>
+      <div class="pp-period">
+        <button
+          v-for="opt in unitOptions"
+          :key="opt.value"
+          class="pp-period-btn"
+          :class="{ active: unit === opt.value }"
+          type="button"
+          @click="unit = opt.value"
         >
           {{ opt.label }}
         </button>
@@ -45,7 +64,9 @@ onMounted(() => {
     <ProjectPlanning
       v-else
       :projects="projectPlanning?.projects || []"
-      :period="period"
+      :anchor="anchor"
+      :mode="mode"
+      :unit="unit"
     />
   </section>
 </template>
@@ -99,5 +120,3 @@ onMounted(() => {
 }
 .er { color: #d93025; }
 </style>
-
-

@@ -17,13 +17,14 @@ type Story = StoryObj<typeof meta>
 function withProcess(props: Record<string, any>): Story['render'] {
   return () => ({
     components: { ProcessBar },
-    data: () => ({ dayZero: day(1), totalDays: 60, ...props }),
+    data: () => ({ anchor: day(1), mode: 'quarter' as const, unit: 'day' as const, ...props }),
     template: `
       <div style="max-width:800px;margin:0 auto;font-family:sans-serif;">
         <div style="position:relative;width:100%;height:36px;background:#f0f0f0;border-radius:6px;">
           <ProcessBar
-            :dayZero="dayZero"
-            :totalDays="totalDays"
+            :anchor="anchor"
+            :mode="mode"
+            :unit="unit"
             :startDate="startDate"
             :endDate="endDate"
             :title="title"
@@ -55,3 +56,15 @@ export const EvenSpan: Story = {
   render: withProcess({ startDate: d.p3s, endDate: d.p3e, title: 'Закупка', projectCode: 'KO-1003', color: '#34a853' }),
 }
 
+/** Год с декадами: 37 колонок, бар растянут на ~2.5 декады */
+export const YearDecades: Story = {
+  render: withProcess({
+    anchor: new Date(now.getFullYear(), 0, 1),
+    mode: 'year' as const,
+    unit: 'decade' as const,
+    startDate: iso(new Date(now.getFullYear(), 0, 5)),
+    endDate: iso(new Date(now.getFullYear(), 2, 20)),
+    title: 'Инсталляция',
+    projectCode: 'KO-1004',
+  }),
+}

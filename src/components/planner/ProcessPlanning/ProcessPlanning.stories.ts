@@ -70,3 +70,15 @@ export const MultipleProjects: Story = {
     ],
   },
 }
+
+/** Год с декадами — проекты растянуты на несколько декад */
+export const YearDecades: Story = {
+  args: {
+    projects: [
+      project('КО_505', [1, 5], [3, 20], [1, 15], [3, 10], [1, 30], [3, 20]),
+      project('КО_506', [2, 10], [5, 25], [2, 20], [5, 2], [3, 1], [5, 8]),
+    ],
+    mode: 'year',
+    unit: 'decade',
+  },
+}

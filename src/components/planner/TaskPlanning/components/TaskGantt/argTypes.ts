@@ -2,17 +2,25 @@ import type { ArgTypes } from '@storybook/vue3-vite'
 import type { TaskGanttProps } from './types'
 
 export const taskGanttArgTypes: ArgTypes<TaskGanttProps> = {
-  dayZero: {
-    name: 'Начало шкалы',
-    description: 'Опорная дата для расчёта смещения задач',
+  anchor: {
+    name: 'Якорь шкалы',
+    description: 'Опорная дата (первая ячейка) для расчёта смещения задач',
     control: 'date',
     table: { type: { summary: 'Date | null' }, category: 'Data' },
   },
-  totalDays: {
-    name: 'Всего дней',
-    description: 'Общее количество дней на шкале',
-    control: { type: 'number', min: 1, max: 365 },
-    table: { category: 'Data' },
+  mode: {
+    name: 'Период',
+    description: 'Период календаря: квартал (92 дня), полугодие или год',
+    control: 'select',
+    options: ['quarter', 'half', 'year'],
+    table: { type: { summary: 'PlanningMode' }, defaultValue: { summary: 'quarter' }, category: 'Data' },
+  },
+  unit: {
+    name: 'Единица ячейки',
+    description: 'Сколько дней в одной ячейке шкалы: день, неделя или декада',
+    control: 'select',
+    options: ['day', 'decade'],
+    table: { type: { summary: 'PlanningUnit' }, defaultValue: { summary: 'day' }, category: 'Data' },
   },
   title: {
     name: 'Название процесса',

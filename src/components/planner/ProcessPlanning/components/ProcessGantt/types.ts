@@ -1,3 +1,5 @@
+import type { PlanningMode, PlanningUnit } from '../../../calendar'
+
 export interface ProcessItem {
   id: number
   title: string
@@ -6,8 +8,9 @@ export interface ProcessItem {
 }
 
 export interface ProcessGanttProps {
-  dayZero: Date | number | null
-  totalDays: number
+  anchor: Date | number | null
+  mode: PlanningMode
+  unit: PlanningUnit
   projectCode?: string
   processes: ProcessItem[]
   groupStartDate?: string

@@ -1,31 +1,32 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import type { PlanningMode, PlanningUnit } from '../calendar'
+import { buildCells } from '../calendar'
 
 const props = defineProps<{
-  startDate: Date | number
-  endDate: Date | number
+  anchor: Date | number
+  mode: PlanningMode
+  unit: PlanningUnit
 }>()
 
-function toDate(v: Date | number): Date {
-  return v instanceof Date ? v : new Date(v)
-}
-
-const dayList = computed<Date[]>(() => {
-  const days: Date[] = []
-  const cur = new Date(toDate(props.startDate))
-  const end = new Date(toDate(props.endDate))
-  while (cur <= end) {
-    days.push(new Date(cur))
-    cur.setDate(cur.getDate() + 1)
-  }
-  return days
-})
-
-function dd(d: Date): string {
-  return d.toLocaleDateString('ru', { day: 'numeric' })
-}
+const cells = computed(() => buildCells(props.anchor, props.mode, props.unit))
 
 const dowMap = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб']
+
+/** Подпись числа — диапазон дней ячейки («1-10», «11-20», «21-31»);
+ * для однодневных ячеек (день) — просто число. Декады не пересекают месяц. */
+function numLabel(i: number): string {
+  const { start, end } = cells.value[i]
+  return start.getDate() === end.getDate() ? start.getDate().toString() : `${start.getDate()}-${end.getDate()}`
+}
+
+/** Подпись нижней строки — день недели (для дней) */
+function subLabel(i: number): string {
+  return props.unit === 'day' ? dowMap[cells.value[i].start.getDay()] : ''
+}
+
+/** Третий ряд (день недели) показываем только для дневных ячеек */
+const showSubRow = computed(() => props.unit === 'day')
 
 interface MonthHeader {
   label: string
@@ -33,20 +34,22 @@ interface MonthHeader {
   ce: number
 }
 
+/** Месяцы с учётом перехода через год — группировка по паре (год, месяц) */
 const monthHeaders = computed<MonthHeader[]>(() => {
-  const dl = dayList.value
-  if (!dl.length) return []
+  const list = cells.value
+  if (!list.length) return []
   const hh: MonthHeader[] = []
-  let cm = -1
-  for (let i = 0; i < dl.length; i++) {
-    const m = dl[i].getMonth()
-    if (m !== cm) {
+  let key = ''
+  for (let i = 0; i < list.length; i++) {
+    const d = list[i].start
+    const k = d.getFullYear() + '-' + d.getMonth()
+    if (k !== key) {
       hh.push({
-        label: dl[i].toLocaleDateString('ru', { month: 'long' }),
+        label: d.toLocaleDateString('ru', { month: 'long' }),
         cs: i + 2,
         ce: i + 2,
       })
-      cm = m
+      key = k
     } else {
       hh[hh.length - 1].ce = i + 2
     }
@@ -63,14 +66,16 @@ const monthHeaders = computed<MonthHeader[]>(() => {
   >{{ mh.label }}</div>
 
   <div class="c hc lc"></div>
-  <div v-for="(d,i) in dayList" :key="'d'+i"
+  <div v-for="(c,i) in cells" :key="'n'+i"
     class="c hc dc"
-  >{{ dd(d) }}</div>
+  >{{ numLabel(i) }}</div>
 
-  <div class="c hc lc"></div>
-  <div v-for="(d,i) in dayList" :key="'dw'+i"
-    class="c hc wc"
-  >{{ dowMap[d.getDay()] }}</div>
+  <template v-if="showSubRow">
+    <div class="c hc lc"></div>
+    <div v-for="(c,i) in cells" :key="'s'+i"
+      class="c hc wc"
+    >{{ subLabel(i) }}</div>
+  </template>
 </template>
 
 <style scoped>

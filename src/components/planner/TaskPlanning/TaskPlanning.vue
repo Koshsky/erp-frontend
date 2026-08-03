@@ -6,13 +6,24 @@ import TaskGantt from './components/TaskGantt/TaskGantt.vue'
 import type { DtoDetailedProcess, DtoResource } from '@/api'
 import type { Resource } from './components/ResourceHeader/types'
 import type { Process } from './types'
+import { buildCells } from '../calendar'
+import type { PlanningMode, PlanningUnit } from '../calendar'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   processes?: DtoDetailedProcess[] | null
   resources?: DtoResource[] | null
   loading?: boolean
   error?: string | null
-}>()
+  /** Якорь шкалы (первая ячейка); по умолчанию — самая ранняя дата старта процесса */
+  anchor?: string | Date | number | null
+  /** Период календаря: квартал, полугодие или год */
+  mode?: PlanningMode
+  /** Единица ячейки: день, неделя или декада */
+  unit?: PlanningUnit
+}>(), {
+  mode: 'quarter',
+  unit: 'day',
+})
 
 // Маппим DTO (из /planning/tasks) во внутренние типы планировщика.
 const displayProcesses = computed<Process[]>(() =>
@@ -45,26 +56,22 @@ const displayResources = computed<Resource[]>(() =>
   })),
 )
 
-const dayList = computed(() => {
-  if (!displayProcesses.value.length) return []
-  // Длина календаря определяется по границам всех процессов
-  let min = Infinity, max = -Infinity
+/** Якорь по умолчанию — самая ранняя дата старта среди процессов */
+const defaultAnchor = computed<Date>(() => {
+  let min = Infinity
   for (const proc of displayProcesses.value) {
     const ts = new Date(proc.start_date).getTime()
-    const te = new Date(proc.end_date).getTime()
     if (ts < min) min = ts
-    if (te > max) max = te
   }
-  if (!isFinite(min) || !isFinite(max)) return []
-  const days: Date[] = []
-  const cur = new Date(min)
-  const end = new Date(max)
-  while (cur <= end) {
-    days.push(new Date(cur))
-    cur.setDate(cur.getDate() + 1)
-  }
-  return days
+  return isFinite(min) ? new Date(min) : new Date()
 })
+
+const anchor = computed<Date>(() => {
+  if (props.anchor == null) return defaultAnchor.value
+  return props.anchor instanceof Date ? props.anchor : new Date(props.anchor)
+})
+
+const cells = computed(() => buildCells(anchor.value, props.mode, props.unit))
 
 function usageForDay(resourceId: number, day: Date): number {
   let used = 0
@@ -81,11 +88,9 @@ function usageForDay(resourceId: number, day: Date): number {
 }
 
 const gridCols = computed(() => {
-  if (!dayList.value.length) return '180px'
-  return `180px repeat(${dayList.value.length}, 1fr)`
+  if (!cells.value.length) return '180px'
+  return `180px repeat(${cells.value.length}, 1fr)`
 })
-
-const dayZero = computed<Date | null>(() => dayList.value.length ? dayList.value[0] : null)
 </script>
 
 <template>
@@ -93,23 +98,26 @@ const dayZero = computed<Date | null>(() => dayList.value.length ? dayList.value
     <div v-if="loading" class="st">Загрузка...</div>
     <div v-else-if="error" class="st er">{{ error }}</div>
 
-    <template v-else-if="displayProcesses.length && dayList.length">
+    <template v-else-if="displayProcesses.length && cells.length">
       <div class="gg" :style="{ gridTemplateColumns: gridCols }">
 
-        <CalendarHeader :startDate="dayList[0]" :endDate="dayList[dayList.length-1]" />
+        <CalendarHeader :anchor="anchor" :mode="mode" :unit="unit" />
 
         <ResourceHeader
-          :dayList="dayList"
+          :anchor="anchor"
+          :mode="mode"
+          :unit="unit"
           :resources="displayResources"
           :usageFn="usageForDay"
         />
 
         <div class="sep" style="gridColumn:1/-1"></div>
 
-        <template v-for="(proc, pi) in displayProcesses" :key="'proc'+proc.id">
+        <template v-for="proc in displayProcesses" :key="'proc'+proc.id">
           <TaskGantt
-            :dayZero="dayZero"
-            :totalDays="dayList.length"
+            :anchor="anchor"
+            :mode="mode"
+            :unit="unit"
             :title="proc.title"
             :projectCode="proc.project_code"
             :tasks="proc.tasks || []"
@@ -133,19 +141,4 @@ const dayZero = computed<Date | null>(() => dayList.value.length ? dayList.value
 .er { color:#d93025; }
 .gg { display: grid; min-width: 600px; }
 .sep { border: none; border-bottom: 2px solid #1a73e8; margin: 4px 0; height: 0; }
-
-.c {
-  border: 1px solid #e8e8e8;
-  text-align: center;
-  font-size: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.lc {
-  position: sticky; left: 0; background: #fff; z-index: 2;
-  text-align: left; padding: 4px 8px !important;
-  border-left: none; justify-content: flex-start; overflow: hidden;
-}
-
 </style>

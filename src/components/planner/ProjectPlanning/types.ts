@@ -1,3 +1,6 @@
+import type { DtoProject } from '@/api'
+import type { PlanningMode, PlanningUnit } from '../calendar'
+
 export interface ProjectItem {
   id: number
   project_code: string
@@ -5,11 +8,13 @@ export interface ProjectItem {
   end_date: string
 }
 
-/** Период отображения календаря */
-export type PlanningPeriod = 'quarter' | 'half' | 'year'
-
 export interface ProjectPlanningProps {
-  projects?: ProjectItem[] | null
+  projects?: DtoProject[] | null
+  anchor?: string | Date | number | null
   /** Период календаря: квартал (3 мес), полугодие или год */
-  period?: PlanningPeriod
+  mode?: PlanningMode
+  /** Единица ячейки: день, неделя или декада */
+  unit?: PlanningUnit
 }
+
+export type { PlanningMode, PlanningUnit }

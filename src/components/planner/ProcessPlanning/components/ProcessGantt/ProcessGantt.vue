@@ -11,32 +11,33 @@ const groupItems = computed(() => props.processes)
 
 <template>
   <GroupGantt
-    :dayZero="dayZero"
-        :totalDays="totalDays"
+    :anchor="anchor"
+    :mode="mode"
+    :unit="unit"
     :items="groupItems"
     :groupStartDate="groupStartDate"
     :groupEndDate="groupEndDate"
   >
     <template #header>
       <span class="header-code">{{ projectCode }}</span>
-  </template>
+    </template>
 
     <template #row="{ item }">
       <span>{{ item.title }}</span>
-</template>
+    </template>
 
     <template #bar="{ item }">
       <ProcessBar
-        :dayZero="dayZero!"
-        :totalDays="totalDays"
+        :anchor="anchor!"
+        :mode="mode"
+        :unit="unit"
         :startDate="item.start_date"
         :endDate="item.end_date"
         :title="item.title"
       />
-  </template>
+    </template>
   </GroupGantt>
 </template>
 
 <style scoped>
 </style>
-

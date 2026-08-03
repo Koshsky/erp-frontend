@@ -2,10 +2,12 @@
 import { computed } from 'vue'
 import GanttBar from '../../../../../GanttBar/GanttBar.vue'
 import type { Task } from './types'
+import type { PlanningMode, PlanningUnit } from '../../../../../calendar'
 
 const props = defineProps<{
-  dayZero: Date | number | null
-  totalDays: number
+  anchor: Date | number | null
+  mode: PlanningMode
+  unit: PlanningUnit
   task: Task
 }>()
 
@@ -17,8 +19,9 @@ const resourcesText = computed(() => {
 
 <template>
   <GanttBar
-    :dayZero="dayZero!"
-    :totalDays="totalDays"
+    :anchor="anchor!"
+    :mode="mode"
+    :unit="unit"
     :startDate="task.start_date"
     :endDate="task.end_date"
   >

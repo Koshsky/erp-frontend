@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { barCells, cellCount } from '../../../calendar'
+import type { PlanningMode, PlanningUnit } from '../../../calendar'
 
 const props = defineProps<{
-  dayZero: Date | number
-  totalDays: number
+  anchor: Date | number
+  mode: PlanningMode
+  unit: PlanningUnit
   startDate: string | Date | number
   endDate: string | Date | number
   title: string
@@ -12,23 +15,11 @@ const props = defineProps<{
   opacity?: number
 }>()
 
-function toDate(v: Date | number): Date {
-  return v instanceof Date ? v : new Date(v)
-}
-
-function dayOffset(date: string | Date | number): number {
-  const d = date instanceof Date ? date : new Date(date)
-  const zero = toDate(props.dayZero)
-  const diff = d.getTime() - zero.getTime()
-  return Math.round(diff / (1000 * 60 * 60 * 24))
-}
-
 const barStyle = computed(() => {
-  const total = props.totalDays
-  const startOff = dayOffset(props.startDate)
-  const endOff = dayOffset(props.endDate)
-  const l = (startOff / total) * 100
-  const w = ((endOff - startOff) / total) * 100
+  const { startCell, endCell } = barCells(props.anchor, props.mode, props.unit, props.startDate, props.endDate)
+  const total = cellCount(props.anchor, props.mode, props.unit)
+  const l = (startCell / total) * 100
+  const w = ((endCell - startCell) / total) * 100
   return {
     left: l + '%',
     width: Math.max(w, 0.5) + '%',
@@ -91,4 +82,3 @@ const barStyle = computed(() => {
   padding: 0 5px;
 }
 </style>
-

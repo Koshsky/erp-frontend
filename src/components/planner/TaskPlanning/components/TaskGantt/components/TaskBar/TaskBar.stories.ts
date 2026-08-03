@@ -14,14 +14,14 @@ const meta: Meta<typeof TaskBar> = {
 export default meta
 type Story = StoryObj<typeof meta>
 
-function withTask(task: any, dayZero: Date, totalDays: number): Story['render'] {
+function withTask(task: any, anchor: Date, mode: 'quarter' | 'half' | 'year', unit: 'day' | 'decade'): Story['render'] {
   return () => ({
     components: { TaskBar },
-    data: () => ({ dayZero, totalDays, task }),
+    data: () => ({ anchor, mode, unit, task }),
     template: `
       <div style="max-width:700px;margin:0 auto;font-family:sans-serif;">
         <div style="position:relative;width:100%;height:40px;background:#f0f0f0;border-radius:6px;">
-          <TaskBar :dayZero="dayZero" :totalDays="totalDays" :task="task" />
+          <TaskBar :anchor="anchor" :mode="mode" :unit="unit" :task="task" />
         </div>
       </div>
     `,
@@ -34,7 +34,7 @@ export const OneResource: Story = {
       start_date: iso(day(4)), end_date: iso(day(9)),
       resources: [{ resource_id: 1, quantity: 2, code: 'И' }],
     },
-    day(1), 30,
+    day(1), 'quarter', 'day',
   ),
 }
 
@@ -48,14 +48,25 @@ export const MultipleResources: Story = {
         { resource_id: 2, quantity: 1, code: 'И' },
       ],
     },
-    day(1), 30,
+    day(1), 'quarter', 'day',
   ),
 }
 
 export const NoResources: Story = {
   render: withTask(
     { id: 1, title: 'Задача без ресурсов', start_date: iso(day(2)), end_date: iso(day(5)), resources: [] },
-    day(1), 30,
+    day(1), 'quarter', 'day',
   ),
 }
 
+/** Год с декадами — бар растянут на несколько декад */
+export const YearDecades: Story = {
+  render: withTask(
+    {
+      id: 1, title: 'Монтаж конструкций',
+      start_date: iso(new Date(now.getFullYear(), 0, 3)), end_date: iso(new Date(now.getFullYear(), 2, 10)),
+      resources: [{ resource_id: 1, quantity: 3, code: 'М' }],
+    },
+    new Date(now.getFullYear(), 0, 1), 'year', 'decade',
+  ),
+}

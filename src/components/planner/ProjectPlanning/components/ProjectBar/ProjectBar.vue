@@ -7,8 +7,9 @@ defineProps<ProjectBarProps>()
 
 <template>
   <ProcessBar
-    :dayZero="dayZero"
-    :totalDays="totalDays"
+    :anchor="anchor"
+    :mode="mode"
+    :unit="unit"
     :startDate="startDate"
     :endDate="endDate"
     :title="projectCode"
