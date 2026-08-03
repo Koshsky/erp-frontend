@@ -1,15 +1,17 @@
 <script setup lang="ts">
-import { ref, onBeforeUnmount } from 'vue'
+import { ref, useSlots, onBeforeUnmount } from 'vue'
+import type { TooltipCellProps } from './types'
 
-const props = defineProps<{
-  text: string
-}>()
+const props = withDefaults(defineProps<TooltipCellProps>(), {
+  multiline: false,
+})
 
 const visible = ref(false)
 const x = ref(0)
 const y = ref(0)
 let showTimer: ReturnType<typeof setTimeout> | null = null
 const triggerRef = ref<HTMLElement | null>(null)
+const slots = useSlots()
 
 function getPos(el: HTMLElement): { x: number; y: number } {
   const rect = el.getBoundingClientRect()
@@ -51,11 +53,14 @@ onBeforeUnmount(() => {
     <slot />
     <Teleport to="body">
       <div
-        v-if="visible && text"
+        v-if="visible && (text || slots.popup)"
         class="tt-popup"
+        :class="{ 'tt-popup--multiline': multiline }"
         :style="{ left: x + 'px', top: y + 'px' }"
       >
-        {{ text }}
+        <slot name="popup">
+          {{ text }}
+        </slot>
       </div>
     </Teleport>
   </span>
@@ -79,5 +84,9 @@ onBeforeUnmount(() => {
   pointer-events: none;
   z-index: 9999;
   box-shadow: 0 3px 12px rgba(0,0,0,.3);
+}
+.tt-popup--multiline {
+  white-space: normal;
+  max-width: 300px;
 }
 </style>

@@ -155,3 +155,19 @@ export function barCells(
   const endCell = clamp(cellIndexOf(cells, eT) + 1, startCell + 1, len)
   return { startCell, endCell }
 }
+
+/** Индекс ячейки, содержащей одиночную дату date (точка на шкале), или null, если дата вне диаграммы. */
+export function dateCellIndex(
+  anchor: Date | string | number,
+  mode: PlanningMode,
+  unit: PlanningUnit,
+  date: Date | string | number,
+): number | null {
+  const cells = buildCells(anchor, mode, unit)
+  if (!cells.length) return null
+  const t = toDayStart(date).getTime()
+  const first = cells[0].start.getTime()
+  const last = cells[cells.length - 1].end.getTime()
+  if (t < first || t > last) return null
+  return cellIndexOf(cells, t)
+}
