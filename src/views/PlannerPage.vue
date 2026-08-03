@@ -22,15 +22,27 @@ onMounted(async () => {
 </script>
 
 <template>
-  <!-- Диаграмма Задач: данные загружает PlannerPage (view) через store,
-       TaskPlanning получает их через props -->
-  <TaskPlanning
-    :processes="taskPlanning?.processes || null"
-    :resources="resources"
-    :loading="loading"
-    :error="error"
-    :anchor="anchor"
-    :mode="mode"
-    :unit="unit"
-  />
+  <section class="pp">
+    <h2 class="pp-title">Задачи</h2>
+    <!-- Диаграмма Задач: данные загружает PlannerPage (view) через store,
+         TaskPlanning получает их через props -->
+    <TaskPlanning
+      :processes="taskPlanning?.processes || null"
+      :resources="resources"
+      :loading="loading"
+      :error="error"
+      :anchor="anchor"
+      :mode="mode"
+      :unit="unit"
+    />
+  </section>
 </template>
+
+<style scoped>
+.pp-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: #2c3e50;
+  margin-bottom: 20px;
+}
+</style>

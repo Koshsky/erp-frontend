@@ -17,8 +17,9 @@ function onLogout() {
     <div class="ah-brand">{{ brand }}</div>
     <nav class="ah-nav">
       <RouterLink to="/">Дашборд</RouterLink>
-      <RouterLink to="/planner">Планировщик</RouterLink>
       <RouterLink to="/projects">Проекты</RouterLink>
+      <RouterLink to="/processes">Процессы</RouterLink>
+      <RouterLink to="/planner">Задачи</RouterLink>
       <RouterLink to="/resources">Ресурсы</RouterLink>
       <RouterLink to="/profile">Профиль</RouterLink>
     </nav>
