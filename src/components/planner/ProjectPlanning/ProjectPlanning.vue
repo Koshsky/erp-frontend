@@ -4,7 +4,7 @@ import CalendarHeader from '../CalendarHeader/CalendarHeader.vue'
 import ProjectBar from './components/ProjectBar/ProjectBar.vue'
 import type { DtoProject } from '@/api'
 import type { PlanningMode, PlanningUnit } from '../calendar'
-import { buildCells } from '../calendar'
+import { buildCells, toDate } from '../calendar'
 
 const props = withDefaults(defineProps<{
   projects?: DtoProject[] | null
@@ -32,7 +32,7 @@ const defaultAnchor = computed<Date>(() => {
   let min = Infinity
   for (const p of projects.value) {
     if (!p.start_date) continue
-    const ts = new Date(p.start_date).getTime()
+    const ts = toDate(p.start_date).getTime()
     if (ts < min) min = ts
   }
   if (!isFinite(min)) return new Date()
@@ -41,7 +41,7 @@ const defaultAnchor = computed<Date>(() => {
 
 const anchor = computed<Date>(() => {
   if (props.anchor == null) return defaultAnchor.value
-  return props.anchor instanceof Date ? props.anchor : new Date(props.anchor)
+  return toDate(props.anchor)
 })
 
 // Ячейки календаря фиксированной длины в зависимости от периода и единицы

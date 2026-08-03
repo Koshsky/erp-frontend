@@ -4,7 +4,7 @@ import CalendarHeader from '../CalendarHeader/CalendarHeader.vue'
 import ProcessGantt from './components/ProcessGantt/ProcessGantt.vue'
 import type { DtoDetailedProject } from '@/api'
 import type { ProcessPlanningProject } from './types'
-import { buildCells } from '../calendar'
+import { buildCells, toDate } from '../calendar'
 import type { PlanningMode, PlanningUnit } from '../calendar'
 
 const props = withDefaults(defineProps<{
@@ -50,7 +50,7 @@ const displayProjects = computed<ProcessPlanningProject[]>(() =>
 const defaultAnchor = computed<Date>(() => {
   let min = Infinity
   for (const project of displayProjects.value) {
-    const ts = new Date(project.start_date).getTime()
+    const ts = toDate(project.start_date).getTime()
     if (ts < min) min = ts
   }
   return isFinite(min) ? new Date(min) : new Date()
@@ -58,7 +58,7 @@ const defaultAnchor = computed<Date>(() => {
 
 const anchor = computed<Date>(() => {
   if (props.anchor == null) return defaultAnchor.value
-  return props.anchor instanceof Date ? props.anchor : new Date(props.anchor)
+  return toDate(props.anchor)
 })
 
 const cells = computed(() => buildCells(anchor.value, props.mode, props.unit))
