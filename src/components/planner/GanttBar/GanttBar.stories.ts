@@ -205,3 +205,125 @@ export const ClippedAtEdges: Story = {
     `,
   }),
 }
+
+/** Драг с границами родителя: группа занимает февраль (groupStartDate/groupEndDate),
+ *  бар внутри можно двигать и растягивать только в её пределах;
+ *  границы группы подсвечены фоном трека. */
+export const ClampedToGroupBounds: Story = {
+  render: () => ({
+    components: { GanttBar },
+    data: () => ({
+      ...base,
+      groupStart: iso(day(2, 1)),
+      groupEnd: iso(day(3, 1)),
+      last: '—',
+    }),
+    methods: {
+      onChange(p: { start_date: string; end_date: string }) {
+        this.last = `${p.start_date} → ${p.end_date}`
+      },
+    },
+    computed: {
+      trackStyle() {
+        return {
+          position: 'relative',
+          width: '100%',
+          height: '36px',
+          background: 'linear-gradient(90deg, #f0f0f0 33.3%, #e8f0fe 33.3%, #e8f0fe 66.6%, #f0f0f0 66.6%)',
+          borderRadius: '6px',
+        }
+      },
+    },
+    template: `
+      <div style="max-width:720px;margin:0 auto;font-family:sans-serif;display:flex;flex-direction:column;gap:18px;">
+        <div style="font-size:12px;color:#666;">Группа (подсвеченная зона) — весь февраль. Бар клиппится её границами при драге и ресайзе.</div>
+
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          <div style="font-size:13px;font-weight:600;color:#666;">Перетаскивание внутри границ</div>
+          <div :style="trackStyle">
+            <GanttBar :anchor="anchor" :mode="mode" :unit="unit" :startDate="iso(day(2,10))" :endDate="iso(day(2,20))" :groupStartDate="groupStart" :groupEndDate="groupEnd" draggable @change="onChange" />
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          <div style="font-size:13px;font-weight:600;color:#666;">Ресайз за правый край, упёршись в границу</div>
+          <div :style="trackStyle">
+            <GanttBar :anchor="anchor" :mode="mode" :unit="unit" :startDate="iso(day(2,15))" :endDate="iso(day(2,24))" :groupStartDate="groupStart" :groupEndDate="groupEnd" color="#1a73e8" draggable @change="onChange" />
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          <div style="font-size:13px;font-weight:600;color:#666;">Бар шире группы — при драге сжимается до её границ</div>
+          <div :style="trackStyle">
+            <GanttBar :anchor="anchor" :mode="mode" :unit="unit" :startDate="iso(day(1,20))" :endDate="iso(day(3,10))" :groupStartDate="groupStart" :groupEndDate="groupEnd" color="#ea4335" draggable @change="onChange" />
+          </div>
+        </div>
+
+        <div style="font-size:12px;color:#666;">Последний результат: <b>{{ last }}</b></div>
+      </div>
+    `,
+  }),
+}
+
+/** Драг: перетаскивание и ресайз за края (ручки видимы при наведении);
+ *  результат приходит в @change. */
+export const Draggable: Story = {
+  render: () => ({
+    components: { GanttBar },
+    data: () => ({
+      ...base,
+      last: '—',
+    }),
+    methods: {
+      onChange(p: { start_date: string; end_date: string }) {
+        this.last = `${p.start_date} → ${p.end_date}`
+      },
+    },
+    computed: {
+      trackStyle() {
+        return {
+          position: 'relative',
+          width: '100%',
+          height: '36px',
+          background: '#f0f0f0',
+          borderRadius: '6px',
+        }
+      },
+    },
+    template: `
+      <div style="max-width:720px;margin:0 auto;font-family:sans-serif;display:flex;flex-direction:column;gap:18px;">
+
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          <div style="font-size:13px;font-weight:600;color:#666;">Перетаскивание (draggable)</div>
+          <div :style="trackStyle">
+            <GanttBar :anchor="anchor" :mode="mode" :unit="unit" :startDate="iso(day(1,10))" :endDate="iso(day(2,5))" draggable @change="onChange" />
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          <div style="font-size:13px;font-weight:600;color:#666;">Ресайз за левый край</div>
+          <div :style="trackStyle">
+            <GanttBar :anchor="anchor" :mode="mode" :unit="unit" :startDate="iso(day(2,10))" :endDate="iso(day(2,28))" color="#1a73e8" draggable @change="onChange" />
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          <div style="font-size:13px;font-weight:600;color:#666;">Ресайз за правый край</div>
+          <div :style="trackStyle">
+            <GanttBar :anchor="anchor" :mode="mode" :unit="unit" :startDate="iso(day(3,5))" :endDate="iso(day(3,20))" color="#ea4335" draggable @change="onChange" />
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          <div style="font-size:13px;font-weight:600;color:#666;">Не перетаскиваемый (draggable=false)</div>
+          <div :style="trackStyle">
+            <GanttBar :anchor="anchor" :mode="mode" :unit="unit" :startDate="iso(day(2,1))" :endDate="iso(day(2,20))" color="#9aa0a6" @change="onChange" />
+          </div>
+        </div>
+
+        <div style="font-size:12px;color:#666;">Последний результат: <b>{{ last }}</b></div>
+
+      </div>
+    `,
+  }),
+}

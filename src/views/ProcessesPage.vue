@@ -58,15 +58,14 @@ onMounted(() => {
       </div>
     </div>
 
-    <p v-if="loading" class="pp-st">Загрузка...</p>
-    <p v-else-if="error" class="pp-st er">{{ error }}</p>
-
     <ProcessPlanning
-      v-else
       :projects="processPlanning?.projects || []"
+      :loading="loading"
+      :error="error"
       :anchor="anchor"
       :mode="mode"
       :unit="unit"
+      @change="(p) => store.updateProcessDates(p.id, p.start_date, p.end_date)"
     />
   </section>
 </template>

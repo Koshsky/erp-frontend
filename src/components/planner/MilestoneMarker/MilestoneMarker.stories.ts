@@ -187,3 +187,89 @@ export const OutOfRange: Story = {
     `,
   }),
 }
+
+/** Перетаскивание вехи по ячейкам: маркер следует за курсором, результат в @change */
+export const Draggable: Story = {
+  render: () => ({
+    components: { MilestoneMarker },
+    data: () => ({
+      anchor: day(1, 1),
+      mode: 'quarter' as const,
+      unit: 'day' as const,
+      date: iso(day(2, 12)),
+      title: 'Сдача ППР',
+      content: 'Утверждение проекта производства работ заказчиком',
+      last: '—',
+    }),
+    methods: {
+      onChange(p: { date: string }) {
+        this.date = p.date
+        this.last = p.date
+      },
+    },
+    template: `
+      <div style="max-width:800px;margin:0 auto;font-family:sans-serif;">
+        <div style="position:relative;width:100%;height:36px;background:#f0f0f0;border-radius:6px;">
+          <MilestoneMarker
+            :anchor="anchor"
+            :mode="mode"
+            :unit="unit"
+            :date="date"
+            :title="title"
+            :content="content"
+            @change="onChange"
+          />
+        </div>
+        <div style="font-size:12px;color:#666;margin-top:6px;">
+          Последняя дата: <b>{{ last }}</b>
+        </div>
+      </div>
+    `,
+  }),
+}
+
+/** Перетаскивание вехи, ограниченное границами процесса: зона 8–21 числа квартала,
+ *  веха не перетаскивается за её пределы. */
+export const ClampedToProcessBounds: Story = {
+  render: () => ({
+    components: { MilestoneMarker },
+    data: () => ({
+      anchor: day(1, 1),
+      mode: 'quarter' as const,
+      unit: 'day' as const,
+      date: iso(day(2, 12)),
+      title: 'Сдача ППР',
+      content: 'Утверждение проекта производства работ заказчиком',
+      groupStart: iso(day(1, 8)),
+      groupEnd: iso(day(2, 21)),
+      last: '—',
+    }),
+    methods: {
+      onChange(p: { date: string }) {
+        this.date = p.date
+        this.last = p.date
+      },
+    },
+    template: `
+      <div style="max-width:800px;margin:0 auto;font-family:sans-serif;">
+        <div style="font-size:12px;color:#666;margin-bottom:6px;">Подсвеченная зона — границы процесса (8 января – 21 февраля). Веха клиппится ими.</div>
+        <div style="position:relative;width:100%;height:36px;background:linear-gradient(90deg,#f0f0f0 7.6%,#e8f0fe 7.6%,#e8f0fe 56.5%,#f0f0f0 56.5%);border-radius:6px;">
+          <MilestoneMarker
+            :anchor="anchor"
+            :mode="mode"
+            :unit="unit"
+            :date="date"
+            :title="title"
+            :content="content"
+            :groupStartDate="groupStart"
+            :groupEndDate="groupEnd"
+            @change="onChange"
+          />
+        </div>
+        <div style="font-size:12px;color:#666;margin-top:6px;">
+          Последняя дата: <b>{{ last }}</b>
+        </div>
+      </div>
+    `,
+  }),
+}

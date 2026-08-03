@@ -42,6 +42,24 @@ export const taskBarArgTypes: ArgTypes<TaskBarProps> = {
       category: 'Data',
     },
   },
+  groupStartDate: {
+    name: 'Начало границ процесса',
+    description: 'Дата начала границ процесса; задачу нельзя перетаскивать левее',
+    control: 'date',
+    table: {
+      type: { summary: 'string | Date | number | null' },
+      category: 'Data',
+    },
+  },
+  groupEndDate: {
+    name: 'Окончание границ процесса',
+    description: 'Дата окончания границ процесса; задачу нельзя перетаскивать правее',
+    control: 'date',
+    table: {
+      type: { summary: 'string | Date | number | null' },
+      category: 'Data',
+    },
+  },
 }
 
 export default taskBarArgTypes

@@ -9,4 +9,6 @@ export interface ProjectBarProps {
   projectCode: string
   color?: string
   opacity?: number
+  /** Включает перетаскивание и ручки изменения длительности */
+  draggable?: boolean
 }

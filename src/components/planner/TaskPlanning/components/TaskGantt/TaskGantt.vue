@@ -7,7 +7,16 @@ import type { TaskGanttProps } from './types'
 
 const props = defineProps<TaskGanttProps>()
 
+const emit = defineEmits<{
+  change: [payload: { id: number; start_date: string; end_date: string }]
+  'milestone-change': [payload: { id: number; date: string }]
+}>()
+
 const groupItems = computed(() => props.tasks)
+
+function onBarChange(id: number, d: { start_date: string; end_date: string }) {
+  emit('change', { id, ...d })
+}
 </script>
 
 <template>
@@ -37,11 +46,22 @@ const groupItems = computed(() => props.tasks)
         :content="ms.content"
         :color="ms.color"
         :headerHeight="headerBarHeight"
+        :groupStartDate="groupStartDate"
+        :groupEndDate="groupEndDate"
+        @change="(d) => emit('milestone-change', { id: ms.id, ...d })"
       />
     </template>
 
     <template #bar="{ item }">
-      <TaskBar :anchor="anchor" :mode="mode" :unit="unit" :task="item" />
+      <TaskBar
+        :anchor="anchor"
+        :mode="mode"
+        :unit="unit"
+        :task="item"
+        :groupStartDate="groupStartDate"
+        :groupEndDate="groupEndDate"
+        @change="(d) => onBarChange(item.id, d)"
+      />
     </template>
   </GroupGantt>
 </template>

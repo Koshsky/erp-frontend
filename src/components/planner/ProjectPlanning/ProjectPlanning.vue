@@ -8,6 +8,8 @@ import { buildCells } from '../calendar'
 
 const props = withDefaults(defineProps<{
   projects?: DtoProject[] | null
+  loading?: boolean
+  error?: string | null
   /** Якорь шкалы (первая ячейка); по умолчанию — самая ранняя дата старта проекта */
   anchor?: string | Date | number | null
   /** Период календаря: квартал, полугодие или год */
@@ -18,6 +20,10 @@ const props = withDefaults(defineProps<{
   mode: 'quarter',
   unit: 'day',
 })
+
+const emit = defineEmits<{
+  change: [payload: { id: number; start_date: string; end_date: string }]
+}>()
 
 const projects = computed<DtoProject[]>(() => props.projects || [])
 
@@ -49,32 +55,39 @@ const gridCols = computed(() => {
 
 <template>
   <div class="pg">
-    <template v-if="projects.length && cells.length">
-      <div class="gg" :style="{ gridTemplateColumns: gridCols }">
-
-        <CalendarHeader :anchor="anchor" :mode="mode" :unit="unit" />
-
-        <div class="sep" style="gridColumn:1/-1"></div>
-
-        <template v-for="project in projects" :key="'proj'+project.id">
-          <div class="c lc ph">
-            <span class="ph-code">{{ project.project_code || '' }}</span>
-          </div>
-          <div class="bar-cell" style="gridColumn:2/-1">
-            <ProjectBar
-              :anchor="anchor!"
-              :mode="mode"
-              :unit="unit"
-              :startDate="project.start_date || ''"
-              :endDate="project.end_date || ''"
-              :projectCode="project.project_code || ''"
-            />
-          </div>
-        </template>
-      </div>
+    <template v-if="loading">
+      <div class="st">Загрузка...</div>
     </template>
+    <template v-else>
+      <p v-if="error" class="pg-error">{{ error }}</p>
+      <template v-if="projects.length && cells.length">
+        <div class="gg" :style="{ gridTemplateColumns: gridCols }">
 
-    <div v-else class="st">Нет данных</div>
+          <CalendarHeader :anchor="anchor" :mode="mode" :unit="unit" />
+
+          <div class="sep" style="gridColumn:1/-1"></div>
+
+          <template v-for="project in projects" :key="'proj'+project.id">
+            <div class="c lc ph">
+              <span class="ph-code">{{ project.project_code || '' }}</span>
+            </div>
+            <div class="bar-cell" style="gridColumn:2/-1">
+              <ProjectBar
+                :anchor="anchor!"
+                :mode="mode"
+                :unit="unit"
+                :startDate="project.start_date || ''"
+                :endDate="project.end_date || ''"
+                :projectCode="project.project_code || ''"
+                @change="(d) => emit('change', { id: project.id ?? 0, ...d })"
+              />
+            </div>
+          </template>
+        </div>
+      </template>
+      <div v-else-if="error" class="st er">{{ error }}</div>
+      <div v-else class="st">Нет данных</div>
+    </template>
   </div>
 </template>
 
@@ -84,6 +97,7 @@ const gridCols = computed(() => {
   box-shadow: 0 1px 6px rgba(0,0,0,.08); overflow-x: auto;
 }
 .st { text-align:center; padding:30px; color:#666; font-size:14px; }
+.pg-error { color:#d93025; font-size:13px; padding:8px 4px; }
 .gg { display: grid; min-width: 600px; }
 .sep { border: none; border-bottom: 2px solid #1a73e8; margin: 4px 0; height: 0; }
 

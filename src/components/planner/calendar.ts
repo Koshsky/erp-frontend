@@ -36,6 +36,19 @@ function dayBefore(v: Date | string | number): number {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1).getTime()
 }
 
+/** Время начала суток, следующих за датой v (для гарантии end > start) */
+function dayAfter(v: Date | string | number): number {
+  const d = toDayStart(v)
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1).getTime()
+}
+
+/** Дата в формате YYYY-MM-DD (локальная зона) */
+export function fmtDate(d: Date): string {
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${d.getFullYear()}-${m}-${day}`
+}
+
 function clamp(v: number, min: number, max: number): number {
   return Math.min(Math.max(v, min), max)
 }
@@ -170,4 +183,86 @@ export function dateCellIndex(
   const last = cells[cells.length - 1].end.getTime()
   if (t < first || t > last) return null
   return cellIndexOf(cells, t)
+}
+
+/**
+ * Диапазон ячеек границ родителя [start, end) для зажима драга бара/вехи.
+ * Возвращает null, если границы не заданы или целиком вне диаграммы —
+ * в этом случае драг ограничивается только шкалой.
+ */
+export function boundsCellSpan(
+  anchor: Date | string | number,
+  mode: PlanningMode,
+  unit: PlanningUnit,
+  startDate?: Date | string | number | null,
+  endDate?: Date | string | number | null,
+): CellSpan | null {
+  if (startDate == null || endDate == null) return null
+  return barCells(anchor, mode, unit, startDate, endDate)
+}
+
+/**
+ * Обратное преобразование диапазона ячеек в даты интервала [start, end).
+ * endCell эксклюзивный, как в barCells. Значения зажаты в границы шкалы
+ * (минимум одна ячейка). Нужно для превращения результата драга бара в даты.
+ */
+export function cellSpanToDates(
+  cells: CalendarCell[],
+  startCell: number,
+  endCell: number,
+): { start_date: string; end_date: string } {
+  const len = cells.length
+  const s = Math.min(Math.max(startCell, 0), len - 1)
+  const e = Math.min(Math.max(endCell, s + 1), len)
+  let endDate: Date
+  if (e < len) {
+    endDate = toDayStart(cells[e].start)
+  } else {
+    const last = cells[len - 1].end
+    endDate = new Date(last.getFullYear(), last.getMonth(), last.getDate() + 1)
+  }
+  return { start_date: fmtDate(cells[s].start), end_date: fmtDate(endDate) }
+}
+
+/**
+ * Зажим интервала дат [start, end) в фактические границы родителя [bStart, bEnd).
+ * end эксклюзивная граница; результат всегда с end > start (минимум 1 день).
+ * Отличие от boundsCellSpan: зажим по датам, а не по ячейкам, поэтому даже при
+ * грубых декадах (первый день декады раньше реального начала родителя) коммит
+ * не уйдёт за границы родителя. Если границы не заданы — интервал как есть.
+ */
+export function clampSpanDates(
+  start: Date | string | number,
+  end: Date | string | number,
+  bStart?: Date | string | number | null,
+  bEnd?: Date | string | number | null,
+): { start_date: string; end_date: string } {
+  const s = toDayStart(start)
+  const e = toDayStart(end)
+  if (bStart == null || bEnd == null) {
+    return { start_date: fmtDate(s), end_date: fmtDate(e) }
+  }
+  const bs = toDayStart(bStart)
+  const be = toDayStart(bEnd)
+  const ns = clamp(s.getTime(), bs.getTime(), dayBefore(be))
+  const ne = clamp(e.getTime(), dayAfter(ns), be.getTime())
+  return { start_date: fmtDate(new Date(ns)), end_date: fmtDate(new Date(ne)) }
+}
+
+/**
+ * Зажим одиночной даты в фактические границы родителя [bStart, bEnd).
+ * Если границы не заданы — дата как есть.
+ */
+export function clampDateToBounds(
+  date: Date | string | number,
+  bStart?: Date | string | number | null,
+  bEnd?: Date | string | number | null,
+): string {
+  const t = toDayStart(date).getTime()
+  if (bStart == null || bEnd == null) {
+    return fmtDate(new Date(t))
+  }
+  const bs = toDayStart(bStart).getTime()
+  const be = dayBefore(bEnd)
+  return fmtDate(new Date(clamp(t, bs, be)))
 }
