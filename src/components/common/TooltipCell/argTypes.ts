@@ -12,6 +12,16 @@ export const tooltipCellArgTypes: ArgTypes<TooltipCellProps> = {
       category: 'Content',
     },
   },
+  multiline: {
+    name: 'Многострочный режим',
+    description: 'Переносить текст по строкам (white-space: normal, max-width)',
+    control: 'boolean',
+    table: {
+      type: { summary: 'boolean' },
+      defaultValue: { summary: 'false' },
+      category: 'Appearance',
+    },
+  },
 }
 
 export default tooltipCellArgTypes

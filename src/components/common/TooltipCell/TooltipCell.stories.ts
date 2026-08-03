@@ -29,7 +29,7 @@ export const LongText: Story = {
     components: { TooltipCell },
     template: `
       <div style="padding:48px;font-family:sans-serif;text-align:center;">
-        <TooltipCell :text="'Длинное описание: инженер ПТО отвечает за разработку и согласование проекта производства работ.'">
+        <TooltipCell :text="'Длинное описание: инженер ПТО отвечает за разработку и согласование проекта производства работ.'" multiline>
           <span style="font-size:14px;border-bottom:1px dashed #999;cursor:default;">Развёрнутое описание</span>
         </TooltipCell>
       </div>
