@@ -34,6 +34,8 @@ onMounted(async () => {
       :anchor="anchor"
       :mode="mode"
       :unit="unit"
+      @change="(p) => planning.updateTaskDates(p.id, p.start_date, p.end_date)"
+      @milestone-change="(p) => planning.updateMilestoneDate(p.id, p.date)"
     />
   </section>
 </template>

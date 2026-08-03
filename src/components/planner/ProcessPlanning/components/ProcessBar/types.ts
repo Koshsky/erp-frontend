@@ -10,4 +10,9 @@ export interface ProcessBarProps {
   projectCode?: string
   color?: string
   opacity?: number
+  /** Включает перетаскивание и ручки изменения длительности */
+  draggable?: boolean
+  /** Границы проекта — ограничивают перетаскивание процесса */
+  groupStartDate?: string | Date | number | null
+  groupEndDate?: string | Date | number | null
 }

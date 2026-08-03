@@ -26,6 +26,11 @@ const props = withDefaults(defineProps<{
   unit: 'day',
 })
 
+const emit = defineEmits<{
+  change: [payload: { id: number; start_date: string; end_date: string }]
+  'milestone-change': [payload: { id: number; date: string }]
+}>()
+
 // Маппим DTO (из /planning/tasks) во внутренние типы планировщика.
 const displayProcesses = computed<Process[]>(() =>
   (props.processes || []).map((dto) => ({
@@ -103,40 +108,45 @@ const gridCols = computed(() => {
 <template>
   <div class="pg">
     <div v-if="loading" class="st">Загрузка...</div>
-    <div v-else-if="error" class="st er">{{ error }}</div>
+    <template v-else>
+      <p v-if="error" class="pg-error">{{ error }}</p>
 
-    <template v-else-if="displayProcesses.length && cells.length">
-      <div class="gg" :style="{ gridTemplateColumns: gridCols }">
+      <template v-if="displayProcesses.length && cells.length">
+        <div class="gg" :style="{ gridTemplateColumns: gridCols }">
 
-        <CalendarHeader :anchor="anchor" :mode="mode" :unit="unit" />
+          <CalendarHeader :anchor="anchor" :mode="mode" :unit="unit" />
 
-        <ResourceHeader
-          :anchor="anchor"
-          :mode="mode"
-          :unit="unit"
-          :resources="displayResources"
-          :usageFn="usageForDay"
-        />
-
-        <div class="sep" style="gridColumn:1/-1"></div>
-
-        <template v-for="proc in displayProcesses" :key="'proc'+proc.id">
-          <TaskGantt
+          <ResourceHeader
             :anchor="anchor"
             :mode="mode"
             :unit="unit"
-            :title="proc.title"
-            :projectCode="proc.project_code"
-            :tasks="proc.tasks || []"
-            :milestones="proc.milestones || []"
-            :groupStartDate="proc.start_date"
-            :groupEndDate="proc.end_date"
+            :resources="displayResources"
+            :usageFn="usageForDay"
           />
-        </template>
-      </div>
-    </template>
 
-    <div v-else class="st">Нет данных</div>
+          <div class="sep" style="gridColumn:1/-1"></div>
+
+          <template v-for="proc in displayProcesses" :key="'proc'+proc.id">
+            <TaskGantt
+              :anchor="anchor"
+              :mode="mode"
+              :unit="unit"
+              :title="proc.title"
+              :projectCode="proc.project_code"
+              :tasks="proc.tasks || []"
+              :milestones="proc.milestones || []"
+              :groupStartDate="proc.start_date"
+              :groupEndDate="proc.end_date"
+              @change="(p) => emit('change', p)"
+              @milestone-change="(p) => emit('milestone-change', p)"
+            />
+          </template>
+        </div>
+      </template>
+
+      <div v-else-if="error" class="st er">{{ error }}</div>
+      <div v-else class="st">Нет данных</div>
+    </template>
   </div>
 </template>
 
@@ -146,6 +156,7 @@ const gridCols = computed(() => {
   box-shadow: 0 1px 6px rgba(0,0,0,.08); overflow-x: auto;
 }
 .st { text-align:center; padding:30px; color:#666; font-size:14px; }
+.pg-error { color:#d93025; font-size:13px; padding:8px 4px; }
 .er { color:#d93025; }
 .gg { display: grid; min-width: 600px; }
 .sep { border: none; border-bottom: 2px solid #1a73e8; margin: 4px 0; height: 0; }

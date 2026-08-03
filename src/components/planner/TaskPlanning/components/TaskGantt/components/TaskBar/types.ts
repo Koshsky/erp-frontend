@@ -19,4 +19,8 @@ export interface TaskBarProps {
   mode: PlanningMode
   unit: PlanningUnit
   task: Task
+  draggable?: boolean
+  /** Границы процесса — ограничивают перетаскивание задачи */
+  groupStartDate?: string | Date | number | null
+  groupEndDate?: string | Date | number | null
 }

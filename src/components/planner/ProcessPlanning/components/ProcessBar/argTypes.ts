@@ -42,6 +42,18 @@ export const processBarArgTypes: ArgTypes<ProcessBarProps> = {
     control: 'date',
     table: { category: 'Data' },
   },
+  groupStartDate: {
+    name: 'Начало границ проекта',
+    description: 'Дата начала границ проекта; процесс нельзя перетаскивать левее',
+    control: 'date',
+    table: { type: { summary: 'string | Date | number | null' }, category: 'Data' },
+  },
+  groupEndDate: {
+    name: 'Окончание границ проекта',
+    description: 'Дата окончания границ проекта; процесс нельзя перетаскивать правее',
+    control: 'date',
+    table: { type: { summary: 'string | Date | number | null' }, category: 'Data' },
+  },
   color: {
     name: 'Цвет',
     control: 'color',

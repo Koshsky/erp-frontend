@@ -1,11 +1,50 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { TooltipCell } from '../../common/TooltipCell'
-import { dateCellIndex, cellCount } from '../calendar'
+import {
+  dateCellIndex,
+  cellCount,
+  buildCells,
+  boundsCellSpan,
+  cellSpanToDates,
+  clampDateToBounds,
+} from '../calendar'
+import { useBarDrag } from '../../../composables/useBarDrag'
 import type { MilestoneMarkerProps } from './types'
 
 const props = withDefaults(defineProps<MilestoneMarkerProps>(), {
   color: '#fbbc04',
+  draggable: true,
+})
+
+const emit = defineEmits<{
+  change: [payload: { date: string }]
+}>()
+
+const rootEl = ref<HTMLElement | null>(null)
+
+const cells = () => buildCells(props.anchor, props.mode, props.unit)
+
+/** Границы процесса — веха не перетаскивается за их пределы */
+const bounds = computed(() =>
+  boundsCellSpan(props.anchor, props.mode, props.unit, props.groupStartDate, props.groupEndDate),
+)
+
+/** Драг вехи как точки: спана в одну ячейку, только перемещение */
+const { isDragging, cursor, previewStyle, startDrag } = useBarDrag({
+  cells,
+  getContainer: () => rootEl.value?.parentElement ?? null,
+  getSpan: () => {
+    const idx = dateCellIndex(props.anchor, props.mode, props.unit, props.date)
+    return idx == null ? null : { startCell: idx, endCell: idx + 1 }
+  },
+  getBounds: () => bounds.value,
+  onCommit: (span) => {
+    const d = cellSpanToDates(cells(), span.startCell, span.endCell)
+    emit('change', {
+      date: clampDateToBounds(d.start_date, props.groupStartDate, props.groupEndDate),
+    })
+  },
 })
 
 /** Бокс ячейки вехи — маркер и луч выравниваются по её центру */
@@ -25,6 +64,9 @@ const markerStyle = computed<Record<string, string | number> | null>(() => {
   return {
     background: props.color,
     ...(height != null ? { height: height + 'px' } : {}),
+    ...(props.draggable
+      ? { cursor: cursor.value ?? 'grab', touchAction: 'none' }
+      : {}),
   }
 })
 
@@ -38,8 +80,18 @@ const rayStyle = computed<Record<string, string | number> | null>(() => {
 </script>
 
 <template>
-  <div v-if="pos" class="ms" :style="{ left: pos.left, width: pos.width }">
-    <div class="ms-marker" :style="markerStyle">
+  <div
+    v-if="pos"
+    ref="rootEl"
+    class="ms"
+    :class="{ 'ms-drag': isDragging }"
+    :style="previewStyle ?? { left: pos.left, width: pos.width }"
+  >
+    <div
+      class="ms-marker"
+      :style="markerStyle"
+      @pointerdown="props.draggable && startDrag($event, 'move')"
+    >
       <TooltipCell :text="title" :multiline="true">
         <span class="ms-hit" />
         <template #popup>
@@ -74,6 +126,9 @@ const rayStyle = computed<Record<string, string | number> | null>(() => {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
   cursor: default;
   pointer-events: auto;
+}
+.ms-drag .ms-marker {
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
 }
 .ms-marker :deep(.tt-trigger) {
   display: flex;

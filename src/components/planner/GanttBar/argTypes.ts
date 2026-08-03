@@ -38,7 +38,7 @@ export const ganttBarArgTypes: ArgTypes<GanttBarProps> = {
     description: 'Дата начала задачи',
     control: 'date',
     table: {
-      type: { summary: 'string | Date' },
+      type: { summary: 'string | Date | number' },
       category: 'Data',
     },
   },
@@ -47,7 +47,25 @@ export const ganttBarArgTypes: ArgTypes<GanttBarProps> = {
     description: 'Дата окончания задачи',
     control: 'date',
     table: {
-      type: { summary: 'string | Date' },
+      type: { summary: 'string | Date | number' },
+      category: 'Data',
+    },
+  },
+  groupStartDate: {
+    name: 'Начало границ родителя',
+    description: 'Дата начала границ родителя (процесса/проекта); бар не перетаскивается левее',
+    control: 'date',
+    table: {
+      type: { summary: 'string | Date | number | null' },
+      category: 'Data',
+    },
+  },
+  groupEndDate: {
+    name: 'Окончание границ родителя',
+    description: 'Дата окончания границ родителя (процесса/проекта); бар не перетаскивается правее',
+    control: 'date',
+    table: {
+      type: { summary: 'string | Date | number | null' },
       category: 'Data',
     },
   },

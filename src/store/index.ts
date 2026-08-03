@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { AuthApi, ProjectsApi, ResourcesApi, PlanningApi, UsersApi, Configuration } from '@/api'
+import { AuthApi, ProjectsApi, ProcessesApi, TasksApi, ResourcesApi, PlanningApi, MilestonesApi, UsersApi, Configuration } from '@/api'
 import type { DtoUserInfo, DtoProject, DtoResource, JwtTokenPair } from '@/api'
 
 const TOKEN_KEY = 'mvs_erp_access_token'
@@ -313,46 +313,106 @@ export const usePlanningStore = defineStore('planning', () => {
   const loading = ref(false)
   const error = ref<string | null>(null)
 
-  async function loadProjectPlanning() {
-    loading.value = true
+  async function loadProjectPlanning(silent = false) {
+    if (!silent) loading.value = true
     error.value = null
     try {
       const api = new PlanningApi(apiConfig())
       const resp = await api.planningProjectsGet()
       projectPlanning.value = resp.data?.data ?? null
     } catch (e: any) {
-      error.value = e.message || String(e)
+      if (!silent) error.value = e.message || String(e)
     } finally {
-      loading.value = false
+      if (!silent) loading.value = false
     }
   }
 
-  async function loadProcessPlanning() {
-    loading.value = true
+  async function loadProcessPlanning(silent = false) {
+    if (!silent) loading.value = true
     error.value = null
     try {
       const api = new PlanningApi(apiConfig())
       const resp = await api.planningProcessesGet()
       processPlanning.value = resp.data?.data ?? null
     } catch (e: any) {
-      error.value = e.message || String(e)
+      if (!silent) error.value = e.message || String(e)
     } finally {
-      loading.value = false
+      if (!silent) loading.value = false
     }
   }
 
-  async function loadTaskPlanning() {
-    loading.value = true
+  async function loadTaskPlanning(silent = false) {
+    if (!silent) loading.value = true
     error.value = null
     try {
       const api = new PlanningApi(apiConfig())
       const resp = await api.planningTasksGet()
       taskPlanning.value = resp.data?.data ?? null
     } catch (e: any) {
-      error.value = e.message || String(e)
+      if (!silent) error.value = e.message || String(e)
     } finally {
-      loading.value = false
+      if (!silent) loading.value = false
     }
+  }
+
+  /** Сохраняет новые даты бара, затем тихо перезагружает данные (без спиннера).
+   *  При ошибке сохранения показывает сообщение и откатывается к серверным данным. */
+  async function updateDates(
+    save: () => Promise<unknown>,
+    reload: (silent: boolean) => Promise<void>,
+    id: number,
+    start_date: string,
+    end_date: string,
+  ) {
+    let saveError: string | null = null
+    try {
+      await save()
+    } catch (e: any) {
+      saveError = e.message || String(e)
+    }
+    await reload(true)
+    if (saveError) error.value = saveError
+  }
+
+  async function updateTaskDates(id: number, start_date: string, end_date: string) {
+    await updateDates(
+      () => new TasksApi(apiConfig()).taskIdPut(id, { start_date, end_date }),
+      loadTaskPlanning,
+      id,
+      start_date,
+      end_date,
+    )
+  }
+
+  async function updateProcessDates(id: number, start_date: string, end_date: string) {
+    await updateDates(
+      () => new ProcessesApi(apiConfig()).processIdPut(id, { start_date, end_date }),
+      loadProcessPlanning,
+      id,
+      start_date,
+      end_date,
+    )
+  }
+
+  async function updateProjectDates(id: number, start_date: string, end_date: string) {
+    await updateDates(
+      () => new ProjectsApi(apiConfig()).projectIdPut(id, { start_date, end_date }),
+      loadProjectPlanning,
+      id,
+      start_date,
+      end_date,
+    )
+  }
+
+  /** Сдвиг вехи (одиночная дата): PUT /milestone/{id} + тихая перезагрузка задач */
+  async function updateMilestoneDate(id: number, date: string) {
+    await updateDates(
+      () => new MilestonesApi(apiConfig()).milestoneIdPut(id, { date }),
+      loadTaskPlanning,
+      id,
+      date,
+      date,
+    )
   }
 
   return {
@@ -364,5 +424,9 @@ export const usePlanningStore = defineStore('planning', () => {
     loadProjectPlanning,
     loadProcessPlanning,
     loadTaskPlanning,
+    updateTaskDates,
+    updateProcessDates,
+    updateProjectDates,
+    updateMilestoneDate,
   }
 })

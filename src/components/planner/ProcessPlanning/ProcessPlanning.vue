@@ -22,6 +22,10 @@ const props = withDefaults(defineProps<{
   unit: 'day',
 })
 
+const emit = defineEmits<{
+  change: [payload: { id: number; start_date: string; end_date: string }]
+}>()
+
 // Маппим DTO (из /planning/processes) во внутренний тип планировщика.
 const displayProjects = computed<ProcessPlanningProject[]>(() =>
   (props.projects || []).map((dto) => ({
@@ -68,29 +72,34 @@ const gridCols = computed(() => {
 <template>
   <div class="pg">
     <div v-if="loading" class="st">Загрузка...</div>
-    <div v-else-if="error" class="st er">{{ error }}</div>
-    <template v-else-if="displayProjects.length && cells.length">
-      <div class="gg" :style="{ gridTemplateColumns: gridCols }">
+    <template v-else>
+      <p v-if="error" class="pg-error">{{ error }}</p>
 
-        <CalendarHeader :anchor="anchor" :mode="mode" :unit="unit" />
+      <template v-if="displayProjects.length && cells.length">
+        <div class="gg" :style="{ gridTemplateColumns: gridCols }">
 
-        <div class="sep" style="gridColumn:1/-1"></div>
+          <CalendarHeader :anchor="anchor" :mode="mode" :unit="unit" />
 
-        <template v-for="project in displayProjects" :key="'proj'+project.id">
-          <ProcessGantt
-            :anchor="anchor"
-            :mode="mode"
-            :unit="unit"
-            :projectCode="project.project_code"
-            :processes="project.processes"
-            :groupStartDate="project.start_date"
-            :groupEndDate="project.end_date"
-          />
-        </template>
-      </div>
+          <div class="sep" style="gridColumn:1/-1"></div>
+
+          <template v-for="project in displayProjects" :key="'proj'+project.id">
+            <ProcessGantt
+              :anchor="anchor"
+              :mode="mode"
+              :unit="unit"
+              :projectCode="project.project_code"
+              :processes="project.processes"
+              :groupStartDate="project.start_date"
+              :groupEndDate="project.end_date"
+              @change="(p) => emit('change', p)"
+            />
+          </template>
+        </div>
+      </template>
+
+      <div v-else-if="error" class="st er">{{ error }}</div>
+      <div v-else class="st">Нет данных</div>
     </template>
-
-    <div v-else class="st">Нет данных</div>
   </div>
 </template>
 
@@ -100,6 +109,7 @@ const gridCols = computed(() => {
   box-shadow: 0 1px 6px rgba(0,0,0,.08); overflow-x: auto;
 }
 .st { text-align:center; padding:30px; color:#666; font-size:14px; }
+.pg-error { color:#d93025; font-size:13px; padding:8px 4px; }
 .er { color:#d93025; }
 .gg { display: grid; min-width: 600px; }
 .sep { border: none; border-bottom: 2px solid #1a73e8; margin: 4px 0; height: 0; }

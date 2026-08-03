@@ -6,7 +6,15 @@ import type { ProcessGanttProps } from './types'
 
 const props = defineProps<ProcessGanttProps>()
 
+const emit = defineEmits<{
+  change: [payload: { id: number; start_date: string; end_date: string }]
+}>()
+
 const groupItems = computed(() => props.processes)
+
+function onBarChange(id: number, d: { start_date: string; end_date: string }) {
+  emit('change', { id, ...d })
+}
 </script>
 
 <template>
@@ -31,6 +39,9 @@ const groupItems = computed(() => props.processes)
         :endDate="item.end_date"
         :title="item.title"
         :projectCode="projectCode"
+        :groupStartDate="groupStartDate"
+        :groupEndDate="groupEndDate"
+        @change="(d) => onBarChange(item.id, d)"
       />
     </template>
   </GroupGantt>

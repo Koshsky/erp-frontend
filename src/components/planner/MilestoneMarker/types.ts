@@ -14,4 +14,9 @@ export interface MilestoneMarkerProps {
   color?: string
   /** Высота шапки (px), в которой стоит флажок; когда задана — рисуется древко вниз до низа блока */
   headerHeight?: number
+  /** Разрешить перетаскивание вехи (сдвиг по ячейкам; на отпускание — @change) */
+  draggable?: boolean
+  /** Границы процесса — веха не перетаскивается за их пределы */
+  groupStartDate?: string | Date | number | null
+  groupEndDate?: string | Date | number | null
 }
