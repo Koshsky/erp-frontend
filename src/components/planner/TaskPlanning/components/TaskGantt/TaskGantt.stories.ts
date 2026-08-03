@@ -60,3 +60,29 @@ export const WithGroupRange: Story = {
     `,
   }),
 }
+
+/** Подложка границ группы, выходящая за диаграмму, обрезана вплотную к обоим краям */
+export const GroupClipped: Story = {
+  render: () => ({
+    components: { TaskGantt },
+    data: () => ({
+      anchor,
+      cells,
+      tasks,
+      title: 'Монтаж',
+      projectCode: 'KO-2003',
+      groupStartDate: iso(day(-20)),
+      groupEndDate: iso(day(130)),
+      mode: 'quarter' as const,
+      unit: 'day' as const,
+    }),
+    template: `
+      <div :style="{ display: 'grid', gridTemplateColumns: '180px repeat(' + cells + ', 1fr)', background: '#fff', borderRadius: '10px', padding: '12px', boxShadow: '0 1px 6px rgba(0,0,0,.08)', overflowX: 'auto', minWidth: '600px' }">
+        <TaskGantt
+          :anchor="anchor" :mode="mode" :unit="unit" :title="title" :projectCode="projectCode"
+          :tasks="tasks" :groupStartDate="groupStartDate" :groupEndDate="groupEndDate"
+        />
+      </div>
+    `,
+  }),
+}

@@ -134,3 +134,74 @@ export const DecadeCells: Story = {
     `,
   }),
 }
+
+/** Обрезка баров по границам диаграммы (квартал от 1 января, дневные ячейки):
+ *  старт до anchor / конец за периодом прижаты к краю; интервалы целиком вне
+ *  календаря и с end <= start не отображаются вовсе. */
+export const ClippedAtEdges: Story = {
+  render: () => ({
+    components: { GanttBar },
+    data: () => ({
+      ...base,
+      prevIso: (d: number) => new Date(y - 1, 11, d).toISOString().slice(0, 10),
+    }),
+    computed: {
+      trackStyle() {
+        return {
+          position: 'relative',
+          width: '100%',
+          height: '36px',
+          background: '#f0f0f0',
+          borderRadius: '6px',
+        }
+      },
+    },
+    template: `
+      <div style="max-width:720px;margin:0 auto;font-family:sans-serif;display:flex;flex-direction:column;gap:18px;">
+
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          <div style="font-size:13px;font-weight:600;color:#666;">Старт до anchor — прижат к левому краю</div>
+          <div :style="trackStyle">
+            <GanttBar :anchor="anchor" :mode="mode" :unit="unit" :startDate="prevIso(25)" :endDate="iso(day(1,20))" color="#34a853" />
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          <div style="font-size:13px;font-weight:600;color:#666;">Конец за периодом — прижат к правому краю</div>
+          <div :style="trackStyle">
+            <GanttBar :anchor="anchor" :mode="mode" :unit="unit" :startDate="iso(day(3,10))" :endDate="iso(day(4,15))" color="#1a73e8" />
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          <div style="font-size:13px;font-weight:600;color:#666;">Целиком левее диаграммы — не отображается</div>
+          <div :style="trackStyle">
+            <GanttBar :anchor="anchor" :mode="mode" :unit="unit" :startDate="prevIso(1)" :endDate="prevIso(20)" color="#ea4335" />
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          <div style="font-size:13px;font-weight:600;color:#666;">Целиком правее диаграммы — не отображается</div>
+          <div :style="trackStyle">
+            <GanttBar :anchor="anchor" :mode="mode" :unit="unit" :startDate="iso(day(5,1))" :endDate="iso(day(5,10))" color="#ea4335" />
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          <div style="font-size:13px;font-weight:600;color:#666;">end == start — не отображается</div>
+          <div :style="trackStyle">
+            <GanttBar :anchor="anchor" :mode="mode" :unit="unit" :startDate="iso(day(1,5))" :endDate="iso(day(1,5))" color="#fbbc04" />
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          <div style="font-size:13px;font-weight:600;color:#666;">Полностью внутри периода — эталон</div>
+          <div :style="trackStyle">
+            <GanttBar :anchor="anchor" :mode="mode" :unit="unit" :startDate="iso(day(1,5))" :endDate="iso(day(3,20))" color="#188038" />
+          </div>
+        </div>
+
+      </div>
+    `,
+  }),
+}
