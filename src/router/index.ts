@@ -57,9 +57,14 @@ const router = createRouter({
   ],
 })
 
-// Глобальный guard: неавторизованных пользователей всегда отправляем на /login
-router.beforeEach((to) => {
+// Глобальный guard: неавторизованных пользователей всегда отправляем на /login.
+// Если access-токен отсутствует или протух, но есть refresh — сначала тихо обновляем сессию.
+router.beforeEach(async (to) => {
   const auth = useAuthStore()
+
+  if (to.meta.requiresAuth && (!auth.isAuthenticated || auth.accessExpired)) {
+    await auth.refreshSession()
+  }
 
   // Страницы под главным layout требуют авторизации
   if (to.meta.requiresAuth && !auth.isAuthenticated) {
