@@ -40,6 +40,12 @@ export const taskGanttArgTypes: ArgTypes<TaskGanttProps> = {
     control: 'object',
     table: { type: { summary: 'Task[]' }, category: 'Data' },
   },
+  milestones: {
+    name: 'Вехи',
+    description: 'Массив вех процесса — маркеры в строке заголовка процесса',
+    control: 'object',
+    table: { type: { summary: 'Milestone[]' }, category: 'Data' },
+  },
   groupStartDate: {
     name: 'Начало процесса',
     control: 'text',

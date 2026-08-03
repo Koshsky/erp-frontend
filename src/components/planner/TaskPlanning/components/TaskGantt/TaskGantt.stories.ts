@@ -86,3 +86,98 @@ export const GroupClipped: Story = {
     `,
   }),
 }
+
+const milestones = [
+  { id: 11, title: 'Согласование сметы', content: 'Утверждение сметной документации заказчиком', date: iso(day(5)) },
+  { id: 12, title: 'Поставка материалов', content: 'Приёмка партии на склад, накладная № 101', date: iso(day(15)) },
+  { id: 13, title: 'Окончание монтажа', content: 'Финал работ на объекте, подготовка к приёмке', date: iso(day(26)) },
+]
+
+/** Вехи процесса — маркеры по центру ячейки в строке заголовка с лучом вниз через задачи */
+export const WithMilestones: Story = {
+  render: () => ({
+    components: { TaskGantt },
+    data: () => ({
+      anchor,
+      cells,
+      tasks,
+      milestones,
+      title: 'Инсталляция',
+      projectCode: 'KO-1001',
+      groupStartDate: iso(day(3)),
+      groupEndDate: iso(day(26)),
+      mode: 'quarter' as const,
+      unit: 'day' as const,
+    }),
+    template: `
+      <div :style="{ display: 'grid', gridTemplateColumns: '180px repeat(' + cells + ', 1fr)', background: '#fff', borderRadius: '10px', padding: '12px', boxShadow: '0 1px 6px rgba(0,0,0,.08)', overflowX: 'auto', minWidth: '600px' }">
+        <TaskGantt
+          :anchor="anchor" :mode="mode" :unit="unit" :title="title" :projectCode="projectCode"
+          :tasks="tasks" :milestones="milestones" :groupStartDate="groupStartDate" :groupEndDate="groupEndDate"
+        />
+      </div>
+    `,
+  }),
+}
+
+/** Маркеры с лучами поверх разметки и баров — видно, какие задачи выполняются в момент вехи */
+export const MilestoneGuides: Story = {
+  render: () => ({
+    components: { TaskGantt },
+    data: () => ({
+      anchor,
+      cells,
+      tasks,
+      milestones: [
+        { id: 31, title: 'Закуп материалов', content: 'Приёмка партии на склад', date: iso(day(6)), color: '#fbbc04' },
+        { id: 32, title: 'Промежуточная приёмка', content: 'Сверка объёмов с заказчиком', date: iso(day(15)), color: '#1a73e8' },
+        { id: 33, title: 'Окончание монтажа', content: 'Финал работ на объекте', date: iso(day(22)), color: '#188038' },
+      ],
+      title: 'Инсталляция',
+      projectCode: 'KO-1001',
+      groupStartDate: iso(day(2)),
+      groupEndDate: iso(day(28)),
+      mode: 'quarter' as const,
+      unit: 'day' as const,
+    }),
+    template: `
+      <div :style="{ display: 'grid', gridTemplateColumns: '180px repeat(' + cells + ', 1fr)', background: '#fff', borderRadius: '10px', padding: '12px', boxShadow: '0 1px 6px rgba(0,0,0,.08)', overflowX: 'auto', minWidth: '600px' }">
+        <TaskGantt
+          :anchor="anchor" :mode="mode" :unit="unit" :title="title" :projectCode="projectCode"
+          :tasks="tasks" :milestones="milestones" :groupStartDate="groupStartDate" :groupEndDate="groupEndDate"
+        />
+      </div>
+    `,
+  }),
+}
+/** Год с декадами — вехи встают по центру ячеек-декад */
+export const WithMilestonesYearDecades: Story = {
+  render: () => ({
+    components: { TaskGantt },
+    data: () => {
+      const anchorY = new Date(now.getFullYear(), 0, 1)
+      const md = (month: number, d: number) => new Date(now.getFullYear(), month - 1, d)
+      return {
+        anchor: anchorY,
+        cells: cellCount(anchorY, 'year', 'decade'),
+        tasks,
+        milestones: [
+          { id: 21, title: 'Старт работ', content: 'Выход бригады на объект', date: iso(md(3, 10)) },
+          { id: 22, title: 'Завершение этапа', content: 'Окончание закупочной кампании', date: iso(md(5, 20)) },
+        ],
+        title: 'Инсталляция',
+        projectCode: 'KO-1001',
+        mode: 'year' as const,
+        unit: 'decade' as const,
+      }
+    },
+    template: `
+      <div :style="{ display: 'grid', gridTemplateColumns: '180px repeat(' + cells + ', 1fr)', background: '#fff', borderRadius: '10px', padding: '12px', boxShadow: '0 1px 6px rgba(0,0,0,.08)', overflowX: 'auto', minWidth: '600px' }">
+        <TaskGantt
+          :anchor="anchor" :mode="mode" :unit="unit" :title="title" :projectCode="projectCode"
+          :tasks="tasks" :milestones="milestones"
+        />
+      </div>
+    `,
+  }),
+}

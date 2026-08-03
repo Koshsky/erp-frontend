@@ -33,6 +33,11 @@ const process = (startM: number, startD: number, endM: number, endD: number, id:
   project_id: id,
   start_date: iso(day(startM, startD)),
   end_date: iso(day(endM, endD)),
+  milestones: [
+    { id: id * 100 + 1, title: 'Согласование сметы', content: 'Утверждение сметной документации заказчиком', date: iso(day(startM, startD + 4)) },
+    { id: id * 100 + 2, title: 'Поставка материалов', content: 'Приёмка партии на склад', date: iso(day(startM, startD + 12)) },
+    { id: id * 100 + 3, title: 'Окончание работ', content: 'Финал работ на объекте, подготовка к приёмке', date: iso(day(endM, Math.min(endD - 3, 28))) },
+  ],
   tasks: taskTitles.map((title, i) => {
     const res = resources[(i % 5)]
     return {

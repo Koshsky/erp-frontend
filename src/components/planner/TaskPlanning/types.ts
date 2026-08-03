@@ -1,5 +1,6 @@
 import type { DtoDetailedProcess, DtoResource } from '@/api'
 import type { PlanningMode, PlanningUnit } from '../calendar'
+import type { Milestone } from './components/TaskGantt/types'
 import type { Task } from './components/TaskGantt/components/TaskBar/types'
 import type { Resource } from './components/ResourceHeader/types'
 
@@ -10,6 +11,7 @@ export interface Process {
   end_date: string
   project_code?: string
   tasks: Task[]
+  milestones: Milestone[]
 }
 
 export interface TaskPlanningProps {

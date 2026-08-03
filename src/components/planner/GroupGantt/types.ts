@@ -15,4 +15,6 @@ export interface GroupGanttProps {
   /** Границы группы (опционально — для подсветки на шкале) */
   groupStartDate?: string
   groupEndDate?: string
+  /** Высота полосы-дорожки под заголовком (px); сюда же опирается луч вехи */
+  headerBarHeight?: number
 }
