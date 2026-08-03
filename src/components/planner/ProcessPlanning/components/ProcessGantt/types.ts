@@ -5,6 +5,8 @@ export interface ProcessItem {
   title: string
   start_date: string
   end_date: string
+  owner_id?: number
+  project_id?: number
 }
 
 export interface ProcessGanttProps {

@@ -22,10 +22,6 @@ const groupItems = computed(() => props.processes)
       <span class="header-code">{{ projectCode }}</span>
     </template>
 
-    <template #row="{ item }">
-      <span>{{ item.title }}</span>
-    </template>
-
     <template #bar="{ item }">
       <ProcessBar
         :anchor="anchor!"
@@ -34,6 +30,7 @@ const groupItems = computed(() => props.processes)
         :startDate="item.start_date"
         :endDate="item.end_date"
         :title="item.title"
+        :projectCode="projectCode"
       />
     </template>
   </GroupGantt>

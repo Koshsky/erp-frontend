@@ -41,7 +41,7 @@ const groupOverlayStyle = computed(() => {
   <template v-for="(item, index) in items" :key="'gi'+item.id">
     <div class="c lc item-label lc-start" :class="{ ta: index % 2 === 1 }">
       <slot name="row" :item="item" :index="index">
-        <span>{{ item.title }}</span>
+        <span class="item-title">{{ item.title }}</span>
         <div class="item-dates">{{ fmt(item.start_date) }} — {{ fmt(item.end_date) }}</div>
       </slot>
     </div>
@@ -79,6 +79,14 @@ const groupOverlayStyle = computed(() => {
   font-weight: 500;
   color: #333;
   min-height: 36px;
+}
+.item-title {
+  font-weight: 600;
+  color: #222;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .ta { background: #fafafa; }
 .item-dates {
