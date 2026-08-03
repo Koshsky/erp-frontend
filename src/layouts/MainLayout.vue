@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import AppHeader from '../components/common/AppHeader.vue'
-import AppSidebar from '../components/common/AppSidebar.vue'
 import AppFooter from '../components/common/AppFooter.vue'
 </script>
 
@@ -8,7 +7,6 @@ import AppFooter from '../components/common/AppFooter.vue'
   <div class="ml">
     <AppHeader />
     <div class="ml-body">
-      <AppSidebar />
       <main class="ml-main">
         <RouterView />
       </main>
@@ -28,7 +26,7 @@ import AppFooter from '../components/common/AppFooter.vue'
 .ml-body {
   flex: 1;
   display: flex;
-  align-items: stretch;
+  flex-direction: column;
   margin: 0;
 }
 
