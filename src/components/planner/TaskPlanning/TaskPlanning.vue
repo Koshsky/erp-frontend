@@ -7,6 +7,7 @@ import type { DtoDetailedProcess, DtoResource } from '@/api'
 import type { Resource } from './components/ResourceHeader/types'
 import type { Process } from './types'
 import { buildCells } from '../calendar'
+import { LABEL_WIDTH } from '../layout'
 import type { PlanningMode, PlanningUnit } from '../calendar'
 
 const props = withDefaults(defineProps<{
@@ -43,6 +44,12 @@ const displayProcesses = computed<Process[]>(() =>
         quantity: r.quantity ?? 0,
         code: r.code ?? '',
       })),
+    })),
+    milestones: (dto.milestones || []).map((m) => ({
+      id: m.id ?? 0,
+      title: m.title ?? '',
+      content: m.content,
+      date: m.date ?? '',
     })),
   })),
 )
@@ -88,8 +95,8 @@ function usageForDay(resourceId: number, day: Date): number {
 }
 
 const gridCols = computed(() => {
-  if (!cells.value.length) return '180px'
-  return `180px repeat(${cells.value.length}, 1fr)`
+  if (!cells.value.length) return LABEL_WIDTH + 'px'
+  return `${LABEL_WIDTH}px repeat(${cells.value.length}, 1fr)`
 })
 </script>
 
@@ -121,6 +128,7 @@ const gridCols = computed(() => {
             :title="proc.title"
             :projectCode="proc.project_code"
             :tasks="proc.tasks || []"
+            :milestones="proc.milestones || []"
             :groupStartDate="proc.start_date"
             :groupEndDate="proc.end_date"
           />

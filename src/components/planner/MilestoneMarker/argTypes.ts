@@ -45,12 +45,11 @@ export const milestoneMarkerArgTypes: ArgTypes<MilestoneMarkerProps> = {
     control: 'color',
     table: { defaultValue: { summary: '#fbbc04' }, category: 'Appearance' },
   },
-  variant: {
-    name: 'Вид маркера',
-    description: 'Полоска в пол-ячейки по центру или маркер на всю ширину ячейки',
-    control: 'select',
-    options: ['strip', 'cell'],
-    table: { defaultValue: { summary: 'strip' }, category: 'Appearance' },
+  headerHeight: {
+    name: 'Высота шапки',
+    description: 'Высота зоны маркера (px). Когда задана — от центра ячейки вниз рисуется луч-древко',
+    control: 'number',
+    table: { type: { summary: 'number' }, category: 'Appearance' },
   },
 }
 
