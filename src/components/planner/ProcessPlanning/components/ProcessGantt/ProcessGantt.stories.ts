@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/vue3-vite'
 import ProcessGantt from './ProcessGantt.vue'
+import { cellCount } from '../../../calendar'
 
 const now = new Date()
 const day = (m: number) => new Date(now.getFullYear(), now.getMonth(), m)
@@ -14,8 +15,8 @@ const meta: Meta<typeof ProcessGantt> = {
 export default meta
 type Story = StoryObj<typeof meta>
 
-const dayZero = day(1)
-const totalDays = 61
+const anchor = day(1)
+const cells = cellCount(anchor, 'quarter', 'day')
 
 const twoProcesses = [
   { id: 1, title: 'Производство', start_date: iso(day(3)), end_date: iso(day(36)) },
@@ -30,10 +31,10 @@ const overlapping = [
 export const TwoProcesses: Story = {
   render: () => ({
     components: { ProcessGantt },
-    data: () => ({ dayZero, totalDays, projectCode: 'КО-1234', processes: twoProcesses }),
+    data: () => ({ anchor, cells, projectCode: 'КО-1234', processes: twoProcesses, mode: 'quarter' as const, unit: 'day' as const }),
     template: `
-      <div :style="{ display: 'grid', gridTemplateColumns: '180px repeat(' + totalDays + ', 1fr)', background: '#fff', borderRadius: '10px', padding: '12px', boxShadow: '0 1px 6px rgba(0,0,0,.08)', overflowX: 'auto', minWidth: '600px' }">
-        <ProcessGantt :dayZero="dayZero" :totalDays="totalDays" :projectCode="projectCode" :processes="processes" />
+      <div :style="{ display: 'grid', gridTemplateColumns: '180px repeat(' + cells + ', 1fr)', background: '#fff', borderRadius: '10px', padding: '12px', boxShadow: '0 1px 6px rgba(0,0,0,.08)', overflowX: 'auto', minWidth: '600px' }">
+        <ProcessGantt :anchor="anchor" :mode="mode" :unit="unit" :projectCode="projectCode" :processes="processes" />
       </div>
     `,
   }),
@@ -42,12 +43,11 @@ export const TwoProcesses: Story = {
 export const Overlapping: Story = {
   render: () => ({
     components: { ProcessGantt },
-    data: () => ({ dayZero, totalDays, projectCode: 'КО-9999', processes: overlapping }),
+    data: () => ({ anchor, cells, projectCode: 'КО-9999', processes: overlapping, mode: 'quarter' as const, unit: 'day' as const }),
     template: `
-      <div :style="{ display: 'grid', gridTemplateColumns: '180px repeat(' + totalDays + ', 1fr)', background: '#fff', borderRadius: '10px', padding: '12px', boxShadow: '0 1px 6px rgba(0,0,0,.08)', overflowX: 'auto', minWidth: '600px' }">
-        <ProcessGantt :dayZero="dayZero" :totalDays="totalDays" :projectCode="projectCode" :processes="processes" />
+      <div :style="{ display: 'grid', gridTemplateColumns: '180px repeat(' + cells + ', 1fr)', background: '#fff', borderRadius: '10px', padding: '12px', boxShadow: '0 1px 6px rgba(0,0,0,.08)', overflowX: 'auto', minWidth: '600px' }">
+        <ProcessGantt :anchor="anchor" :mode="mode" :unit="unit" :projectCode="projectCode" :processes="processes" />
       </div>
     `,
   }),
 }
-

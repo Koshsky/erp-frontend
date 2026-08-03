@@ -1,6 +1,9 @@
+import type { PlanningMode, PlanningUnit } from '../../../calendar'
+
 export interface ProcessBarProps {
-  dayZero: Date | number
-  totalDays: number
+  anchor: Date | number
+  mode: PlanningMode
+  unit: PlanningUnit
   startDate: string | Date | number
   endDate: string | Date | number
   title: string

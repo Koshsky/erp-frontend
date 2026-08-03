@@ -1,6 +1,9 @@
+import type { PlanningMode, PlanningUnit } from '../../../calendar'
+
 export interface ProjectBarProps {
-  dayZero: Date | number
-  totalDays: number
+  anchor: Date | number
+  mode: PlanningMode
+  unit: PlanningUnit
   startDate: string
   endDate: string
   projectCode: string

@@ -1,6 +1,9 @@
+import type { PlanningMode, PlanningUnit } from '../calendar'
+
 export interface GanttBarProps {
-  dayZero: Date
-  totalDays: number
+  anchor: Date | number
+  mode: PlanningMode
+  unit: PlanningUnit
   startDate: string | Date
   endDate: string | Date
   color?: string

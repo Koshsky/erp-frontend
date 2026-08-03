@@ -1,3 +1,5 @@
+import type { DtoDetailedProcess, DtoResource } from '@/api'
+import type { PlanningMode, PlanningUnit } from '../calendar'
 import type { Task } from './components/TaskGantt/components/TaskBar/types'
 import type { Resource } from './components/ResourceHeader/types'
 
@@ -11,6 +13,11 @@ export interface Process {
 }
 
 export interface TaskPlanningProps {
-  mockProcesses?: Process[] | null
-  mockResources?: Resource[] | null
+  processes?: DtoDetailedProcess[] | null
+  resources?: DtoResource[] | null
+  loading?: boolean
+  error?: string | null
+  anchor?: string | Date | number | null
+  mode?: PlanningMode
+  unit?: PlanningUnit
 }

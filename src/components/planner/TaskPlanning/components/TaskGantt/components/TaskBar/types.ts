@@ -1,3 +1,5 @@
+import type { PlanningMode, PlanningUnit } from '../../../../../calendar'
+
 export interface TaskResource {
   resource_id: number
   quantity: number
@@ -13,7 +15,8 @@ export interface Task {
 }
 
 export interface TaskBarProps {
-  dayZero: Date | null
-  totalDays: number
+  anchor: Date | null
+  mode: PlanningMode
+  unit: PlanningUnit
   task: Task
 }

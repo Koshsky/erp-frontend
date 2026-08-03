@@ -1,4 +1,7 @@
+import type { PlanningMode, PlanningUnit } from '../calendar'
+
 export interface CalendarHeaderProps {
-  startDate: Date
-  endDate: Date
+  anchor: Date | number
+  mode: PlanningMode
+  unit: PlanningUnit
 }

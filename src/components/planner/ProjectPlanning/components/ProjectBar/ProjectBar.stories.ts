@@ -17,13 +17,14 @@ type Story = StoryObj<typeof meta>
 function withProject(props: Record<string, any>): Story['render'] {
   return () => ({
     components: { ProjectBar },
-    data: () => ({ dayZero: day(1), totalDays: 92, ...props }),
+    data: () => ({ anchor: day(1), mode: 'quarter' as const, unit: 'day' as const, ...props }),
     template: `
       <div style="max-width:800px;margin:0 auto;font-family:sans-serif;">
         <div style="position:relative;width:100%;height:36px;background:#f0f0f0;border-radius:6px;">
           <ProjectBar
-            :dayZero="dayZero"
-            :totalDays="totalDays"
+            :anchor="anchor"
+            :mode="mode"
+            :unit="unit"
             :startDate="startDate"
             :endDate="endDate"
             :projectCode="projectCode"

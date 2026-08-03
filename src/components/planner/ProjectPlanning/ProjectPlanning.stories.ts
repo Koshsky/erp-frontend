@@ -53,15 +53,25 @@ const threeProjects = [
 ]
 
 export const Quarter: Story = {
-  args: { projects: threeProjects, period: 'quarter' },
+  args: { projects: threeProjects, mode: 'quarter' },
 }
 
 export const HalfYear: Story = {
-  args: { projects: threeProjects, period: 'half' },
+  args: { projects: threeProjects, mode: 'half' },
 }
 
 export const FullYear: Story = {
-  args: { projects: threeProjects, period: 'year' },
+  args: { projects: threeProjects, mode: 'year' },
+}
+
+/** Год с декадами — основной сценарий годового планирования */
+export const FullYearDecades: Story = {
+  args: { projects: threeProjects, mode: 'year', unit: 'decade' },
+}
+
+/** Полгода с декадными ячейками */
+export const HalfYearDecades: Story = {
+  args: { projects: threeProjects, mode: 'half', unit: 'decade' },
 }
 
 

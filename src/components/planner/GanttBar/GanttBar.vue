@@ -1,28 +1,22 @@
 <script setup lang="ts">
+import { barCells, cellCount } from '../calendar'
+import type { PlanningMode, PlanningUnit } from '../calendar'
+
 const props = defineProps<{
-  dayZero: Date | number
-  totalDays: number
+  anchor: Date | number
+  mode: PlanningMode
+  unit: PlanningUnit
   startDate: string | Date | number
   endDate: string | Date | number
   color?: string
   opacity?: number
 }>()
 
-function toDate(v: Date | number): Date {
-  return v instanceof Date ? v : new Date(v)
-}
-
-function dayOffset(date: string | Date | number): number {
-  const d = date instanceof Date ? date : new Date(date)
-  return Math.round((d.getTime() - toDate(props.dayZero).getTime()) / (1000 * 60 * 60 * 24))
-}
-
 function barStyle(): Record<string, string | number> {
-  const total = props.totalDays
-  const startOff = dayOffset(props.startDate)
-  const endOff = dayOffset(props.endDate)
-  const l = (startOff / total) * 100
-  const w = ((endOff - startOff) / total) * 100
+  const { startCell, endCell } = barCells(props.anchor, props.mode, props.unit, props.startDate, props.endDate)
+  const total = cellCount(props.anchor, props.mode, props.unit)
+  const l = (startCell / total) * 100
+  const w = ((endCell - startCell) / total) * 100
   return {
     left: l + '%',
     width: Math.max(w, 0.5) + '%',
@@ -55,4 +49,3 @@ function barStyle(): Record<string, string | number> {
 }
 .gantt-bar:hover { opacity: .95 !important; }
 </style>
-

@@ -1,10 +1,10 @@
 import type { Meta, StoryObj } from '@storybook/vue3-vite'
 import ResourceHeader from './ResourceHeader.vue'
+import { cellCount } from '../../../calendar'
 
 const now = new Date()
-const day = (d: number) => new Date(now.getFullYear(), now.getMonth(), d)
-
-const dayList = Array.from({ length: 20 }, (_, i) => day(i + 1))
+const y = now.getFullYear()
+const day = (d: number) => new Date(y, now.getMonth(), d)
 
 const resources = [
   { id: 1, code: 'ПТО', title: 'Инженер ПТО', quantity: 4 },
@@ -24,20 +24,28 @@ const meta: Meta<typeof ResourceHeader> = {
 export default meta
 type Story = StoryObj<typeof meta>
 
-function renderWith(usageMap: Record<number, number[]>) {
+const cellDates = (cells: number) => Array.from({ length: cells }, (_, i) => day(i + 1))
+
+function renderWith(usageMap: Record<number, number[]>, unit: 'day' | 'decade' = 'day') {
+  const anchor = day(1)
+  const cells = cellCount(anchor, 'quarter', unit)
   return () => ({
     components: { ResourceHeader },
     data: () => ({
-      dayList,
+      anchor,
+      mode: 'quarter' as const,
+      unit,
+      cells,
       resources,
       usageFn: (rid: number, d: Date) => {
-        const idx = dayList.findIndex(x => x.getTime() === d.getTime())
+        const dates = cellDates(cellCount(anchor, 'quarter', 'day'))
+        const idx = dates.findIndex(x => x.getTime() === d.getTime())
         return idx >= 0 ? (usageMap[rid]?.[idx] || 0) : 0
       },
     }),
     template: `
-      <div :style="{ display: 'grid', gridTemplateColumns: '180px repeat(' + dayList.length + ', 1fr)', background: '#fff', borderRadius: '10px', padding: '12px', boxShadow: '0 1px 6px rgba(0,0,0,.08)', overflowX: 'auto', minWidth: '600px' }">
-        <ResourceHeader :dayList="dayList" :resources="resources" :usageFn="usageFn" />
+      <div :style="{ display: 'grid', gridTemplateColumns: '180px repeat(' + cells + ', 1fr)', background: '#fff', borderRadius: '10px', padding: '12px', boxShadow: '0 1px 6px rgba(0,0,0,.08)', overflowX: 'auto', minWidth: '600px' }">
+        <ResourceHeader :anchor="anchor" :mode="mode" :unit="unit" :resources="resources" :usageFn="usageFn" />
       </div>
     `,
   })
@@ -77,3 +85,16 @@ export const Underloaded: Story = {
   }),
 }
 
+/** Декады: пик дневной загрузки внутри каждой ячейки (10 дней) */
+export const DecadeCells: Story = {
+  render: renderWith(
+    {
+      1: [1,2,2,2,2,1,1,2,2,2,1,1,2,1,1,1,0,2,1,1],
+      2: [2,2,1,3,3,2,2,3,3,3,3,2,3,2,2,1,2,3,2,2],
+      3: [0,1,1,1,0,0,1,1,0,0,1,1,1,0,0,1,0,1,0,0],
+      4: [1,0,0,1,1,1,0,0,1,1,1,0,1,1,0,0,1,0,1,1],
+      5: [1,1,0,1,1,0,0,1,1,0,0,1,0,1,1,1,0,0,1,0],
+    },
+    'decade',
+  ),
+}

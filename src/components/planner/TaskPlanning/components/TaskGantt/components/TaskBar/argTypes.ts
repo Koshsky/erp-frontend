@@ -2,21 +2,34 @@ import type { ArgTypes } from '@storybook/vue3-vite'
 import type { TaskBarProps } from './types'
 
 export const taskBarArgTypes: ArgTypes<TaskBarProps> = {
-  dayZero: {
-    name: 'Начало шкалы',
-    description: 'Опорная дата для расчёта смещения задачи',
+  anchor: {
+    name: 'Якорь шкалы',
+    description: 'Опорная дата (первая ячейка) для расчёта смещения задачи',
     control: 'date',
     table: {
       type: { summary: 'Date | null' },
       category: 'Data',
     },
   },
-  totalDays: {
-    name: 'Всего дней',
-    description: 'Общее количество дней',
-    control: { type: 'number', min: 1, max: 365 },
+  mode: {
+    name: 'Период',
+    description: 'Период календаря: квартал (92 дня), полугодие или год',
+    control: 'select',
+    options: ['quarter', 'half', 'year'],
     table: {
-      type: { summary: 'number' },
+      type: { summary: 'PlanningMode' },
+      defaultValue: { summary: 'quarter' },
+      category: 'Data',
+    },
+  },
+  unit: {
+    name: 'Единица ячейки',
+    description: 'Сколько дней в одной ячейке шкалы: день, неделя или декада',
+    control: 'select',
+    options: ['day', 'decade'],
+    table: {
+      type: { summary: 'PlanningUnit' },
+      defaultValue: { summary: 'day' },
       category: 'Data',
     },
   },

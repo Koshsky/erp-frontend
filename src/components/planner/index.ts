@@ -1,3 +1,4 @@
+export * from './calendar'
 export { default as CalendarHeader } from './CalendarHeader/CalendarHeader.vue'
 export { default as GanttBar } from './GanttBar/GanttBar.vue'
 export { default as GroupGantt } from './GroupGantt/GroupGantt.vue'

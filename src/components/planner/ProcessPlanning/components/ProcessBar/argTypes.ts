@@ -12,15 +12,25 @@ export const processBarArgTypes: ArgTypes<ProcessBarProps> = {
     control: 'text',
     table: { category: 'Content' },
   },
-  dayZero: {
-    name: 'Начало шкалы',
+  anchor: {
+    name: 'Якорь шкалы',
+    description: 'Опорная дата (первая ячейка) для расчёта смещения',
     control: 'date',
     table: { type: { summary: 'Date | number' }, category: 'Data' },
   },
-  totalDays: {
-    name: 'Всего дней',
-    control: { type: 'number', min: 1, max: 365 },
-    table: { category: 'Data' },
+  mode: {
+    name: 'Период',
+    description: 'Период календаря: квартал (92 дня), полугодие или год',
+    control: 'select',
+    options: ['quarter', 'half', 'year'],
+    table: { type: { summary: 'PlanningMode' }, defaultValue: { summary: 'quarter' }, category: 'Data' },
+  },
+  unit: {
+    name: 'Единица ячейки',
+    description: 'Сколько дней в одной ячейке шкалы: день, неделя или декада',
+    control: 'select',
+    options: ['day', 'decade'],
+    table: { type: { summary: 'PlanningUnit' }, defaultValue: { summary: 'day' }, category: 'Data' },
   },
   startDate: {
     name: 'Дата начала',

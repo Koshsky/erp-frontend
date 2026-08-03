@@ -2,25 +2,66 @@ import type { ArgTypes } from '@storybook/vue3-vite'
 import type { TaskPlanningProps } from './types'
 
 export const taskPlanningArgTypes: ArgTypes<TaskPlanningProps> = {
-  mockProcesses: {
-    name: 'Тестовые процессы',
-    description: 'Набор процессов для отображения (режим мок-данных)',
+  processes: {
+    name: 'Процессы',
+    description: 'Набор процессов (DTO из /planning/tasks) для отображения',
     control: 'object',
     table: {
-      type: { summary: 'Process[] | null' },
+      type: { summary: 'DtoDetailedProcess[] | null' },
       defaultValue: { summary: 'null' },
-      category: 'Mock Data',
+      category: 'Data',
     },
   },
-  mockResources: {
-    name: 'Тестовые ресурсы',
-    description: 'Набор ресурсов (режим мок-данных)',
+  resources: {
+    name: 'Ресурсы',
+    description: 'Набор ресурсов',
     control: 'object',
     table: {
-      type: { summary: 'Resource[] | null' },
+      type: { summary: 'DtoResource[] | null' },
       defaultValue: { summary: 'null' },
-      category: 'Mock Data',
+      category: 'Data',
     },
+  },
+  anchor: {
+    name: 'Якорь шкалы',
+    description: 'Опорная дата (первая ячейка); по умолчанию — самая ранняя дата старта процесса',
+    control: 'date',
+    table: {
+      type: { summary: 'string | Date | number | null' },
+      category: 'Data',
+    },
+  },
+  mode: {
+    name: 'Период',
+    description: 'Период календаря: квартал (92 дня), полугодие или год',
+    control: 'select',
+    options: ['quarter', 'half', 'year'],
+    table: {
+      type: { summary: 'PlanningMode' },
+      defaultValue: { summary: 'quarter' },
+      category: 'Data',
+    },
+  },
+  unit: {
+    name: 'Единица ячейки',
+    description: 'Сколько дней в одной ячейке шкалы: день, неделя или декада',
+    control: 'select',
+    options: ['day', 'decade'],
+    table: {
+      type: { summary: 'PlanningUnit' },
+      defaultValue: { summary: 'day' },
+      category: 'Data',
+    },
+  },
+  loading: {
+    name: 'Загрузка',
+    control: 'boolean',
+    table: { category: 'State' },
+  },
+  error: {
+    name: 'Ошибка',
+    control: 'text',
+    table: { category: 'State' },
   },
 }
 
