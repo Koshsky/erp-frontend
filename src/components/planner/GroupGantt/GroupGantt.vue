@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { GroupGanttProps } from './types'
-import { barCells, cellCount } from '../calendar'
+import { barCells, cellCount, toDate } from '../calendar'
 import { LABEL_WIDTH } from '../layout'
 
 const props = withDefaults(defineProps<GroupGanttProps>(), {
@@ -16,7 +16,7 @@ defineSlots<{
 }>()
 
 function fmt(d: string | Date | number | null | undefined): string {
-  return d ? new Date(d).toLocaleDateString('ru') : ''
+  return d ? toDate(d).toLocaleDateString('ru') : ''
 }
 
 /** Полупрозрачная подложка границ группы */

@@ -6,7 +6,7 @@ import TaskGantt from './components/TaskGantt/TaskGantt.vue'
 import type { DtoDetailedProcess, DtoResource } from '@/api'
 import type { Resource } from './components/ResourceHeader/types'
 import type { Process } from './types'
-import { buildCells } from '../calendar'
+import { buildCells, toDate } from '../calendar'
 import { LABEL_WIDTH } from '../layout'
 import type { PlanningMode, PlanningUnit } from '../calendar'
 
@@ -72,7 +72,7 @@ const displayResources = computed<Resource[]>(() =>
 const defaultAnchor = computed<Date>(() => {
   let min = Infinity
   for (const proc of displayProcesses.value) {
-    const ts = new Date(proc.start_date).getTime()
+    const ts = toDate(proc.start_date).getTime()
     if (ts < min) min = ts
   }
   return isFinite(min) ? new Date(min) : new Date()
@@ -80,7 +80,7 @@ const defaultAnchor = computed<Date>(() => {
 
 const anchor = computed<Date>(() => {
   if (props.anchor == null) return defaultAnchor.value
-  return props.anchor instanceof Date ? props.anchor : new Date(props.anchor)
+  return toDate(props.anchor)
 })
 
 const cells = computed(() => buildCells(anchor.value, props.mode, props.unit))
@@ -91,7 +91,8 @@ function usageForDay(resourceId: number, day: Date): number {
     if (!proc.tasks) continue
     for (const t of proc.tasks) {
       const d = day.getTime()
-      if (d < new Date(t.start_date).getTime() || d >= new Date(t.end_date).getTime()) continue
+      // start_date включительно, end_date исключительно (локальные даты, как у баров)
+      if (d < toDate(t.start_date).getTime() || d >= toDate(t.end_date).getTime()) continue
       const a = (t.resources || []).find((r) => r.resource_id === resourceId)
       if (a) used += a.quantity
     }
