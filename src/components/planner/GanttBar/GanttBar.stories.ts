@@ -129,7 +129,7 @@ export const DecadeCells: Story = {
         <div style="position:relative;width:100%;height:36px;background:#f0f0f0;border-radius:6px;">
           <GanttBar :anchor="anchor" :mode="mode" :unit="unit" :startDate="iso(day(1,5))" :endDate="iso(day(3,20))" color="#1a73e8" />
         </div>
-        <div style="font-size:11px;color:#888;margin-top:4px;">Год, декады: бар с 5 января по 20 марта (end исключён) занимает 8 декад из {{ cells }}</div>
+        <div style="font-size:11px;color:#888;margin-top:4px;">Год, декады: бар с 5 января по 20 марта (end включён) занимает 9 декад из {{ cells }}</div>
       </div>
     `,
   }),
@@ -137,7 +137,7 @@ export const DecadeCells: Story = {
 
 /** Обрезка баров по границам диаграммы (квартал от 1 января, дневные ячейки):
  *  старт до anchor / конец за периодом прижаты к краю; интервалы целиком вне
- *  календаря и с end <= start не отображаются вовсе. */
+ *  календаря и с end < start не отображаются вовсе. */
 export const ClippedAtEdges: Story = {
   render: () => ({
     components: { GanttBar },
@@ -188,7 +188,14 @@ export const ClippedAtEdges: Story = {
         </div>
 
         <div style="display:flex;flex-direction:column;gap:6px;">
-          <div style="font-size:13px;font-weight:600;color:#666;">end == start — не отображается</div>
+          <div style="font-size:13px;font-weight:600;color:#666;">end &lt; start — не отображается</div>
+          <div :style="trackStyle">
+            <GanttBar :anchor="anchor" :mode="mode" :unit="unit" :startDate="iso(day(1,5))" :endDate="iso(day(1,4))" color="#fbbc04" />
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          <div style="font-size:13px;font-weight:600;color:#666;">Однодневная задача (end == start) — бар на одну ячейку</div>
           <div :style="trackStyle">
             <GanttBar :anchor="anchor" :mode="mode" :unit="unit" :startDate="iso(day(1,5))" :endDate="iso(day(1,5))" color="#fbbc04" />
           </div>
