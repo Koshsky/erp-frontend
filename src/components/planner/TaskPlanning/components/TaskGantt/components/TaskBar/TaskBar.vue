@@ -24,6 +24,7 @@ const props = withDefaults(
 
 const emit = defineEmits<{
   change: [payload: { start_date: string; end_date: string }]
+  contextmenu: [payload: { clientX: number; clientY: number }]
 }>()
 
 const resourcesText = computed(() => {
@@ -43,6 +44,7 @@ const resourcesText = computed(() => {
     :groupEndDate="groupEndDate"
     :draggable="draggable"
     @change="(d) => emit('change', d)"
+    @contextmenu="(p) => emit('contextmenu', p)"
   >
     <span class="tb-label">{{ resourcesText }}</span>
   </GanttBar>

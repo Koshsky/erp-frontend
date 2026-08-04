@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { storeToRefs } from 'pinia'
 import ProcessPlanning from '../components/planner/ProcessPlanning/ProcessPlanning.vue'
 import { ContextMenu } from '../components/common'
@@ -28,31 +28,43 @@ const unitOptions: { value: PlanningUnit; label: string }[] = [
 
 // ПКМ по пустому месту группы: создание процесса в проекте-родителе.
 // Дата под курсором, вставка строки в позицию ПКМ.
+// ПКМ по бару процесса: меню удаления процесса.
 interface MenuState {
   x: number
   y: number
   date: string
   rowIndex: number
   projectId?: number
+  processId?: number
 }
 const menu = ref<MenuState | null>(null)
-const menuItems: ContextMenuItem[] = [{ id: 'create-process', label: 'Создать процесс' }]
+const menuItems = computed<ContextMenuItem[]>(() =>
+  menu.value?.processId != null
+    ? [{ id: 'delete-process', label: 'Удалить процесс' }]
+    : [{ id: 'create-process', label: 'Создать процесс' }],
+)
 
-function onContextMenu(p: { clientX: number; clientY: number; date: string; rowIndex: number; projectId?: number }) {
-  menu.value = { x: p.clientX, y: p.clientY, date: p.date, rowIndex: p.rowIndex, projectId: p.projectId }
+function onContextMenu(p: { clientX: number; clientY: number; date: string; rowIndex: number; projectId?: number; processId?: number }) {
+  menu.value = { x: p.clientX, y: p.clientY, date: p.date, rowIndex: p.rowIndex, projectId: p.projectId, processId: p.processId }
 }
 
 async function onSelect(id: string) {
-  if (id !== 'create-process' || !menu.value) return
-  const { date, rowIndex, projectId } = menu.value
-  if (projectId == null) return
-  const ok = await store.createProcess({
-    title: 'Новый процесс',
-    project_id: projectId,
-    start_date: date,
-    end_date: addMonthsISO(date, 3),
-  }, rowIndex)
-  if (!ok) error.value = store.error
+  if (!menu.value) return
+  const { date, rowIndex, projectId, processId } = menu.value
+  if (id === 'create-process') {
+    if (projectId == null) return
+    const ok = await store.createProcess({
+      title: 'Новый процесс',
+      project_id: projectId,
+      start_date: date,
+      end_date: addMonthsISO(date, 3),
+    }, rowIndex)
+    if (!ok) error.value = store.error
+  } else if (id === 'delete-process' && processId != null) {
+    if (!window.confirm('Удалить процесс? Это удалит все его задачи и вехи.')) return
+    const ok = await store.deleteProcess(processId)
+    if (!ok) error.value = store.error
+  }
 }
 
 onMounted(() => {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { storeToRefs } from 'pinia'
 import ProjectPlanning from '../components/planner/ProjectPlanning/ProjectPlanning.vue'
 import { ContextMenu } from '../components/common'
@@ -27,28 +27,40 @@ const unitOptions: { value: PlanningUnit; label: string }[] = [
 ]
 
 // ПКМ по пустому месту: меню создания проекта (дата под курсором, вставка в позицию ПКМ)
+// ПКМ по бару проекта: меню удаления проекта
 interface MenuState {
   x: number
   y: number
   date: string
   rowIndex: number
+  projectId?: number
 }
 const menu = ref<MenuState | null>(null)
-const menuItems: ContextMenuItem[] = [{ id: 'create-project', label: 'Создать проект' }]
+const menuItems = computed<ContextMenuItem[]>(() =>
+  menu.value?.projectId != null
+    ? [{ id: 'delete-project', label: 'Удалить проект' }]
+    : [{ id: 'create-project', label: 'Создать проект' }],
+)
 
-function onContextMenu(p: { clientX: number; clientY: number; date: string; rowIndex: number }) {
-  menu.value = { x: p.clientX, y: p.clientY, date: p.date, rowIndex: p.rowIndex }
+function onContextMenu(p: { clientX: number; clientY: number; date: string; rowIndex: number; projectId?: number }) {
+  menu.value = { x: p.clientX, y: p.clientY, date: p.date, rowIndex: p.rowIndex, projectId: p.projectId }
 }
 
 async function onSelect(id: string) {
-  if (id !== 'create-project' || !menu.value) return
-  const { date, rowIndex } = menu.value
-  const ok = await store.createProject({
-    code: 'КО_' + Date.now(),
-    start_date: date,
-    end_date: addMonthsISO(date, 6),
-  }, rowIndex)
-  if (!ok) error.value = store.error
+  if (!menu.value) return
+  const { date, rowIndex, projectId } = menu.value
+  if (id === 'create-project') {
+    const ok = await store.createProject({
+      code: 'КО_' + Date.now(),
+      start_date: date,
+      end_date: addMonthsISO(date, 6),
+    }, rowIndex)
+    if (!ok) error.value = store.error
+  } else if (id === 'delete-project' && projectId != null) {
+    if (!window.confirm('Удалить проект? Это удалит все его процессы, задачи и вехи.')) return
+    const ok = await store.deleteProject(projectId)
+    if (!ok) error.value = store.error
+  }
 }
 
 onMounted(() => {

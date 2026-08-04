@@ -24,7 +24,7 @@ const props = withDefaults(defineProps<{
 
 const emit = defineEmits<{
   change: [payload: { id: number; start_date: string; end_date: string }]
-  contextmenu: [payload: { clientX: number; clientY: number; date: string; rowIndex: number; projectId?: number }]
+  contextmenu: [payload: { clientX: number; clientY: number; date: string; rowIndex: number; projectId?: number; processId?: number }]
 }>()
 
 // Маппим DTO (из /planning/processes) во внутренний тип планировщика.

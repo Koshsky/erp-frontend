@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { storeToRefs } from 'pinia'
 import TaskPlanning from '../components/planner/TaskPlanning/TaskPlanning.vue'
 import { ContextMenu } from '../components/common'
@@ -20,28 +20,35 @@ const anchor = ref<Date | null>(null)
 
 // ПКМ по пустому месту группы: создание задачи или вехи в процессе-родителе.
 // Дата под курсором; задача вставляется строкой в позицию ПКМ, веха — точка на шкале.
+// ПКМ по бару задачи / флажку вехи: меню удаления.
 interface MenuState {
   x: number
   y: number
   date: string
   rowIndex: number
   processId?: number
+  taskId?: number
+  milestoneId?: number
 }
 const menu = ref<MenuState | null>(null)
-const menuItems: ContextMenuItem[] = [
-  { id: 'create-task', label: 'Создать задачу' },
-  { id: 'create-milestone', label: 'Создать веху' },
-]
+const menuItems = computed<ContextMenuItem[]>(() => {
+  if (menu.value?.taskId != null) return [{ id: 'delete-task', label: 'Удалить задачу' }]
+  if (menu.value?.milestoneId != null) return [{ id: 'delete-milestone', label: 'Удалить веху' }]
+  return [
+    { id: 'create-task', label: 'Создать задачу' },
+    { id: 'create-milestone', label: 'Создать веху' },
+  ]
+})
 
-function onContextMenu(p: { clientX: number; clientY: number; date: string; rowIndex: number; processId?: number }) {
-  menu.value = { x: p.clientX, y: p.clientY, date: p.date, rowIndex: p.rowIndex, processId: p.processId }
+function onContextMenu(p: { clientX: number; clientY: number; date: string; rowIndex: number; processId?: number; taskId?: number; milestoneId?: number }) {
+  menu.value = { x: p.clientX, y: p.clientY, date: p.date, rowIndex: p.rowIndex, processId: p.processId, taskId: p.taskId, milestoneId: p.milestoneId }
 }
 
 async function onSelect(id: string) {
   if (!menu.value) return
-  const { date, rowIndex, processId } = menu.value
-  if (processId == null) return
+  const { date, rowIndex, processId, taskId, milestoneId } = menu.value
   if (id === 'create-task') {
+    if (processId == null) return
     const ok = await planning.createTask({
       title: 'Новая задача',
       process_id: processId,
@@ -50,12 +57,21 @@ async function onSelect(id: string) {
     }, rowIndex)
     if (!ok) error.value = planning.error
   } else if (id === 'create-milestone') {
+    if (processId == null) return
     const ok = await planning.createMilestone({
       title: 'Новая веха',
       content: 'Новая веха',
       process_id: processId,
       date,
     })
+    if (!ok) error.value = planning.error
+  } else if (id === 'delete-task' && taskId != null) {
+    if (!window.confirm('Удалить задачу?')) return
+    const ok = await planning.deleteTask(taskId)
+    if (!ok) error.value = planning.error
+  } else if (id === 'delete-milestone' && milestoneId != null) {
+    if (!window.confirm('Удалить веху?')) return
+    const ok = await planning.deleteMilestone(milestoneId)
     if (!ok) error.value = planning.error
   }
 }

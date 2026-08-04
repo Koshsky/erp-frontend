@@ -525,6 +525,53 @@ export const usePlanningStore = defineStore('planning', () => {
     return true
   }
 
+  /** Удаление элемента из массива по id (no-op, если списка или элемента нет). */
+  function removeById<T extends { id?: number }>(list: T[] | null | undefined, id: number): void {
+    if (!list) return
+    const i = list.findIndex((x) => x.id === id)
+    if (i >= 0) list.splice(i, 1)
+  }
+
+  /** Общий путь удаления: DELETE по id; true при успехе, иначе false. */
+  async function deleteBy(remove: () => Promise<unknown>): Promise<boolean> {
+    try {
+      await remove()
+      return true
+    } catch (e: any) {
+      error.value = e.message || String(e)
+      return false
+    }
+  }
+
+  async function deleteProject(id: number): Promise<boolean> {
+    const ok = await deleteBy(() => new ProjectsApi(apiConfig()).projectIdDelete(id))
+    if (!ok) return false
+    removeById(projectPlanning.value?.projects, id)
+    removeById(useAppStore().projects, id)
+    return true
+  }
+
+  async function deleteProcess(id: number): Promise<boolean> {
+    const ok = await deleteBy(() => new ProcessesApi(apiConfig()).processIdDelete(id))
+    if (!ok) return false
+    for (const p of processPlanning.value?.projects ?? []) removeById(p.processes, id)
+    return true
+  }
+
+  async function deleteTask(id: number): Promise<boolean> {
+    const ok = await deleteBy(() => new TasksApi(apiConfig()).taskIdDelete(id))
+    if (!ok) return false
+    for (const p of taskPlanning.value?.processes ?? []) removeById(p.tasks, id)
+    return true
+  }
+
+  async function deleteMilestone(id: number): Promise<boolean> {
+    const ok = await deleteBy(() => new MilestonesApi(apiConfig()).milestoneIdDelete(id))
+    if (!ok) return false
+    for (const p of taskPlanning.value?.processes ?? []) removeById(p.milestones, id)
+    return true
+  }
+
   return {
     projectPlanning,
     processPlanning,
@@ -542,5 +589,9 @@ export const usePlanningStore = defineStore('planning', () => {
     createProcess,
     createTask,
     createMilestone,
+    deleteProject,
+    deleteProcess,
+    deleteTask,
+    deleteMilestone,
   }
 })
