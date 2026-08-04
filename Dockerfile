@@ -5,6 +5,8 @@ WORKDIR /app
 # Базовый URL API, подставляется при сборке (vite встраивает VITE_* на этапе build)
 ARG VITE_API_BASE=/api/v1
 ENV VITE_API_BASE=$VITE_API_BASE
+ARG VITE_API_URL=/api/v1
+ENV VITE_API_URL=$VITE_API_URL
 
 COPY package.json package-lock.json ./
 RUN npm install
