@@ -437,6 +437,63 @@ export const usePlanningStore = defineStore('planning', () => {
     )
   }
 
+  /** Общий путь обновления полей (модалка редактирования): PUT + тихий reload;
+   *  при ошибке показывает сообщение и возвращает false (модалка остаётся открытой). */
+  async function updateMeta(
+    save: () => Promise<unknown>,
+    reload: (silent: boolean) => Promise<void>,
+  ): Promise<boolean> {
+    let saveError: string | null = null
+    try {
+      await save()
+    } catch (e: any) {
+      saveError = e.message || String(e)
+    }
+    await reload(true)
+    if (saveError) {
+      error.value = saveError
+      return false
+    }
+    return true
+  }
+
+  async function updateProjectMeta(
+    id: number,
+    patch: { code?: string; owner_id?: number },
+  ): Promise<boolean> {
+    return updateMeta(
+      () => new ProjectsApi(apiConfig()).projectIdPut(id, patch),
+      loadProjectPlanning,
+    )
+  }
+
+  async function updateProcessMeta(
+    id: number,
+    patch: { title?: string; owner_id?: number },
+  ): Promise<boolean> {
+    return updateMeta(
+      () => new ProcessesApi(apiConfig()).processIdPut(id, patch),
+      loadProcessPlanning,
+    )
+  }
+
+  async function updateTaskMeta(id: number, patch: { title?: string }): Promise<boolean> {
+    return updateMeta(
+      () => new TasksApi(apiConfig()).taskIdPut(id, patch),
+      loadTaskPlanning,
+    )
+  }
+
+  async function updateMilestoneMeta(
+    id: number,
+    patch: { title?: string; content?: string },
+  ): Promise<boolean> {
+    return updateMeta(
+      () => new MilestonesApi(apiConfig()).milestoneIdPut(id, patch),
+      loadTaskPlanning,
+    )
+  }
+
   /** Общий путь создания: POST; при успехе возвращает created-ответ, иначе null. */
   async function postCreate(create: () => Promise<{ data?: { data?: unknown } }>): Promise<unknown> {
     try {
@@ -649,6 +706,10 @@ export const usePlanningStore = defineStore('planning', () => {
     updateProcessDates,
     updateProjectDates,
     updateMilestoneDate,
+    updateProjectMeta,
+    updateProcessMeta,
+    updateTaskMeta,
+    updateMilestoneMeta,
     createProject,
     createProcess,
     createTask,

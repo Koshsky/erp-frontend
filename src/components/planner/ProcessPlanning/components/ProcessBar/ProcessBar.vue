@@ -17,6 +17,7 @@ const props = withDefaults(defineProps<ProcessBarProps>(), {
 const emit = defineEmits<{
   change: [payload: { start_date: string; end_date: string }]
   contextmenu: [payload: { clientX: number; clientY: number }]
+  edit: []
 }>()
 
 const dateRange = computed(() =>
@@ -44,6 +45,7 @@ const dateRange = computed(() =>
     :draggable="draggable"
     @change="(d) => emit('change', d)"
     @contextmenu="(p) => emit('contextmenu', p)"
+    @edit="() => emit('edit')"
   >
     <span class="pb-title">{{ title }}</span>
     <span v-if="projectCode" class="pb-code">{{ projectCode }}</span>

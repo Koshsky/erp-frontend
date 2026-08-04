@@ -56,9 +56,13 @@ const props = withDefaults(
 const emit = defineEmits<{
   change: [payload: { start_date: string; end_date: string }]
   contextmenu: [payload: { clientX: number; clientY: number }]
+  /** ЛКМ по бару (без перетаскивания) — открыть редактирование */
+  edit: []
 }>()
 
 const barEl = ref<HTMLElement | null>(null)
+/** Точка начала нажатия — чтобы отличать клик от перетаскивания */
+const pressPoint = ref<{ x: number; y: number } | null>(null)
 
 /** Есть ли кастомный тултип: через проп `tooltip` или слот `#tooltip` */
 const hasTooltip = computed(() => Boolean(props.tooltip) || Boolean(slots.tooltip))
@@ -105,11 +109,19 @@ const cursorStyle = computed<Record<string, string>>(() => {
 })
 
 function onBodyPointerDown(e: PointerEvent) {
+  pressPoint.value = { x: e.clientX, y: e.clientY }
   if (props.draggable) startDrag(e, 'move')
 }
 
 function onHandlePointerDown(e: PointerEvent, mode: 'resizeStart' | 'resizeEnd') {
   if (props.draggable) startDrag(e, mode)
+}
+
+function onClick(e: MouseEvent) {
+  if ((e.target as HTMLElement).closest('.gb-handle')) return
+  const p = pressPoint.value
+  if (p && Math.hypot(e.clientX - p.x, e.clientY - p.y) > 5) return
+  emit('edit')
 }
 
 function onContextMenu(e: MouseEvent) {
@@ -126,6 +138,7 @@ function onContextMenu(e: MouseEvent) {
     :style="[barStyle, previewStyle, cursorStyle]"
     :title="hasTooltip ? undefined : title"
     @pointerdown="onBodyPointerDown"
+    @click="onClick"
     @contextmenu.prevent.stop="onContextMenu"
   >
     <TooltipCell v-if="hasTooltip" :text="tooltip ?? ''" :multiline="true">

@@ -28,6 +28,7 @@ const emit = defineEmits<{
   change: [payload: { id: number; start_date: string; end_date: string }]
   contextmenu: [payload: { clientX: number; clientY: number; date: string; rowIndex: number; projectId?: number }]
   reorder: [payload: { from: number; to: number }]
+  edit: [payload: number]
 }>()
 
 const userNames = computed(() => new Map((props.users || []).map((u) => [u.id, u.name])))
@@ -91,6 +92,7 @@ const gridCols = computed(() => {
             @change="(p) => emit('change', p)"
             @contextmenu="(p) => emit('contextmenu', p)"
             @reorder="(p) => emit('reorder', p)"
+            @edit="(id) => emit('edit', id)"
           />
         </div>
       </template>

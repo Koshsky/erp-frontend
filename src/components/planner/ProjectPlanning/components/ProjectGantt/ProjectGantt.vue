@@ -10,6 +10,7 @@ const emit = defineEmits<{
   change: [payload: { id: number; start_date: string; end_date: string }]
   contextmenu: [payload: { clientX: number; clientY: number; date: string; rowIndex: number; projectId?: number }]
   reorder: [payload: { from: number; to: number }]
+  edit: [payload: number]
 }>()
 
 const groupItems = computed(() =>
@@ -57,6 +58,7 @@ function onBarContextMenu(p: { clientX: number; clientY: number }, id: number) {
         :ownerName="item.owner_name"
         @change="(d) => onBarChange(item.id, d)"
         @contextmenu="(p) => onBarContextMenu(p, item.id)"
+        @edit="() => emit('edit', item.id)"
       />
     </template>
   </GroupGantt>

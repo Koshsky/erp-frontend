@@ -20,9 +20,13 @@ const props = withDefaults(defineProps<MilestoneMarkerProps>(), {
 const emit = defineEmits<{
   change: [payload: { date: string }]
   contextmenu: [payload: { clientX: number; clientY: number }]
+  /** ЛКМ по вехе (без перетаскивания) — открыть редактирование */
+  edit: []
 }>()
 
 const rootEl = ref<HTMLElement | null>(null)
+/** Точка начала нажатия — чтобы отличать клик от перетаскивания */
+const pressPoint = ref<{ x: number; y: number } | null>(null)
 
 const cells = () => buildCells(props.anchor, props.mode, props.unit)
 
@@ -82,6 +86,17 @@ const rayStyle = computed<Record<string, string | number> | null>(() => {
 function onContextMenu(e: MouseEvent) {
   emit('contextmenu', { clientX: e.clientX, clientY: e.clientY })
 }
+
+function onPointerDown(e: PointerEvent) {
+  pressPoint.value = { x: e.clientX, y: e.clientY }
+  if (props.draggable) startDrag(e, 'move')
+}
+
+function onClick(e: MouseEvent) {
+  const p = pressPoint.value
+  if (p && Math.hypot(e.clientX - p.x, e.clientY - p.y) > 5) return
+  emit('edit')
+}
 </script>
 
 <template>
@@ -95,7 +110,8 @@ function onContextMenu(e: MouseEvent) {
     <div
       class="ms-marker"
       :style="markerStyle"
-      @pointerdown="props.draggable && startDrag($event, 'move')"
+      @pointerdown="onPointerDown"
+      @click="onClick"
       @contextmenu.prevent.stop="onContextMenu"
     >
       <TooltipCell :text="title" :multiline="true">

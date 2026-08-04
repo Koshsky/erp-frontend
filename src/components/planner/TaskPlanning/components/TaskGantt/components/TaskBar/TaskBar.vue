@@ -26,6 +26,7 @@ const props = withDefaults(
 const emit = defineEmits<{
   change: [payload: { start_date: string; end_date: string }]
   contextmenu: [payload: { clientX: number; clientY: number }]
+  edit: []
 }>()
 
 const resourcesText = computed(() => {
@@ -50,6 +51,7 @@ const dateRange = computed(() =>
     :draggable="draggable"
     @change="(d) => emit('change', d)"
     @contextmenu="(p) => emit('contextmenu', p)"
+    @edit="() => emit('edit')"
   >
     <span class="tb-label">{{ resourcesText }}</span>
     <template #tooltip>

@@ -30,6 +30,8 @@ const emit = defineEmits<{
   change: [payload: { id: number; start_date: string; end_date: string }]
   'milestone-change': [payload: { id: number; date: string }]
   contextmenu: [payload: { clientX: number; clientY: number; date: string; rowIndex: number; processId?: number; taskId?: number; milestoneId?: number }]
+  'task-edit': [payload: number]
+  'milestone-edit': [payload: number]
 }>()
 
 // Маппим DTO (из /planning/tasks) во внутренние типы планировщика.
@@ -147,6 +149,8 @@ const gridCols = computed(() => {
               @change="(p) => emit('change', p)"
               @milestone-change="(p) => emit('milestone-change', p)"
               @contextmenu="(p) => emit('contextmenu', p)"
+              @task-edit="(id) => emit('task-edit', id)"
+              @milestone-edit="(id) => emit('milestone-edit', id)"
             />
           </template>
         </div>
