@@ -7,6 +7,8 @@ export interface ProjectBarProps {
   startDate: string
   endDate: string
   projectCode: string
+  priority?: number
+  ownerName?: string
   color?: string
   opacity?: number
   /** Включает перетаскивание и ручки изменения длительности */

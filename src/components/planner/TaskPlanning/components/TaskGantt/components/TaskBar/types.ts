@@ -4,6 +4,7 @@ export interface TaskResource {
   resource_id: number
   quantity: number
   code: string
+  title?: string
 }
 
 export interface Task {

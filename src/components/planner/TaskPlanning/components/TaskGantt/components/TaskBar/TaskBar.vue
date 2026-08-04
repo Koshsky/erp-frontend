@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import GanttBar from '../../../../../GanttBar/GanttBar.vue'
 import type { Task } from './types'
 import type { PlanningMode, PlanningUnit } from '../../../../../calendar'
+import { toDate } from '../../../../../calendar'
 
 const props = withDefaults(
   defineProps<{
@@ -31,6 +32,10 @@ const resourcesText = computed(() => {
   if (!props.task.resources || !props.task.resources.length) return '—'
   return props.task.resources.map(r => `${r.quantity}×${r.code || '?'}`).join(', ')
 })
+
+const dateRange = computed(() =>
+  `${toDate(props.task.start_date).toLocaleDateString('ru')} — ${toDate(props.task.end_date).toLocaleDateString('ru')}`,
+)
 </script>
 
 <template>
@@ -47,6 +52,17 @@ const resourcesText = computed(() => {
     @contextmenu="(p) => emit('contextmenu', p)"
   >
     <span class="tb-label">{{ resourcesText }}</span>
+    <template #tooltip>
+      <div class="gb-tooltip">
+        <div class="gb-tooltip-title">{{ task.title }}</div>
+        <div class="gb-tooltip-row">{{ dateRange }}</div>
+        <div v-if="task.resources && task.resources.length" class="gb-tooltip-resources">
+          <div v-for="r in task.resources" :key="r.resource_id" class="gb-tooltip-row">
+            {{ r.title || r.code }} × {{ r.quantity }}
+          </div>
+        </div>
+      </div>
+    </template>
   </GanttBar>
 </template>
 

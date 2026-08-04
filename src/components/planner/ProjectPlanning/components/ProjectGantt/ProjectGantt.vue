@@ -17,6 +17,8 @@ const groupItems = computed(() =>
     title: p.project_code || '',
     start_date: p.start_date || '',
     end_date: p.end_date || '',
+    priority: p.priority,
+    owner_name: p.owner_name,
   })),
 )
 
@@ -48,6 +50,8 @@ function onBarContextMenu(p: { clientX: number; clientY: number }, id: number) {
         :startDate="item.start_date"
         :endDate="item.end_date"
         :projectCode="item.title"
+        :priority="item.priority"
+        :ownerName="item.owner_name"
         @change="(d) => onBarChange(item.id, d)"
         @contextmenu="(p) => onBarContextMenu(p, item.id)"
       />

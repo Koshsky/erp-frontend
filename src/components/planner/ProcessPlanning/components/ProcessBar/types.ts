@@ -8,6 +8,7 @@ export interface ProcessBarProps {
   endDate: string | Date | number
   title: string
   projectCode?: string
+  ownerName?: string
   color?: string
   opacity?: number
   /** Включает перетаскивание и ручки изменения длительности */

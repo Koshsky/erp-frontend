@@ -49,6 +49,7 @@ function onBarContextMenu(p: { clientX: number; clientY: number }, id: number) {
         :endDate="item.end_date"
         :title="item.title"
         :projectCode="projectCode"
+        :ownerName="item.owner_name"
         :groupStartDate="groupStartDate"
         :groupEndDate="groupEndDate"
         @change="(d) => onBarChange(item.id, d)"

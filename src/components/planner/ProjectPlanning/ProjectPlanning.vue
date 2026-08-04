@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import CalendarHeader from '../CalendarHeader/CalendarHeader.vue'
 import ProjectGantt from './components/ProjectGantt/ProjectGantt.vue'
 import type { ProjectGanttItem } from './components/ProjectGantt/types'
-import type { DtoProject } from '@/api'
+import type { DtoProject, DtoUserInfo } from '@/api'
 import type { PlanningMode, PlanningUnit } from '../calendar'
 import { buildCells, toDate } from '../calendar'
 
@@ -11,6 +11,8 @@ const props = withDefaults(defineProps<{
   projects?: DtoProject[] | null
   loading?: boolean
   error?: string | null
+  /** Пользователи для отображения владельца (owner_id → name) в тултипах */
+  users?: DtoUserInfo[] | null
   /** Якорь шкалы (первая ячейка); по умолчанию — самая ранняя дата старта проекта */
   anchor?: string | Date | number | null
   /** Период календаря: квартал, полугодие или год */
@@ -27,12 +29,16 @@ const emit = defineEmits<{
   contextmenu: [payload: { clientX: number; clientY: number; date: string; rowIndex: number; projectId?: number }]
 }>()
 
+const userNames = computed(() => new Map((props.users || []).map((u) => [u.id, u.name])))
+
 const projects = computed<ProjectGanttItem[]>(() =>
   (props.projects || []).map((dto) => ({
     id: dto.id ?? 0,
     project_code: dto.project_code ?? '',
     start_date: dto.start_date ?? '',
     end_date: dto.end_date ?? '',
+    priority: dto.priority,
+    owner_name: dto.owner_id != null ? userNames.value.get(dto.owner_id) : undefined,
   })),
 )
 

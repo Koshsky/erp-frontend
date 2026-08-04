@@ -288,6 +288,24 @@ export const useAppStore = defineStore('app', () => {
     }
   }
 
+  const users = ref<DtoUserInfo[]>([])
+  const usersLoading = ref(false)
+  const usersError = ref<string | null>(null)
+
+  async function loadUsers() {
+    usersLoading.value = true
+    usersError.value = null
+    try {
+      const api = new UsersApi(apiConfig())
+      const resp = await api.userGet()
+      users.value = resp.data?.data ?? []
+    } catch (e: any) {
+      usersError.value = e.message || String(e)
+    } finally {
+      usersLoading.value = false
+    }
+  }
+
   const totalProjects = computed(() => projects.value.length)
   const totalResources = computed(() => resources.value.length)
 
@@ -298,10 +316,14 @@ export const useAppStore = defineStore('app', () => {
     resources,
     resourcesLoading,
     resourcesError,
+    users,
+    usersLoading,
+    usersError,
     totalProjects,
     totalResources,
     loadProjects,
     loadResources,
+    loadUsers,
   }
 })
 
