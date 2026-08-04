@@ -10,6 +10,7 @@ withDefaults(defineProps<ProjectBarProps>(), {
 
 const emit = defineEmits<{
   change: [payload: { start_date: string; end_date: string }]
+  contextmenu: [payload: { clientX: number; clientY: number }]
 }>()
 </script>
 
@@ -25,5 +26,6 @@ const emit = defineEmits<{
     :opacity="opacity"
     :draggable="draggable"
     @change="(d) => emit('change', d)"
+    @contextmenu="(p) => emit('contextmenu', p)"
   />
 </template>

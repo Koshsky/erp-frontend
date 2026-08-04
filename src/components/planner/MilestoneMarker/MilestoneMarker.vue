@@ -19,6 +19,7 @@ const props = withDefaults(defineProps<MilestoneMarkerProps>(), {
 
 const emit = defineEmits<{
   change: [payload: { date: string }]
+  contextmenu: [payload: { clientX: number; clientY: number }]
 }>()
 
 const rootEl = ref<HTMLElement | null>(null)
@@ -77,6 +78,10 @@ const rayStyle = computed<Record<string, string | number> | null>(() => {
     top: props.headerHeight + 'px',
   }
 })
+
+function onContextMenu(e: MouseEvent) {
+  emit('contextmenu', { clientX: e.clientX, clientY: e.clientY })
+}
 </script>
 
 <template>
@@ -91,6 +96,7 @@ const rayStyle = computed<Record<string, string | number> | null>(() => {
       class="ms-marker"
       :style="markerStyle"
       @pointerdown="props.draggable && startDrag($event, 'move')"
+      @contextmenu.prevent.stop="onContextMenu"
     >
       <TooltipCell :text="title" :multiline="true">
         <span class="ms-hit" />
@@ -135,6 +141,7 @@ const rayStyle = computed<Record<string, string | number> | null>(() => {
   align-items: stretch;
   width: 100%;
   height: 100%;
+  cursor: inherit;
 }
 .ms-hit {
   display: block;

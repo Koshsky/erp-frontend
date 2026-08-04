@@ -13,6 +13,7 @@ withDefaults(defineProps<ProcessBarProps>(), {
 
 const emit = defineEmits<{
   change: [payload: { start_date: string; end_date: string }]
+  contextmenu: [payload: { clientX: number; clientY: number }]
 }>()
 </script>
 
@@ -35,6 +36,7 @@ const emit = defineEmits<{
     :shadow="true"
     :draggable="draggable"
     @change="(d) => emit('change', d)"
+    @contextmenu="(p) => emit('contextmenu', p)"
   >
     <span class="pb-title">{{ title }}</span>
     <span v-if="projectCode" class="pb-code">{{ projectCode }}</span>

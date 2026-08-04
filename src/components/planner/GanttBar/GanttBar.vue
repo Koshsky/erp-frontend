@@ -50,6 +50,7 @@ const props = withDefaults(
 
 const emit = defineEmits<{
   change: [payload: { start_date: string; end_date: string }]
+  contextmenu: [payload: { clientX: number; clientY: number }]
 }>()
 
 const barEl = ref<HTMLElement | null>(null)
@@ -102,6 +103,10 @@ function onBodyPointerDown(e: PointerEvent) {
 function onHandlePointerDown(e: PointerEvent, mode: 'resizeStart' | 'resizeEnd') {
   if (props.draggable) startDrag(e, mode)
 }
+
+function onContextMenu(e: MouseEvent) {
+  emit('contextmenu', { clientX: e.clientX, clientY: e.clientY })
+}
 </script>
 
 <template>
@@ -113,6 +118,7 @@ function onHandlePointerDown(e: PointerEvent, mode: 'resizeStart' | 'resizeEnd')
     :style="[barStyle, previewStyle, cursorStyle]"
     :title="title"
     @pointerdown="onBodyPointerDown"
+    @contextmenu.prevent.stop="onContextMenu"
   >
     <slot />
     <template v-if="draggable">

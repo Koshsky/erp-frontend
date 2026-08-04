@@ -29,7 +29,7 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{
   change: [payload: { id: number; start_date: string; end_date: string }]
   'milestone-change': [payload: { id: number; date: string }]
-  contextmenu: [payload: { clientX: number; clientY: number; date: string; rowIndex: number; processId?: number }]
+  contextmenu: [payload: { clientX: number; clientY: number; date: string; rowIndex: number; processId?: number; taskId?: number; milestoneId?: number }]
 }>()
 
 // Маппим DTO (из /planning/tasks) во внутренние типы планировщика.
