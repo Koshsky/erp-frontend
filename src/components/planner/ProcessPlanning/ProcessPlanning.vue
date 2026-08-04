@@ -5,6 +5,7 @@ import ProcessGantt from './components/ProcessGantt/ProcessGantt.vue'
 import type { DtoDetailedProject, DtoUserInfo } from '@/api'
 import type { ProcessPlanningProject } from './types'
 import { buildCells, toDate } from '../calendar'
+import { LABEL_WIDTH, CELL_WIDTH } from '../layout'
 import type { PlanningMode, PlanningUnit } from '../calendar'
 
 const props = withDefaults(defineProps<{
@@ -74,8 +75,8 @@ const anchor = computed<Date>(() => {
 const cells = computed(() => buildCells(anchor.value, props.mode, props.unit))
 
 const gridCols = computed(() => {
-  if (!cells.value.length) return '180px'
-  return `180px repeat(${cells.value.length}, 1fr)`
+  if (!cells.value.length) return `${LABEL_WIDTH}px`
+  return `${LABEL_WIDTH}px repeat(${cells.value.length}, var(--cell-width, ${CELL_WIDTH}px))`
 })
 </script>
 

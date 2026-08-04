@@ -5,7 +5,8 @@ import type { DtoDetailedProject } from '@/api'
 const now = new Date()
 const y = now.getFullYear()
 const day = (month: number, d: number) => new Date(y, month - 1, d)
-const iso = (d: Date) => d.toISOString().slice(0, 10)
+const iso = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 
 let projectSeq = 0
 

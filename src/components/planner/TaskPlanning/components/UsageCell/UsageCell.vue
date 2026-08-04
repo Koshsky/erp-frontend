@@ -16,24 +16,30 @@ const state = computed<CellState>(() => {
   return 'over'
 })
 
+/** Полный формат в ячейке; для крайних случаев (переполнение) — дублируется в тултипе */
 const displayText = computed(() => `${props.used}/${props.total}`)
+const tooltip = computed(() => `Занято: ${props.used}/${props.total}`)
 </script>
 
 <template>
-  <div class="uc" :class="state">{{ displayText }}</div>
+  <div class="uc" :class="state" :title="tooltip">{{ displayText }}</div>
 </template>
 
 <style scoped>
 .uc {
-  border: 1px solid #e8e8e8;
+  width: 100%;
+  height: 100%;
   text-align: center;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
   min-height: 24px;
+  min-width: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 0 4px;
+  padding: 0 1px;
+  overflow: hidden;
+  white-space: nowrap;
   transition: background 0.15s, color 0.15s;
 }
 

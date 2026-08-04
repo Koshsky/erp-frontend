@@ -46,7 +46,7 @@ const resourceCells = computed(() =>
 <template>
   <template v-for="rc in resourceCells" :key="'r'+rc.res.id">
     <div class="c lc rl">
-      <TooltipCell :text="rc.res.title">
+      <TooltipCell :text="`${rc.res.title} (всего: ${rc.res.quantity})`">
       <span class="rt">{{ rc.res.code }}</span>
       </TooltipCell>
     </div>

@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import type { GroupGanttProps } from './types'
 import { barCells, cellCount, toDate, dateAtPointer } from '../calendar'
-import { LABEL_WIDTH } from '../layout'
+import { LABEL_WIDTH, CELL_WIDTH } from '../layout'
 
 const props = withDefaults(defineProps<GroupGanttProps>(), {
   headerBarHeight: 4,
@@ -123,7 +123,7 @@ const groupOverlayStyle = computed(() => {
 
 const gridTemplate = computed(() => {
   const total = props.anchor ? cellCount(props.anchor, props.mode, props.unit) : 0
-  return `${LABEL_WIDTH}px repeat(${total}, 1fr)`
+  return `${LABEL_WIDTH}px repeat(${total}, var(--cell-width, ${CELL_WIDTH}px))`
 })
 </script>
 

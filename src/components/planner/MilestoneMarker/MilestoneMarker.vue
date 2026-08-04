@@ -8,6 +8,7 @@ import {
   boundsCellSpan,
   cellSpanToDates,
   clampDateToBounds,
+  toDate,
 } from '../calendar'
 import { useBarDrag } from '../../../composables/useBarDrag'
 import type { MilestoneMarkerProps } from './types'
@@ -25,6 +26,9 @@ const emit = defineEmits<{
 }>()
 
 const rootEl = ref<HTMLElement | null>(null)
+
+/** Дата вехи в формате для тултипа (локализованная) */
+const formattedDate = computed(() => toDate(props.date).toLocaleDateString('ru'))
 
 const cells = () => buildCells(props.anchor, props.mode, props.unit)
 
@@ -57,7 +61,7 @@ const pos = computed<{ left: string; width: string } | null>(() => {
   const total = cellCount(props.anchor, props.mode, props.unit)
   return {
     left: (index / total) * 100 + '%',
-    width: Math.max((1 / total) * 100, 0.5) + '%',
+    width: (1 / total) * 100 + '%',
   }
 })
 
@@ -115,6 +119,7 @@ function onDblClick() {
           <div class="ms-popup">
             <div class="ms-popup-title">{{ title }}</div>
             <div v-if="content" class="ms-popup-content">{{ content }}</div>
+            <div class="ms-popup-date">{{ formattedDate }}</div>
           </div>
         </template>
       </TooltipCell>
@@ -176,5 +181,10 @@ function onDblClick() {
 }
 .ms-popup-content {
   color: rgba(255, 255, 255, 0.85);
+}
+.ms-popup-date {
+  color: rgba(255, 255, 255, 0.85);
+  margin-top: 4px;
+  font-size: 12px;
 }
 </style>

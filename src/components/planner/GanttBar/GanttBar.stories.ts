@@ -5,7 +5,8 @@ import { cellCount } from '../calendar'
 const now = new Date()
 const y = now.getFullYear()
 const day = (m: number, d: number) => new Date(y, m - 1, d)
-const iso = (d: Date) => d.toISOString().slice(0, 10)
+const iso = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 
 const meta: Meta<typeof GanttBar> = {
   title: 'Components/Planner/GanttBar',
@@ -123,7 +124,7 @@ export const DecadeCells: Story = {
     },
     template: `
       <div style="max-width:900px;margin:0 auto;font-family:sans-serif;">
-        <div :style="{ display:'grid', gridTemplateColumns:'repeat(' + cells + ', 1fr)', gap:'1px', background:'#eee', marginBottom:'2px' }">
+        <div :style="{ display:'grid', gridTemplateColumns:'repeat(' + cells + ', var(--cell-width, 32px))', gap:'1px', background:'#eee', marginBottom:'2px' }">
           <div v-for="i in cells" :key="'c'+i" style="height:12px;background:#f8f9fa"></div>
         </div>
         <div style="position:relative;width:100%;height:36px;background:#f0f0f0;border-radius:6px;">
@@ -143,7 +144,10 @@ export const ClippedAtEdges: Story = {
     components: { GanttBar },
     data: () => ({
       ...base,
-      prevIso: (d: number) => new Date(y - 1, 11, d).toISOString().slice(0, 10),
+      prevIso: (d: number) => {
+        const p = new Date(y - 1, 11, d)
+        return `${p.getFullYear()}-${String(p.getMonth() + 1).padStart(2, '0')}-${String(p.getDate()).padStart(2, '0')}`
+      },
     }),
     computed: {
       trackStyle() {

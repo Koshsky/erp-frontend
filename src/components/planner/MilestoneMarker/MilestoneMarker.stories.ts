@@ -4,7 +4,8 @@ import MilestoneMarker from './MilestoneMarker.vue'
 const now = new Date()
 const y = now.getFullYear()
 const day = (m: number, d: number) => new Date(y, m - 1, d)
-const iso = (d: Date) => d.toISOString().slice(0, 10)
+const iso = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 
 const meta: Meta<typeof MilestoneMarker> = {
   title: 'Components/Planner/MilestoneMarker',

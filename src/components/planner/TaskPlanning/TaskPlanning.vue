@@ -7,7 +7,7 @@ import type { DtoDetailedProcess, DtoResource } from '@/api'
 import type { Resource } from './components/ResourceHeader/types'
 import type { Process } from './types'
 import { buildCells, toDate } from '../calendar'
-import { LABEL_WIDTH } from '../layout'
+import { LABEL_WIDTH, CELL_WIDTH } from '../layout'
 import type { PlanningMode, PlanningUnit } from '../calendar'
 
 const props = withDefaults(defineProps<{
@@ -110,7 +110,7 @@ function usageForDay(resourceId: number, day: Date): number {
 
 const gridCols = computed(() => {
   if (!cells.value.length) return LABEL_WIDTH + 'px'
-  return `${LABEL_WIDTH}px repeat(${cells.value.length}, 1fr)`
+  return `${LABEL_WIDTH}px repeat(${cells.value.length}, var(--cell-width, ${CELL_WIDTH}px))`
 })
 </script>
 
