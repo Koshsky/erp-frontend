@@ -6,3 +6,5 @@ export { default as MilestoneMarker } from './MilestoneMarker/MilestoneMarker.vu
 export { default as TaskPlanning } from './TaskPlanning/TaskPlanning.vue'
 export { default as ProcessPlanning } from './ProcessPlanning/ProcessPlanning.vue'
 export { default as ProjectPlanning } from './ProjectPlanning/ProjectPlanning.vue'
+export { default as ResourceManagerModal } from './ResourceManagerModal/ResourceManagerModal.vue'
+export * from './ResourceManagerModal/types'

@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { AuthApi, ProjectsApi, ProcessesApi, TasksApi, ResourcesApi, PlanningApi, MilestonesApi, UsersApi, Configuration } from '@/api'
+import { AuthApi, ProjectsApi, ProcessesApi, TasksApi, ResourcesApi, PlanningApi, MilestonesApi, UsersApi, AssignmentsApi, Configuration } from '@/api'
 import type { DtoUserInfo, DtoProject, DtoResource, JwtTokenPair } from '@/api'
 
 const TOKEN_KEY = 'mvs_erp_access_token'
@@ -651,6 +651,61 @@ export const usePlanningStore = defineStore('planning', () => {
     return true
   }
 
+  /** Находит ресурс (из /planning/tasks) задачи по resource_id вместе с assignment_id */
+  function findAssigned(taskId: number, resourceId: number) {
+    for (const p of taskPlanning.value?.processes ?? []) {
+      const t = (p.tasks ?? []).find((x: any) => x.id === taskId)
+      if (!t) continue
+      return (t.resources ?? []).find((r: any) => r.id === resourceId) as
+        | { id?: number; assignment_id?: number }
+        | undefined
+    }
+    return undefined
+  }
+
+  /** Назначает ресурс задаче: POST /assignment + тихий reload задач. */
+  async function assignResource(
+    taskId: number,
+    resourceId: number,
+    quantity: number,
+  ): Promise<boolean> {
+    return updateMeta(
+      () =>
+        new AssignmentsApi(apiConfig()).assignmentPost({
+          task_id: taskId,
+          resource_id: resourceId,
+          quantity,
+        }),
+      loadTaskPlanning,
+    )
+  }
+
+  /** Снимает назначение ресурса с задачи: DELETE /assignment/{id} (по assignment_id из
+   *  /planning/tasks, иначе падаем на GET /assignment → поиск по (task_id, resource_id)).
+   *  При успехе — тихий reload задач. */
+  async function removeResource(taskId: number, resourceId: number): Promise<boolean> {
+    const found = findAssigned(taskId, resourceId)
+    let assignmentId: number | undefined
+    if (found?.assignment_id) {
+      assignmentId = found.assignment_id
+    } else {
+      try {
+        const resp = await new AssignmentsApi(apiConfig()).assignmentGet()
+        const list = resp.data?.data ?? []
+        const a = list.find((x: any) => x.task_id === taskId && x.resource_id === resourceId)
+        if (a?.id == null) {
+          error.value = 'Назначение не найдено'
+          return false
+        }
+        assignmentId = a.id
+      } catch (e: any) {
+        error.value = e.message || String(e)
+        return false
+      }
+    }
+    return updateMeta(() => new AssignmentsApi(apiConfig()).assignmentIdDelete(assignmentId!), loadTaskPlanning)
+  }
+
   /** Переупорядочивает проекты (драг строки): новые приоритеты = index+1, PUT уходят
    *  только для изменившихся — перемещённый проект и сдвинутые между позициями.
    *  При ошибке тихо перезагружаем данные (откат к серверному порядку). */
@@ -718,6 +773,8 @@ export const usePlanningStore = defineStore('planning', () => {
     deleteProcess,
     deleteTask,
     deleteMilestone,
+    assignResource,
+    removeResource,
     reorderProjects,
   }
 })
