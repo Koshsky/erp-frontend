@@ -2,8 +2,11 @@
 import { ref, onMounted } from 'vue'
 import { storeToRefs } from 'pinia'
 import ProjectPlanning from '../components/planner/ProjectPlanning/ProjectPlanning.vue'
+import { ContextMenu } from '../components/common'
+import type { ContextMenuItem } from '../components/common/ContextMenu'
 import { usePlanningStore } from '../store'
 import type { PlanningMode, PlanningUnit } from '../components/planner/calendar'
+import { addMonthsISO } from '../components/planner/calendar'
 
 const store = usePlanningStore()
 const { projectPlanning, loading, error } = storeToRefs(store)
@@ -22,6 +25,31 @@ const unitOptions: { value: PlanningUnit; label: string }[] = [
   { value: 'day', label: 'День' },
   { value: 'decade', label: 'Декада' },
 ]
+
+// ПКМ по пустому месту: меню создания проекта (дата под курсором, вставка в позицию ПКМ)
+interface MenuState {
+  x: number
+  y: number
+  date: string
+  rowIndex: number
+}
+const menu = ref<MenuState | null>(null)
+const menuItems: ContextMenuItem[] = [{ id: 'create-project', label: 'Создать проект' }]
+
+function onContextMenu(p: { clientX: number; clientY: number; date: string; rowIndex: number }) {
+  menu.value = { x: p.clientX, y: p.clientY, date: p.date, rowIndex: p.rowIndex }
+}
+
+async function onSelect(id: string) {
+  if (id !== 'create-project' || !menu.value) return
+  const { date, rowIndex } = menu.value
+  const ok = await store.createProject({
+    code: 'КО_' + Date.now(),
+    start_date: date,
+    end_date: addMonthsISO(date, 6),
+  }, rowIndex)
+  if (!ok) error.value = store.error
+}
 
 onMounted(() => {
   store.loadProjectPlanning()
@@ -66,6 +94,16 @@ onMounted(() => {
       :mode="mode"
       :unit="unit"
       @change="(p) => store.updateProjectDates(p.id, p.start_date, p.end_date)"
+      @contextmenu="onContextMenu"
+    />
+
+    <ContextMenu
+      :open="!!menu"
+      :x="menu?.x ?? 0"
+      :y="menu?.y ?? 0"
+      :items="menuItems"
+      @select="onSelect"
+      @close="menu = null"
     />
   </section>
 </template>

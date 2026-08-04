@@ -10,12 +10,17 @@ const props = defineProps<TaskGanttProps>()
 const emit = defineEmits<{
   change: [payload: { id: number; start_date: string; end_date: string }]
   'milestone-change': [payload: { id: number; date: string }]
+  contextmenu: [payload: { clientX: number; clientY: number; date: string; rowIndex: number; processId?: number }]
 }>()
 
 const groupItems = computed(() => props.tasks)
 
 function onBarChange(id: number, d: { start_date: string; end_date: string }) {
   emit('change', { id, ...d })
+}
+
+function onContextMenu(p: { clientX: number; clientY: number; date: string; rowIndex: number }) {
+  emit('contextmenu', { ...p, processId: props.processId })
 }
 </script>
 
@@ -28,6 +33,7 @@ function onBarChange(id: number, d: { start_date: string; end_date: string }) {
     :groupStartDate="groupStartDate"
     :groupEndDate="groupEndDate"
     :headerBarHeight="36"
+    @contextmenu="onContextMenu"
   >
     <template #header>
       <span class="header-title">{{ title }}</span>

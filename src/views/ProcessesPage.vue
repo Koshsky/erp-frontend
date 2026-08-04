@@ -2,8 +2,11 @@
 import { ref, onMounted } from 'vue'
 import { storeToRefs } from 'pinia'
 import ProcessPlanning from '../components/planner/ProcessPlanning/ProcessPlanning.vue'
+import { ContextMenu } from '../components/common'
+import type { ContextMenuItem } from '../components/common/ContextMenu'
 import { usePlanningStore } from '../store'
 import type { PlanningMode, PlanningUnit } from '../components/planner/calendar'
+import { addMonthsISO } from '../components/planner/calendar'
 
 const store = usePlanningStore()
 const { processPlanning, loading, error } = storeToRefs(store)
@@ -22,6 +25,35 @@ const unitOptions: { value: PlanningUnit; label: string }[] = [
   { value: 'day', label: 'День' },
   { value: 'decade', label: 'Декада' },
 ]
+
+// ПКМ по пустому месту группы: создание процесса в проекте-родителе.
+// Дата под курсором, вставка строки в позицию ПКМ.
+interface MenuState {
+  x: number
+  y: number
+  date: string
+  rowIndex: number
+  projectId?: number
+}
+const menu = ref<MenuState | null>(null)
+const menuItems: ContextMenuItem[] = [{ id: 'create-process', label: 'Создать процесс' }]
+
+function onContextMenu(p: { clientX: number; clientY: number; date: string; rowIndex: number; projectId?: number }) {
+  menu.value = { x: p.clientX, y: p.clientY, date: p.date, rowIndex: p.rowIndex, projectId: p.projectId }
+}
+
+async function onSelect(id: string) {
+  if (id !== 'create-process' || !menu.value) return
+  const { date, rowIndex, projectId } = menu.value
+  if (projectId == null) return
+  const ok = await store.createProcess({
+    title: 'Новый процесс',
+    project_id: projectId,
+    start_date: date,
+    end_date: addMonthsISO(date, 3),
+  }, rowIndex)
+  if (!ok) error.value = store.error
+}
 
 onMounted(() => {
   store.loadProcessPlanning()
@@ -66,6 +98,16 @@ onMounted(() => {
       :mode="mode"
       :unit="unit"
       @change="(p) => store.updateProcessDates(p.id, p.start_date, p.end_date)"
+      @contextmenu="onContextMenu"
+    />
+
+    <ContextMenu
+      :open="!!menu"
+      :x="menu?.x ?? 0"
+      :y="menu?.y ?? 0"
+      :items="menuItems"
+      @select="onSelect"
+      @close="menu = null"
     />
   </section>
 </template>
