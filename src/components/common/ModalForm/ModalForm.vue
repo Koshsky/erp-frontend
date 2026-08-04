@@ -91,6 +91,14 @@ function onKeydown(e: KeyboardEvent) {
               </option>
             </select>
             <input
+              v-else-if="f.type === 'number'"
+              v-model.number="values[f.key]"
+              class="mf-input"
+              type="number"
+              min="1"
+              :placeholder="f.placeholder"
+            />
+            <input
               v-else
               v-model="values[f.key]"
               class="mf-input"
