@@ -17,4 +17,6 @@ export interface GroupGanttProps {
   groupEndDate?: string
   /** Высота полосы-дорожки под заголовком (px); сюда же опирается луч вехи */
   headerBarHeight?: number
+  /** Включает перетаскивание строк (ручка в колонке названий) для смены порядка */
+  reorderable?: boolean
 }

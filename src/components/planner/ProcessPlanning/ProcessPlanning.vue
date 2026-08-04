@@ -32,6 +32,7 @@ const emit = defineEmits<{
 const userNames = computed(() => new Map((props.users || []).map((u) => [u.id, u.name])))
 
 // Маппим DTO (из /planning/processes) во внутренний тип планировщика.
+// Процессы внутри проекта сортируем по алфавиту.
 const displayProjects = computed<ProcessPlanningProject[]>(() =>
   (props.projects || []).map((dto) => ({
     id: dto.id ?? 0,
@@ -40,15 +41,17 @@ const displayProjects = computed<ProcessPlanningProject[]>(() =>
     end_date: dto.end_date ?? '',
     owner_id: dto.owner_id,
     priority: dto.priority,
-    processes: (dto.processes || []).map((p) => ({
-      id: p.id ?? 0,
-      title: p.title ?? '',
-      start_date: p.start_date ?? '',
-      end_date: p.end_date ?? '',
-      owner_id: p.owner_id,
-      owner_name: p.owner_id != null ? userNames.value.get(p.owner_id) : undefined,
-      project_id: p.project_id,
-    })),
+    processes: [...(dto.processes || [])]
+      .sort((a, b) => (a.title || '').localeCompare(b.title || '', 'ru'))
+      .map((p) => ({
+        id: p.id ?? 0,
+        title: p.title ?? '',
+        start_date: p.start_date ?? '',
+        end_date: p.end_date ?? '',
+        owner_id: p.owner_id,
+        owner_name: p.owner_id != null ? userNames.value.get(p.owner_id) : undefined,
+        project_id: p.project_id,
+      })),
   })),
 )
 

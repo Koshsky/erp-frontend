@@ -33,6 +33,7 @@ const emit = defineEmits<{
 }>()
 
 // Маппим DTO (из /planning/tasks) во внутренние типы планировщика.
+// Задачи внутри процесса сортируем по алфавиту.
 const displayProcesses = computed<Process[]>(() =>
   (props.processes || []).map((dto) => ({
     id: dto.id ?? 0,
@@ -40,18 +41,20 @@ const displayProcesses = computed<Process[]>(() =>
     start_date: dto.start_date ?? '',
     end_date: dto.end_date ?? '',
     project_code: '',
-    tasks: (dto.tasks || []).map((t) => ({
-      id: t.id ?? 0,
-      title: t.title ?? '',
-      start_date: t.start_date ?? '',
-      end_date: t.end_date ?? '',
-      resources: (t.resources || []).map((r) => ({
-        resource_id: r.id ?? 0,
-        quantity: r.quantity ?? 0,
-        code: r.code ?? '',
-        title: r.title ?? '',
+    tasks: [...(dto.tasks || [])]
+      .sort((a, b) => (a.title || '').localeCompare(b.title || '', 'ru'))
+      .map((t) => ({
+        id: t.id ?? 0,
+        title: t.title ?? '',
+        start_date: t.start_date ?? '',
+        end_date: t.end_date ?? '',
+        resources: (t.resources || []).map((r) => ({
+          resource_id: r.id ?? 0,
+          quantity: r.quantity ?? 0,
+          code: r.code ?? '',
+          title: r.title ?? '',
+        })),
       })),
-    })),
     milestones: (dto.milestones || []).map((m) => ({
       id: m.id ?? 0,
       title: m.title ?? '',
