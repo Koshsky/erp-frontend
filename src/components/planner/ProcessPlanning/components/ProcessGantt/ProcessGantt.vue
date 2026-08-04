@@ -8,12 +8,17 @@ const props = defineProps<ProcessGanttProps>()
 
 const emit = defineEmits<{
   change: [payload: { id: number; start_date: string; end_date: string }]
+  contextmenu: [payload: { clientX: number; clientY: number; date: string; rowIndex: number; projectId?: number }]
 }>()
 
 const groupItems = computed(() => props.processes)
 
 function onBarChange(id: number, d: { start_date: string; end_date: string }) {
   emit('change', { id, ...d })
+}
+
+function onContextMenu(p: { clientX: number; clientY: number; date: string; rowIndex: number }) {
+  emit('contextmenu', { ...p, projectId: props.projectId })
 }
 </script>
 
@@ -25,6 +30,7 @@ function onBarChange(id: number, d: { start_date: string; end_date: string }) {
     :items="groupItems"
     :groupStartDate="groupStartDate"
     :groupEndDate="groupEndDate"
+    @contextmenu="onContextMenu"
   >
     <template #header>
       <span class="header-code">{{ projectCode }}</span>

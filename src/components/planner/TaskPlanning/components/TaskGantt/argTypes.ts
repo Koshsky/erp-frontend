@@ -34,6 +34,12 @@ export const taskGanttArgTypes: ArgTypes<TaskGanttProps> = {
     control: 'text',
     table: { category: 'Content' },
   },
+  processId: {
+    name: 'Идентификатор процесса',
+    description: 'ID процесса-родителя (для создания задач/вех в группе)',
+    control: 'number',
+    table: { type: { summary: 'number' }, category: 'Data' },
+  },
   tasks: {
     name: 'Задачи',
     description: 'Массив задач процесса',

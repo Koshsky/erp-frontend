@@ -17,6 +17,8 @@ export interface TaskGanttProps {
   unit: PlanningUnit
   title: string
   projectCode?: string
+  /** Идентификатор процесса-родителя (для создания задач/вех в группе) */
+  processId?: number
   tasks: Task[]
   milestones?: Milestone[]
   groupStartDate?: string

@@ -2,8 +2,11 @@
 import { ref, onMounted } from 'vue'
 import { storeToRefs } from 'pinia'
 import TaskPlanning from '../components/planner/TaskPlanning/TaskPlanning.vue'
+import { ContextMenu } from '../components/common'
+import type { ContextMenuItem } from '../components/common/ContextMenu'
 import { usePlanningStore, useAppStore } from '../store'
 import type { PlanningMode, PlanningUnit } from '../components/planner/calendar'
+import { addDaysISO } from '../components/planner/calendar'
 
 const planning = usePlanningStore()
 const app = useAppStore()
@@ -14,6 +17,48 @@ const { resources } = storeToRefs(app)
 const mode = ref<PlanningMode>('quarter')
 const unit = ref<PlanningUnit>('day')
 const anchor = ref<Date | null>(null)
+
+// ПКМ по пустому месту группы: создание задачи или вехи в процессе-родителе.
+// Дата под курсором; задача вставляется строкой в позицию ПКМ, веха — точка на шкале.
+interface MenuState {
+  x: number
+  y: number
+  date: string
+  rowIndex: number
+  processId?: number
+}
+const menu = ref<MenuState | null>(null)
+const menuItems: ContextMenuItem[] = [
+  { id: 'create-task', label: 'Создать задачу' },
+  { id: 'create-milestone', label: 'Создать веху' },
+]
+
+function onContextMenu(p: { clientX: number; clientY: number; date: string; rowIndex: number; processId?: number }) {
+  menu.value = { x: p.clientX, y: p.clientY, date: p.date, rowIndex: p.rowIndex, processId: p.processId }
+}
+
+async function onSelect(id: string) {
+  if (!menu.value) return
+  const { date, rowIndex, processId } = menu.value
+  if (processId == null) return
+  if (id === 'create-task') {
+    const ok = await planning.createTask({
+      title: 'Новая задача',
+      process_id: processId,
+      start_date: date,
+      end_date: addDaysISO(date, 7),
+    }, rowIndex)
+    if (!ok) error.value = planning.error
+  } else if (id === 'create-milestone') {
+    const ok = await planning.createMilestone({
+      title: 'Новая веха',
+      content: 'Новая веха',
+      process_id: processId,
+      date,
+    })
+    if (!ok) error.value = planning.error
+  }
+}
 
 onMounted(async () => {
   await planning.loadTaskPlanning()
@@ -36,6 +81,16 @@ onMounted(async () => {
       :unit="unit"
       @change="(p) => planning.updateTaskDates(p.id, p.start_date, p.end_date)"
       @milestone-change="(p) => planning.updateMilestoneDate(p.id, p.date)"
+      @contextmenu="onContextMenu"
+    />
+
+    <ContextMenu
+      :open="!!menu"
+      :x="menu?.x ?? 0"
+      :y="menu?.y ?? 0"
+      :items="menuItems"
+      @select="onSelect"
+      @close="menu = null"
     />
   </section>
 </template>

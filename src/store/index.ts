@@ -415,6 +415,116 @@ export const usePlanningStore = defineStore('planning', () => {
     )
   }
 
+  /** Общий путь создания: POST; при успехе возвращает created-ответ, иначе null. */
+  async function postCreate(create: () => Promise<{ data?: { data?: unknown } }>): Promise<unknown> {
+    try {
+      const resp = await create()
+      return resp.data?.data ?? null
+    } catch (e: any) {
+      error.value = e.message || String(e)
+      return null
+    }
+  }
+
+  /** Вставка элемента в массив по индексу (сдвиг строк вниз); index по умолчанию — в конец. */
+  function insertAt<T>(list: T[] | null | undefined, index: number | undefined, item: T): void {
+    if (!list) return
+    const i = index == null || index < 0 || index > list.length ? list.length : index
+    list.splice(i, 0, item)
+  }
+
+  async function createProject(
+    payload: {
+      code: string
+      start_date: string
+      end_date: string
+      priority?: number
+    },
+    index?: number,
+  ): Promise<boolean> {
+    const created = await postCreate(() => new ProjectsApi(apiConfig()).projectPost(payload))
+    if (created == null) return false
+    const dto = created as { id?: number; code?: string; start_date?: string; end_date?: string }
+    insertAt(projectPlanning.value?.projects, index, {
+      id: dto.id ?? 0,
+      project_code: dto.code ?? payload.code,
+      start_date: dto.start_date ?? payload.start_date,
+      end_date: dto.end_date ?? payload.end_date,
+    })
+    insertAt(useAppStore().projects, index, {
+      id: dto.id ?? 0,
+      project_code: dto.code ?? payload.code,
+      start_date: dto.start_date ?? payload.start_date,
+      end_date: dto.end_date ?? payload.end_date,
+    })
+    return true
+  }
+
+  async function createProcess(
+    payload: {
+      title: string
+      project_id: number
+      start_date: string
+      end_date: string
+    },
+    index?: number,
+  ): Promise<boolean> {
+    const created = await postCreate(() => new ProcessesApi(apiConfig()).processPost(payload))
+    if (created == null) return false
+    const dto = created as { id?: number; title?: string; start_date?: string; end_date?: string }
+    const project = processPlanning.value?.projects?.find((p: any) => p.id === payload.project_id)
+    insertAt(project?.processes, index, {
+      id: dto.id ?? 0,
+      title: dto.title ?? payload.title,
+      start_date: dto.start_date ?? payload.start_date,
+      end_date: dto.end_date ?? payload.end_date,
+      project_id: payload.project_id,
+    })
+    return true
+  }
+
+  async function createTask(
+    payload: {
+      title: string
+      process_id: number
+      start_date: string
+      end_date: string
+    },
+    index?: number,
+  ): Promise<boolean> {
+    const created = await postCreate(() => new TasksApi(apiConfig()).taskPost(payload))
+    if (created == null) return false
+    const dto = created as { id?: number; title?: string; start_date?: string; end_date?: string }
+    const proc = taskPlanning.value?.processes?.find((p: any) => p.id === payload.process_id)
+    insertAt(proc?.tasks, index, {
+      id: dto.id ?? 0,
+      title: dto.title ?? payload.title,
+      start_date: dto.start_date ?? payload.start_date,
+      end_date: dto.end_date ?? payload.end_date,
+      resources: [],
+    })
+    return true
+  }
+
+  async function createMilestone(payload: {
+    title: string
+    content?: string
+    process_id: number
+    date: string
+  }): Promise<boolean> {
+    const created = await postCreate(() => new MilestonesApi(apiConfig()).milestonePost(payload))
+    if (created == null) return false
+    const dto = created as { id?: number; title?: string; content?: string; date?: string }
+    const proc = taskPlanning.value?.processes?.find((p: any) => p.id === payload.process_id)
+    proc?.milestones?.push({
+      id: dto.id ?? 0,
+      title: dto.title ?? payload.title,
+      content: dto.content ?? payload.content ?? '',
+      date: dto.date ?? payload.date,
+    })
+    return true
+  }
+
   return {
     projectPlanning,
     processPlanning,
@@ -428,5 +538,9 @@ export const usePlanningStore = defineStore('planning', () => {
     updateProcessDates,
     updateProjectDates,
     updateMilestoneDate,
+    createProject,
+    createProcess,
+    createTask,
+    createMilestone,
   }
 })

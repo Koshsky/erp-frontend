@@ -1,12 +1,32 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import type { GroupGanttProps } from './types'
-import { barCells, cellCount, toDate } from '../calendar'
+import { barCells, cellCount, toDate, dateAtPointer } from '../calendar'
 import { LABEL_WIDTH } from '../layout'
 
 const props = withDefaults(defineProps<GroupGanttProps>(), {
   headerBarHeight: 4,
 })
+
+const emit = defineEmits<{
+  contextmenu: [payload: { clientX: number; clientY: number; date: string; rowIndex: number }]
+}>()
+
+const gridRef = ref<HTMLElement | null>(null)
+
+/** ПКМ по пустому месту группы: эмитим дату под указателем и индекс строки,
+ *  в которую нужно вставить новый элемент (строки ниже сдвинутся вниз).
+ *  Клики по барам и вехам пропускаем — это не «пустое место». */
+function onContextMenu(e: MouseEvent) {
+  if (!props.anchor) return
+  const target = e.target as HTMLElement
+  if (target.closest('.gantt-bar, .gb-handle, .ms')) return
+  const date = dateAtPointer(props.anchor, props.mode, props.unit, gridRef.value?.getBoundingClientRect() ?? null, e.clientX)
+  if (!date) return
+  const rowEl = target.closest('[data-row-index]') as HTMLElement | null
+  const rowIndex = rowEl != null ? Number(rowEl.dataset.rowIndex) : props.items.length
+  emit('contextmenu', { clientX: e.clientX, clientY: e.clientY, date, rowIndex })
+}
 
 defineSlots<{
   header(): any
@@ -38,8 +58,8 @@ const gridTemplate = computed(() => {
 </script>
 
 <template>
-  <div class="gg-block" style="gridColumn:1/-1">
-    <div class="gg-grid" :style="{ gridTemplateColumns: gridTemplate }">
+  <div class="gg-block" style="gridColumn:1/-1" @contextmenu.prevent="onContextMenu">
+    <div ref="gridRef" class="gg-grid" :style="{ gridTemplateColumns: gridTemplate }">
       <div class="c lc ph-header">
         <slot name="header" />
       </div>
@@ -50,13 +70,13 @@ const gridTemplate = computed(() => {
       </div>
 
       <template v-for="(item, index) in items" :key="'gi'+item.id">
-        <div class="c lc item-label lc-start" :class="{ ta: index % 2 === 1 }">
+        <div class="c lc item-label lc-start" :class="{ ta: index % 2 === 1 }" :data-row-index="index">
           <slot name="row" :item="item" :index="index">
             <span class="item-title">{{ item.title }}</span>
             <div class="item-dates">{{ fmt(item.start_date) }} — {{ fmt(item.end_date) }}</div>
           </slot>
         </div>
-        <div class="bar-cell" :class="{ ta: index % 2 === 1 }" style="gridColumn:2/-1">
+        <div class="bar-cell" :class="{ ta: index % 2 === 1 }" style="gridColumn:2/-1" :data-row-index="index">
           <!-- Подложка границ группы на каждой ячейке -->
           <div v-if="groupOverlayStyle" class="group-overlay" :style="groupOverlayStyle" />
           <slot name="bar" :item="item" :index="index" :count="items.length" />

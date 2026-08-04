@@ -24,6 +24,7 @@ const props = withDefaults(defineProps<{
 
 const emit = defineEmits<{
   change: [payload: { id: number; start_date: string; end_date: string }]
+  contextmenu: [payload: { clientX: number; clientY: number; date: string; rowIndex: number }]
 }>()
 
 const projects = computed<ProjectGanttItem[]>(() =>
@@ -81,6 +82,7 @@ const gridCols = computed(() => {
             :unit="unit"
             :projects="projects"
             @change="(p) => emit('change', p)"
+            @contextmenu="(p) => emit('contextmenu', p)"
           />
         </div>
       </template>

@@ -4,6 +4,8 @@ export type PlanningMode = 'quarter' | 'half' | 'year'
 /** Единица ячейки шкалы: день или декада (10 дней) */
 export type PlanningUnit = 'day' | 'decade'
 
+import { LABEL_WIDTH } from './layout'
+
 /** Длина периода в календарных месяцах (от месяца anchor включительно) */
 export const MODE_MONTHS: Record<PlanningMode, number> = {
   quarter: 3,
@@ -47,6 +49,18 @@ export function fmtDate(d: Date): string {
   const m = String(d.getMonth() + 1).padStart(2, '0')
   const day = String(d.getDate()).padStart(2, '0')
   return `${d.getFullYear()}-${m}-${day}`
+}
+
+/** Дата через n дней (YYYY-MM-DD, локальная зона) */
+export function addDaysISO(date: Date | string | number, days: number): string {
+  const d = toDayStart(date)
+  return fmtDate(new Date(d.getFullYear(), d.getMonth(), d.getDate() + days))
+}
+
+/** Дата через n календарных месяцев (YYYY-MM-DD, локальная зона) */
+export function addMonthsISO(date: Date | string | number, months: number): string {
+  const d = toDayStart(date)
+  return fmtDate(new Date(d.getFullYear(), d.getMonth() + months, d.getDate()))
 }
 
 function clamp(v: number, min: number, max: number): number {
@@ -265,4 +279,35 @@ export function clampDateToBounds(
   const bs = toDayStart(bStart).getTime()
   const be = dayBefore(bEnd)
   return fmtDate(new Date(clamp(t, bs, be)))
+}
+
+/**
+ * Дата под указателем мыши на сетке планировщика.
+ * rect — getBoundingClientRect() области шкалы (включая колонку названий),
+ * clientX — координата клика относительно окна. Возвращает YYYY-MM-DD
+ * (локальная зона), интерполируя внутри ячейки (для декад — точная дата),
+ * либо null, если клик левее шкалы (на колонке названий) или вне сетки.
+ */
+export function dateAtPointer(
+  anchor: Date | string | number,
+  mode: PlanningMode,
+  unit: PlanningUnit,
+  rect: DOMRect | null,
+  clientX: number,
+): string | null {
+  if (!rect) return null
+  const cells = buildCells(anchor, mode, unit)
+  if (!cells.length) return null
+  const x = clientX - rect.left
+  if (x < LABEL_WIDTH) return null
+  const timelineWidth = rect.width - LABEL_WIDTH
+  if (timelineWidth <= 0) return null
+  const cellWidth = timelineWidth / cells.length
+  const rawIdx = (x - LABEL_WIDTH) / cellWidth
+  const idx = clamp(Math.floor(rawIdx), 0, cells.length - 1)
+  const frac = clamp(rawIdx - idx, 0, 1)
+  const cell = cells[idx]
+  const start = cell.start.getTime()
+  const end = Math.max(cell.end.getTime(), start)
+  return fmtDate(new Date(start + Math.round(frac * (end - start))))
 }

@@ -27,6 +27,12 @@ export const processGanttArgTypes: ArgTypes<ProcessGanttProps> = {
     control: 'text',
     table: { category: 'Content' },
   },
+  projectId: {
+    name: 'Идентификатор проекта',
+    description: 'ID проекта-родителя (для создания процессов в группе)',
+    control: 'number',
+    table: { type: { summary: 'number' }, category: 'Data' },
+  },
   processes: {
     name: 'Процессы (задачи)',
     description: 'Массив задач в рамках процесса',

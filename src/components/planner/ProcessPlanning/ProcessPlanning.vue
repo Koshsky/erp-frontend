@@ -24,6 +24,7 @@ const props = withDefaults(defineProps<{
 
 const emit = defineEmits<{
   change: [payload: { id: number; start_date: string; end_date: string }]
+  contextmenu: [payload: { clientX: number; clientY: number; date: string; rowIndex: number; projectId?: number }]
 }>()
 
 // Маппим DTO (из /planning/processes) во внутренний тип планировщика.
@@ -88,10 +89,12 @@ const gridCols = computed(() => {
               :mode="mode"
               :unit="unit"
               :projectCode="project.project_code"
+              :projectId="project.id"
               :processes="project.processes"
               :groupStartDate="project.start_date"
               :groupEndDate="project.end_date"
               @change="(p) => emit('change', p)"
+              @contextmenu="(p) => emit('contextmenu', p)"
             />
           </template>
         </div>

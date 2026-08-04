@@ -29,6 +29,7 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{
   change: [payload: { id: number; start_date: string; end_date: string }]
   'milestone-change': [payload: { id: number; date: string }]
+  contextmenu: [payload: { clientX: number; clientY: number; date: string; rowIndex: number; processId?: number }]
 }>()
 
 // Маппим DTO (из /planning/tasks) во внутренние типы планировщика.
@@ -134,12 +135,14 @@ const gridCols = computed(() => {
               :unit="unit"
               :title="proc.title"
               :projectCode="proc.project_code"
+              :processId="proc.id"
               :tasks="proc.tasks || []"
               :milestones="proc.milestones || []"
               :groupStartDate="proc.start_date"
               :groupEndDate="proc.end_date"
               @change="(p) => emit('change', p)"
               @milestone-change="(p) => emit('milestone-change', p)"
+              @contextmenu="(p) => emit('contextmenu', p)"
             />
           </template>
         </div>

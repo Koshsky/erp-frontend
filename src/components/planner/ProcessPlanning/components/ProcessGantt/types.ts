@@ -14,6 +14,8 @@ export interface ProcessGanttProps {
   mode: PlanningMode
   unit: PlanningUnit
   projectCode?: string
+  /** Идентификатор проекта-родителя (для создания процессов в группе) */
+  projectId?: number
   processes: ProcessItem[]
   groupStartDate?: string
   groupEndDate?: string
