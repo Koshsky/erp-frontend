@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import CalendarHeader from '../CalendarHeader/CalendarHeader.vue'
-import ProjectBar from './components/ProjectBar/ProjectBar.vue'
+import ProjectGantt from './components/ProjectGantt/ProjectGantt.vue'
+import type { ProjectGanttItem } from './components/ProjectGantt/types'
 import type { DtoProject } from '@/api'
 import type { PlanningMode, PlanningUnit } from '../calendar'
 import { buildCells, toDate } from '../calendar'
@@ -25,7 +26,14 @@ const emit = defineEmits<{
   change: [payload: { id: number; start_date: string; end_date: string }]
 }>()
 
-const projects = computed<DtoProject[]>(() => props.projects || [])
+const projects = computed<ProjectGanttItem[]>(() =>
+  (props.projects || []).map((dto) => ({
+    id: dto.id ?? 0,
+    project_code: dto.project_code ?? '',
+    start_date: dto.start_date ?? '',
+    end_date: dto.end_date ?? '',
+  })),
+)
 
 // Отправная точка календаря по умолчанию — самый ранний старт проекта (или текущая дата)
 const defaultAnchor = computed<Date>(() => {
@@ -67,22 +75,13 @@ const gridCols = computed(() => {
 
           <div class="sep" style="gridColumn:1/-1"></div>
 
-          <template v-for="project in projects" :key="'proj'+project.id">
-            <div class="c lc ph">
-              <span class="ph-code">{{ project.project_code || '' }}</span>
-            </div>
-            <div class="bar-cell" style="gridColumn:2/-1">
-              <ProjectBar
-                :anchor="anchor!"
-                :mode="mode"
-                :unit="unit"
-                :startDate="project.start_date || ''"
-                :endDate="project.end_date || ''"
-                :projectCode="project.project_code || ''"
-                @change="(d) => emit('change', { id: project.id ?? 0, ...d })"
-              />
-            </div>
-          </template>
+          <ProjectGantt
+            :anchor="anchor"
+            :mode="mode"
+            :unit="unit"
+            :projects="projects"
+            @change="(p) => emit('change', p)"
+          />
         </div>
       </template>
       <div v-else-if="error" class="st er">{{ error }}</div>
@@ -100,33 +99,4 @@ const gridCols = computed(() => {
 .pg-error { color:#d93025; font-size:13px; padding:8px 4px; }
 .gg { display: grid; min-width: 600px; }
 .sep { border: none; border-bottom: 2px solid #1a73e8; margin: 4px 0; height: 0; }
-
-.c {
-  border: 1px solid #e8e8e8;
-  display: flex;
-  align-items: center;
-  font-size: 12px;
-}
-.lc {
-  position: sticky; left: 0; background: #fff; z-index: 2;
-  text-align: left; padding: 4px 8px !important;
-  border-left: none; overflow: hidden;
-}
-.ph {
-  min-height: 32px;
-  background: #f0f7ff;
-  font-weight: 700; font-size: 13px; color: #1a73e8;
-}
-.ph-code {
-  font-size: 12px;
-  color: #1a73e8;
-  font-weight: 700;
-  letter-spacing: 0.3px;
-}
-
-.bar-cell {
-  position: relative; min-height: 36px;
-  border: 1px solid #e8e8e8; border-top: none; background: #fff;
-  overflow: hidden;
-}
 </style>
