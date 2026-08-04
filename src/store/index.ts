@@ -571,21 +571,69 @@ export const usePlanningStore = defineStore('planning', () => {
     },
     index?: number,
   ): Promise<boolean> {
-    const created = await postCreate(() => new ProjectsApi(apiConfig()).projectPost(payload))
+    const list = projectPlanning.value?.projects
+    const i =
+      index == null || index < 0 || index > (list?.length ?? 0) ? (list?.length ?? 0) : index
+    const priority = i + 1
+
+    const created = await postCreate(() =>
+      new ProjectsApi(apiConfig()).projectPost({ ...payload, priority }),
+    )
     if (created == null) return false
-    const dto = created as { id?: number; code?: string; start_date?: string; end_date?: string }
-    insertAt(projectPlanning.value?.projects, index, {
+    const dto = created as {
+      id?: number
+      code?: string
+      start_date?: string
+      end_date?: string
+      priority?: number
+    }
+
+    // Сдвинутые вниз проекты (позиции >= i) получают приоритет +1
+    const changes: { id: number; priority: number }[] = []
+    if (Array.isArray(list)) {
+      for (let j = i; j < list.length; j++) {
+        const p = list[j] as { id?: number; priority?: number }
+        const np = j + 2
+        if (p.id != null && p.priority !== np) changes.push({ id: p.id, priority: np })
+      }
+    }
+
+    let saveError: string | null = null
+    try {
+      await Promise.all(
+        changes.map((c) => new ProjectsApi(apiConfig()).projectIdPut(c.id, { priority: c.priority })),
+      )
+    } catch (e: any) {
+      saveError = e.message || String(e)
+    }
+
+    const item = {
       id: dto.id ?? 0,
       project_code: dto.code ?? payload.code,
       start_date: dto.start_date ?? payload.start_date,
       end_date: dto.end_date ?? payload.end_date,
-    })
-    insertAt(useAppStore().projects, index, {
-      id: dto.id ?? 0,
-      project_code: dto.code ?? payload.code,
-      start_date: dto.start_date ?? payload.start_date,
-      end_date: dto.end_date ?? payload.end_date,
-    })
+      priority: dto.priority ?? priority,
+    }
+    insertAt(projectPlanning.value?.projects, i, item)
+    insertAt(useAppStore().projects, i, item)
+
+    const app = useAppStore()
+    if (Array.isArray(projectPlanning.value?.projects)) {
+      const plist = projectPlanning.value.projects as { priority?: number }[]
+      for (let j = i; j < plist.length; j++) plist[j].priority = j + 1
+    }
+    if (Array.isArray(app.projects)) {
+      for (const p of app.projects) {
+        const c = changes.find((x) => x.id === p.id)
+        if (c) p.priority = c.priority
+      }
+    }
+
+    if (saveError) {
+      error.value = saveError
+      await loadProjectPlanning(true)
+      return false
+    }
     return true
   }
 
