@@ -19,10 +19,10 @@ const anchor = day(1)
 const cells = cellCount(anchor, 'quarter', 'day')
 
 const tasks = [
-  { id: 1, title: 'Осмотр объекта', start_date: iso(day(2)), end_date: iso(day(5)), resources: [{ resource_id: 1, quantity: 2, code: 'И' }] },
-  { id: 2, title: 'Разработка ППР', start_date: iso(day(4)), end_date: iso(day(14)), resources: [{ resource_id: 1, quantity: 1, code: 'И' }] },
-  { id: 3, title: 'Закуп материалов', start_date: iso(day(6)), end_date: iso(day(20)), resources: [{ resource_id: 5, quantity: 1, code: 'СВ' }] },
-  { id: 4, title: 'Монтаж конструкций', start_date: iso(day(12)), end_date: iso(day(28)), resources: [{ resource_id: 2, quantity: 3, code: 'МК' }] },
+  { id: 1, title: 'Осмотр объекта', start_date: iso(day(2)), end_date: iso(day(5)), resources: [{ resource_id: 1, assignment_id: 1, quantity: 2, code: 'И' }] },
+  { id: 2, title: 'Разработка ППР', start_date: iso(day(4)), end_date: iso(day(14)), resources: [{ resource_id: 1, assignment_id: 2, quantity: 1, code: 'И' }] },
+  { id: 3, title: 'Закуп материалов', start_date: iso(day(6)), end_date: iso(day(20)), resources: [{ resource_id: 5, assignment_id: 3, quantity: 1, code: 'СВ' }] },
+  { id: 4, title: 'Монтаж конструкций', start_date: iso(day(12)), end_date: iso(day(28)), resources: [{ resource_id: 2, assignment_id: 4, quantity: 3, code: 'МК' }] },
 ]
 export const Default: Story = {
   render: () => ({

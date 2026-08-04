@@ -2,6 +2,7 @@ import type { PlanningMode, PlanningUnit } from '../../../../../calendar'
 
 export interface TaskResource {
   resource_id: number
+  assignment_id: number
   quantity: number
   code: string
   title?: string

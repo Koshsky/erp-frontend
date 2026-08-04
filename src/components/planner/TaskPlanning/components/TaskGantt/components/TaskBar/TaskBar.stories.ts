@@ -32,7 +32,7 @@ export const OneResource: Story = {
     {
       id: 1, title: 'Осмотр объекта',
       start_date: iso(day(4)), end_date: iso(day(9)),
-      resources: [{ resource_id: 1, quantity: 2, code: 'И' }],
+      resources: [{ resource_id: 1, assignment_id: 1, quantity: 2, code: 'И' }],
     },
     day(1), 'quarter', 'day',
   ),
@@ -44,8 +44,8 @@ export const MultipleResources: Story = {
       id: 1, title: 'Монтаж конструкций',
       start_date: iso(day(6)), end_date: iso(day(18)),
       resources: [
-        { resource_id: 1, quantity: 3, code: 'М' },
-        { resource_id: 2, quantity: 1, code: 'И' },
+        { resource_id: 1, assignment_id: 1, quantity: 3, code: 'М' },
+        { resource_id: 2, assignment_id: 2, quantity: 1, code: 'И' },
       ],
     },
     day(1), 'quarter', 'day',
@@ -65,7 +65,7 @@ export const YearDecades: Story = {
     {
       id: 1, title: 'Монтаж конструкций',
       start_date: iso(new Date(now.getFullYear(), 0, 3)), end_date: iso(new Date(now.getFullYear(), 2, 10)),
-      resources: [{ resource_id: 1, quantity: 3, code: 'М' }],
+      resources: [{ resource_id: 1, assignment_id: 1, quantity: 3, code: 'М' }],
     },
     new Date(now.getFullYear(), 0, 1), 'year', 'decade',
   ),
@@ -85,7 +85,7 @@ export const ClampedToProcessBounds: Story = {
       task: {
         id: 1, title: 'Монтаж конструкций',
         start_date: iso(day(10)), end_date: iso(day(18)),
-        resources: [{ resource_id: 1, quantity: 2, code: 'М' }],
+        resources: [{ resource_id: 1, assignment_id: 1, quantity: 2, code: 'М' }],
       },
       last: '—',
     }),

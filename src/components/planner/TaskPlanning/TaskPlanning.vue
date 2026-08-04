@@ -52,6 +52,7 @@ const displayProcesses = computed<Process[]>(() =>
         end_date: t.end_date ?? '',
         resources: (t.resources || []).map((r) => ({
           resource_id: r.id ?? 0,
+          assignment_id: r.assignment_id ?? 0,
           quantity: r.quantity ?? 0,
           code: r.code ?? '',
           title: r.title ?? '',
