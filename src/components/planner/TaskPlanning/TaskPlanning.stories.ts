@@ -46,7 +46,7 @@ const process = (startM: number, startD: number, endM: number, endD: number, id:
       process_id: id,
       start_date: iso(day(startM, startD + i * 2)),
       end_date: iso(day(startM, startD + i * 2 + 5)),
-      resources: [{ id: res.id, code: res.code, title: res.title, quantity: (i % 3) + 1 }],
+      resources: [{ id: res.id, assignment_id: i + 1 + offset, code: res.code, title: res.title, quantity: (i % 3) + 1 }],
     }
   }),
 })

@@ -192,6 +192,7 @@ export interface DtoRegisterRequest {
     'username'?: string;
 }
 export interface DtoResource {
+    'assignment_id'?: number;
     'code'?: string;
     'id'?: number;
     'quantity'?: number;
