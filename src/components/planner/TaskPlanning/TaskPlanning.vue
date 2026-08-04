@@ -99,8 +99,8 @@ function usageForDay(resourceId: number, day: Date): number {
     if (!proc.tasks) continue
     for (const t of proc.tasks) {
       const d = day.getTime()
-      // start_date включительно, end_date исключительно (локальные даты, как у баров)
-      if (d < toDate(t.start_date).getTime() || d >= toDate(t.end_date).getTime()) continue
+      // start_date и end_date включительно (локальные даты, как у баров)
+      if (d < toDate(t.start_date).getTime() || d > toDate(t.end_date).getTime()) continue
       const a = (t.resources || []).find((r) => r.resource_id === resourceId)
       if (a) used += a.quantity
     }
