@@ -73,6 +73,7 @@ export interface DtoCreateMilestoneRequest {
 }
 export interface DtoCreateProcessRequest {
     'end_date'?: string;
+    'owner_id'?: number;
     'project_id'?: number;
     'start_date'?: string;
     'title'?: string;
@@ -80,6 +81,7 @@ export interface DtoCreateProcessRequest {
 export interface DtoCreateProjectRequest {
     'code'?: string;
     'end_date'?: string;
+    'owner_id'?: number;
     'priority'?: number;
     'start_date'?: string;
 }
@@ -213,20 +215,26 @@ export interface DtoTaskResponse {
 }
 export interface DtoUpdateAssignmentRequest {
     'quantity'?: number;
+    'resource_id'?: number;
+    'task_id'?: number;
 }
 export interface DtoUpdateMilestoneRequest {
     'content'?: string;
     'date'?: string;
+    'process_id'?: number;
     'title'?: string;
 }
 export interface DtoUpdateProcessRequest {
     'end_date'?: string;
+    'owner_id'?: number;
+    'project_id'?: number;
     'start_date'?: string;
     'title'?: string;
 }
 export interface DtoUpdateProjectRequest {
     'code'?: string;
     'end_date'?: string;
+    'owner_id'?: number;
     'priority'?: number;
     'start_date'?: string;
 }
@@ -237,6 +245,7 @@ export interface DtoUpdateResourceRequest {
 }
 export interface DtoUpdateTaskRequest {
     'end_date'?: string;
+    'process_id'?: number;
     'start_date'?: string;
     'title'?: string;
 }
@@ -260,7 +269,7 @@ export interface DtoUserResponse {
 export interface JwtTokenPair {
     'access_token'?: string;
     /**
-     * секунды
+     * seconds
      */
     'expires_in'?: number;
     'refresh_token'?: string;
