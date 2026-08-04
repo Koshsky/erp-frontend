@@ -11,25 +11,33 @@ const x = ref(0)
 const y = ref(0)
 let showTimer: ReturnType<typeof setTimeout> | null = null
 const triggerRef = ref<HTMLElement | null>(null)
+const popupRef = ref<HTMLElement | null>(null)
 const slots = useSlots()
 
-function getPos(el: HTMLElement): { x: number; y: number } {
-  const rect = el.getBoundingClientRect()
-  return { x: rect.right + 8, y: rect.top + rect.height / 2 }
+const PAD = 12
+
+/** Позиция поповера у курсора: справа-снизу, с зажимом в пределы окна */
+function positionAt(e: MouseEvent) {
+  let left = e.clientX + PAD
+  let top = e.clientY + PAD
+  const el = popupRef.value
+  if (el) {
+    const rect = el.getBoundingClientRect()
+    left = Math.min(left, window.innerWidth - rect.width - 8)
+    top = Math.min(top, window.innerHeight - rect.height - 8)
+  }
+  x.value = Math.max(8, left)
+  y.value = Math.max(8, top)
 }
 
 function onMouseEnter(e: MouseEvent) {
-  const pos = getPos(e.currentTarget as HTMLElement)
-  x.value = pos.x
-  y.value = pos.y
+  positionAt(e)
   showTimer = setTimeout(() => { visible.value = true }, 400)
 }
 
 function onMouseMove(e: MouseEvent) {
   if (!visible.value) return
-  const pos = getPos(e.currentTarget as HTMLElement)
-  x.value = pos.x
-  y.value = pos.y
+  positionAt(e)
 }
 
 function onMouseLeave() {
@@ -54,6 +62,7 @@ onBeforeUnmount(() => {
     <Teleport to="body">
       <div
         v-if="visible && (text || slots.popup)"
+        ref="popupRef"
         class="tt-popup"
         :class="{ 'tt-popup--multiline': multiline }"
         :style="{ left: x + 'px', top: y + 'px' }"
@@ -73,7 +82,6 @@ onBeforeUnmount(() => {
 }
 .tt-popup {
   position: fixed;
-  transform: translateY(-50%);
   background: #2c2c2c;
   color: #fff;
   font-size: 12px;

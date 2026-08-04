@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import CalendarHeader from '../CalendarHeader/CalendarHeader.vue'
 import ProcessGantt from './components/ProcessGantt/ProcessGantt.vue'
-import type { DtoDetailedProject } from '@/api'
+import type { DtoDetailedProject, DtoUserInfo } from '@/api'
 import type { ProcessPlanningProject } from './types'
 import { buildCells, toDate } from '../calendar'
 import type { PlanningMode, PlanningUnit } from '../calendar'
@@ -11,6 +11,8 @@ const props = withDefaults(defineProps<{
   projects?: DtoDetailedProject[] | null
   loading?: boolean
   error?: string | null
+  /** Пользователи для отображения владельца (owner_id → name) в тултипах */
+  users?: DtoUserInfo[] | null
   /** Якорь шкалы (первая ячейка); по умолчанию — самая ранняя дата старта проекта */
   anchor?: string | Date | number | null
   /** Период календаря: квартал, полугодие или год */
@@ -27,6 +29,8 @@ const emit = defineEmits<{
   contextmenu: [payload: { clientX: number; clientY: number; date: string; rowIndex: number; projectId?: number; processId?: number }]
 }>()
 
+const userNames = computed(() => new Map((props.users || []).map((u) => [u.id, u.name])))
+
 // Маппим DTO (из /planning/processes) во внутренний тип планировщика.
 const displayProjects = computed<ProcessPlanningProject[]>(() =>
   (props.projects || []).map((dto) => ({
@@ -42,6 +46,7 @@ const displayProjects = computed<ProcessPlanningProject[]>(() =>
       start_date: p.start_date ?? '',
       end_date: p.end_date ?? '',
       owner_id: p.owner_id,
+      owner_name: p.owner_id != null ? userNames.value.get(p.owner_id) : undefined,
       project_id: p.project_id,
     })),
   })),

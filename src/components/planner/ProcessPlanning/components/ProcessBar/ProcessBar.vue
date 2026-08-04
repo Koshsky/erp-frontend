@@ -1,9 +1,12 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import GanttBar from '../../../GanttBar/GanttBar.vue'
 import type { ProcessBarProps } from './types'
+import { toDate } from '../../../calendar'
 
-withDefaults(defineProps<ProcessBarProps>(), {
+const props = withDefaults(defineProps<ProcessBarProps>(), {
   projectCode: '',
+  ownerName: '',
   color: '#1a73e8',
   opacity: 0.85,
   draggable: true,
@@ -15,6 +18,10 @@ const emit = defineEmits<{
   change: [payload: { start_date: string; end_date: string }]
   contextmenu: [payload: { clientX: number; clientY: number }]
 }>()
+
+const dateRange = computed(() =>
+  `${toDate(props.startDate).toLocaleDateString('ru')} — ${toDate(props.endDate).toLocaleDateString('ru')}`,
+)
 </script>
 
 <template>
@@ -40,6 +47,15 @@ const emit = defineEmits<{
   >
     <span class="pb-title">{{ title }}</span>
     <span v-if="projectCode" class="pb-code">{{ projectCode }}</span>
+    <template #tooltip>
+      <slot name="tooltip">
+        <div class="gb-tooltip">
+          <div class="gb-tooltip-title">{{ title }}</div>
+          <div v-if="ownerName" class="gb-tooltip-row">Владелец: {{ ownerName }}</div>
+          <div class="gb-tooltip-row">{{ dateRange }}</div>
+        </div>
+      </slot>
+    </template>
   </GanttBar>
 </template>
 

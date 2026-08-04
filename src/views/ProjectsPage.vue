@@ -4,11 +4,12 @@ import { storeToRefs } from 'pinia'
 import ProjectPlanning from '../components/planner/ProjectPlanning/ProjectPlanning.vue'
 import { ContextMenu } from '../components/common'
 import type { ContextMenuItem } from '../components/common/ContextMenu'
-import { usePlanningStore } from '../store'
+import { usePlanningStore, useAppStore } from '../store'
 import type { PlanningMode, PlanningUnit } from '../components/planner/calendar'
 import { addMonthsISO } from '../components/planner/calendar'
 
 const store = usePlanningStore()
+const app = useAppStore()
 const { projectPlanning, loading, error } = storeToRefs(store)
 
 const mode = ref<PlanningMode>('quarter')
@@ -65,6 +66,7 @@ async function onSelect(id: string) {
 
 onMounted(() => {
   store.loadProjectPlanning()
+  if (!app.users.length) void app.loadUsers()
 })
 </script>
 
@@ -102,6 +104,7 @@ onMounted(() => {
       :projects="projectPlanning?.projects || []"
       :loading="loading"
       :error="error"
+      :users="app.users"
       :anchor="anchor"
       :mode="mode"
       :unit="unit"

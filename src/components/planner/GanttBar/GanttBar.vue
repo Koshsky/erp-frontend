@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, useSlots } from 'vue'
 import {
   barCells,
   boundsCellSpan,
@@ -9,7 +9,10 @@ import {
   clampSpanDates,
 } from '../calendar'
 import { useBarDrag } from '../../../composables/useBarDrag'
+import { TooltipCell } from '../../common/TooltipCell'
 import type { PlanningMode, PlanningUnit } from '../calendar'
+
+const slots = useSlots()
 
 const props = withDefaults(
   defineProps<{
@@ -25,6 +28,8 @@ const props = withDefaults(
     opacity?: number
     /** Нативный тултип при наведении */
     title?: string
+    /** Текст кастомного тултипа (показывается, если не передан слот #tooltip) */
+    tooltip?: string
     height?: number
     top?: number
     minWidth?: number
@@ -54,6 +59,9 @@ const emit = defineEmits<{
 }>()
 
 const barEl = ref<HTMLElement | null>(null)
+
+/** Есть ли кастомный тултип: через проп `tooltip` или слот `#tooltip` */
+const hasTooltip = computed(() => Boolean(props.tooltip) || Boolean(slots.tooltip))
 
 const cells = computed(() => buildCells(props.anchor, props.mode, props.unit))
 const span = computed(() =>
@@ -116,11 +124,17 @@ function onContextMenu(e: MouseEvent) {
     class="gantt-bar"
     :class="{ 'gb-draggable': draggable, 'gb-shadow': shadow, 'is-dragging': isDragging }"
     :style="[barStyle, previewStyle, cursorStyle]"
-    :title="title"
+    :title="hasTooltip ? undefined : title"
     @pointerdown="onBodyPointerDown"
     @contextmenu.prevent.stop="onContextMenu"
   >
-    <slot />
+    <TooltipCell v-if="hasTooltip" :text="tooltip ?? ''" :multiline="true">
+      <slot />
+      <template #popup>
+        <slot name="tooltip" />
+      </template>
+    </TooltipCell>
+    <slot v-else />
     <template v-if="draggable">
       <span
         class="gb-handle gb-handle-l"
@@ -145,6 +159,13 @@ function onContextMenu(e: MouseEvent) {
   overflow: hidden;
   box-sizing: border-box;
   transition: opacity 0.15s;
+}
+.gantt-bar :deep(.tt-trigger) {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  cursor: inherit;
 }
 .gantt-bar:hover {
   opacity: 0.95 !important;
@@ -178,5 +199,25 @@ function onContextMenu(e: MouseEvent) {
 }
 .gb-handle:hover {
   background: rgba(255, 255, 255, 0.35);
+}
+</style>
+
+<style>
+.gb-tooltip {
+  font-size: 12px;
+  line-height: 1.45;
+}
+.gb-tooltip-title {
+  font-weight: 700;
+  margin-bottom: 2px;
+}
+.gb-tooltip-row {
+  color: rgba(255, 255, 255, 0.85);
+  white-space: nowrap;
+}
+.gb-tooltip-resources {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
 }
 </style>

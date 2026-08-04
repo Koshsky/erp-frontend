@@ -5,6 +5,8 @@ export interface ProjectGanttItem {
   project_code: string
   start_date: string
   end_date: string
+  priority?: number
+  owner_name?: string
 }
 
 export interface ProjectGanttProps {

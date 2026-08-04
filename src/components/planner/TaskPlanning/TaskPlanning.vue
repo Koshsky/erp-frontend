@@ -49,6 +49,7 @@ const displayProcesses = computed<Process[]>(() =>
         resource_id: r.id ?? 0,
         quantity: r.quantity ?? 0,
         code: r.code ?? '',
+        title: r.title ?? '',
       })),
     })),
     milestones: (dto.milestones || []).map((m) => ({

@@ -6,6 +6,7 @@ export interface ProcessItem {
   start_date: string
   end_date: string
   owner_id?: number
+  owner_name?: string
   project_id?: number
 }
 
