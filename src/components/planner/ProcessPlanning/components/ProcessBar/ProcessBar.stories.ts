@@ -3,7 +3,8 @@ import ProcessBar from './ProcessBar.vue'
 
 const now = new Date()
 const day = (d: number) => new Date(now.getFullYear(), now.getMonth(), d)
-const iso = (d: Date) => d.toISOString().slice(0, 10)
+const iso = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 
 const meta: Meta<typeof ProcessBar> = {
   title: 'Components/Planner/ProcessBar',

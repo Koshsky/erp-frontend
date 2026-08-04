@@ -4,7 +4,8 @@ import { cellCount } from '../../../calendar'
 
 const now = new Date()
 const day = (m: number) => new Date(now.getFullYear(), now.getMonth(), m)
-const iso = (d: Date) => d.toISOString().slice(0, 10)
+const iso = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 
 const meta: Meta<typeof ProcessGantt> = {
   title: 'Components/Planner/ProcessGantt',
@@ -33,7 +34,7 @@ export const TwoProcesses: Story = {
     components: { ProcessGantt },
     data: () => ({ anchor, cells, projectCode: 'КО-1234', processes: twoProcesses, mode: 'quarter' as const, unit: 'day' as const }),
     template: `
-      <div :style="{ display: 'grid', gridTemplateColumns: '180px repeat(' + cells + ', 1fr)', background: '#fff', borderRadius: '10px', padding: '12px', boxShadow: '0 1px 6px rgba(0,0,0,.08)', overflowX: 'auto', minWidth: '600px' }">
+      <div :style="{ display: 'grid', gridTemplateColumns: '180px repeat(' + cells + ', var(--cell-width, 32px))', background: '#fff', borderRadius: '10px', padding: '12px', boxShadow: '0 1px 6px rgba(0,0,0,.08)', overflowX: 'auto', minWidth: '600px' }">
         <ProcessGantt :anchor="anchor" :mode="mode" :unit="unit" :projectCode="projectCode" :processes="processes" />
       </div>
     `,
@@ -45,7 +46,7 @@ export const Overlapping: Story = {
     components: { ProcessGantt },
     data: () => ({ anchor, cells, projectCode: 'КО-9999', processes: overlapping, mode: 'quarter' as const, unit: 'day' as const }),
     template: `
-      <div :style="{ display: 'grid', gridTemplateColumns: '180px repeat(' + cells + ', 1fr)', background: '#fff', borderRadius: '10px', padding: '12px', boxShadow: '0 1px 6px rgba(0,0,0,.08)', overflowX: 'auto', minWidth: '600px' }">
+      <div :style="{ display: 'grid', gridTemplateColumns: '180px repeat(' + cells + ', var(--cell-width, 32px))', background: '#fff', borderRadius: '10px', padding: '12px', boxShadow: '0 1px 6px rgba(0,0,0,.08)', overflowX: 'auto', minWidth: '600px' }">
         <ProcessGantt :anchor="anchor" :mode="mode" :unit="unit" :projectCode="projectCode" :processes="processes" />
       </div>
     `,

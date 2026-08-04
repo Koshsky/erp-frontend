@@ -44,7 +44,7 @@ function renderWith(usageMap: Record<number, number[]>, unit: 'day' | 'decade' =
       },
     }),
     template: `
-      <div :style="{ display: 'grid', gridTemplateColumns: '180px repeat(' + cells + ', 1fr)', background: '#fff', borderRadius: '10px', padding: '12px', boxShadow: '0 1px 6px rgba(0,0,0,.08)', overflowX: 'auto', minWidth: '600px' }">
+      <div :style="{ display: 'grid', gridTemplateColumns: '180px repeat(' + cells + ', var(--cell-width, 32px))', background: '#fff', borderRadius: '10px', padding: '12px', boxShadow: '0 1px 6px rgba(0,0,0,.08)', overflowX: 'auto', minWidth: '600px' }">
         <ResourceHeader :anchor="anchor" :mode="mode" :unit="unit" :resources="resources" :usageFn="usageFn" />
       </div>
     `,

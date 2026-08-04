@@ -78,7 +78,7 @@ const barStyle = computed<Record<string, string | number> | null>(() => {
   const total = cellCount(props.anchor, props.mode, props.unit)
   return {
     left: (span.value.startCell / total) * 100 + '%',
-    width: Math.max(((span.value.endCell - span.value.startCell) / total) * 100, 0.5) + '%',
+    width: ((span.value.endCell - span.value.startCell) / total) * 100 + '%',
     background: props.color,
     opacity: props.opacity,
     height: props.height + 'px',

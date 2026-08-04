@@ -4,7 +4,8 @@ import { cellCount } from '../../../calendar'
 
 const now = new Date()
 const day = (m: number) => new Date(now.getFullYear(), now.getMonth(), m)
-const iso = (d: Date) => d.toISOString().slice(0, 10)
+const iso = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 
 const meta: Meta<typeof TaskGantt> = {
   title: 'Components/Planner/TaskGantt',
@@ -29,7 +30,7 @@ export const Default: Story = {
     components: { TaskGantt },
     data: () => ({ anchor, cells, tasks, title: 'Инсталляция', projectCode: 'KO-1001', mode: 'quarter' as const, unit: 'day' as const }),
     template: `
-      <div :style="{ display: 'grid', gridTemplateColumns: '180px repeat(' + cells + ', 1fr)', background: '#fff', borderRadius: '10px', padding: '12px', boxShadow: '0 1px 6px rgba(0,0,0,.08)', overflowX: 'auto', minWidth: '600px' }">
+      <div :style="{ display: 'grid', gridTemplateColumns: '180px repeat(' + cells + ', var(--cell-width, 32px))', background: '#fff', borderRadius: '10px', padding: '12px', boxShadow: '0 1px 6px rgba(0,0,0,.08)', overflowX: 'auto', minWidth: '600px' }">
         <TaskGantt :anchor="anchor" :mode="mode" :unit="unit" :title="title" :projectCode="projectCode" :tasks="tasks" />
       </div>
     `,
@@ -51,7 +52,7 @@ export const WithGroupRange: Story = {
       unit: 'day' as const,
     }),
     template: `
-      <div :style="{ display: 'grid', gridTemplateColumns: '180px repeat(' + cells + ', 1fr)', background: '#fff', borderRadius: '10px', padding: '12px', boxShadow: '0 1px 6px rgba(0,0,0,.08)', overflowX: 'auto', minWidth: '600px' }">
+      <div :style="{ display: 'grid', gridTemplateColumns: '180px repeat(' + cells + ', var(--cell-width, 32px))', background: '#fff', borderRadius: '10px', padding: '12px', boxShadow: '0 1px 6px rgba(0,0,0,.08)', overflowX: 'auto', minWidth: '600px' }">
         <TaskGantt
           :anchor="anchor" :mode="mode" :unit="unit" :title="title" :projectCode="projectCode"
           :tasks="tasks" :groupStartDate="groupStartDate" :groupEndDate="groupEndDate"
@@ -77,7 +78,7 @@ export const GroupClipped: Story = {
       unit: 'day' as const,
     }),
     template: `
-      <div :style="{ display: 'grid', gridTemplateColumns: '180px repeat(' + cells + ', 1fr)', background: '#fff', borderRadius: '10px', padding: '12px', boxShadow: '0 1px 6px rgba(0,0,0,.08)', overflowX: 'auto', minWidth: '600px' }">
+      <div :style="{ display: 'grid', gridTemplateColumns: '180px repeat(' + cells + ', var(--cell-width, 32px))', background: '#fff', borderRadius: '10px', padding: '12px', boxShadow: '0 1px 6px rgba(0,0,0,.08)', overflowX: 'auto', minWidth: '600px' }">
         <TaskGantt
           :anchor="anchor" :mode="mode" :unit="unit" :title="title" :projectCode="projectCode"
           :tasks="tasks" :groupStartDate="groupStartDate" :groupEndDate="groupEndDate"
@@ -110,7 +111,7 @@ export const WithMilestones: Story = {
       unit: 'day' as const,
     }),
     template: `
-      <div :style="{ display: 'grid', gridTemplateColumns: '180px repeat(' + cells + ', 1fr)', background: '#fff', borderRadius: '10px', padding: '12px', boxShadow: '0 1px 6px rgba(0,0,0,.08)', overflowX: 'auto', minWidth: '600px' }">
+      <div :style="{ display: 'grid', gridTemplateColumns: '180px repeat(' + cells + ', var(--cell-width, 32px))', background: '#fff', borderRadius: '10px', padding: '12px', boxShadow: '0 1px 6px rgba(0,0,0,.08)', overflowX: 'auto', minWidth: '600px' }">
         <TaskGantt
           :anchor="anchor" :mode="mode" :unit="unit" :title="title" :projectCode="projectCode"
           :tasks="tasks" :milestones="milestones" :groupStartDate="groupStartDate" :groupEndDate="groupEndDate"
@@ -141,7 +142,7 @@ export const MilestoneGuides: Story = {
       unit: 'day' as const,
     }),
     template: `
-      <div :style="{ display: 'grid', gridTemplateColumns: '180px repeat(' + cells + ', 1fr)', background: '#fff', borderRadius: '10px', padding: '12px', boxShadow: '0 1px 6px rgba(0,0,0,.08)', overflowX: 'auto', minWidth: '600px' }">
+      <div :style="{ display: 'grid', gridTemplateColumns: '180px repeat(' + cells + ', var(--cell-width, 32px))', background: '#fff', borderRadius: '10px', padding: '12px', boxShadow: '0 1px 6px rgba(0,0,0,.08)', overflowX: 'auto', minWidth: '600px' }">
         <TaskGantt
           :anchor="anchor" :mode="mode" :unit="unit" :title="title" :projectCode="projectCode"
           :tasks="tasks" :milestones="milestones" :groupStartDate="groupStartDate" :groupEndDate="groupEndDate"
@@ -172,7 +173,7 @@ export const WithMilestonesYearDecades: Story = {
       }
     },
     template: `
-      <div :style="{ display: 'grid', gridTemplateColumns: '180px repeat(' + cells + ', 1fr)', background: '#fff', borderRadius: '10px', padding: '12px', boxShadow: '0 1px 6px rgba(0,0,0,.08)', overflowX: 'auto', minWidth: '600px' }">
+      <div :style="{ display: 'grid', gridTemplateColumns: '180px repeat(' + cells + ', var(--cell-width, 32px))', background: '#fff', borderRadius: '10px', padding: '12px', boxShadow: '0 1px 6px rgba(0,0,0,.08)', overflowX: 'auto', minWidth: '600px' }">
         <TaskGantt
           :anchor="anchor" :mode="mode" :unit="unit" :title="title" :projectCode="projectCode"
           :tasks="tasks" :milestones="milestones"
