@@ -11,6 +11,8 @@ const emit = defineEmits<{
   change: [payload: { id: number; start_date: string; end_date: string }]
   'milestone-change': [payload: { id: number; date: string }]
   contextmenu: [payload: { clientX: number; clientY: number; date: string; rowIndex: number; processId?: number; taskId?: number; milestoneId?: number }]
+  'task-edit': [payload: number]
+  'milestone-edit': [payload: number]
 }>()
 
 const groupItems = computed(() => props.tasks)
@@ -64,6 +66,7 @@ function onMilestoneContextMenu(p: { clientX: number; clientY: number }, id: num
         :groupEndDate="groupEndDate"
         @change="(d) => emit('milestone-change', { id: ms.id, ...d })"
         @contextmenu="(p) => onMilestoneContextMenu(p, ms.id)"
+        @edit="() => emit('milestone-edit', ms.id)"
       />
     </template>
 
@@ -77,6 +80,7 @@ function onMilestoneContextMenu(p: { clientX: number; clientY: number }, id: num
         :groupEndDate="groupEndDate"
         @change="(d) => onBarChange(item.id, d)"
         @contextmenu="(p) => onBarContextMenu(p, item.id)"
+        @edit="() => emit('task-edit', item.id)"
       />
     </template>
   </GroupGantt>

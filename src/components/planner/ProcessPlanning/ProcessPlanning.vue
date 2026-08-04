@@ -27,6 +27,7 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{
   change: [payload: { id: number; start_date: string; end_date: string }]
   contextmenu: [payload: { clientX: number; clientY: number; date: string; rowIndex: number; projectId?: number; processId?: number }]
+  edit: [payload: number]
 }>()
 
 const userNames = computed(() => new Map((props.users || []).map((u) => [u.id, u.name])))
@@ -103,6 +104,7 @@ const gridCols = computed(() => {
               :groupEndDate="project.end_date"
               @change="(p) => emit('change', p)"
               @contextmenu="(p) => emit('contextmenu', p)"
+              @edit="(id) => emit('edit', id)"
             />
           </template>
         </div>

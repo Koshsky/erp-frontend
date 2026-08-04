@@ -13,6 +13,7 @@ const props = withDefaults(defineProps<ProjectBarProps>(), {
 const emit = defineEmits<{
   change: [payload: { start_date: string; end_date: string }]
   contextmenu: [payload: { clientX: number; clientY: number }]
+  edit: []
 }>()
 
 const dateRange = computed(() =>
@@ -33,6 +34,7 @@ const dateRange = computed(() =>
     :draggable="draggable"
     @change="(d) => emit('change', d)"
     @contextmenu="(p) => emit('contextmenu', p)"
+    @edit="() => emit('edit')"
   >
     <template #tooltip>
       <div class="gb-tooltip">

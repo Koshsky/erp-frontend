@@ -2,8 +2,9 @@
 import { ref, onMounted, computed } from 'vue'
 import { storeToRefs } from 'pinia'
 import ProjectPlanning from '../components/planner/ProjectPlanning/ProjectPlanning.vue'
-import { ContextMenu } from '../components/common'
+import { ContextMenu, ModalForm } from '../components/common'
 import type { ContextMenuItem } from '../components/common/ContextMenu'
+import type { ModalField } from '../components/common/ModalForm'
 import { usePlanningStore, useAppStore } from '../store'
 import type { PlanningMode, PlanningUnit } from '../components/planner/calendar'
 import { addMonthsISO } from '../components/planner/calendar'
@@ -28,7 +29,7 @@ const unitOptions: { value: PlanningUnit; label: string }[] = [
 ]
 
 // ПКМ по пустому месту: меню создания проекта (дата под курсором, вставка в позицию ПКМ)
-// ПКМ по бару проекта: меню удаления проекта
+// ПКМ по бару проекта: меню редактирования/удаления проекта
 interface MenuState {
   x: number
   y: number
@@ -39,12 +40,45 @@ interface MenuState {
 const menu = ref<MenuState | null>(null)
 const menuItems = computed<ContextMenuItem[]>(() =>
   menu.value?.projectId != null
-    ? [{ id: 'delete-project', label: 'Удалить проект' }]
+    ? [
+        { id: 'edit-project', label: 'Редактировать' },
+        { id: 'delete-project', label: 'Удалить проект' },
+      ]
     : [{ id: 'create-project', label: 'Создать проект' }],
 )
 
+// Модалка редактирования проекта (код, владелец)
+interface EditState {
+  id: number
+  code: string
+  ownerId?: number
+}
+const edit = ref<EditState | null>(null)
+const saving = ref(false)
+const editError = ref<string | null>(null)
+
+const ownerOptions = computed(() =>
+  app.users.map((u) => ({ value: u.id ?? 0, label: u.name ?? '' })),
+)
+
+const editFields = computed<ModalField[]>(() => {
+  if (!edit.value) return []
+  return [
+    { key: 'code', label: 'Код проекта', type: 'text', value: edit.value.code, required: true },
+    { key: 'owner_id', label: 'Владелец', type: 'select', value: edit.value.ownerId, options: ownerOptions.value },
+  ]
+})
+
 function onContextMenu(p: { clientX: number; clientY: number; date: string; rowIndex: number; projectId?: number }) {
   menu.value = { x: p.clientX, y: p.clientY, date: p.date, rowIndex: p.rowIndex, projectId: p.projectId }
+}
+
+function openProjectEdit(id: number) {
+  const p = store.projectPlanning?.projects?.find((x: any) => x.id === id)
+  if (p) {
+    edit.value = { id, code: p.project_code ?? '', ownerId: p.owner_id }
+    editError.value = null
+  }
 }
 
 async function onSelect(id: string) {
@@ -57,6 +91,8 @@ async function onSelect(id: string) {
       end_date: addMonthsISO(date, 6),
     }, rowIndex)
     if (!ok) error.value = store.error
+  } else if (id === 'edit-project' && projectId != null) {
+    openProjectEdit(projectId)
   } else if (id === 'delete-project' && projectId != null) {
     if (!window.confirm('Удалить проект? Это удалит все его процессы, задачи и вехи.')) return
     const ok = await store.deleteProject(projectId)
@@ -67,6 +103,17 @@ async function onSelect(id: string) {
 async function onReorder(e: { from: number; to: number }) {
   const ok = await store.reorderProjects(e.from, e.to)
   if (!ok) error.value = store.error
+}
+
+async function onEditSave(values: Record<string, string | number>) {
+  if (!edit.value) return
+  saving.value = true
+  editError.value = null
+  const ownerId = values.owner_id !== '' ? Number(values.owner_id) : undefined
+  const ok = await store.updateProjectMeta(edit.value.id, { code: String(values.code ?? ''), owner_id: ownerId })
+  saving.value = false
+  if (ok) edit.value = null
+  else editError.value = store.error
 }
 
 onMounted(() => {
@@ -116,6 +163,7 @@ onMounted(() => {
       @change="(p) => store.updateProjectDates(p.id, p.start_date, p.end_date)"
       @contextmenu="onContextMenu"
       @reorder="onReorder"
+      @edit="openProjectEdit"
     />
 
     <ContextMenu
@@ -125,6 +173,16 @@ onMounted(() => {
       :items="menuItems"
       @select="onSelect"
       @close="menu = null"
+    />
+
+    <ModalForm
+      :open="!!edit"
+      title="Редактировать проект"
+      :fields="editFields"
+      :busy="saving"
+      :error="editError"
+      @save="onEditSave"
+      @close="edit = null"
     />
   </section>
 </template>
