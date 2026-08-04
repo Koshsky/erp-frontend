@@ -61,9 +61,9 @@ const tooltip = computed(() => `Занято: ${props.used}/${props.total}`)
   color: #333;
 }
 
-/* 4. Выходной день */
+/* 4. Выходной день — как обычная ячейка таблицы (не выделять) */
 .weekend {
-  background: #fde2e2 !important;
-  color: #333;
+  background: #f0f0f0;
+  color: #999;
 }
 </style>
