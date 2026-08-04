@@ -2,6 +2,8 @@
 import { ref, onMounted, computed } from 'vue'
 import { storeToRefs } from 'pinia'
 import TaskPlanning from '../components/planner/TaskPlanning/TaskPlanning.vue'
+import { ResourceManagerModal } from '../components/planner'
+import type { AssignedResource, AddResourcePayload } from '../components/planner/ResourceManagerModal'
 import { ContextMenu, ModalForm } from '../components/common'
 import type { ContextMenuItem } from '../components/common/ContextMenu'
 import type { ModalField } from '../components/common/ModalForm'
@@ -36,6 +38,7 @@ const menuItems = computed<ContextMenuItem[]>(() => {
   if (menu.value?.taskId != null)
     return [
       { id: 'edit-task', label: 'Редактировать' },
+      { id: 'manage-resources', label: 'Управление ресурсами' },
       { id: 'delete-task', label: 'Удалить задачу' },
     ]
   if (menu.value?.milestoneId != null)
@@ -122,6 +125,8 @@ async function onSelect(id: string) {
     if (!ok) error.value = planning.error
   } else if (id === 'edit-task' && taskId != null) {
     openTaskEdit(taskId)
+  } else if (id === 'manage-resources' && taskId != null) {
+    openResources(taskId)
   } else if (id === 'edit-milestone' && milestoneId != null) {
     openMilestoneEdit(milestoneId)
   } else if (id === 'delete-task' && taskId != null) {
@@ -150,6 +155,73 @@ async function onEditSave(values: Record<string, string | number>) {
   saving.value = false
   if (ok) edit.value = null
   else editError.value = planning.error
+}
+
+// Модалка «Управление ресурсами» задачи (назначение/снятие ресурсов)
+const resourcesModalTaskId = ref<number | null>(null)
+const resourcesBusy = ref(false)
+const resourcesError = ref<string | null>(null)
+
+/** Название задачи для заголовка модалки */
+const resourcesTaskTitle = computed(() => {
+  if (resourcesModalTaskId.value == null) return ''
+  return (
+    planning.taskPlanning?.processes
+      ?.flatMap((p: any) => p.tasks ?? [])
+      .find((t: any) => t.id === resourcesModalTaskId.value)?.title ?? ''
+  )
+})
+
+/** Назначенные задаче ресурсы из /planning/tasks (обновляются после тихого reload) */
+const assignedResources = computed<AssignedResource[]>(() => {
+  if (resourcesModalTaskId.value == null) return []
+  const task = planning.taskPlanning?.processes
+    ?.flatMap((p: any) => p.tasks ?? [])
+    .find((t: any) => t.id === resourcesModalTaskId.value)
+  return (task?.resources ?? []).map((r: any) => ({
+    assignment_id: r.assignment_id,
+    resource_id: r.id ?? 0,
+    quantity: r.quantity ?? 0,
+    title: r.title,
+    code: r.code,
+  }))
+})
+
+/** Справочник ресурсов для выбора в модалке (только с id) */
+const resourceOptions = computed(() =>
+  resources.value
+    .filter((r) => r.id != null)
+    .map((r) => ({ id: r.id as number, title: r.title, code: r.code })),
+)
+
+function openResources(taskId: number) {
+  resourcesModalTaskId.value = taskId
+  resourcesError.value = null
+}
+
+async function onAddResource(payload: AddResourcePayload) {
+  if (resourcesModalTaskId.value == null) return
+  resourcesBusy.value = true
+  resourcesError.value = null
+  const ok = await planning.assignResource(
+    resourcesModalTaskId.value,
+    payload.resource_id,
+    payload.quantity,
+  )
+  resourcesBusy.value = false
+  if (!ok) resourcesError.value = planning.error
+}
+
+async function onRemoveResource(payload: { resource_id: number }) {
+  if (resourcesModalTaskId.value == null) return
+  resourcesBusy.value = true
+  resourcesError.value = null
+  const ok = await planning.removeResource(
+    resourcesModalTaskId.value,
+    payload.resource_id,
+  )
+  resourcesBusy.value = false
+  if (!ok) resourcesError.value = planning.error
 }
 
 onMounted(async () => {
@@ -195,6 +267,19 @@ onMounted(async () => {
       :error="editError"
       @save="onEditSave"
       @close="edit = null"
+    />
+
+    <ResourceManagerModal
+      :open="resourcesModalTaskId != null"
+      :task-id="resourcesModalTaskId ?? 0"
+      :task-title="resourcesTaskTitle"
+      :resources="resourceOptions"
+      :assigned="assignedResources"
+      :busy="resourcesBusy"
+      :error="resourcesError"
+      @add="onAddResource"
+      @remove="onRemoveResource"
+      @close="resourcesModalTaskId = null"
     />
   </section>
 </template>
