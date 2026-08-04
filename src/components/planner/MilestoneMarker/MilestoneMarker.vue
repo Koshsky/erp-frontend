@@ -20,13 +20,11 @@ const props = withDefaults(defineProps<MilestoneMarkerProps>(), {
 const emit = defineEmits<{
   change: [payload: { date: string }]
   contextmenu: [payload: { clientX: number; clientY: number }]
-  /** ЛКМ по вехе (без перетаскивания) — открыть редактирование */
+  /** Дабл клик по вехе — открыть редактирование */
   edit: []
 }>()
 
 const rootEl = ref<HTMLElement | null>(null)
-/** Точка начала нажатия — чтобы отличать клик от перетаскивания */
-const pressPoint = ref<{ x: number; y: number } | null>(null)
 
 const cells = () => buildCells(props.anchor, props.mode, props.unit)
 
@@ -88,13 +86,10 @@ function onContextMenu(e: MouseEvent) {
 }
 
 function onPointerDown(e: PointerEvent) {
-  pressPoint.value = { x: e.clientX, y: e.clientY }
   if (props.draggable) startDrag(e, 'move')
 }
 
-function onClick(e: MouseEvent) {
-  const p = pressPoint.value
-  if (p && Math.hypot(e.clientX - p.x, e.clientY - p.y) > 5) return
+function onDblClick() {
   emit('edit')
 }
 </script>
@@ -111,7 +106,7 @@ function onClick(e: MouseEvent) {
       class="ms-marker"
       :style="markerStyle"
       @pointerdown="onPointerDown"
-      @click="onClick"
+      @dblclick="onDblClick"
       @contextmenu.prevent.stop="onContextMenu"
     >
       <TooltipCell :text="title" :multiline="true">
