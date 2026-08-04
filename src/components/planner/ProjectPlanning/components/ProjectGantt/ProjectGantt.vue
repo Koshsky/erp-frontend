@@ -9,6 +9,7 @@ const props = defineProps<ProjectGanttProps>()
 const emit = defineEmits<{
   change: [payload: { id: number; start_date: string; end_date: string }]
   contextmenu: [payload: { clientX: number; clientY: number; date: string; rowIndex: number; projectId?: number }]
+  reorder: [payload: { from: number; to: number }]
 }>()
 
 const groupItems = computed(() =>
@@ -40,7 +41,9 @@ function onBarContextMenu(p: { clientX: number; clientY: number }, id: number) {
     :mode="mode"
     :unit="unit"
     :items="groupItems"
+    reorderable
     @contextmenu="onContextMenu"
+    @reorder="(p) => emit('reorder', p)"
   >
     <template #bar="{ item }">
       <ProjectBar

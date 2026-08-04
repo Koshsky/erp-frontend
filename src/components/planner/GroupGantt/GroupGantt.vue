@@ -6,10 +6,12 @@ import { LABEL_WIDTH } from '../layout'
 
 const props = withDefaults(defineProps<GroupGanttProps>(), {
   headerBarHeight: 4,
+  reorderable: false,
 })
 
 const emit = defineEmits<{
   contextmenu: [payload: { clientX: number; clientY: number; date: string; rowIndex: number }]
+  reorder: [payload: { from: number; to: number }]
 }>()
 
 const gridRef = ref<HTMLElement | null>(null)
@@ -20,12 +22,80 @@ const gridRef = ref<HTMLElement | null>(null)
 function onContextMenu(e: MouseEvent) {
   if (!props.anchor) return
   const target = e.target as HTMLElement
-  if (target.closest('.gantt-bar, .gb-handle, .ms')) return
+  if (target.closest('.gantt-bar, .gb-handle, .ms, .row-handle')) return
   const date = dateAtPointer(props.anchor, props.mode, props.unit, gridRef.value?.getBoundingClientRect() ?? null, e.clientX)
   if (!date) return
   const rowEl = target.closest('[data-row-index]') as HTMLElement | null
   const rowIndex = rowEl != null ? Number(rowEl.dataset.rowIndex) : props.items.length
   emit('contextmenu', { clientX: e.clientX, clientY: e.clientY, date, rowIndex })
+}
+
+// === Вертикальный драг строк (reorder) ===
+const draggingFrom = ref<number | null>(null)
+const dragTo = ref<number | null>(null)
+const dropStyle = ref<{ top: string } | null>(null)
+const rowDragCursor = ref(false)
+
+/** Целевой индекс вставки [0..n] по позиции курсора: число строк, середина которых выше курсора */
+function targetBoundary(clientY: number): number {
+  const rows = gridRef.value?.querySelectorAll<HTMLElement>('.item-label[data-row-index]')
+  if (!rows || !rows.length) return 0
+  let b = 0
+  for (const el of rows) {
+    const r = el.getBoundingClientRect()
+    if (clientY > r.top + r.height / 2) b += 1
+  }
+  return b
+}
+
+function onRowDragMove(e: PointerEvent) {
+  if (draggingFrom.value == null) return
+  const b = targetBoundary(e.clientY)
+  const n = props.items.length
+  // Границы [0, n], индикатор — над строкой с индексом b (в конце — под последней)
+  dragTo.value = b
+  if (b === 0) {
+    const first = gridRef.value?.querySelector<HTMLElement>('.item-label[data-row-index]')
+    dropStyle.value = { top: (first?.offsetTop ?? 0) + 'px' }
+  } else if (b >= n) {
+    const last = gridRef.value?.querySelectorAll<HTMLElement>('.item-label[data-row-index]')[n - 1]
+    dropStyle.value = { top: ((last?.offsetTop ?? 0) + (last?.offsetHeight ?? 0)) + 'px' }
+  } else {
+    const el = gridRef.value?.querySelectorAll<HTMLElement>('.item-label[data-row-index]')[b]
+    dropStyle.value = { top: (el?.offsetTop ?? 0) + 'px' }
+  }
+}
+
+function onRowDragUp() {
+  const from = draggingFrom.value
+  const b = dragTo.value
+  window.removeEventListener('pointermove', onRowDragMove)
+  window.removeEventListener('pointerup', onRowDragUp)
+  window.removeEventListener('pointercancel', onRowDragUp)
+  document.body.style.userSelect = ''
+  rowDragCursor.value = false
+  draggingFrom.value = null
+  dragTo.value = null
+  dropStyle.value = null
+  if (from == null || b == null) return
+  const n = props.items.length
+  // Финальная позиция: при сдвиге вниз вставка на позицию на единицу меньше границы
+  const to = b > from ? b - 1 : b
+  if (to >= 0 && to < n && to !== from) emit('reorder', { from, to })
+}
+
+function startRowDrag(e: PointerEvent, from: number) {
+  if (e.button !== 0 || e.ctrlKey || e.metaKey) return
+  if (!props.reorderable || props.items.length < 2) return
+  e.preventDefault()
+  e.stopPropagation()
+  draggingFrom.value = from
+  dragTo.value = from
+  rowDragCursor.value = true
+  document.body.style.userSelect = 'none'
+  window.addEventListener('pointermove', onRowDragMove)
+  window.addEventListener('pointerup', onRowDragUp)
+  window.addEventListener('pointercancel', onRowDragUp)
 }
 
 defineSlots<{
@@ -70,7 +140,14 @@ const gridTemplate = computed(() => {
       </div>
 
       <template v-for="(item, index) in items" :key="'gi'+item.id">
-        <div class="c lc item-label lc-start" :class="{ ta: index % 2 === 1 }" :data-row-index="index">
+        <div class="c lc item-label lc-start" :class="{ ta: index % 2 === 1, 'with-handle': reorderable }" :data-row-index="index">
+          <span
+            v-if="reorderable"
+            class="row-handle"
+            :class="{ 'is-grabbing': rowDragCursor && draggingFrom === index }"
+            :title="'Перетащить для смены приоритета'"
+            @pointerdown.stop="startRowDrag($event, index)"
+          >⠿</span>
           <slot name="row" :item="item" :index="index">
             <span class="item-title">{{ item.title }}</span>
             <div class="item-dates">{{ fmt(item.start_date) }} — {{ fmt(item.end_date) }}</div>
@@ -82,6 +159,8 @@ const gridTemplate = computed(() => {
           <slot name="bar" :item="item" :index="index" :count="items.length" />
         </div>
       </template>
+
+      <div v-if="dropStyle" class="drop-line" :style="dropStyle" />
     </div>
 
     <!-- Слой милестоунов: поверх разметки и баров, но под липкой колонкой названий -->
@@ -98,6 +177,7 @@ const gridTemplate = computed(() => {
 .gg-grid {
   display: grid;
   min-width: 0;
+  position: relative;
 }
 .c {
   border: 1px solid #e8e8e8;
@@ -124,6 +204,41 @@ const gridTemplate = computed(() => {
   font-weight: 500;
   color: #333;
   min-height: 36px;
+}
+.row-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 2px;
+  display: flex;
+  align-items: center;
+  color: #bbb;
+  font-size: 14px;
+  padding: 0 3px;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.row-handle:hover {
+  color: #1a73e8;
+  background: rgba(26, 115, 232, 0.08);
+}
+.item-label.with-handle {
+  padding-left: 24px !important;
+}
+.row-handle.is-grabbing {
+  cursor: grabbing;
+  color: #1a73e8;
+}
+.drop-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: #1a73e8;
+  z-index: 12;
+  pointer-events: none;
 }
 .item-title {
   font-weight: 400;

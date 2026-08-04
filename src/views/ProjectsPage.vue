@@ -64,6 +64,11 @@ async function onSelect(id: string) {
   }
 }
 
+async function onReorder(e: { from: number; to: number }) {
+  const ok = await store.reorderProjects(e.from, e.to)
+  if (!ok) error.value = store.error
+}
+
 onMounted(() => {
   store.loadProjectPlanning()
   if (!app.users.length) void app.loadUsers()
@@ -110,6 +115,7 @@ onMounted(() => {
       :unit="unit"
       @change="(p) => store.updateProjectDates(p.id, p.start_date, p.end_date)"
       @contextmenu="onContextMenu"
+      @reorder="onReorder"
     />
 
     <ContextMenu

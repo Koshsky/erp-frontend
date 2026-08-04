@@ -594,6 +594,48 @@ export const usePlanningStore = defineStore('planning', () => {
     return true
   }
 
+  /** Переупорядочивает проекты (драг строки): новые приоритеты = index+1, PUT уходят
+   *  только для изменившихся — перемещённый проект и сдвинутые между позициями.
+   *  При ошибке тихо перезагружаем данные (откат к серверному порядку). */
+  async function reorderProjects(from: number, to: number): Promise<boolean> {
+    const list = projectPlanning.value?.projects
+    if (!Array.isArray(list) || from === to) return true
+    if (from < 0 || from >= list.length || to < 0 || to >= list.length) return false
+    const moved = list.splice(from, 1)[0]
+    list.splice(to, 0, moved)
+
+    const changes: { id: number; priority: number }[] = []
+    list.forEach((p: any, i: number) => {
+      const priority = i + 1
+      if (p.priority !== priority) changes.push({ id: p.id, priority })
+    })
+    if (!changes.length) return true
+
+    let saveError: string | null = null
+    try {
+      await Promise.all(
+        changes.map((c) => new ProjectsApi(apiConfig()).projectIdPut(c.id, { priority: c.priority })),
+      )
+    } catch (e: any) {
+      saveError = e.message || String(e)
+    }
+
+    await loadProjectPlanning(true)
+    if (saveError) {
+      error.value = saveError
+      return false
+    }
+
+    const appProjects = useAppStore().projects
+    if (Array.isArray(appProjects)) {
+      for (const p of appProjects) {
+        const c = changes.find((x) => x.id === p.id)
+        if (c) p.priority = c.priority
+      }
+    }
+    return true
+  }
+
   return {
     projectPlanning,
     processPlanning,
@@ -615,5 +657,6 @@ export const usePlanningStore = defineStore('planning', () => {
     deleteProcess,
     deleteTask,
     deleteMilestone,
+    reorderProjects,
   }
 })
