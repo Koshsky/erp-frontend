@@ -57,15 +57,8 @@ const displayProjects = computed<ProcessPlanningProject[]>(() =>
   })),
 )
 
-/** Якорь по умолчанию — самая ранняя дата старта среди проектов */
-const defaultAnchor = computed<Date>(() => {
-  let min = Infinity
-  for (const project of displayProjects.value) {
-    const ts = toDate(project.start_date).getTime()
-    if (ts < min) min = ts
-  }
-  return isFinite(min) ? new Date(min) : new Date()
-})
+/** Якорь по умолчанию — текущая дата: прошлое отсекается слева (архив) */
+const defaultAnchor = computed<Date>(() => new Date())
 
 const anchor = computed<Date>(() => {
   if (props.anchor == null) return defaultAnchor.value

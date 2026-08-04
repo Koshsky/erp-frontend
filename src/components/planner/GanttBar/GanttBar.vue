@@ -7,6 +7,8 @@ import {
   cellCount,
   cellSpanToDates,
   clampSpanDates,
+  toDate,
+  fmtDate,
 } from '../calendar'
 import { useBarDrag } from '../../../composables/useBarDrag'
 import { TooltipCell } from '../../common/TooltipCell'
@@ -73,6 +75,14 @@ const bounds = computed(() =>
   boundsCellSpan(props.anchor, props.mode, props.unit, props.groupStartDate, props.groupEndDate),
 )
 
+/** Бар отсечён слева якорем (исторический старт раньше начала шкалы): левая граница архивная,
+ *  её нельзя двигать/перезаписывать — разрешён только ресайз правого края. */
+const clippedLeft = computed(
+  () =>
+    cells.value.length > 0 &&
+    toDate(props.startDate).getTime() < cells.value[0].start.getTime(),
+)
+
 const barStyle = computed<Record<string, string | number> | null>(() => {
   if (!span.value) return null
   const total = cellCount(props.anchor, props.mode, props.unit)
@@ -96,22 +106,23 @@ const { isDragging, cursor, previewStyle, startDrag } = useBarDrag({
   onCommit: (sp) => {
     if (!cells.value.length) return
     const d = cellSpanToDates(cells.value, sp.startCell, sp.endCell)
-    emit('change', clampSpanDates(d.start_date, d.end_date, props.groupStartDate, props.groupEndDate))
+    const start_date = clippedLeft.value ? fmtDate(toDate(props.startDate)) : d.start_date
+    emit('change', clampSpanDates(start_date, d.end_date, props.groupStartDate, props.groupEndDate))
   },
 })
 
 const cursorStyle = computed<Record<string, string>>(() => {
   if (cursor.value) return { cursor: cursor.value }
-  if (props.draggable) return { cursor: 'grab' }
+  if (props.draggable && !clippedLeft.value) return { cursor: 'grab' }
   return { cursor: 'default' }
 })
 
 function onBodyPointerDown(e: PointerEvent) {
-  if (props.draggable) startDrag(e, 'move')
+  if (props.draggable && !clippedLeft.value) startDrag(e, 'move')
 }
 
 function onHandlePointerDown(e: PointerEvent, mode: 'resizeStart' | 'resizeEnd') {
-  if (props.draggable) startDrag(e, mode)
+  if (props.draggable && (mode !== 'resizeStart' || !clippedLeft.value)) startDrag(e, mode)
 }
 
 function onDblClick(e: MouseEvent) {
@@ -145,6 +156,7 @@ function onContextMenu(e: MouseEvent) {
     <slot v-else />
     <template v-if="draggable">
       <span
+        v-if="!clippedLeft"
         class="gb-handle gb-handle-l"
         style="cursor: ew-resize"
         @pointerdown.stop="onHandlePointerDown($event, 'resizeStart')"

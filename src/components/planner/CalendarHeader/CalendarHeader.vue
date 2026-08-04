@@ -20,6 +20,12 @@ function numLabel(i: number): string {
   return start.getDate() === end.getDate() ? start.getDate().toString() : `${start.getDate()}-${end.getDate()}`
 }
 
+/** Название месяца с годом: «Февраль 2026» (без суффикса «г.», капитализация в JS) */
+function monthLabel(d: Date): string {
+  const month = d.toLocaleDateString('ru', { month: 'long' })
+  return month.charAt(0).toUpperCase() + month.slice(1) + ' ' + d.getFullYear()
+}
+
 /** Подпись нижней строки — день недели (для дней) */
 function subLabel(i: number): string {
   return props.unit === 'day' ? dowMap[cells.value[i].start.getDay()] : ''
@@ -45,7 +51,7 @@ const monthHeaders = computed<MonthHeader[]>(() => {
     const k = d.getFullYear() + '-' + d.getMonth()
     if (k !== key) {
       hh.push({
-        label: d.toLocaleDateString('ru', { month: 'long' }),
+        label: monthLabel(d),
         cs: i + 2,
         ce: i + 2,
       })
@@ -93,7 +99,7 @@ const monthHeaders = computed<MonthHeader[]>(() => {
   text-align: left; padding: 4px 8px !important;
   border-left: none; justify-content: flex-start;
 }
-.mc { text-transform: capitalize; font-size: 11px; min-height: 28px; }
+.mc { font-size: 11px; min-height: 28px; }
 .dc { font-size: 11px; min-height: 26px; }
 .wc { font-size: 10px; color: #666; min-height: 24px; }
 </style>

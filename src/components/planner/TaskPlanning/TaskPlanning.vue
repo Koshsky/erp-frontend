@@ -76,15 +76,8 @@ const displayResources = computed<Resource[]>(() =>
   })),
 )
 
-/** Якорь по умолчанию — самая ранняя дата старта среди процессов */
-const defaultAnchor = computed<Date>(() => {
-  let min = Infinity
-  for (const proc of displayProcesses.value) {
-    const ts = toDate(proc.start_date).getTime()
-    if (ts < min) min = ts
-  }
-  return isFinite(min) ? new Date(min) : new Date()
-})
+/** Якорь по умолчанию — текущая дата: прошлое отсекается слева (архив) */
+const defaultAnchor = computed<Date>(() => new Date())
 
 const anchor = computed<Date>(() => {
   if (props.anchor == null) return defaultAnchor.value

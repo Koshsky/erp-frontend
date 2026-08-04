@@ -45,17 +45,8 @@ const projects = computed<ProjectGanttItem[]>(() =>
   })),
 )
 
-// Отправная точка календаря по умолчанию — самый ранний старт проекта (или текущая дата)
-const defaultAnchor = computed<Date>(() => {
-  let min = Infinity
-  for (const p of projects.value) {
-    if (!p.start_date) continue
-    const ts = toDate(p.start_date).getTime()
-    if (ts < min) min = ts
-  }
-  if (!isFinite(min)) return new Date()
-  return new Date(min)
-})
+// Отправная точка календаря по умолчанию — текущая дата (прошлое отсекается слева)
+const defaultAnchor = computed<Date>(() => new Date())
 
 const anchor = computed<Date>(() => {
   if (props.anchor == null) return defaultAnchor.value
