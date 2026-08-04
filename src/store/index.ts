@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { AuthApi, ProjectsApi, ProcessesApi, TasksApi, ResourcesApi, PlanningApi, MilestonesApi, UsersApi, AssignmentsApi, Configuration } from '@/api'
-import type { DtoUserInfo, DtoProject, DtoResource, JwtTokenPair } from '@/api'
+import type { DtoUserInfo, DtoProject, DtoResource, DtoCreateResourceRequest, DtoUpdateResourceRequest, JwtTokenPair } from '@/api'
 
 const TOKEN_KEY = 'mvs_erp_access_token'
 const REFRESH_KEY = 'mvs_erp_refresh_token'
@@ -288,6 +288,53 @@ export const useAppStore = defineStore('app', () => {
     }
   }
 
+  async function createResource(payload: DtoCreateResourceRequest): Promise<boolean> {
+    resourcesError.value = null
+    try {
+      const api = new ResourcesApi(apiConfig())
+      const resp = await api.resourcePost(payload)
+      const body = resp.data
+      if (body?.error) throw new Error(body.error)
+      if (body?.data) resources.value.push(body.data)
+      return true
+    } catch (e: any) {
+      resourcesError.value = e.message || String(e)
+      return false
+    }
+  }
+
+  async function updateResource(id: number, patch: DtoUpdateResourceRequest): Promise<boolean> {
+    resourcesError.value = null
+    try {
+      const api = new ResourcesApi(apiConfig())
+      const resp = await api.resourceIdPut(id, patch)
+      const body = resp.data
+      if (body?.error) throw new Error(body.error)
+      const updated = body?.data
+      if (updated) {
+        const i = resources.value.findIndex((r) => r.id === id)
+        if (i >= 0) resources.value[i] = updated
+      }
+      return true
+    } catch (e: any) {
+      resourcesError.value = e.message || String(e)
+      return false
+    }
+  }
+
+  async function deleteResource(id: number): Promise<boolean> {
+    resourcesError.value = null
+    try {
+      await new ResourcesApi(apiConfig()).resourceIdDelete(id)
+      const i = resources.value.findIndex((r) => r.id === id)
+      if (i >= 0) resources.value.splice(i, 1)
+      return true
+    } catch (e: any) {
+      resourcesError.value = e.message || String(e)
+      return false
+    }
+  }
+
   const users = ref<DtoUserInfo[]>([])
   const usersLoading = ref(false)
   const usersError = ref<string | null>(null)
@@ -324,6 +371,9 @@ export const useAppStore = defineStore('app', () => {
     loadProjects,
     loadResources,
     loadUsers,
+    createResource,
+    updateResource,
+    deleteResource,
   }
 })
 
