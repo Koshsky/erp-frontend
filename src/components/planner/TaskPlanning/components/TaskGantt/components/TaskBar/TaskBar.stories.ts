@@ -60,6 +60,38 @@ export const NoResources: Story = {
   ),
 }
 
+/** Много ресурсов на узком баре: бейджи не помещаются рядом и складываются стопкой
+ *  (ховер по бару — тултип со всеми ресурсами). */
+export const StackedBadges: Story = {
+  render: () => ({
+    components: { TaskBar },
+    data: () => ({
+      anchor: day(1),
+      mode: 'quarter' as const,
+      unit: 'day' as const,
+      task: {
+        id: 1,
+        title: 'Монтаж',
+        start_date: iso(day(5)),
+        end_date: iso(day(26)),
+        resources: [
+          { resource_id: 1, assignment_id: 1, quantity: 1, code: 'И' },
+          { resource_id: 2, assignment_id: 2, quantity: 2, code: 'М' },
+          { resource_id: 3, assignment_id: 3, quantity: 1, code: 'К' },
+          { resource_id: 4, assignment_id: 4, quantity: 3, code: 'С' },
+        ],
+      },
+    }),
+    template: `
+      <div style="max-width:600px;margin:0 auto;font-family:sans-serif;">
+        <div style="position:relative;width:100%;height:40px;background:#f0f0f0;border-radius:6px;">
+          <TaskBar :anchor="anchor" :mode="mode" :unit="unit" :task="task" />
+        </div>
+      </div>
+    `,
+  }),
+}
+
 /** Год с декадами — бар растянут на несколько декад */
 export const YearDecades: Story = {
   render: withTask(
