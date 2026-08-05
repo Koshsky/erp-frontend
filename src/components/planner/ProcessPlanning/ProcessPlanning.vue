@@ -20,9 +20,12 @@ const props = withDefaults(defineProps<{
   mode?: PlanningMode
   /** Единица ячейки: день, неделя или декада */
   unit?: PlanningUnit
+  /** Разрешает изменение процессов: перенос дат, редактирование, удаление */
+  canManage?: boolean
 }>(), {
   mode: 'quarter',
   unit: 'day',
+  canManage: true,
 })
 
 const emit = defineEmits<{
@@ -98,6 +101,7 @@ const gridCols = computed(() => {
                 :processes="project.processes"
                 :groupStartDate="project.start_date"
                 :groupEndDate="project.end_date"
+                :can-manage="canManage"
                 @change="(p) => emit('change', p)"
                 @contextmenu="(p) => emit('contextmenu', p)"
                 @edit="(id) => emit('edit', id)"

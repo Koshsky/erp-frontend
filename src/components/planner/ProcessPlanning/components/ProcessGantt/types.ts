@@ -20,4 +20,6 @@ export interface ProcessGanttProps {
   processes: ProcessItem[]
   groupStartDate?: string
   groupEndDate?: string
+  /** Разрешает изменение процессов: перенос дат, редактирование, удаление */
+  canManage?: boolean
 }

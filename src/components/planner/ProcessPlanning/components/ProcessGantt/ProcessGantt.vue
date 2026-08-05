@@ -4,7 +4,9 @@ import { GroupGantt } from '../../../GroupGantt'
 import ProcessBar from '../ProcessBar/ProcessBar.vue'
 import type { ProcessGanttProps } from './types'
 
-const props = defineProps<ProcessGanttProps>()
+const props = withDefaults(defineProps<ProcessGanttProps>(), {
+  canManage: true,
+})
 
 const emit = defineEmits<{
   change: [payload: { id: number; start_date: string; end_date: string }]
@@ -24,6 +26,10 @@ function onContextMenu(p: { clientX: number; clientY: number; date: string; rowI
 
 function onBarContextMenu(p: { clientX: number; clientY: number }, id: number) {
   emit('contextmenu', { ...p, date: '', rowIndex: -1, projectId: props.projectId, processId: id })
+}
+
+function onBarEdit(id: number) {
+  if (props.canManage) emit('edit', id)
 }
 </script>
 
@@ -53,9 +59,10 @@ function onBarContextMenu(p: { clientX: number; clientY: number }, id: number) {
         :ownerName="item.owner_name"
         :groupStartDate="groupStartDate"
         :groupEndDate="groupEndDate"
+        :draggable="canManage"
         @change="(d) => onBarChange(item.id, d)"
         @contextmenu="(p) => onBarContextMenu(p, item.id)"
-        @edit="() => emit('edit', item.id)"
+        @edit="() => onBarEdit(item.id)"
       />
     </template>
   </GroupGantt>

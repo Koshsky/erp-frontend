@@ -21,9 +21,12 @@ const props = withDefaults(defineProps<{
   mode?: PlanningMode
   /** Единица ячейки: день, неделя или декада */
   unit?: PlanningUnit
+  /** Разрешает изменение задач и вех: перенос дат, редактирование, удаление */
+  canManage?: boolean
 }>(), {
   mode: 'quarter',
   unit: 'day',
+  canManage: true,
 })
 
 const emit = defineEmits<{
@@ -143,6 +146,7 @@ const gridCols = computed(() => {
                 :milestones="proc.milestones || []"
                 :groupStartDate="proc.start_date"
                 :groupEndDate="proc.end_date"
+                :can-manage="canManage"
                 @change="(p) => emit('change', p)"
                 @milestone-change="(p) => emit('milestone-change', p)"
                 @contextmenu="(p) => emit('contextmenu', p)"

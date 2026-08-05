@@ -23,4 +23,6 @@ export interface TaskGanttProps {
   milestones?: Milestone[]
   groupStartDate?: string
   groupEndDate?: string
+  /** Разрешает изменение задач и вех: перенос дат, редактирование, удаление */
+  canManage?: boolean
 }

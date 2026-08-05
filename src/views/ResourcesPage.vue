@@ -4,11 +4,16 @@ import { storeToRefs } from 'pinia'
 import { ContextMenu, ModalForm } from '../components/common'
 import type { ContextMenuItem } from '../components/common/ContextMenu'
 import type { ModalField } from '../components/common/ModalForm'
-import { useAppStore } from '../store'
+import { useAppStore, useAuthStore } from '../store'
 import type { DtoResource } from '@/api'
 
 const store = useAppStore()
+const auth = useAuthStore()
 const { resources, resourcesLoading, resourcesError } = storeToRefs(store)
+
+// dp (директор проектов) — read-only: может менять только приоритет проектов,
+// поэтому создание/редактирование/удаление ресурсов ему недоступно.
+const canManage = computed(() => auth.user?.role !== 'dp')
 
 // ПКМ по строке ресурса: редактирование/удаление
 interface MenuState {
@@ -44,7 +49,7 @@ const modalFields = computed<ModalField[]>(() => {
 })
 
 function onRowContextMenu(e: MouseEvent, res: DtoResource) {
-  if (res.id == null) return
+  if (res.id == null || !canManage.value) return
   menu.value = { x: e.clientX, y: e.clientY, resourceId: res.id }
 }
 
@@ -98,7 +103,7 @@ onMounted(() => {
   <section class="rp">
     <div class="rp-head">
       <h2 class="rp-title">Ресурсы</h2>
-      <button type="button" class="rp-add" @click="openCreate">Создать ресурс</button>
+      <button v-if="canManage" type="button" class="rp-add" @click="openCreate">Создать ресурс</button>
     </div>
 
     <p v-if="resourcesLoading" class="rp-st">Загрузка...</p>

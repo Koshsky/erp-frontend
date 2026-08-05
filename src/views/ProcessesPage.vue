@@ -5,12 +5,13 @@ import ProcessPlanning from '../components/planner/ProcessPlanning/ProcessPlanni
 import { ContextMenu, ModalForm } from '../components/common'
 import type { ContextMenuItem } from '../components/common/ContextMenu'
 import type { ModalField } from '../components/common/ModalForm'
-import { usePlanningStore, useAppStore } from '../store'
+import { usePlanningStore, useAppStore, useAuthStore } from '../store'
 import type { PlanningMode, PlanningUnit } from '../components/planner/calendar'
 import { addMonthsISO } from '../components/planner/calendar'
 
 const store = usePlanningStore()
 const app = useAppStore()
+const auth = useAuthStore()
 const { processPlanning, loading, error } = storeToRefs(store)
 
 const mode = ref<PlanningMode>('quarter')
@@ -40,14 +41,20 @@ interface MenuState {
   processId?: number
 }
 const menu = ref<MenuState | null>(null)
-const menuItems = computed<ContextMenuItem[]>(() =>
-  menu.value?.processId != null
+
+// dp (директор проектов) — read-only: может менять только приоритет проектов,
+// поэтому создание/редактирование/удаление процессов и перенос их дат недоступны.
+const canManage = computed(() => auth.user?.role !== 'dp')
+
+const menuItems = computed<ContextMenuItem[]>(() => {
+  if (!canManage.value) return []
+  return menu.value?.processId != null
     ? [
         { id: 'edit-process', label: 'Редактировать' },
         { id: 'delete-process', label: 'Удалить процесс' },
       ]
-    : [{ id: 'create-process', label: 'Создать процесс' }],
-)
+    : [{ id: 'create-process', label: 'Создать процесс' }]
+})
 
 // Модалка редактирования процесса (название, владелец)
 interface EditState {
@@ -72,6 +79,7 @@ const editFields = computed<ModalField[]>(() => {
 })
 
 function onContextMenu(p: { clientX: number; clientY: number; date: string; rowIndex: number; projectId?: number; processId?: number }) {
+  if (!canManage.value) return
   menu.value = { x: p.clientX, y: p.clientY, date: p.date, rowIndex: p.rowIndex, projectId: p.projectId, processId: p.processId }
 }
 
@@ -160,6 +168,7 @@ onMounted(() => {
       :anchor="anchor"
       :mode="mode"
       :unit="unit"
+      :can-manage="canManage"
       @change="(p) => store.updateProcessDates(p.id, p.start_date, p.end_date)"
       @contextmenu="onContextMenu"
       @edit="openProcessEdit"
