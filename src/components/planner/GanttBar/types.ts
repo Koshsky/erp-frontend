@@ -1,9 +1,8 @@
-import type { PlanningMode, PlanningUnit } from '../calendar'
+import type { TimelineCtx } from '@/composables/useInfiniteTimeline'
 
 export interface GanttBarProps {
-  anchor: Date | number
-  mode: PlanningMode
-  unit: PlanningUnit
+  /** Контекст бесконечной шкалы */
+  timeline: TimelineCtx
   startDate: string | Date | number
   endDate: string | Date | number
   /** Границы родителя (процесса/проекта) — ограничивают перетаскивание */
@@ -13,6 +12,7 @@ export interface GanttBarProps {
   opacity?: number
   /** Нативный тултип при наведении */
   title?: string
+  tooltip?: string
   height?: number
   top?: number
   minWidth?: number

@@ -1,5 +1,5 @@
 import type { DtoProject } from '@/api'
-import type { PlanningMode, PlanningUnit } from '../calendar'
+import type { PlanningUnit } from '../calendar'
 
 export interface ProjectItem {
   id: number
@@ -10,11 +10,10 @@ export interface ProjectItem {
 
 export interface ProjectPlanningProps {
   projects?: DtoProject[] | null
-  anchor?: string | Date | number | null
-  /** Период календаря: квартал (3 мес), полугодие или год */
-  mode?: PlanningMode
-  /** Единица ячейки: день, неделя или декада */
+  /** Якорь шкалы: ячейка с индексом 0 (начальная позиция) */
+  origin?: string | Date
+  /** Единица ячейки: день или декада */
   unit?: PlanningUnit
 }
 
-export type { PlanningMode, PlanningUnit }
+export type { PlanningUnit }

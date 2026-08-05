@@ -1,5 +1,5 @@
 import type { DtoDetailedProject } from '@/api'
-import type { PlanningMode, PlanningUnit } from '../calendar'
+import type { PlanningUnit } from '../calendar'
 import type { ProcessItem } from './components/ProcessGantt/types'
 
 export interface ProcessPlanningProject {
@@ -17,7 +17,10 @@ export interface ProcessPlanningProps {
   projects?: DtoDetailedProject[] | null
   loading?: boolean
   error?: string | null
-  anchor?: string | Date | number | null
-  mode?: PlanningMode
+  /** Якорь шкалы: ячейка с индексом 0 (начальная позиция) */
+  origin?: string | Date
+  /** Единица ячейки: день или декада */
   unit?: PlanningUnit
 }
+
+export type { PlanningUnit }

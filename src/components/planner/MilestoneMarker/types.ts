@@ -1,9 +1,8 @@
-import type { PlanningMode, PlanningUnit } from '../calendar'
+import type { TimelineCtx } from '../../../composables/useInfiniteTimeline'
 
 export interface MilestoneMarkerProps {
-  anchor: Date | number
-  mode: PlanningMode
-  unit: PlanningUnit
+  /** Контекст бесконечной шкалы */
+  timeline: TimelineCtx
   /** Дата вехи — одна точка на шкале (позиция флажка) */
   date: string | Date | number
   /** Заголовок вехи — первая строка тултипа */
@@ -12,8 +11,8 @@ export interface MilestoneMarkerProps {
   content?: string
   /** Цвет флажка и древка */
   color?: string
-  /** Высота шапки (px), в которой стоит флажок; когда задана — рисуется древко вниз до низа блока */
-  headerHeight?: number
+  /** Высота полосы вех (px), в которой стоит флажок; ниже — луч вниз до конца группы */
+  stripHeight?: number
   /** Разрешить перетаскивание вехи (сдвиг по ячейкам; на отпускание — @change) */
   draggable?: boolean
   /** Границы процесса — веха не перетаскивается за их пределы */

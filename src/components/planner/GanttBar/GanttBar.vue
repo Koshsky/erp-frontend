@@ -1,26 +1,16 @@
 <script setup lang="ts">
-import { computed, ref, useSlots } from 'vue'
-import {
-  barCells,
-  boundsCellSpan,
-  buildCells,
-  cellCount,
-  cellSpanToDates,
-  clampSpanDates,
-  toDate,
-  fmtDate,
-} from '../calendar'
+import { computed, inject, ref, useSlots } from 'vue'
+import { cellRangeForSpan, clampSpanDates, spanToDates } from '../calendar'
+import type { TimelineCtx } from '../../../composables/useInfiniteTimeline'
+import { TimelineScrollKey, TimelineSyncKey } from '../../../composables/useInfiniteTimeline'
 import { useBarDrag } from '../../../composables/useBarDrag'
 import { TooltipCell } from '../../common/TooltipCell'
-import type { PlanningMode, PlanningUnit } from '../calendar'
 
 const slots = useSlots()
 
 const props = withDefaults(
   defineProps<{
-    anchor: Date | number
-    mode: PlanningMode
-    unit: PlanningUnit
+    timeline: TimelineCtx
     startDate: string | Date | number
     endDate: string | Date | number
     /** Границы родителя (процесса/проекта) — ограничивают перетаскивание */
@@ -63,32 +53,37 @@ const emit = defineEmits<{
 }>()
 
 const barEl = ref<HTMLElement | null>(null)
+const scrollEl = inject(TimelineScrollKey, null)
+const timelineSync = inject(TimelineSyncKey, () => {})
 
 /** Есть ли кастомный тултип: через проп `tooltip` или слот `#tooltip` */
 const hasTooltip = computed(() => Boolean(props.tooltip) || Boolean(slots.tooltip))
 
-const cells = computed(() => buildCells(props.anchor, props.mode, props.unit))
 const span = computed(() =>
-  barCells(props.anchor, props.mode, props.unit, props.startDate, props.endDate),
+  cellRangeForSpan(props.timeline.origin, props.timeline.unit, props.startDate, props.endDate),
 )
 const bounds = computed(() =>
-  boundsCellSpan(props.anchor, props.mode, props.unit, props.groupStartDate, props.groupEndDate),
+  props.groupStartDate != null && props.groupEndDate != null
+    ? cellRangeForSpan(props.timeline.origin, props.timeline.unit, props.groupStartDate, props.groupEndDate)
+    : null,
 )
 
-/** Бар отсечён слева якорем (исторический старт раньше начала шкалы): левая граница архивная,
- *  её нельзя двигать/перезаписывать — разрешён только ресайз правого края. */
-const clippedLeft = computed(
-  () =>
-    cells.value.length > 0 &&
-    toDate(props.startDate).getTime() < cells.value[0].start.getTime(),
-)
+/** Бар скрывается, если его спана не пересекает видимое окно (±запас) */
+const visible = computed(() => {
+  if (!span.value) return false
+  const t = props.timeline
+  return (
+    span.value.endCell > t.windowStart - 4 && span.value.startCell < t.windowStart + t.viewportCells + 4
+  )
+})
 
 const barStyle = computed<Record<string, string | number> | null>(() => {
-  if (!span.value) return null
-  const total = cellCount(props.anchor, props.mode, props.unit)
+  if (!span.value || !visible.value) return null
+  const t = props.timeline
+  const s = span.value
   return {
-    left: (span.value.startCell / total) * 100 + '%',
-    width: ((span.value.endCell - span.value.startCell) / total) * 100 + '%',
+    left: t.cellLeft(s.startCell) + 'px',
+    width: (s.endCell - s.startCell) * t.cellPx + 'px',
     background: props.color,
     opacity: props.opacity,
     height: props.height + 'px',
@@ -99,30 +94,29 @@ const barStyle = computed<Record<string, string | number> | null>(() => {
 })
 
 const { isDragging, cursor, previewStyle, startDrag } = useBarDrag({
-  cells: () => cells.value,
-  getContainer: () => barEl.value?.parentElement ?? null,
+  timeline: () => props.timeline,
+  scrollEl: () => scrollEl?.value ?? null,
+  sync: timelineSync,
   getSpan: () => span.value,
   getBounds: () => bounds.value,
   onCommit: (sp) => {
-    if (!cells.value.length) return
-    const d = cellSpanToDates(cells.value, sp.startCell, sp.endCell)
-    const start_date = clippedLeft.value ? fmtDate(toDate(props.startDate)) : d.start_date
-    emit('change', clampSpanDates(start_date, d.end_date, props.groupStartDate, props.groupEndDate))
+    const d = spanToDates(props.timeline.origin, props.timeline.unit, sp.startCell, sp.endCell)
+    emit('change', clampSpanDates(d.start_date, d.end_date, props.groupStartDate, props.groupEndDate))
   },
 })
 
 const cursorStyle = computed<Record<string, string>>(() => {
   if (cursor.value) return { cursor: cursor.value }
-  if (props.draggable && !clippedLeft.value) return { cursor: 'grab' }
+  if (props.draggable) return { cursor: 'grab' }
   return { cursor: 'default' }
 })
 
 function onBodyPointerDown(e: PointerEvent) {
-  if (props.draggable && !clippedLeft.value) startDrag(e, 'move')
+  if (props.draggable) startDrag(e, 'move')
 }
 
 function onHandlePointerDown(e: PointerEvent, mode: 'resizeStart' | 'resizeEnd') {
-  if (props.draggable && (mode !== 'resizeStart' || !clippedLeft.value)) startDrag(e, mode)
+  if (props.draggable) startDrag(e, mode)
 }
 
 function onDblClick(e: MouseEvent) {
@@ -156,7 +150,6 @@ function onContextMenu(e: MouseEvent) {
     <slot v-else />
     <template v-if="draggable">
       <span
-        v-if="!clippedLeft"
         class="gb-handle gb-handle-l"
         style="cursor: ew-resize"
         @pointerdown.stop="onHandlePointerDown($event, 'resizeStart')"

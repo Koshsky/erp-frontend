@@ -27,9 +27,7 @@ const dateRange = computed(() =>
 
 <template>
   <GanttBar
-    :anchor="anchor"
-    :mode="mode"
-    :unit="unit"
+    :timeline="timeline"
     :startDate="startDate"
     :endDate="endDate"
     :groupStartDate="groupStartDate"

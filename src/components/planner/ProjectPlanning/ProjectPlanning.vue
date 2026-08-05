@@ -1,46 +1,46 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import CalendarHeader from '../CalendarHeader/CalendarHeader.vue'
+import TimelineGrid from '../TimelineGrid/TimelineGrid.vue'
 import ProjectGantt from './components/ProjectGantt/ProjectGantt.vue'
-import type { ProjectGanttItem } from './components/ProjectGantt/types'
 import type { DtoProject, DtoUserInfo } from '@/api'
-import type { PlanningMode, PlanningUnit } from '../calendar'
-import { buildCells, toDate } from '../calendar'
-import { LABEL_WIDTH, CELL_WIDTH } from '../layout'
+import type { PlanningUnit } from '../calendar'
 
 const props = withDefaults(defineProps<{
   projects?: DtoProject[] | null
   loading?: boolean
   error?: string | null
+  /** Якорь шкалы: ячейка с индексом 0 (начальная позиция) */
+  origin?: Date | string
+  /** Единица ячейки: день или декада */
+  unit?: PlanningUnit
   /** Пользователи для отображения владельца (owner_id → name) в тултипах */
   users?: DtoUserInfo[] | null
-  /** Якорь шкалы (первая ячейка); по умолчанию — самая ранняя дата старта проекта */
-  anchor?: string | Date | number | null
-  /** Период календаря: квартал, полугодие или год */
-  mode?: PlanningMode
-  /** Единица ячейки: день, неделя или декада */
-  unit?: PlanningUnit
   /** Разрешает переупорядочивание строк (смену приоритетов) */
   reorderable?: boolean
-  /** Проверка прав на управление проектом: редактирование, удаление, перенос дат */
+  /** Проверка прав на управление проектом */
   canManage?: (projectId: number) => boolean
 }>(), {
-  mode: 'quarter',
+  projects: null,
+  loading: false,
+  error: null,
+  origin: '',
   unit: 'day',
+  users: null,
   reorderable: true,
   canManage: () => true,
 })
 
 const emit = defineEmits<{
   change: [payload: { id: number; start_date: string; end_date: string }]
-  contextmenu: [payload: { clientX: number; clientY: number; date: string; rowIndex: number; projectId?: number }]
+  contextmenu: [payload: { clientX: number; clientY: number; date: string | null; rowIndex: number; projectId?: number }]
   reorder: [payload: { from: number; to: number }]
   edit: [payload: number]
 }>()
 
 const userNames = computed(() => new Map((props.users || []).map((u) => [u.id, u.name])))
 
-const projects = computed<ProjectGanttItem[]>(() =>
+const displayProjects = computed(() =>
   (props.projects || []).map((dto) => ({
     id: dto.id ?? 0,
     project_code: dto.project_code ?? '',
@@ -51,54 +51,39 @@ const projects = computed<ProjectGanttItem[]>(() =>
   })),
 )
 
-// Отправная точка календаря по умолчанию — текущая дата (прошлое отсекается слева)
-const defaultAnchor = computed<Date>(() => new Date())
-
-const anchor = computed<Date>(() => {
-  if (props.anchor == null) return defaultAnchor.value
-  return toDate(props.anchor)
-})
-
-// Ячейки календаря фиксированной длины в зависимости от периода и единицы
-const cells = computed(() => buildCells(anchor.value, props.mode, props.unit))
-
-const gridCols = computed(() => {
-  if (!cells.value.length) return `${LABEL_WIDTH}px`
-  return `${LABEL_WIDTH}px repeat(${cells.value.length}, var(--cell-width, ${CELL_WIDTH}px))`
-})
+/** ПКМ по пустому месту шкалы — создание проекта в позиции строки под курсором */
+function onGridCtx(p: { clientX: number; clientY: number; date: string | null; rowIndex?: number }) {
+  emit('contextmenu', {
+    clientX: p.clientX,
+    clientY: p.clientY,
+    date: p.date,
+    rowIndex: p.rowIndex ?? 0,
+  })
+}
 </script>
 
 <template>
   <div class="pg">
-    <template v-if="loading">
-      <div class="st">Загрузка...</div>
-    </template>
+    <div v-if="loading" class="st">Загрузка...</div>
     <template v-else>
       <p v-if="error" class="pg-error">{{ error }}</p>
-      <template v-if="projects.length && cells.length">
-        <div class="pg-scroll">
-          <div class="gg" :style="{ gridTemplateColumns: gridCols }">
 
-            <div class="gg-head" :style="{ gridTemplateColumns: gridCols }">
-              <CalendarHeader :anchor="anchor" :mode="mode" :unit="unit" />
-              <div class="sep" style="gridColumn:1/-1"></div>
-            </div>
+      <TimelineGrid v-if="displayProjects.length" :origin="origin" :unit="unit" @ctxmenu="onGridCtx">
+        <template #default="{ t }">
+          <CalendarHeader :t="t" />
+          <ProjectGantt
+            :timeline="t"
+            :projects="displayProjects"
+            :reorderable="reorderable"
+            :can-manage="canManage"
+            @change="(p) => emit('change', p)"
+            @contextmenu="(p) => emit('contextmenu', p)"
+            @reorder="(p) => emit('reorder', p)"
+            @edit="(id) => emit('edit', id)"
+          />
+        </template>
+      </TimelineGrid>
 
-            <ProjectGantt
-              :anchor="anchor"
-              :mode="mode"
-              :unit="unit"
-              :projects="projects"
-              :reorderable="reorderable"
-              :can-manage="canManage"
-              @change="(p) => emit('change', p)"
-              @contextmenu="(p) => emit('contextmenu', p)"
-              @reorder="(p) => emit('reorder', p)"
-              @edit="(id) => emit('edit', id)"
-            />
-          </div>
-        </div>
-      </template>
       <div v-else-if="error" class="st er">{{ error }}</div>
       <div v-else class="st">Нет данных</div>
     </template>
@@ -107,21 +92,23 @@ const gridCols = computed(() => {
 
 <style scoped>
 .pg {
-  background: #fff; border-radius: 10px; padding: 12px;
-  box-shadow: 0 1px 6px rgba(0,0,0,.08);
-}
-.pg-scroll { overflow: auto; max-height: var(--planner-max-height, calc(100vh - 160px)); }
-.st { text-align:center; padding:30px; color:#666; font-size:14px; }
-.pg-error { color:#d93025; font-size:13px; padding:8px 4px; }
-.gg { display: grid; min-width: 600px; }
-.gg-head {
-  grid-column: 1 / -1;
-  display: grid;
-  position: sticky;
-  top: 0;
-  z-index: 20;
   background: #fff;
-  box-shadow: 0 2px 6px rgba(0,0,0,.06);
+  border-radius: 10px;
+  padding: 12px;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.08);
 }
-.sep { border: none; border-bottom: 2px solid #1a73e8; margin: 4px 0; height: 0; }
+.st {
+  text-align: center;
+  padding: 30px;
+  color: #666;
+  font-size: 14px;
+}
+.pg-error {
+  color: #d93025;
+  font-size: 13px;
+  padding: 8px 4px;
+}
+.er {
+  color: #d93025;
+}
 </style>

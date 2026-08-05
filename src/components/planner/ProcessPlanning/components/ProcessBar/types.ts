@@ -1,9 +1,8 @@
-import type { PlanningMode, PlanningUnit } from '../../../calendar'
+import type { TimelineCtx } from '@/composables/useInfiniteTimeline'
 
 export interface ProcessBarProps {
-  anchor: Date | number
-  mode: PlanningMode
-  unit: PlanningUnit
+  /** Контекст бесконечной шкалы */
+  timeline: TimelineCtx
   startDate: string | Date | number
   endDate: string | Date | number
   title: string

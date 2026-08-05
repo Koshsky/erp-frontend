@@ -1,7 +1,6 @@
-import type { PlanningMode, PlanningUnit } from '../calendar'
+import type { TimelineCtx } from '@/composables/useInfiniteTimeline'
 
 export interface CalendarHeaderProps {
-  anchor: Date | number
-  mode: PlanningMode
-  unit: PlanningUnit
+  /** Контекст бесконечной шкалы */
+  t: TimelineCtx
 }

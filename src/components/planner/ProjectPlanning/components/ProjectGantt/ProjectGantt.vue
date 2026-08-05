@@ -31,33 +31,25 @@ function onBarChange(id: number, d: { start_date: string; end_date: string }) {
   emit('change', { id, ...d })
 }
 
-function onContextMenu(p: { clientX: number; clientY: number; date: string; rowIndex: number }) {
-  emit('contextmenu', p)
-}
-
-function onBarContextMenu(p: { clientX: number; clientY: number }, id: number) {
-  emit('contextmenu', { ...p, date: '', rowIndex: -1, projectId: id })
+function onContextMenu(p: { clientX: number; clientY: number; id: number }) {
+  emit('contextmenu', { ...p, date: '', rowIndex: -1, projectId: p.id })
 }
 
 function onBarEdit(id: number) {
   if (props.canManage(id)) emit('edit', id)
-}</script>
+}
+</script>
 
 <template>
   <GroupGantt
-    :anchor="anchor"
-    :mode="mode"
-    :unit="unit"
+    :timeline="timeline"
     :items="groupItems"
     :reorderable="reorderable"
-    @contextmenu="onContextMenu"
     @reorder="(p) => emit('reorder', p)"
   >
     <template #bar="{ item }">
       <ProjectBar
-        :anchor="anchor!"
-        :mode="mode"
-        :unit="unit"
+        :timeline="timeline"
         :startDate="item.start_date"
         :endDate="item.end_date"
         :projectCode="item.title"
@@ -65,7 +57,7 @@ function onBarEdit(id: number) {
         :ownerName="item.owner_name"
         :draggable="canManage(item.id)"
         @change="(d) => onBarChange(item.id, d)"
-        @contextmenu="(p) => onBarContextMenu(p, item.id)"
+        @contextmenu="(p) => onContextMenu({ ...p, id: item.id })"
         @edit="() => onBarEdit(item.id)"
       />
     </template>

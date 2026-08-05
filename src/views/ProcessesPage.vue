@@ -6,7 +6,7 @@ import { ContextMenu, ModalForm } from '../components/common'
 import type { ContextMenuItem } from '../components/common/ContextMenu'
 import type { ModalField } from '../components/common/ModalForm'
 import { usePlanningStore, useAppStore, useAuthStore } from '../store'
-import type { PlanningMode, PlanningUnit } from '../components/planner/calendar'
+import type { PlanningUnit } from '../components/planner/calendar'
 import { addMonthsISO } from '../components/planner/calendar'
 
 const store = usePlanningStore()
@@ -14,15 +14,13 @@ const app = useAppStore()
 const auth = useAuthStore()
 const { processPlanning, loading, error } = storeToRefs(store)
 
-const mode = ref<PlanningMode>('quarter')
 const unit = ref<PlanningUnit>('day')
-const anchor = ref<Date | null>(null)
 
-const modeOptions: { value: PlanningMode; label: string }[] = [
-  { value: 'quarter', label: '3 месяца' },
-  { value: 'half', label: 'Полгода' },
-  { value: 'year', label: 'Год' },
-]
+/** Якорь шкалы: первое число предыдущего месяца от сегодня */
+const origin = computed(() => {
+  const now = new Date()
+  return new Date(now.getFullYear(), now.getMonth() - 1, 1)
+})
 
 const unitOptions: { value: PlanningUnit; label: string }[] = [
   { value: 'day', label: 'День' },
@@ -35,7 +33,7 @@ const unitOptions: { value: PlanningUnit; label: string }[] = [
 interface MenuState {
   x: number
   y: number
-  date: string
+  date: string | null
   rowIndex: number
   projectId?: number
   processId?: number
@@ -78,8 +76,10 @@ const editFields = computed<ModalField[]>(() => {
   ]
 })
 
-function onContextMenu(p: { clientX: number; clientY: number; date: string; rowIndex: number; projectId?: number; processId?: number }) {
+function onContextMenu(p: { clientX: number; clientY: number; date: string | null; rowIndex: number; projectId?: number; processId?: number }) {
   if (!canManage.value) return
+  // Пустое место группы: создание процесса требует проект-родителя и известной даты
+  if (p.processId == null && (p.projectId == null || p.date == null)) return
   menu.value = { x: p.clientX, y: p.clientY, date: p.date, rowIndex: p.rowIndex, projectId: p.projectId, processId: p.processId }
 }
 
@@ -97,7 +97,7 @@ async function onSelect(id: string) {
   if (!menu.value) return
   const { date, rowIndex, projectId, processId } = menu.value
   if (id === 'create-process') {
-    if (projectId == null) return
+    if (projectId == null || date == null) return
     const ok = await store.createProcess({
       title: 'Новый процесс',
       project_id: projectId,
@@ -136,18 +136,6 @@ onMounted(() => {
     <div class="pp-head">
       <div class="pp-period">
         <button
-          v-for="opt in modeOptions"
-          :key="opt.value"
-          class="pp-period-btn"
-          :class="{ active: mode === opt.value }"
-          type="button"
-          @click="mode = opt.value"
-        >
-          {{ opt.label }}
-        </button>
-      </div>
-      <div class="pp-period">
-        <button
           v-for="opt in unitOptions"
           :key="opt.value"
           class="pp-period-btn"
@@ -165,8 +153,7 @@ onMounted(() => {
       :loading="loading"
       :error="error"
       :users="app.users"
-      :anchor="anchor"
-      :mode="mode"
+      :origin="origin"
       :unit="unit"
       :can-manage="canManage"
       @change="(p) => store.updateProcessDates(p.id, p.start_date, p.end_date)"

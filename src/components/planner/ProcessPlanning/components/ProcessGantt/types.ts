@@ -1,4 +1,4 @@
-import type { PlanningMode, PlanningUnit } from '../../../calendar'
+import type { TimelineCtx } from '@/composables/useInfiniteTimeline'
 
 export interface ProcessItem {
   id: number
@@ -11,15 +11,13 @@ export interface ProcessItem {
 }
 
 export interface ProcessGanttProps {
-  anchor: Date | number | null
-  mode: PlanningMode
-  unit: PlanningUnit
+  timeline: TimelineCtx
   projectCode?: string
   /** Идентификатор проекта-родителя (для создания процессов в группе) */
   projectId?: number
   processes: ProcessItem[]
-  groupStartDate?: string
-  groupEndDate?: string
+  groupStartDate?: string | Date | number | null
+  groupEndDate?: string | Date | number | null
   /** Разрешает изменение процессов: перенос дат, редактирование, удаление */
   canManage?: boolean
 }

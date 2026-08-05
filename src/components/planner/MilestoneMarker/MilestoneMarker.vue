@@ -1,21 +1,25 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { TooltipCell } from '../../common/TooltipCell'
+import { computed, inject, ref } from 'vue'
 import {
-  dateCellIndex,
-  cellCount,
-  buildCells,
-  boundsCellSpan,
-  cellSpanToDates,
+  cellIndexForDate,
+  cellStartDate,
+  cellEndDate,
+  cellRangeForSpan,
   clampDateToBounds,
-  toDate,
+  fmtDate,
 } from '../calendar'
+import type { TimelineCtx } from '../../../composables/useInfiniteTimeline'
+import { TimelineScrollKey, TimelineSyncKey } from '../../../composables/useInfiniteTimeline'
 import { useBarDrag } from '../../../composables/useBarDrag'
+import { TooltipCell } from '../../common/TooltipCell'
 import type { MilestoneMarkerProps } from './types'
 
 const props = withDefaults(defineProps<MilestoneMarkerProps>(), {
   color: '#fbbc04',
   draggable: true,
+  stripHeight: 20,
+  groupStartDate: null,
+  groupEndDate: null,
 })
 
 const emit = defineEmits<{
@@ -26,63 +30,69 @@ const emit = defineEmits<{
 }>()
 
 const rootEl = ref<HTMLElement | null>(null)
+const scrollEl = inject(TimelineScrollKey, null)
+const timelineSync = inject(TimelineSyncKey, () => {})
 
 /** Дата вехи в формате для тултипа (локализованная) */
-const formattedDate = computed(() => toDate(props.date).toLocaleDateString('ru'))
+const formattedDate = computed(() => {
+  const d = props.timeline.cellStart(cellIndexForDate(props.timeline.origin, props.timeline.unit, props.date))
+  return d.toLocaleDateString('ru')
+})
 
-const cells = () => buildCells(props.anchor, props.mode, props.unit)
-
-/** Границы процесса — веха не перетаскивается за их пределы */
-const bounds = computed(() =>
-  boundsCellSpan(props.anchor, props.mode, props.unit, props.groupStartDate, props.groupEndDate),
+/** Индекс ячейки вехи */
+const idx = computed(() =>
+  cellIndexForDate(props.timeline.origin, props.timeline.unit, props.date),
 )
 
-/** Драг вехи как точки: спана в одну ячейку, только перемещение */
+/** Веха скрывается вне видимого окна (±запас) */
+const visible = computed(() => {
+  const t = props.timeline
+  return idx.value > t.windowStart - 4 && idx.value < t.windowStart + t.viewportCells + 4
+})
+
+const bounds = computed(() =>
+  props.groupStartDate != null && props.groupEndDate != null
+    ? cellRangeForSpan(props.timeline.origin, props.timeline.unit, props.groupStartDate, props.groupEndDate)
+    : null,
+)
+
 const { isDragging, cursor, previewStyle, startDrag } = useBarDrag({
-  cells,
-  getContainer: () => rootEl.value?.parentElement ?? null,
-  getSpan: () => {
-    const idx = dateCellIndex(props.anchor, props.mode, props.unit, props.date)
-    return idx == null ? null : { startCell: idx, endCell: idx + 1 }
-  },
+  timeline: () => props.timeline,
+  scrollEl: () => scrollEl?.value ?? null,
+  sync: timelineSync,
+  getSpan: () => ({ startCell: idx.value, endCell: idx.value + 1 }),
   getBounds: () => bounds.value,
-  onCommit: (span) => {
-    const d = cellSpanToDates(cells(), span.startCell, span.endCell)
-    emit('change', {
-      date: clampDateToBounds(d.start_date, props.groupStartDate, props.groupEndDate),
-    })
+  onCommit: (sp) => {
+    const date = clampDateToBounds(
+      fmtDate(cellStartDate(props.timeline.origin, props.timeline.unit, sp.startCell)),
+      props.groupStartDate,
+      props.groupEndDate,
+    )
+    emit('change', { date })
   },
 })
 
-/** Бокс ячейки вехи — маркер и луч выравниваются по её центру */
-const pos = computed<{ left: string; width: string } | null>(() => {
-  const index = dateCellIndex(props.anchor, props.mode, props.unit, props.date)
-  if (index == null) return null
-  const total = cellCount(props.anchor, props.mode, props.unit)
+/** Позиция и флаг/луч */
+const pos = computed(() => {
+  if (!visible.value) return null
   return {
-    left: (index / total) * 100 + '%',
-    width: (1 / total) * 100 + '%',
+    left: props.timeline.cellLeft(idx.value) + 'px',
+    width: props.timeline.cellPx + 'px',
   }
 })
 
 const markerStyle = computed<Record<string, string | number> | null>(() => {
   if (!pos.value) return null
-  const height = props.headerHeight != null ? props.headerHeight - 4 : null
   return {
     background: props.color,
-    ...(height != null ? { height: height + 'px' } : {}),
-    ...(props.draggable
-      ? { cursor: cursor.value ?? 'grab', touchAction: 'none' }
-      : {}),
+    height: Math.max(props.stripHeight - 4, 8) + 'px',
+    ...(props.draggable ? { cursor: cursor.value ?? 'grab', touchAction: 'none' } : {}),
   }
 })
 
 const rayStyle = computed<Record<string, string | number> | null>(() => {
-  if (!pos.value || props.headerHeight == null) return null
-  return {
-    background: props.color,
-    top: props.headerHeight + 'px',
-  }
+  if (!pos.value) return null
+  return { background: props.color, top: props.stripHeight + 'px' }
 })
 
 function onContextMenu(e: MouseEvent) {
@@ -104,7 +114,7 @@ function onDblClick() {
     ref="rootEl"
     class="ms"
     :class="{ 'ms-drag': isDragging }"
-    :style="previewStyle ?? { left: pos.left, width: pos.width }"
+    :style="previewStyle ?? pos"
   >
     <div
       class="ms-marker"
@@ -135,16 +145,14 @@ function onDblClick() {
   bottom: 0;
   pointer-events: none;
 }
-/* Маркер вехи: закруглённый прямоугольник в половину ширины ячейки по центру */
 .ms-marker {
   position: absolute;
   left: 50%;
   transform: translateX(-50%);
   top: 2px;
-  bottom: 2px;
   width: 50%;
-  border-radius: 4px;
   min-width: 4px;
+  border-radius: 4px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
   cursor: default;
   pointer-events: auto;
@@ -163,7 +171,6 @@ function onDblClick() {
   display: block;
   width: 100%;
 }
-/* Луч-древко: сплошная линия цвета вехи по центру ячейки, от низа шапки до низа блока */
 .ms-ray {
   position: absolute;
   left: 50%;
@@ -171,6 +178,7 @@ function onDblClick() {
   bottom: 0;
   width: 2px;
   opacity: 0.9;
+  pointer-events: none;
 }
 </style>
 

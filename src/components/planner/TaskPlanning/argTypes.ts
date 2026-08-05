@@ -22,29 +22,18 @@ export const taskPlanningArgTypes: ArgTypes<TaskPlanningProps> = {
       category: 'Data',
     },
   },
-  anchor: {
+  origin: {
     name: 'Якорь шкалы',
-    description: 'Опорная дата (первая ячейка); по умолчанию — самая ранняя дата старта процесса',
+    description: 'Дата-якорь (ячейка с индексом 0); начальная позиция шкалы',
     control: 'date',
     table: {
-      type: { summary: 'string | Date | number | null' },
-      category: 'Data',
-    },
-  },
-  mode: {
-    name: 'Период',
-    description: 'Период календаря: квартал (92 дня), полугодие или год',
-    control: 'select',
-    options: ['quarter', 'half', 'year'],
-    table: {
-      type: { summary: 'PlanningMode' },
-      defaultValue: { summary: 'quarter' },
+      type: { summary: 'string | Date' },
       category: 'Data',
     },
   },
   unit: {
     name: 'Единица ячейки',
-    description: 'Сколько дней в одной ячейке шкалы: день, неделя или декада',
+    description: 'Сколько дней в одной ячейке шкалы: день или декада',
     control: 'select',
     options: ['day', 'decade'],
     table: {

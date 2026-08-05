@@ -1,4 +1,4 @@
-import type { PlanningMode, PlanningUnit } from '../../../calendar'
+import type { TimelineCtx } from '@/composables/useInfiniteTimeline'
 import type { Task } from './components/TaskBar/types'
 
 /** Веха процесса — одна точка на шкале с заголовком и описанием */
@@ -12,17 +12,15 @@ export interface Milestone {
 }
 
 export interface TaskGanttProps {
-  anchor: Date | null
-  mode: PlanningMode
-  unit: PlanningUnit
+  timeline: TimelineCtx
   title: string
   projectCode?: string
   /** Идентификатор процесса-родителя (для создания задач/вех в группе) */
   processId?: number
   tasks: Task[]
   milestones?: Milestone[]
-  groupStartDate?: string
-  groupEndDate?: string
+  groupStartDate?: string | Date | number | null
+  groupEndDate?: string | Date | number | null
   /** Разрешает изменение задач и вех: перенос дат, редактирование, удаление */
   canManage?: boolean
 }

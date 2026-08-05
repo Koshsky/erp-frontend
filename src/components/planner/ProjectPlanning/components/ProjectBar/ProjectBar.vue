@@ -23,9 +23,7 @@ const dateRange = computed(() =>
 
 <template>
   <ProcessBar
-    :anchor="anchor"
-    :mode="mode"
-    :unit="unit"
+    :timeline="timeline"
     :startDate="startDate"
     :endDate="endDate"
     :title="projectCode"
