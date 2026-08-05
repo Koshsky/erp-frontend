@@ -232,7 +232,6 @@ onMounted(async () => {
 
 <template>
   <section class="pp">
-    <h2 class="pp-title">Задачи</h2>
     <!-- Диаграмма Задач: данные загружает PlannerPage (view) через store,
          TaskPlanning получает их через props -->
     <TaskPlanning
@@ -285,10 +284,7 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.pp-title {
-  font-size: 24px;
-  font-weight: 700;
-  color: #2c3e50;
-  margin-bottom: 20px;
+.pp {
+  --planner-max-height: calc(100vh - 112px);
 }
 </style>

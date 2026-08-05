@@ -80,27 +80,30 @@ const gridCols = computed(() => {
       <p v-if="error" class="pg-error">{{ error }}</p>
 
       <template v-if="displayProjects.length && cells.length">
-        <div class="gg" :style="{ gridTemplateColumns: gridCols }">
+        <div class="pg-scroll">
+          <div class="gg" :style="{ gridTemplateColumns: gridCols }">
 
-          <CalendarHeader :anchor="anchor" :mode="mode" :unit="unit" />
+            <div class="gg-head" :style="{ gridTemplateColumns: gridCols }">
+              <CalendarHeader :anchor="anchor" :mode="mode" :unit="unit" />
+              <div class="sep" style="gridColumn:1/-1"></div>
+            </div>
 
-          <div class="sep" style="gridColumn:1/-1"></div>
-
-          <template v-for="project in displayProjects" :key="'proj'+project.id">
-            <ProcessGantt
-              :anchor="anchor"
-              :mode="mode"
-              :unit="unit"
-              :projectCode="project.project_code"
-              :projectId="project.id"
-              :processes="project.processes"
-              :groupStartDate="project.start_date"
-              :groupEndDate="project.end_date"
-              @change="(p) => emit('change', p)"
-              @contextmenu="(p) => emit('contextmenu', p)"
-              @edit="(id) => emit('edit', id)"
-            />
-          </template>
+            <template v-for="project in displayProjects" :key="'proj'+project.id">
+              <ProcessGantt
+                :anchor="anchor"
+                :mode="mode"
+                :unit="unit"
+                :projectCode="project.project_code"
+                :projectId="project.id"
+                :processes="project.processes"
+                :groupStartDate="project.start_date"
+                :groupEndDate="project.end_date"
+                @change="(p) => emit('change', p)"
+                @contextmenu="(p) => emit('contextmenu', p)"
+                @edit="(id) => emit('edit', id)"
+              />
+            </template>
+          </div>
         </div>
       </template>
 
@@ -113,11 +116,21 @@ const gridCols = computed(() => {
 <style scoped>
 .pg {
   background: #fff; border-radius: 10px; padding: 12px;
-  box-shadow: 0 1px 6px rgba(0,0,0,.08); overflow-x: auto;
+  box-shadow: 0 1px 6px rgba(0,0,0,.08);
 }
+.pg-scroll { overflow: auto; max-height: var(--planner-max-height, calc(100vh - 160px)); }
 .st { text-align:center; padding:30px; color:#666; font-size:14px; }
 .pg-error { color:#d93025; font-size:13px; padding:8px 4px; }
 .er { color:#d93025; }
 .gg { display: grid; min-width: 600px; }
+.gg-head {
+  grid-column: 1 / -1;
+  display: grid;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: #fff;
+  box-shadow: 0 2px 6px rgba(0,0,0,.06);
+}
 .sep { border: none; border-bottom: 2px solid #1a73e8; margin: 4px 0; height: 0; }
 </style>

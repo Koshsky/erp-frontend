@@ -79,7 +79,7 @@ const resourceCells = computed(() =>
   overflow: visible;
   display: flex;
   align-items: center;
-  min-height: 24px;
+  min-height: 18px;
   cursor: default;
 }
 .rt {

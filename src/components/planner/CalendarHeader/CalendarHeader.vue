@@ -99,7 +99,7 @@ const monthHeaders = computed<MonthHeader[]>(() => {
   text-align: left; padding: 4px 8px !important;
   border-left: none; justify-content: flex-start;
 }
-.mc { font-size: 11px; min-height: 28px; }
-.dc { font-size: 11px; min-height: 26px; }
-.wc { font-size: 10px; color: #666; min-height: 24px; }
+.mc { font-size: 11px; min-height: 20px; }
+.dc { font-size: 11px; min-height: 18px; }
+.wc { font-size: 10px; color: #666; min-height: 16px; }
 </style>

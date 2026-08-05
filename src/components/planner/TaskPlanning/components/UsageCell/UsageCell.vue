@@ -32,7 +32,7 @@ const tooltip = computed(() => `Занято: ${props.used}/${props.total}`)
   text-align: center;
   font-size: 10px;
   font-weight: 600;
-  min-height: 24px;
+  min-height: 18px;
   min-width: 0;
   display: flex;
   align-items: center;
