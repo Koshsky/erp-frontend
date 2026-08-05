@@ -62,6 +62,7 @@ function onMilestoneEdit(id: number) {
         <TaskBar
           :timeline="timeline"
           :task="item"
+          :projectCode="projectCode"
           :groupStartDate="groupStartDate"
           :groupEndDate="groupEndDate"
           :draggable="canManage"
