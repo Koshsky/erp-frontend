@@ -5,7 +5,9 @@ import { MilestoneMarker } from '../../../MilestoneMarker'
 import TaskBar from './components/TaskBar/TaskBar.vue'
 import type { TaskGanttProps } from './types'
 
-const props = defineProps<TaskGanttProps>()
+const props = withDefaults(defineProps<TaskGanttProps>(), {
+  canManage: true,
+})
 
 const emit = defineEmits<{
   change: [payload: { id: number; start_date: string; end_date: string }]
@@ -31,6 +33,14 @@ function onBarContextMenu(p: { clientX: number; clientY: number }, id: number) {
 
 function onMilestoneContextMenu(p: { clientX: number; clientY: number }, id: number) {
   emit('contextmenu', { ...p, date: '', rowIndex: -1, processId: props.processId, milestoneId: id })
+}
+
+function onTaskEdit(id: number) {
+  if (props.canManage) emit('task-edit', id)
+}
+
+function onMilestoneEdit(id: number) {
+  if (props.canManage) emit('milestone-edit', id)
 }
 </script>
 
@@ -64,9 +74,10 @@ function onMilestoneContextMenu(p: { clientX: number; clientY: number }, id: num
         :headerHeight="headerBarHeight"
         :groupStartDate="groupStartDate"
         :groupEndDate="groupEndDate"
+        :draggable="canManage"
         @change="(d) => emit('milestone-change', { id: ms.id, ...d })"
         @contextmenu="(p) => onMilestoneContextMenu(p, ms.id)"
-        @edit="() => emit('milestone-edit', ms.id)"
+        @edit="() => onMilestoneEdit(ms.id)"
       />
     </template>
 
@@ -78,9 +89,10 @@ function onMilestoneContextMenu(p: { clientX: number; clientY: number }, id: num
         :task="item"
         :groupStartDate="groupStartDate"
         :groupEndDate="groupEndDate"
+        :draggable="canManage"
         @change="(d) => onBarChange(item.id, d)"
         @contextmenu="(p) => onBarContextMenu(p, item.id)"
-        @edit="() => emit('task-edit', item.id)"
+        @edit="() => onTaskEdit(item.id)"
       />
     </template>
   </GroupGantt>

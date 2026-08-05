@@ -7,12 +7,13 @@ import type { AssignedResource, AddResourcePayload } from '../components/planner
 import { ContextMenu, ModalForm } from '../components/common'
 import type { ContextMenuItem } from '../components/common/ContextMenu'
 import type { ModalField } from '../components/common/ModalForm'
-import { usePlanningStore, useAppStore } from '../store'
+import { usePlanningStore, useAppStore, useAuthStore } from '../store'
 import type { PlanningMode, PlanningUnit } from '../components/planner/calendar'
 import { addDaysISO } from '../components/planner/calendar'
 
 const planning = usePlanningStore()
 const app = useAppStore()
+const auth = useAuthStore()
 
 const { taskPlanning, loading, error } = storeToRefs(planning)
 const { resources } = storeToRefs(app)
@@ -34,7 +35,13 @@ interface MenuState {
   milestoneId?: number
 }
 const menu = ref<MenuState | null>(null)
+
+// dp (директор проектов) — read-only: может менять только приоритет проектов,
+// поэтому задачи, вехи и назначения ресурсов ему недоступны для изменения.
+const canManage = computed(() => auth.user?.role !== 'dp')
+
 const menuItems = computed<ContextMenuItem[]>(() => {
+  if (!canManage.value) return []
   if (menu.value?.taskId != null)
     return [
       { id: 'edit-task', label: 'Редактировать' },
@@ -79,6 +86,7 @@ const editFields = computed<ModalField[]>(() => {
 })
 
 function onContextMenu(p: { clientX: number; clientY: number; date: string; rowIndex: number; processId?: number; taskId?: number; milestoneId?: number }) {
+  if (!canManage.value) return
   menu.value = { x: p.clientX, y: p.clientY, date: p.date, rowIndex: p.rowIndex, processId: p.processId, taskId: p.taskId, milestoneId: p.milestoneId }
 }
 
@@ -242,6 +250,7 @@ onMounted(async () => {
       :anchor="anchor"
       :mode="mode"
       :unit="unit"
+      :can-manage="canManage"
       @change="(p) => planning.updateTaskDates(p.id, p.start_date, p.end_date)"
       @milestone-change="(p) => planning.updateMilestoneDate(p.id, p.date)"
       @contextmenu="onContextMenu"
