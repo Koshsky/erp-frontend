@@ -19,6 +19,8 @@ export interface Task {
 export interface TaskBarProps {
   timeline: TimelineCtx
   task: Task
+  /** Код проекта — показывается бейджем сразу после названия задачи */
+  projectCode?: string
   draggable?: boolean
   /** Границы процесса — ограничивают перетаскивание задачи */
   groupStartDate?: string | Date | number | null

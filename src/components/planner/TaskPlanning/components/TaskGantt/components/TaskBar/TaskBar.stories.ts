@@ -17,14 +17,14 @@ const meta: Meta<typeof TaskBar> = {
 export default meta
 type Story = StoryObj<typeof meta>
 
-function withTask(task: any, width = 3000): Story['render'] {
+function withTask(task: any, projectCode = 'КО_505', width = 3000): Story['render'] {
   return () => ({
     components: { TaskBar },
-    data: () => ({ timeline: makeDemoTimeline(iso(day(1, 1)), 'day'), task }),
+    data: () => ({ timeline: makeDemoTimeline(iso(day(1, 1)), 'day'), task, projectCode }),
     template: `
       <div style="max-width:800px;margin:0 auto;font-family:sans-serif;overflow-x:auto;">
         <div style="position:relative;width:${width}px;height:40px;background:#f0f0f0;border-radius:6px;">
-          <TaskBar :timeline="timeline" :task="task" />
+          <TaskBar :timeline="timeline" :task="task" :projectCode="projectCode" />
         </div>
       </div>
     `,
@@ -69,5 +69,5 @@ export const StackedBadges: Story = {
       { resource_id: 3, assignment_id: 3, quantity: 1, code: 'К' },
       { resource_id: 4, assignment_id: 4, quantity: 3, code: 'С' },
     ],
-  }, 600),
+  }, 'КО_505', 600),
 }

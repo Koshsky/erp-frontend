@@ -9,12 +9,14 @@ const props = withDefaults(
   defineProps<{
     timeline: TimelineCtx
     task: Task
+    projectCode?: string
     draggable?: boolean
     /** Границы процесса — ограничивают перетаскивание задачи */
     groupStartDate?: string | Date | number | null
     groupEndDate?: string | Date | number | null
   }>(),
   {
+    projectCode: '',
     draggable: true,
     groupStartDate: null,
     groupEndDate: null,
@@ -36,12 +38,15 @@ function badgeLabel(r: { code?: string; title?: string }): string {
   return r.code || r.title || '?'
 }
 
-// === Стопка бейджей ресурсов ===
-// Бейджи стоят рядом, пока умещаются в ширину бара вместе с полным названием задачи.
-// Если не умещаются — накладываются друг на друга (стопка), при наведении виден тултип бара.
+// === Бейдж кода проекта + стопка бейджей ресурсов ===
+// Бейдж кода проекта идёт сразу после названия; если не умещается рядом с полным
+// названием — скрывается. Ресурсные бейджи при нехватке места складываются стопкой.
 const contentRef = ref<HTMLElement | null>(null)
 const titleRef = ref<HTMLElement | null>(null)
+const projRef = ref<HTMLElement | null>(null)
 const badgesRef = ref<HTMLElement | null>(null)
+const projWidth = ref(0)
+const showProj = ref(true)
 const stacked = ref(false)
 
 let resizeObserver: ResizeObserver | null = null
@@ -51,8 +56,14 @@ function updateStacked() {
   const title = titleRef.value
   const badges = badgesRef.value
   if (!content || !title || !badges) return
+  // Кэш ширины бейджа проекта обновляем только пока он видим (при display:none scrollWidth = 0)
+  const proj = projRef.value
+  if (proj && showProj.value) projWidth.value = proj.scrollWidth
   const available = content.clientWidth - title.scrollWidth
-  stacked.value = badges.scrollWidth > available
+  const pw = props.projectCode ? projWidth.value : 0
+  showProj.value = pw > 0 && available >= pw
+  const availForRes = available - (showProj.value ? pw : 0)
+  stacked.value = badges.scrollWidth > availForRes
 }
 
 onMounted(() => {
@@ -65,9 +76,13 @@ onBeforeUnmount(() => {
   resizeObserver?.disconnect()
 })
 
-// После обновления набора ресурсов (назначение/снятие) пересчитываем укладку
+// После обновления набора ресурсов или кода проекта пересчитываем укладку
 watch(
   () => props.task.resources,
+  () => requestAnimationFrame(updateStacked),
+)
+watch(
+  () => props.projectCode,
   () => requestAnimationFrame(updateStacked),
 )
 </script>
@@ -86,6 +101,7 @@ watch(
   >
     <span ref="contentRef" class="tb-content">
       <span ref="titleRef" class="tb-title">{{ task.title }}</span>
+      <span v-show="showProj" ref="projRef" class="tb-proj">{{ projectCode }}</span>
       <span ref="badgesRef" class="tb-badges" :class="{ 'is-stacked': stacked }">
         <span
           v-for="r in task.resources"
@@ -117,7 +133,7 @@ watch(
   min-width: 0;
 }
 .tb-title {
-  flex: 1;
+  flex: 0 1 auto;
   min-width: 0;
   font-size: 12px;
   font-weight: 700;
@@ -126,6 +142,19 @@ watch(
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  pointer-events: none;
+}
+.tb-proj {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.6;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.22);
+  border-radius: 10px;
+  padding: 0 7px;
+  margin-left: 6px;
+  white-space: nowrap;
   pointer-events: none;
 }
 .tb-badges {
@@ -137,10 +166,11 @@ watch(
 .tb-badge {
   flex-shrink: 0;
   font-size: 10px;
-  font-weight: 600;
+  font-weight: 700;
   line-height: 1.6;
   color: #fff;
-  background: rgba(0, 0, 0, 0.22);
+  background: rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.55);
   border-radius: 10px;
   padding: 0 7px;
   margin-left: 6px;
