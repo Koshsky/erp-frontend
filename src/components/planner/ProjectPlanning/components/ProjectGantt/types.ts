@@ -14,4 +14,8 @@ export interface ProjectGanttProps {
   mode: PlanningMode
   unit: PlanningUnit
   projects: ProjectGanttItem[]
+  /** Разрешает переупорядочивание строк (смену приоритетов) */
+  reorderable?: boolean
+  /** Проверка прав на управление проектом: редактирование, удаление, перенос дат */
+  canManage?: (projectId: number) => boolean
 }
