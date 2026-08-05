@@ -7,6 +7,7 @@ import { LABEL_WIDTH, CELL_WIDTH } from '../layout'
 const props = withDefaults(defineProps<GroupGanttProps>(), {
   headerBarHeight: 4,
   reorderable: false,
+  mergedLabel: false,
 })
 
 const emit = defineEmits<{
@@ -100,10 +101,17 @@ function startRowDrag(e: PointerEvent, from: number) {
 
 defineSlots<{
   header(): any
+  label(): any
   overlay(props: { headerBarHeight: number }): any
   row(props: { item: any; index: number }): any
   bar(props: { item: any; index: number; count: number }): any
 }>()
+
+/** В режиме mergedLabel большая ячейка левой колонки тянется на всю высоту группы */
+const mergedLabelStyle = computed<Record<string, string> | null>(() => {
+  if (!props.mergedLabel || props.items.length === 0) return null
+  return { gridRow: `1 / span ${props.items.length + 1}` }
+})
 
 function fmt(d: string | Date | number | null | undefined): string {
   return d ? toDate(d).toLocaleDateString('ru') : ''
@@ -130,7 +138,10 @@ const gridTemplate = computed(() => {
 <template>
   <div class="gg-block" style="gridColumn:1/-1" @contextmenu.prevent="onContextMenu">
     <div ref="gridRef" class="gg-grid" :style="{ gridTemplateColumns: gridTemplate }">
-      <div class="c lc ph-header">
+      <div v-if="mergedLabelStyle" class="c lc group-label" :style="mergedLabelStyle">
+        <slot name="label" />
+      </div>
+      <div v-else class="c lc ph-header">
         <slot name="header" />
       </div>
 
@@ -140,7 +151,7 @@ const gridTemplate = computed(() => {
       </div>
 
       <template v-for="(item, index) in items" :key="'gi'+item.id">
-        <div class="c lc item-label lc-start" :class="{ ta: index % 2 === 1, 'with-handle': reorderable }" :data-row-index="index">
+        <div v-if="!mergedLabel" class="c lc item-label lc-start" :class="{ ta: index % 2 === 1, 'with-handle': reorderable }" :data-row-index="index">
           <span
             v-if="reorderable"
             class="row-handle"
@@ -295,5 +306,16 @@ const gridTemplate = computed(() => {
   font-size: 13px;
   color: #333;
   border-bottom: 1px solid #ddd;
+}
+
+/* Режим mergedLabel: одна большая ячейка левой колонки на всю высоту группы */
+.group-label {
+  grid-column: 1;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 4px;
+  text-align: left;
+  padding: 8px 12px !important;
 }
 </style>

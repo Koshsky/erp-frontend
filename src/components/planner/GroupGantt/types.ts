@@ -19,4 +19,7 @@ export interface GroupGanttProps {
   headerBarHeight?: number
   /** Включает перетаскивание строк (ручка в колонке названий) для смены порядка */
   reorderable?: boolean
+  /** Сливает левую колонку группы в одну ячейку на всю высоту группы:
+   *  вместо заголовка и подписей строк рендерится единый слот #label */
+  mergedLabel?: boolean
 }
