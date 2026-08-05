@@ -126,7 +126,6 @@ onMounted(() => {
 <template>
   <section class="pp">
     <div class="pp-head">
-      <h2 class="pp-title">Процессы</h2>
       <div class="pp-period">
         <button
           v-for="opt in modeOptions"
@@ -195,11 +194,6 @@ onMounted(() => {
   flex-wrap: wrap;
   gap: 12px;
   margin-bottom: 20px;
-}
-.pp-title {
-  font-size: 24px;
-  font-weight: 700;
-  color: #2c3e50;
 }
 .pp-period {
   display: inline-flex;
