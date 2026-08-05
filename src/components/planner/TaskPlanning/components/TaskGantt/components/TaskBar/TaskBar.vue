@@ -2,14 +2,12 @@
 import { computed, ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import GanttBar from '../../../../../GanttBar/GanttBar.vue'
 import type { Task } from './types'
-import type { PlanningMode, PlanningUnit } from '../../../../../calendar'
+import type { TimelineCtx } from '@/composables/useInfiniteTimeline'
 import { toDate } from '../../../../../calendar'
 
 const props = withDefaults(
   defineProps<{
-    anchor: Date | number | null
-    mode: PlanningMode
-    unit: PlanningUnit
+    timeline: TimelineCtx
     task: Task
     draggable?: boolean
     /** Границы процесса — ограничивают перетаскивание задачи */
@@ -76,9 +74,7 @@ watch(
 
 <template>
   <GanttBar
-    :anchor="anchor!"
-    :mode="mode"
-    :unit="unit"
+    :timeline="timeline"
     :startDate="task.start_date"
     :endDate="task.end_date"
     :groupStartDate="groupStartDate"

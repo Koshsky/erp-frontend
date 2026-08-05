@@ -1,105 +1,131 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { PlanningMode, PlanningUnit } from '../calendar'
-import { buildCells } from '../calendar'
+import type { TimelineCtx } from '../../../composables/useInfiniteTimeline'
+import { cellIndexForDate } from '../calendar'
+import { LABEL_WIDTH, headerHeight } from '../layout'
 
 const props = defineProps<{
-  anchor: Date | number
-  mode: PlanningMode
-  unit: PlanningUnit
+  t: TimelineCtx
 }>()
-
-const cells = computed(() => buildCells(props.anchor, props.mode, props.unit))
 
 const dowMap = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб']
 
-/** Подпись числа — диапазон дней ячейки («1-10», «11-20», «21-31»);
- * для однодневных ячеек (день) — просто число. Декады не пересекают месяц. */
+/** Подпись числа ячейки: для дня — число; для декады — диапазон дней (1-10, 11-20, 21-конец) */
 function numLabel(i: number): string {
-  const { start, end } = cells.value[i]
-  return start.getDate() === end.getDate() ? start.getDate().toString() : `${start.getDate()}-${end.getDate()}`
+  const s = props.t.cellStart(i)
+  const e = props.t.cellEnd(i)
+  return s.getDate() === e.getDate() ? s.getDate().toString() : `${s.getDate()}-${e.getDate()}`
 }
 
-/** Название месяца с годом: «Февраль 2026» (без суффикса «г.», капитализация в JS) */
 function monthLabel(d: Date): string {
-  const month = d.toLocaleDateString('ru', { month: 'long' })
-  return month.charAt(0).toUpperCase() + month.slice(1) + ' ' + d.getFullYear()
+  const m = d.toLocaleDateString('ru', { month: 'long' })
+  return m.charAt(0).toUpperCase() + m.slice(1) + ' ' + d.getFullYear()
 }
 
-/** Подпись нижней строки — день недели (для дней) */
-function subLabel(i: number): string {
-  return props.unit === 'day' ? dowMap[cells.value[i].start.getDay()] : ''
-}
-
-/** Третий ряд (день недели) показываем только для дневных ячеек */
-const showSubRow = computed(() => props.unit === 'day')
-
-interface MonthHeader {
-  label: string
-  cs: number
-  ce: number
-}
-
-/** Месяцы с учётом перехода через год — группировка по паре (год, месяц) */
-const monthHeaders = computed<MonthHeader[]>(() => {
-  const list = cells.value
-  if (!list.length) return []
-  const hh: MonthHeader[] = []
-  let key = ''
-  for (let i = 0; i < list.length; i++) {
-    const d = list[i].start
-    const k = d.getFullYear() + '-' + d.getMonth()
-    if (k !== key) {
-      hh.push({
-        label: monthLabel(d),
-        cs: i + 2,
-        ce: i + 2,
-      })
-      key = k
-    } else {
-      hh[hh.length - 1].ce = i + 2
-    }
+/** Месяцы с объединением ячеек — метка центрируется по ПОЛНОЙ длине месяца
+ *  (от первой до последней ячейки месяца), а не по видимому окну, чтобы не «плавала» при прокрутке */
+const monthGroups = computed(() => {
+  const out: { key: string; label: string; from: number; to: number }[] = []
+  const seen = new Set<string>()
+  for (const i of props.t.visibleIndices) {
+    const d = props.t.cellStart(i)
+    const key = d.getFullYear() + '-' + d.getMonth()
+    if (seen.has(key)) continue
+    seen.add(key)
+    const firstOfMonth = cellIndexForDate(props.t.origin, props.t.unit, new Date(d.getFullYear(), d.getMonth(), 1))
+    const lastOfMonth = cellIndexForDate(props.t.origin, props.t.unit, new Date(d.getFullYear(), d.getMonth() + 1, 0))
+    out.push({ key, label: monthLabel(d), from: firstOfMonth, to: lastOfMonth })
   }
-  return hh
+  return out
 })
+
+const showWeekdayRow = computed(() => props.t.unit === 'day')
 </script>
 
 <template>
-  <div class="c hc lc"></div>
-  <div v-for="(mh,i) in monthHeaders" :key="'mh'+i"
-    class="c hc mc"
-    :style="{ gridColumn: mh.cs + ' / ' + (mh.ce+1) }"
-  >{{ mh.label }}</div>
+  <div class="tg-head" :style="{ height: headerHeight(t.unit) + 'px' }">
+    <div class="th-corner" :style="{ width: LABEL_WIDTH + 'px' }"></div>
 
-  <div class="c hc lc"></div>
-  <div v-for="(c,i) in cells" :key="'n'+i"
-    class="c hc dc"
-  >{{ numLabel(i) }}</div>
+    <div v-for="m in monthGroups" :key="'m' + m.from"
+      class="th-month"
+      :style="{ left: t.cellLeft(m.from) + 'px', width: (m.to - m.from + 1) * t.cellPx + 'px' }">
+      {{ m.label }}
+    </div>
 
-  <template v-if="showSubRow">
-    <div class="c hc lc"></div>
-    <div v-for="(c,i) in cells" :key="'s'+i"
-      class="c hc wc"
-    >{{ subLabel(i) }}</div>
-  </template>
+    <div v-for="i in t.visibleIndices" :key="'n' + i"
+      class="th-num"
+      :style="{ left: t.cellLeft(i) + 'px', width: t.cellPx + 'px' }">
+      {{ numLabel(i) }}
+    </div>
+
+    <template v-if="showWeekdayRow">
+      <div v-for="i in t.visibleIndices" :key="'w' + i"
+        class="th-wd"
+        :style="{ left: t.cellLeft(i) + 'px', width: t.cellPx + 'px' }">
+        {{ dowMap[t.cellStart(i).getDay()] }}
+      </div>
+    </template>
+  </div>
 </template>
 
 <style scoped>
-.c {
-  border: 1px solid #e8e8e8;
-  text-align: center;
+.tg-head {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: #f8f9fa;
+  border-bottom: 2px solid #1a73e8;
+}
+.th-corner {
+  position: sticky;
+  left: 0;
+  height: 100%;
+  background: #f8f9fa;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  font-weight: 700;
   font-size: 12px;
+  color: #444;
+  border-right: 1px solid #e0e0e0;
+}
+.th-month {
+  position: absolute;
+  top: 2px;
+  height: 18px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #444;
+  overflow: hidden;
+  white-space: nowrap;
   display: flex;
   align-items: center;
   justify-content: center;
+  background: #f8f9fa;
 }
-.hc { font-weight: 600; background: #f8f9fa; color: #444; }
-.lc {
-  position: sticky; left: 0; background: #f8f9fa; z-index: 2;
-  text-align: left; padding: 4px 8px !important;
-  border-left: none; justify-content: flex-start;
+.th-num {
+  position: absolute;
+  top: 20px;
+  height: 18px;
+  font-size: 10px;
+  color: #666;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  border-left: 1px solid #e6e6e6;
+  background: #f8f9fa;
 }
-.mc { font-size: 11px; min-height: 20px; }
-.dc { font-size: 11px; min-height: 18px; }
-.wc { font-size: 10px; color: #666; min-height: 16px; }
+.th-wd {
+  position: absolute;
+  top: 38px;
+  height: 18px;
+  font-size: 10px;
+  color: #999;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  border-left: 1px solid #e6e6e6;
+  background: #f8f9fa;
+}
 </style>

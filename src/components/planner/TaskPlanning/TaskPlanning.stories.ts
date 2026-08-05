@@ -66,6 +66,7 @@ export const SingleProject: Story = {
   args: {
     processes: [process(7, 15, 8, 22, 1, 0)],
     resources,
+    origin: '2026-07-01',
   },
 }
 
@@ -76,10 +77,11 @@ export const MultipleProjects: Story = {
       process(8, 5, 9, 18, 2, 100),
     ],
     resources,
+    origin: '2026-07-01',
   },
 }
 
-/** Год с декадами — процессы растянуты на несколько декад */
+/** Декады — процессы растянуты на несколько декад */
 export const YearDecades: Story = {
   args: {
     processes: [
@@ -87,7 +89,7 @@ export const YearDecades: Story = {
       process(2, 10, 5, 25, 2, 100),
     ],
     resources,
-    mode: 'year',
+    origin: '2026-01-01',
     unit: 'decade',
   },
 }

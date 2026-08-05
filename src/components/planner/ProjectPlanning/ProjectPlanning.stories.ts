@@ -33,7 +33,7 @@ export default meta
 type Story = StoryObj<typeof meta>
 
 export const SingleProject: Story = {
-  args: { projects: [project('КО_505-S-ПТЗ_БСМП_МВС', [7, 15], [9, 20])] },
+  args: { projects: [project('КО_505-S-ПТЗ_БСМП_МВС', [7, 15], [9, 20])], origin: '2026-07-01' },
 }
 
 export const MultipleProjects: Story = {
@@ -43,36 +43,19 @@ export const MultipleProjects: Story = {
       project('КО_506-S-СПБ_ГБ_ТЕЛЕМЕД', [8, 1], [11, 5]),
       project('КО_512-S-КРД_ОДКБ_ВИДЕО', [6, 20], [10, 15]),
     ],
+    origin: '2026-07-01',
   },
 }
 
-// Три варианта периода календаря: квартал, полугодие, год
-const threeProjects = [
-  project('КО_505-S-ПТЗ_БСМП_МВС', [7, 15], [9, 20]),
-  project('КО_506-S-СПБ_ГБ_ТЕЛЕМЕД', [8, 5], [11, 10]),
-  project('КО_512-S-КРД_ОДКБ_ВИДЕО', [6, 25], [10, 20]),
-]
-
-export const Quarter: Story = {
-  args: { projects: threeProjects, mode: 'quarter' },
-}
-
-export const HalfYear: Story = {
-  args: { projects: threeProjects, mode: 'half' },
-}
-
-export const FullYear: Story = {
-  args: { projects: threeProjects, mode: 'year' },
-}
-
-/** Год с декадами — основной сценарий годового планирования */
-export const FullYearDecades: Story = {
-  args: { projects: threeProjects, mode: 'year', unit: 'decade' },
-}
-
-/** Полгода с декадными ячейками */
-export const HalfYearDecades: Story = {
-  args: { projects: threeProjects, mode: 'half', unit: 'decade' },
+export const WithDecades: Story = {
+  args: {
+    projects: [
+      project('КО_505-S-ПТЗ_БСМП_МВС', [7, 15], [9, 20]),
+      project('КО_506-S-СПБ_ГБ_ТЕЛЕМЕД', [8, 5], [11, 10]),
+    ],
+    origin: '2026-07-01',
+    unit: 'decade',
+  },
 }
 
 

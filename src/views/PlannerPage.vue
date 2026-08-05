@@ -8,7 +8,7 @@ import { ContextMenu, ModalForm } from '../components/common'
 import type { ContextMenuItem } from '../components/common/ContextMenu'
 import type { ModalField } from '../components/common/ModalForm'
 import { usePlanningStore, useAppStore, useAuthStore } from '../store'
-import type { PlanningMode, PlanningUnit } from '../components/planner/calendar'
+import type { PlanningUnit } from '../components/planner/calendar'
 import { addDaysISO } from '../components/planner/calendar'
 
 const planning = usePlanningStore()
@@ -18,9 +18,13 @@ const auth = useAuthStore()
 const { taskPlanning, loading, error } = storeToRefs(planning)
 const { resources } = storeToRefs(app)
 
-const mode = ref<PlanningMode>('quarter')
 const unit = ref<PlanningUnit>('day')
-const anchor = ref<Date | null>(null)
+
+/** Якорь шкалы: первое число предыдущего месяца от сегодня */
+const origin = computed(() => {
+  const now = new Date()
+  return new Date(now.getFullYear(), now.getMonth() - 1, 1)
+})
 
 // ПКМ по пустому месту группы: создание задачи или вехи в процессе-родителе.
 // Дата под курсором; задача вставляется строкой в позицию ПКМ, веха — точка на шкале.
@@ -28,7 +32,7 @@ const anchor = ref<Date | null>(null)
 interface MenuState {
   x: number
   y: number
-  date: string
+  date: string | null
   rowIndex: number
   processId?: number
   taskId?: number
@@ -85,8 +89,10 @@ const editFields = computed<ModalField[]>(() => {
   return [base]
 })
 
-function onContextMenu(p: { clientX: number; clientY: number; date: string; rowIndex: number; processId?: number; taskId?: number; milestoneId?: number }) {
+function onContextMenu(p: { clientX: number; clientY: number; date: string | null; rowIndex: number; processId?: number; taskId?: number; milestoneId?: number }) {
   if (!canManage.value) return
+  // Пустое место группы: создание требует процесс-родитель и известную дату
+  if (p.taskId == null && p.milestoneId == null && (p.processId == null || p.date == null)) return
   menu.value = { x: p.clientX, y: p.clientY, date: p.date, rowIndex: p.rowIndex, processId: p.processId, taskId: p.taskId, milestoneId: p.milestoneId }
 }
 
@@ -114,7 +120,7 @@ async function onSelect(id: string) {
   if (!menu.value) return
   const { date, rowIndex, processId, taskId, milestoneId } = menu.value
   if (id === 'create-task') {
-    if (processId == null) return
+    if (processId == null || date == null) return
     const ok = await planning.createTask({
       title: 'Новая задача',
       process_id: processId,
@@ -123,7 +129,7 @@ async function onSelect(id: string) {
     }, rowIndex)
     if (!ok) error.value = planning.error
   } else if (id === 'create-milestone') {
-    if (processId == null) return
+    if (processId == null || date == null) return
     const ok = await planning.createMilestone({
       title: 'Новая веха',
       content: 'Новая веха',
@@ -247,8 +253,7 @@ onMounted(async () => {
       :resources="resources"
       :loading="loading"
       :error="error"
-      :anchor="anchor"
-      :mode="mode"
+      :origin="origin"
       :unit="unit"
       :can-manage="canManage"
       @change="(p) => planning.updateTaskDates(p.id, p.start_date, p.end_date)"

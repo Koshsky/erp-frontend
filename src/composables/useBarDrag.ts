@@ -1,20 +1,21 @@
 import { ref } from 'vue'
 import type { Ref } from 'vue'
-import type { CalendarCell, CellSpan } from '../components/planner/calendar'
+import type { CellSpan } from '../components/planner/calendar'
+import type { TimelineCtx } from './useInfiniteTimeline'
+import { LABEL_WIDTH } from '../components/planner/layout'
 
 export type BarDragMode = 'move' | 'resizeStart' | 'resizeEnd'
 
 export interface UseBarDragOptions {
-  /** Актуальный список ячеек шкалы (anchor/mode/unit текущие) */
-  cells: () => CalendarCell[]
-  /** Родительский контейнер бара (position: relative), его ширина = вся шкала */
-  getContainer: () => HTMLElement | null
-  /** Текущий диапазон ячеек бара */
+  /** Текущий контекст бесконечной шкалы (reactive, читается на каждом move) */
+  timeline: () => TimelineCtx
+  /** Скролл-контейнер шкалы (для rect → ячейка и автопрокрутки) */
+  scrollEl: () => HTMLElement | null
+  /** Пересчёт окна + расширение диапазона после программной прокрутки */
+  sync: () => void
+  /** Текущий диапазон ячеек бара (абсолютные индексы) */
   getSpan: () => CellSpan | null
-  /**
-   * Допустимый диапазон ячеек [start, end) — границы родителя (процесса/проекта).
-   * null означает, что границы не заданы и драг ограничивается только шкалой.
-   */
+  /** Допустимый диапазон ячеек — границы родителя (абсолютные). null = без границ */
   getBounds?: () => CellSpan | null
   /** Вызывается на отпускание, если диапазон изменился */
   onCommit: (span: CellSpan) => void
@@ -22,23 +23,23 @@ export interface UseBarDragOptions {
 
 export interface BarDrag {
   isDragging: Ref<boolean>
-  /** Курсор во время и в ожидании драга (ew-resize у ручек задаётся в компоненте) */
   cursor: Ref<'grabbing' | 'ew-resize' | null>
-  /** Локальный стиль бара во время драга (px-координаты вместо %) */
   previewStyle: Ref<Record<string, string | number> | null>
   startDrag: (e: PointerEvent, mode: BarDragMode) => void
 }
 
+const EDGE_MARGIN = 48
+const SCROLL_SPEED = 28
+
+function clamp(v: number, min: number, max: number): number {
+  return Math.min(Math.max(v, min), max)
+}
+
 /**
- * Драг бара ганта без библиотек: Pointer Events + слушатели на window.
- * Движение по горизонтали переводится в смещение в ячейках с привязкой к целым
- * ячейкам; диапазон зажимается в границы (intersection границ родителя со
- * шкалой [0, total]) с минимумом в одну ячейку. При move ширина сохраняется,
- * при ресайзе растянутый край упирается в границу; если бар в целом шире
- * границ родителя — он сжимается до их размеров. Итоговая спана всегда
- * целиком лежит в границах, поэтому на коммит не уходит диапазон вне родителя.
- * Во время драга барам задаётся previewStyle (px), на отпускание вызывается
- * onCommit с новым диапазоном ячеек.
+ * Драг бара в бесконечной шкале: движение переводится в абсолютные ячейки через
+ * ячейку под курсором (учитывает автопрокрутку), диапазон зажимается в границы
+ * родителя. У края контейнера включается автопрокрутка (rAF-цикл), которая
+ * двигает скролл и расширяет диапазон шкалы.
  */
 export function useBarDrag(options: UseBarDragOptions): BarDrag {
   const isDragging = ref(false)
@@ -46,53 +47,86 @@ export function useBarDrag(options: UseBarDragOptions): BarDrag {
   const previewStyle = ref<Record<string, string | number> | null>(null)
 
   let mode: BarDragMode | null = null
-  let startX = 0
+  let startPointerCell = 0
   let startSpan: CellSpan | null = null
-  let containerWidth = 0
-  let totalCells = 0
   let dragSpan: CellSpan | null = null
+  let lastClientX = 0
+  let rafId: number | null = null
+  let scrollDir = 0
 
-  function clamp(v: number, min: number, max: number): number {
-    return Math.min(Math.max(v, min), max)
+  function currentPointerCell(clientX: number): number {
+    const t = options.timeline()
+    const el = options.scrollEl()
+    if (!el) return startPointerCell
+    const rect = el.getBoundingClientRect()
+    return t.windowStart + (clientX - rect.left - LABEL_WIDTH) / t.cellPx
   }
 
-  function onMove(e: PointerEvent) {
-    if (!mode || !startSpan || totalCells <= 0 || containerWidth <= 0) return
-    const cellPx = containerWidth / totalCells
-    const delta = Math.round((e.clientX - startX) / cellPx)
+  function computeSpan(clientX: number) {
+    const t = options.timeline()
+    if (!mode || !startSpan) return
+    const delta = currentPointerCell(clientX) - startPointerCell
 
-    let bMin = 0
-    let bMax = totalCells
     const bounds = options.getBounds?.() ?? null
+    let bMin = -Infinity
+    let bMax = Infinity
     if (bounds) {
-      bMin = clamp(Math.max(bounds.startCell, 0), 0, totalCells - 1)
-      bMax = clamp(Math.min(bounds.endCell, totalCells), 1, totalCells)
-      if (bMax <= bMin) bMax = bMin + 1
+      bMin = bounds.startCell
+      bMax = Math.max(bounds.endCell, bMin + 1)
     }
 
     let s = startSpan.startCell
     let end = startSpan.endCell
     if (mode === 'move') {
       const width = startSpan.endCell - startSpan.startCell
-      s = clamp(startSpan.startCell + delta, bMin, Math.max(bMin, bMax - width))
+      s = Math.round(startSpan.startCell + delta)
+      s = clamp(s, bMin, Math.max(bMin, bMax - width))
       end = Math.min(s + width, bMax)
     } else if (mode === 'resizeStart') {
-      s = clamp(startSpan.startCell + delta, bMin, Math.max(bMin, end - 1))
+      s = clamp(Math.round(startSpan.startCell + delta), bMin, Math.max(bMin, end - 1))
     } else {
-      end = clamp(startSpan.endCell + delta, Math.min(bMax, s + 1), bMax)
+      end = clamp(Math.round(startSpan.endCell + delta), Math.min(bMax, s + 1), bMax)
     }
 
-    // Финальная усадка спана целиком в границы (оба края, минимум 1 ячейка):
-    // зафиксированный при ресайзе край не должен вылезать за границы родителя,
-    // иначе на коммит (и в API) уйдёт диапазон вне родителя. Бар шире границ
-    // при этом сжимается до размеров родителя.
     s = clamp(s, bMin, Math.max(bMin, bMax - 1))
     end = clamp(end, Math.min(bMax, s + 1), bMax)
     dragSpan = { startCell: s, endCell: end }
     previewStyle.value = {
-      left: (s / totalCells) * containerWidth + 'px',
-      width: ((end - s) / totalCells) * containerWidth + 'px',
+      left: t.cellLeft(s) + 'px',
+      width: (end - s) * t.cellPx + 'px',
     }
+  }
+
+  function autoscrollFrame() {
+    const el = options.scrollEl()
+    if (!el || scrollDir === 0) return
+    el.scrollLeft += scrollDir * SCROLL_SPEED
+    options.sync()
+    computeSpan(lastClientX)
+    rafId = requestAnimationFrame(autoscrollFrame)
+  }
+
+  function updateAutoscroll(clientX: number) {
+    const el = options.scrollEl()
+    if (!el) return
+    const rect = el.getBoundingClientRect()
+    const dir = clientX < rect.left + EDGE_MARGIN ? -1 : clientX > rect.right - EDGE_MARGIN ? 1 : 0
+    if (dir === scrollDir) return
+    scrollDir = dir
+    if (rafId != null) cancelAnimationFrame(rafId)
+    rafId = dir === 0 ? null : requestAnimationFrame(autoscrollFrame)
+  }
+
+  function stopAutoscroll() {
+    scrollDir = 0
+    if (rafId != null) cancelAnimationFrame(rafId)
+    rafId = null
+  }
+
+  function onMove(e: PointerEvent) {
+    lastClientX = e.clientX
+    computeSpan(e.clientX)
+    updateAutoscroll(e.clientX)
   }
 
   function onUp() {
@@ -106,11 +140,10 @@ export function useBarDrag(options: UseBarDragOptions): BarDrag {
   }
 
   function endDrag() {
+    stopAutoscroll()
     mode = null
     startSpan = null
     dragSpan = null
-    containerWidth = 0
-    totalCells = 0
     isDragging.value = false
     cursor.value = null
     previewStyle.value = null
@@ -122,17 +155,13 @@ export function useBarDrag(options: UseBarDragOptions): BarDrag {
 
   function startDrag(e: PointerEvent, m: BarDragMode) {
     if (e.button !== 0 || e.ctrlKey || e.metaKey) return
-    const container = options.getContainer()
     const span = options.getSpan()
-    if (!container || !span) return
-    const cells = options.cells()
-    if (!cells.length) return
+    if (!span) return
     e.preventDefault()
     mode = m
-    startX = e.clientX
+    lastClientX = e.clientX
+    startPointerCell = currentPointerCell(e.clientX)
     startSpan = { ...span }
-    containerWidth = container.getBoundingClientRect().width
-    totalCells = cells.length
     dragSpan = { ...span }
     isDragging.value = true
     cursor.value = m === 'move' ? 'grabbing' : 'ew-resize'

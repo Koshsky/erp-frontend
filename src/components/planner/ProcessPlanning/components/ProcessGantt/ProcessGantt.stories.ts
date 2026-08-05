@@ -1,9 +1,10 @@
 import type { Meta, StoryObj } from '@storybook/vue3-vite'
 import ProcessGantt from './ProcessGantt.vue'
-import { cellCount } from '../../../calendar'
+import { makeDemoTimeline } from '@/components/planner/plannerStoryHelpers'
 
 const now = new Date()
-const day = (m: number) => new Date(now.getFullYear(), now.getMonth(), m)
+const y = now.getFullYear()
+const day = (m: number, d: number) => new Date(y, m - 1, d)
 const iso = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 
@@ -16,39 +17,29 @@ const meta: Meta<typeof ProcessGantt> = {
 export default meta
 type Story = StoryObj<typeof meta>
 
-const anchor = day(1)
-const cells = cellCount(anchor, 'quarter', 'day')
-
-const twoProcesses = [
-  { id: 1, title: 'Производство', start_date: iso(day(3)), end_date: iso(day(36)) },
-  { id: 2, title: 'Инсталляция', start_date: iso(day(20)), end_date: iso(day(56)) },
-]
-
-const overlapping = [
-  { id: 1, title: 'Производство', start_date: iso(day(1)), end_date: iso(day(40)) },
-  { id: 2, title: 'Инсталляция', start_date: iso(day(30)), end_date: iso(day(60)) },
-  { id: 3, title: 'Пусконаладка', start_date: iso(day(50)), end_date: iso(day(61)) },
-]
-export const TwoProcesses: Story = {
-  render: () => ({
+function withProcesses(processes: any[]): Story['render'] {
+  return () => ({
     components: { ProcessGantt },
-    data: () => ({ anchor, cells, projectCode: 'КО-1234', processes: twoProcesses, mode: 'quarter' as const, unit: 'day' as const }),
+    data: () => ({ timeline: makeDemoTimeline(iso(day(1, 1)), 'day'), projectCode: 'КО-1234', processes }),
     template: `
-      <div :style="{ display: 'grid', gridTemplateColumns: '180px repeat(' + cells + ', var(--cell-width, 32px))', background: '#fff', borderRadius: '10px', padding: '12px', boxShadow: '0 1px 6px rgba(0,0,0,.08)', overflowX: 'auto', minWidth: '600px' }">
-        <ProcessGantt :anchor="anchor" :mode="mode" :unit="unit" :projectCode="projectCode" :processes="processes" />
+      <div style="width:3000px;background:#fff;border-radius:10px;padding:12px;box-shadow:0 1px 6px rgba(0,0,0,.08);">
+        <ProcessGantt :timeline="timeline" :projectCode="projectCode" :processes="processes" />
       </div>
     `,
-  }),
+  })
+}
+
+export const TwoProcesses: Story = {
+  render: withProcesses([
+    { id: 1, title: 'Производство', start_date: iso(day(1, 3)), end_date: iso(day(2, 5)) },
+    { id: 2, title: 'Инсталляция', start_date: iso(day(1, 20)), end_date: iso(day(2, 25)) },
+  ]),
 }
 
 export const Overlapping: Story = {
-  render: () => ({
-    components: { ProcessGantt },
-    data: () => ({ anchor, cells, projectCode: 'КО-9999', processes: overlapping, mode: 'quarter' as const, unit: 'day' as const }),
-    template: `
-      <div :style="{ display: 'grid', gridTemplateColumns: '180px repeat(' + cells + ', var(--cell-width, 32px))', background: '#fff', borderRadius: '10px', padding: '12px', boxShadow: '0 1px 6px rgba(0,0,0,.08)', overflowX: 'auto', minWidth: '600px' }">
-        <ProcessGantt :anchor="anchor" :mode="mode" :unit="unit" :projectCode="projectCode" :processes="processes" />
-      </div>
-    `,
-  }),
+  render: withProcesses([
+    { id: 1, title: 'Производство', start_date: iso(day(1, 1)), end_date: iso(day(2, 9)) },
+    { id: 2, title: 'Инсталляция', start_date: iso(day(1, 30)), end_date: iso(day(2, 28)) },
+    { id: 3, title: 'Пусконаладка', start_date: iso(day(2, 19)), end_date: iso(day(3, 1)) },
+  ]),
 }

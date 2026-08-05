@@ -20,10 +20,6 @@ function onBarChange(id: number, d: { start_date: string; end_date: string }) {
   emit('change', { id, ...d })
 }
 
-function onContextMenu(p: { clientX: number; clientY: number; date: string; rowIndex: number }) {
-  emit('contextmenu', { ...p, projectId: props.projectId })
-}
-
 function onBarContextMenu(p: { clientX: number; clientY: number }, id: number) {
   emit('contextmenu', { ...p, date: '', rowIndex: -1, projectId: props.projectId, processId: id })
 }
@@ -35,23 +31,15 @@ function onBarEdit(id: number) {
 
 <template>
   <GroupGantt
-    :anchor="anchor"
-    :mode="mode"
-    :unit="unit"
+    :timeline="timeline"
     :items="groupItems"
     :groupStartDate="groupStartDate"
     :groupEndDate="groupEndDate"
-    @contextmenu="onContextMenu"
+    :groupId="projectId"
   >
-    <template #header>
-      <span class="header-code">{{ projectCode }}</span>
-    </template>
-
     <template #bar="{ item }">
       <ProcessBar
-        :anchor="anchor!"
-        :mode="mode"
-        :unit="unit"
+        :timeline="timeline"
         :startDate="item.start_date"
         :endDate="item.end_date"
         :title="item.title"

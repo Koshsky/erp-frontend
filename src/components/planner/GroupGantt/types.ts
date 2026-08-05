@@ -1,4 +1,4 @@
-import type { PlanningMode, PlanningUnit } from '../calendar'
+import type { TimelineCtx } from '../../../composables/useInfiniteTimeline'
 
 export interface GroupGanttItem {
   id: number
@@ -8,18 +8,16 @@ export interface GroupGanttItem {
 }
 
 export interface GroupGanttProps {
-  anchor: Date | number | null
-  mode: PlanningMode
-  unit: PlanningUnit
+  /** Контекст бесконечной шкалы */
+  timeline: TimelineCtx
   items: GroupGanttItem[]
-  /** Границы группы (опционально — для подсветки на шкале) */
-  groupStartDate?: string
-  groupEndDate?: string
-  /** Высота полосы-дорожки под заголовком (px); сюда же опирается луч вехи */
-  headerBarHeight?: number
+  /** Границы группы (опционально — подсветка на шкале) */
+  groupStartDate?: string | Date | number | null
+  groupEndDate?: string | Date | number | null
   /** Включает перетаскивание строк (ручка в колонке названий) для смены порядка */
   reorderable?: boolean
-  /** Сливает левую колонку группы в одну ячейку на всю высоту группы:
-   *  вместо заголовка и подписей строк рендерится единый слот #label */
+  /** Сливает колонку названий в одну ячейку на всю высоту группы (слот #label) */
   mergedLabel?: boolean
+  /** Идентификатор родителя группы (project_id/process_id) — для создания внутри группы */
+  groupId?: string | number | null
 }

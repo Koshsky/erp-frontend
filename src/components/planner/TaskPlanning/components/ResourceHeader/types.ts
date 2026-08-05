@@ -1,4 +1,4 @@
-import type { PlanningMode, PlanningUnit } from '../../../calendar'
+import type { TimelineCtx } from '@/composables/useInfiniteTimeline'
 
 export interface Resource {
   id: number
@@ -8,9 +8,7 @@ export interface Resource {
 }
 
 export interface ResourceHeaderProps {
-  anchor: Date | number
-  mode: PlanningMode
-  unit: PlanningUnit
+  t: TimelineCtx
   resources: Resource[]
   usageFn: (resourceId: number, day: Date) => number
 }

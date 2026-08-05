@@ -1,4 +1,4 @@
-import type { PlanningMode, PlanningUnit } from '../../../calendar'
+import type { TimelineCtx } from '@/composables/useInfiniteTimeline'
 
 export interface ProjectGanttItem {
   id: number
@@ -10,9 +10,7 @@ export interface ProjectGanttItem {
 }
 
 export interface ProjectGanttProps {
-  anchor: Date | number | null
-  mode: PlanningMode
-  unit: PlanningUnit
+  timeline: TimelineCtx
   projects: ProjectGanttItem[]
   /** Разрешает переупорядочивание строк (смену приоритетов) */
   reorderable?: boolean

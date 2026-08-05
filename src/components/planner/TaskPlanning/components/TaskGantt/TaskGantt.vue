@@ -4,6 +4,7 @@ import { GroupGantt } from '../../../GroupGantt'
 import { MilestoneMarker } from '../../../MilestoneMarker'
 import TaskBar from './components/TaskBar/TaskBar.vue'
 import type { TaskGanttProps } from './types'
+import { LABEL_WIDTH } from '../../../layout'
 
 const props = withDefaults(defineProps<TaskGanttProps>(), {
   canManage: true,
@@ -21,10 +22,6 @@ const groupItems = computed(() => props.tasks)
 
 function onBarChange(id: number, d: { start_date: string; end_date: string }) {
   emit('change', { id, ...d })
-}
-
-function onContextMenu(p: { clientX: number; clientY: number; date: string; rowIndex: number }) {
-  emit('contextmenu', { ...p, processId: props.processId })
 }
 
 function onBarContextMenu(p: { clientX: number; clientY: number }, id: number) {
@@ -45,66 +42,68 @@ function onMilestoneEdit(id: number) {
 </script>
 
 <template>
-  <GroupGantt
-    :anchor="anchor"
-    :mode="mode"
-    :unit="unit"
-    :items="groupItems"
-    :groupStartDate="groupStartDate"
-    :groupEndDate="groupEndDate"
-    :headerBarHeight="36"
-    mergedLabel
-    @contextmenu="onContextMenu"
-  >
-    <template #label>
-      <div v-if="projectCode" class="gl-code">{{ projectCode }}</div>
-      <div class="gl-title">{{ title }}</div>
-    </template>
+  <div class="tg-task-group">
+    <!-- Непрозрачная липкая ячейка колонки названий для строки вех (иначе сквозь неё видны бары) -->
+    <div class="tg-ms-label" :style="{ width: LABEL_WIDTH + 'px' }" />
+    <GroupGantt
+      :timeline="timeline"
+      :items="groupItems"
+      :groupStartDate="groupStartDate"
+      :groupEndDate="groupEndDate"
+      :groupId="processId"
+      mergedLabel
+    >
+      <template #label>
+        <div v-if="projectCode" class="gl-code">{{ projectCode }}</div>
+        <div class="gl-title">{{ title }}</div>
+      </template>
 
-    <template #header>
-      <span class="header-title">{{ title }}</span>
-      <span v-if="projectCode" class="header-code">{{ projectCode }}</span>
-    </template>
+      <template #bar="{ item }">
+        <TaskBar
+          :timeline="timeline"
+          :task="item"
+          :groupStartDate="groupStartDate"
+          :groupEndDate="groupEndDate"
+          :draggable="canManage"
+          @change="(d) => onBarChange(item.id, d)"
+          @contextmenu="(p) => onBarContextMenu(p, item.id)"
+          @edit="() => onTaskEdit(item.id)"
+        />
+      </template>
+    </GroupGantt>
 
-    <template #overlay="{ headerBarHeight }">
-      <MilestoneMarker
-        v-for="ms in milestones"
-        :key="ms.id"
-        :anchor="anchor!"
-        :mode="mode"
-        :unit="unit"
-        :date="ms.date"
-        :title="ms.title"
-        :content="ms.content"
-        :color="ms.color"
-        :headerHeight="headerBarHeight"
-        :groupStartDate="groupStartDate"
-        :groupEndDate="groupEndDate"
-        :draggable="canManage"
-        @change="(d) => emit('milestone-change', { id: ms.id, ...d })"
-        @contextmenu="(p) => onMilestoneContextMenu(p, ms.id)"
-        @edit="() => onMilestoneEdit(ms.id)"
-      />
-    </template>
-
-    <template #bar="{ item }">
-      <TaskBar
-        :anchor="anchor"
-        :mode="mode"
-        :unit="unit"
-        :task="item"
-        :groupStartDate="groupStartDate"
-        :groupEndDate="groupEndDate"
-        :draggable="canManage"
-        @change="(d) => onBarChange(item.id, d)"
-        @contextmenu="(p) => onBarContextMenu(p, item.id)"
-        @edit="() => onTaskEdit(item.id)"
-      />
-    </template>
-  </GroupGantt>
+    <MilestoneMarker
+      v-for="ms in milestones"
+      :key="ms.id"
+      :timeline="timeline"
+      :date="ms.date"
+      :title="ms.title"
+      :content="ms.content"
+      :color="ms.color"
+      :stripHeight="20"
+      :groupStartDate="groupStartDate"
+      :groupEndDate="groupEndDate"
+      :draggable="canManage"
+      @change="(d) => emit('milestone-change', { id: ms.id, ...d })"
+      @contextmenu="(p) => onMilestoneContextMenu(p, ms.id)"
+      @edit="() => onMilestoneEdit(ms.id)"
+    />
+  </div>
 </template>
 
 <style scoped>
+.tg-task-group {
+  position: relative;
+  padding-top: 20px;
+}
+.tg-ms-label {
+  position: sticky;
+  left: 0;
+  height: 20px;
+  background: #fff;
+  z-index: 11;
+  margin-top: -20px;
+}
 .gl-code {
   font-size: 16px;
   font-weight: 800;

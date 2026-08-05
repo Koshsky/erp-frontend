@@ -1,4 +1,4 @@
-import type { PlanningMode, PlanningUnit } from '../../../../../calendar'
+import type { TimelineCtx } from '@/composables/useInfiniteTimeline'
 
 export interface TaskResource {
   resource_id: number
@@ -17,9 +17,7 @@ export interface Task {
 }
 
 export interface TaskBarProps {
-  anchor: Date | null
-  mode: PlanningMode
-  unit: PlanningUnit
+  timeline: TimelineCtx
   task: Task
   draggable?: boolean
   /** Границы процесса — ограничивают перетаскивание задачи */

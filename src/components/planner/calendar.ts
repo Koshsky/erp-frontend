@@ -1,17 +1,7 @@
-/** Тип периода отображения календаря — количество календарных месяцев от месяца anchor */
-export type PlanningMode = 'quarter' | 'half' | 'year'
-
 /** Единица ячейки шкалы: день или декада (10 дней) */
 export type PlanningUnit = 'day' | 'decade'
 
 import { LABEL_WIDTH } from './layout'
-
-/** Длина периода в календарных месяцах (от месяца anchor включительно) */
-export const MODE_MONTHS: Record<PlanningMode, number> = {
-  quarter: 3,
-  half: 6,
-  year: 12,
-}
 
 const DAY_MS = 1000 * 60 * 60 * 24
 
@@ -60,29 +50,6 @@ function lastDayOfMonth(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth() + 1, 0)
 }
 
-/** Граница декады (последний день) для даты внутри месяца: 10, 20 или конец месяца */
-function decadeEnd(d: Date): Date {
-  if (d.getDate() <= 10) return new Date(d.getFullYear(), d.getMonth(), 10)
-  if (d.getDate() <= 20) return new Date(d.getFullYear(), d.getMonth(), 20)
-  return lastDayOfMonth(d)
-}
-
-/** Количество декад, оставшихся в месяце от дня anchor до конца месяца (1-3) */
-function decadesInAnchorMonth(a: Date): number {
-  return a.getDate() <= 10 ? 3 : a.getDate() <= 20 ? 2 : 1
-}
-
-/** Количество ячеек на шкале для пары mode/unit.
- * Для декад — все оставшиеся декады месяца anchor (1-3) + по 3 декады в каждом следующем месяце.
- * Для дней — каждый день от anchor до конца последнего месяца периода. */
-export function cellCount(anchor: Date | string | number, mode: PlanningMode, unit: PlanningUnit): number {
-  const a = toDayStart(anchor)
-  const months = MODE_MONTHS[mode]
-  if (unit === 'decade') return decadesInAnchorMonth(a) + 3 * (months - 1)
-  const end = new Date(a.getFullYear(), a.getMonth() + months, 0)
-  return Math.round((end.getTime() - a.getTime()) / DAY_MS) + 1
-}
-
 export interface CellSpan {
   startCell: number
   endCell: number
@@ -94,141 +61,125 @@ export interface CalendarCell {
   end: Date
 }
 
-/** Ячейки календаря от anchor на период mode с единицей unit.
- * Декады выровнены по месяцам: 1-10, 11-20, 21-конец; первая декада месяца anchor частичная (от anchor). */
-export function buildCells(anchor: Date | string | number, mode: PlanningMode, unit: PlanningUnit): CalendarCell[] {
-  const a = toDayStart(anchor)
+// ============================================================================
+// Бесконечная шкала в абсолютных индексах ячеек.
+// origin — дата-якорь; ячейка i — абсолютный индекс (может быть отрицательным).
+// День:  i  = origin + i дней.  Декада: строго по календарю (1-10/11-20/21-конец),
+// ячейка 0 — декада, содержащая origin; месяц = месяц(origin) + floor(i/3).
+// ============================================================================
+
+/** Месяц в абсолютном счёте: год*12 + месяц (для разницы месяцев). */
+function monthNumber(d: Date): number {
+  return d.getFullYear() * 12 + d.getMonth()
+}
+
+/** Номер декады внутри месяца по дате: 0 ([1..10]), 1 ([11..20]), 2 ([21..конец]). */
+function decadeIndexOfDay(d: Date): number {
+  if (d.getDate() <= 10) return 0
+  if (d.getDate() <= 20) return 1
+  return 2
+}
+
+/** Первое число месяца и номер декады для ячейки i (корректно для отрицательных i). */
+function cellMonthDec(origin: Date, i: number): { first: Date; dec: number } {
+  const first = new Date(origin.getFullYear(), origin.getMonth() + Math.floor(i / 3), 1)
+  const dec = ((i % 3) + 3) % 3
+  return { first, dec }
+}
+
+/**
+ * Абсолютный индекс ячейки, содержащей дату. Всегда существует (может быть
+ * отрицательным). Для дней — разница дат от origin; для декад — календарная привязка.
+ */
+export function cellIndexForDate(
+  origin: Date | string | number,
+  unit: PlanningUnit,
+  date: Date | string | number,
+): number {
+  const o = toDayStart(origin)
+  const d = toDayStart(date)
+  if (unit === 'day') return Math.round((d.getTime() - o.getTime()) / DAY_MS)
+  return (monthNumber(d) - monthNumber(o)) * 3 + decadeIndexOfDay(d)
+}
+
+/** Дата начала ячейки i (локальная полночь). */
+export function cellStartDate(origin: Date | string | number, unit: PlanningUnit, i: number): Date {
+  const o = toDayStart(origin)
+  if (unit === 'day') return new Date(o.getFullYear(), o.getMonth(), o.getDate() + i)
+  const { first, dec } = cellMonthDec(o, i)
+  return new Date(first.getFullYear(), first.getMonth(), 1 + dec * 10)
+}
+
+/** Дата конца ячейки i (включительно, локальная полночь). */
+export function cellEndDate(origin: Date | string | number, unit: PlanningUnit, i: number): Date {
+  if (unit === 'day') return cellStartDate(origin, unit, i)
+  const { first, dec } = cellMonthDec(toDayStart(origin), i)
+  if (dec < 2) return new Date(first.getFullYear(), first.getMonth(), 10 + dec * 10)
+  return lastDayOfMonth(first)
+}
+
+/** count подряд идущих ячеек, начиная с fromCell (абсолютные индексы). */
+export function windowCells(
+  origin: Date | string | number,
+  unit: PlanningUnit,
+  fromCell: number,
+  count: number,
+): CalendarCell[] {
   const cells: CalendarCell[] = []
-  if (unit === 'decade') {
-    const months = MODE_MONTHS[mode]
-    // Месяц anchor: все оставшиеся декады от дня anchor до конца месяца
-    const monthEnd = lastDayOfMonth(a)
-    let cur = a
-    while (cur <= monthEnd) {
-      const end = decadeEnd(cur)
-      cells.push({ index: cells.length, start: cur, end })
-      cur = new Date(end.getFullYear(), end.getMonth(), end.getDate() + 1)
-    }
-    // Последующие месяцы: по 3 полные декады (cur уже — первое число следующего месяца)
-    for (let m = 1; m < months; m++) {
-      const monthStart = new Date(cur.getFullYear(), cur.getMonth(), 1)
-      for (let dec = 0; dec < 3; dec++) {
-        const start = new Date(monthStart.getFullYear(), monthStart.getMonth(), 1 + dec * 10)
-        const end = dec < 2 ? new Date(start.getFullYear(), start.getMonth(), 10 + dec * 10) : lastDayOfMonth(monthStart)
-        cells.push({ index: cells.length, start, end })
-      }
-      cur = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 1)
-    }
-    return cells
-  }
-  const end = new Date(a.getFullYear(), a.getMonth() + MODE_MONTHS[mode], 0)
-  let cur = a
-  while (cur <= end) {
-    cells.push({ index: cells.length, start: cur, end: cur })
-    cur = new Date(cur.getFullYear(), cur.getMonth(), cur.getDate() + 1)
+  for (let k = 0; k < count; k++) {
+    const i = fromCell + k
+    cells.push({ index: i, start: cellStartDate(origin, unit, i), end: cellEndDate(origin, unit, i) })
   }
   return cells
 }
 
-/** Индекс ячейки, содержащей дату date (зажат в [0, len-1]) */
-function cellIndexOf(cells: CalendarCell[], t: number): number {
-  const len = cells.length
-  if (len === 0) return 0
-  if (t < cells[0].start.getTime()) return 0
-  const last = cells[len - 1].end.getTime()
-  if (t > last) return len - 1
-  const idx = cells.findIndex((c) => c.start.getTime() <= t && t <= c.end.getTime())
-  return idx >= 0 ? idx : 0
-}
-
 /**
- * Ячейки интервала [start, end] на шкале: обе границы включительные.
+ * Спан интервала [start, end] (обе границы включительно) в абсолютных ячейках.
  * endCell — эксклюзивная граница (индекс ячейки, следующей за последней занятой).
- * Результат зажат в [0, cellCount].
- * Возвращает null, если интервал некорректен (end < start) или не пересекает
- * диаграмму целиком (все дни левее или правее календаря) — бар скрывается.
+ * Возвращает null, если интервал некорректен (end < start).
  */
-export function barCells(
-  anchor: Date | string | number,
-  mode: PlanningMode,
+export function cellRangeForSpan(
+  origin: Date | string | number,
   unit: PlanningUnit,
   start: Date | string | number,
   end: Date | string | number,
 ): CellSpan | null {
-  const cells = buildCells(anchor, mode, unit)
-  const len = cells.length
-  if (!len) return null
   const s = toDayStart(start)
   const e = toDayStart(end)
   if (e.getTime() < s.getTime()) return null
-  const sT = s.getTime()
-  const eT = e.getTime()
-  const first = cells[0].start.getTime()
-  const last = cells[len - 1].end.getTime()
-  if (eT < first) return null
-  if (sT > last) return null
-  const startCell = cellIndexOf(cells, sT)
-  const endCell = clamp(cellIndexOf(cells, eT) + 1, startCell + 1, len)
+  const startCell = cellIndexForDate(origin, unit, s)
+  const endCell = Math.max(cellIndexForDate(origin, unit, e) + 1, startCell + 1)
   return { startCell, endCell }
 }
 
-/** Индекс ячейки, содержащей одиночную дату date (точка на шкале), или null, если дата вне диаграммы. */
-export function dateCellIndex(
-  anchor: Date | string | number,
-  mode: PlanningMode,
+/** Преобразование спана ячеек [startCell, endCell) в даты [start, end] (обе включительно). */
+export function spanToDates(
+  origin: Date | string | number,
   unit: PlanningUnit,
-  date: Date | string | number,
-): number | null {
-  const cells = buildCells(anchor, mode, unit)
-  if (!cells.length) return null
-  const t = toDayStart(date).getTime()
-  const first = cells[0].start.getTime()
-  const last = cells[cells.length - 1].end.getTime()
-  if (t < first || t > last) return null
-  return cellIndexOf(cells, t)
+  startCell: number,
+  endCell: number,
+): { start_date: string; end_date: string } {
+  const s = Math.min(startCell, endCell - 1)
+  const e = Math.max(endCell, s + 1)
+  const last = cellEndDate(origin, unit, e - 1)
+  return { start_date: fmtDate(cellStartDate(origin, unit, s)), end_date: fmtDate(last) }
 }
 
-/**
- * Диапазон ячеек границ родителя [start, end] (обе границы включительно)
- * для зажима драга бара/вехи.
- * Возвращает null, если границы не заданы или целиком вне диаграммы —
- * в этом случае драг ограничивается только шкалой.
- */
-export function boundsCellSpan(
-  anchor: Date | string | number,
-  mode: PlanningMode,
+/** Границы родителя в абсолютных ячейках (для зажима драга). null, если не заданы/некорректны. */
+export function boundsForSpan(
+  origin: Date | string | number,
   unit: PlanningUnit,
   startDate?: Date | string | number | null,
   endDate?: Date | string | number | null,
 ): CellSpan | null {
   if (startDate == null || endDate == null) return null
-  return barCells(anchor, mode, unit, startDate, endDate)
-}
-
-/**
- * Обратное преобразование диапазона ячеек в даты интервала [start, end]
- * (обе границы включительно): end_date — последний день последней занятой ячейки.
- * endCell эксклюзивный, как в barCells. Значения зажаты в границы шкалы
- * (минимум одна ячейка). Нужно для превращения результата драга бара в даты.
- */
-export function cellSpanToDates(
-  cells: CalendarCell[],
-  startCell: number,
-  endCell: number,
-): { start_date: string; end_date: string } {
-  const len = cells.length
-  const s = Math.min(Math.max(startCell, 0), len - 1)
-  const e = Math.min(Math.max(endCell, s + 1), len)
-  const last = cells[Math.min(e, len) - 1].end
-  return { start_date: fmtDate(cells[s].start), end_date: fmtDate(last) }
+  return cellRangeForSpan(origin, unit, startDate, endDate)
 }
 
 /**
  * Зажим интервала дат [start, end] (обе границы включительно) в фактические
  * границы родителя [bStart, bEnd]. Результат всегда с end >= start (минимум 1 день).
- * Отличие от boundsCellSpan: зажим по датам, а не по ячейкам, поэтому даже при
- * грубых декадах (первый день декады раньше реального начала родителя) коммит
- * не уйдёт за границы родителя. Если границы не заданы — интервал как есть.
+ * Если границы не заданы — интервал как есть.
  */
 export function clampSpanDates(
   start: Date | string | number,
@@ -250,8 +201,7 @@ export function clampSpanDates(
 
 /**
  * Зажим одиночной даты в фактические границы родителя [bStart, bEnd]
- * (обе границы включительно).
- * Если границы не заданы — дата как есть.
+ * (обе границы включительно). Если границы не заданы — дата как есть.
  */
 export function clampDateToBounds(
   date: Date | string | number,
@@ -268,32 +218,26 @@ export function clampDateToBounds(
 }
 
 /**
- * Дата под указателем мыши на сетке планировщика.
- * rect — getBoundingClientRect() области шкалы (включая колонку названий),
- * clientX — координата клика относительно окна. Возвращает YYYY-MM-DD
- * (локальная зона), интерполируя внутри ячейки (для декад — точная дата),
- * либо null, если клик левее шкалы (на колонке названий) или вне сетки.
+ * Дата под указателем мыши в бесконечной шкале.
+ * windowStartCell — абсолютный индекс ячейки у левого края шкалы (видимое окно),
+ * cellPx — ширина ячейки в px, rect — контейнер (включая колонку названий LABEL_WIDTH).
+ * Возвращает YYYY-MM-DD (локальная зона) либо null, если клик левее шкалы.
  */
-export function dateAtPointer(
-  anchor: Date | string | number,
-  mode: PlanningMode,
+export function dateForPointer(
+  origin: Date | string | number,
   unit: PlanningUnit,
+  windowStartCell: number,
+  cellPx: number,
   rect: DOMRect | null,
   clientX: number,
 ): string | null {
-  if (!rect) return null
-  const cells = buildCells(anchor, mode, unit)
-  if (!cells.length) return null
+  if (!rect || cellPx <= 0) return null
   const x = clientX - rect.left
   if (x < LABEL_WIDTH) return null
-  const timelineWidth = rect.width - LABEL_WIDTH
-  if (timelineWidth <= 0) return null
-  const cellWidth = timelineWidth / cells.length
-  const rawIdx = (x - LABEL_WIDTH) / cellWidth
-  const idx = clamp(Math.floor(rawIdx), 0, cells.length - 1)
-  const frac = clamp(rawIdx - idx, 0, 1)
-  const cell = cells[idx]
-  const start = cell.start.getTime()
-  const end = Math.max(cell.end.getTime(), start)
+  const raw = (x - LABEL_WIDTH) / cellPx
+  const i = Math.floor(raw)
+  const frac = raw - i
+  const start = cellStartDate(origin, unit, windowStartCell + i).getTime()
+  const end = cellEndDate(origin, unit, windowStartCell + i).getTime()
   return fmtDate(new Date(start + Math.round(frac * (end - start))))
 }
