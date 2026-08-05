@@ -92,6 +92,7 @@ export interface DtoCreateResourceRequest {
 }
 export interface DtoCreateTaskRequest {
     'end_date'?: string;
+    'owner_id'?: number;
     'process_id'?: number;
     'start_date'?: string;
     'title'?: string;
@@ -118,6 +119,7 @@ export interface DtoDetailedProject {
 export interface DtoDetailedTask {
     'end_date'?: string;
     'id'?: number;
+    'owner_id'?: number;
     'process_id'?: number;
     'resources'?: Array<DtoResource>;
     'start_date'?: string;
@@ -210,6 +212,7 @@ export interface DtoTaskPlanning {
 export interface DtoTaskResponse {
     'end_date'?: string;
     'id'?: number;
+    'owner_id'?: number;
     'process_id'?: number;
     'start_date'?: string;
     'title'?: string;
@@ -246,11 +249,13 @@ export interface DtoUpdateResourceRequest {
 }
 export interface DtoUpdateTaskRequest {
     'end_date'?: string;
+    'owner_id'?: number;
     'process_id'?: number;
     'start_date'?: string;
     'title'?: string;
 }
 export interface DtoUpdateUserRequest {
+    'manager_id'?: number;
     'name'?: string;
     'role'?: string;
     'username'?: string;
@@ -263,6 +268,7 @@ export interface DtoUserInfo {
 }
 export interface DtoUserResponse {
     'id'?: number;
+    'manager_id'?: number;
     'name'?: string;
     'role'?: string;
     'username'?: string;
@@ -3711,6 +3717,43 @@ export const UsersApiAxiosParamCreator = function (configuration?: Configuration
                 options: localVarRequestOptions,
             };
         },
+        /**
+         * Returns the direct reports (users whose manager_id points to the given user)
+         * @summary List subordinates
+         * @param {number} id User ID
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        userIdSubordinatesGet: async (id: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'id' is not null or undefined
+            assertParamExists('userIdSubordinatesGet', 'id', id)
+            const localVarPath = `/user/{id}/subordinates`
+                .replace('{id}', encodeURIComponent(String(id)));
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'GET', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication ApiKeyAuth required
+            await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
+
+            localVarHeaderParameter['Accept'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
     }
 };
 
@@ -3785,6 +3828,19 @@ export const UsersApiFp = function(configuration?: Configuration) {
             const localVarOperationServerBasePath = operationServerMap['UsersApi.userIdPut']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
+        /**
+         * Returns the direct reports (users whose manager_id points to the given user)
+         * @summary List subordinates
+         * @param {number} id User ID
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async userIdSubordinatesGet(id: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<UserGet200Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.userIdSubordinatesGet(id, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['UsersApi.userIdSubordinatesGet']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
     }
 };
 
@@ -3844,6 +3900,16 @@ export const UsersApiFactory = function (configuration?: Configuration, basePath
         userIdPut(id: number, body: DtoUpdateUserRequest, options?: RawAxiosRequestConfig): AxiosPromise<UserIdGet200Response> {
             return localVarFp.userIdPut(id, body, options).then((request) => request(axios, basePath));
         },
+        /**
+         * Returns the direct reports (users whose manager_id points to the given user)
+         * @summary List subordinates
+         * @param {number} id User ID
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        userIdSubordinatesGet(id: number, options?: RawAxiosRequestConfig): AxiosPromise<UserGet200Response> {
+            return localVarFp.userIdSubordinatesGet(id, options).then((request) => request(axios, basePath));
+        },
     };
 };
 
@@ -3895,6 +3961,15 @@ export interface UsersApiInterface {
      * @throws {RequiredError}
      */
     userIdPut(id: number, body: DtoUpdateUserRequest, options?: RawAxiosRequestConfig): AxiosPromise<UserIdGet200Response>;
+
+    /**
+     * Returns the direct reports (users whose manager_id points to the given user)
+     * @summary List subordinates
+     * @param {number} id User ID
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    userIdSubordinatesGet(id: number, options?: RawAxiosRequestConfig): AxiosPromise<UserGet200Response>;
 
 }
 
@@ -3955,6 +4030,17 @@ export class UsersApi extends BaseAPI implements UsersApiInterface {
      */
     public userIdPut(id: number, body: DtoUpdateUserRequest, options?: RawAxiosRequestConfig) {
         return UsersApiFp(this.configuration).userIdPut(id, body, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * Returns the direct reports (users whose manager_id points to the given user)
+     * @summary List subordinates
+     * @param {number} id User ID
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    public userIdSubordinatesGet(id: number, options?: RawAxiosRequestConfig) {
+        return UsersApiFp(this.configuration).userIdSubordinatesGet(id, options).then((request) => request(this.axios, this.basePath));
     }
 }
 
