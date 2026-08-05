@@ -4,7 +4,10 @@ import { GroupGantt } from '../../../GroupGantt'
 import ProjectBar from '../ProjectBar/ProjectBar.vue'
 import type { ProjectGanttProps } from './types'
 
-const props = defineProps<ProjectGanttProps>()
+const props = withDefaults(defineProps<ProjectGanttProps>(), {
+  reorderable: true,
+  canManage: () => true,
+})
 
 const emit = defineEmits<{
   change: [payload: { id: number; start_date: string; end_date: string }]
@@ -34,6 +37,10 @@ function onContextMenu(p: { clientX: number; clientY: number; date: string; rowI
 
 function onBarContextMenu(p: { clientX: number; clientY: number }, id: number) {
   emit('contextmenu', { ...p, date: '', rowIndex: -1, projectId: id })
+}
+
+function onBarEdit(id: number) {
+  if (props.canManage(id)) emit('edit', id)
 }</script>
 
 <template>
@@ -42,7 +49,7 @@ function onBarContextMenu(p: { clientX: number; clientY: number }, id: number) {
     :mode="mode"
     :unit="unit"
     :items="groupItems"
-    reorderable
+    :reorderable="reorderable"
     @contextmenu="onContextMenu"
     @reorder="(p) => emit('reorder', p)"
   >
@@ -56,9 +63,10 @@ function onBarContextMenu(p: { clientX: number; clientY: number }, id: number) {
         :projectCode="item.title"
         :priority="item.priority"
         :ownerName="item.owner_name"
+        :draggable="canManage(item.id)"
         @change="(d) => onBarChange(item.id, d)"
         @contextmenu="(p) => onBarContextMenu(p, item.id)"
-        @edit="() => emit('edit', item.id)"
+        @edit="() => onBarEdit(item.id)"
       />
     </template>
   </GroupGantt>

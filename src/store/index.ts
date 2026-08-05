@@ -586,6 +586,7 @@ export const usePlanningStore = defineStore('planning', () => {
       start_date?: string
       end_date?: string
       priority?: number
+      owner_id?: number
     }
 
     // Сдвинутые вниз проекты (позиции >= i) получают приоритет +1
@@ -613,6 +614,7 @@ export const usePlanningStore = defineStore('planning', () => {
       start_date: dto.start_date ?? payload.start_date,
       end_date: dto.end_date ?? payload.end_date,
       priority: dto.priority ?? priority,
+      owner_id: dto.owner_id,
     }
     insertAt(projectPlanning.value?.projects, i, item)
     insertAt(useAppStore().projects, i, item)

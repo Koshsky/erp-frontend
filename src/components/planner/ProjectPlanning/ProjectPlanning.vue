@@ -20,9 +20,15 @@ const props = withDefaults(defineProps<{
   mode?: PlanningMode
   /** Единица ячейки: день, неделя или декада */
   unit?: PlanningUnit
+  /** Разрешает переупорядочивание строк (смену приоритетов) */
+  reorderable?: boolean
+  /** Проверка прав на управление проектом: редактирование, удаление, перенос дат */
+  canManage?: (projectId: number) => boolean
 }>(), {
   mode: 'quarter',
   unit: 'day',
+  reorderable: true,
+  canManage: () => true,
 })
 
 const emit = defineEmits<{
@@ -83,6 +89,8 @@ const gridCols = computed(() => {
               :mode="mode"
               :unit="unit"
               :projects="projects"
+              :reorderable="reorderable"
+              :can-manage="canManage"
               @change="(p) => emit('change', p)"
               @contextmenu="(p) => emit('contextmenu', p)"
               @reorder="(p) => emit('reorder', p)"

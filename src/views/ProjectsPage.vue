@@ -5,12 +5,13 @@ import ProjectPlanning from '../components/planner/ProjectPlanning/ProjectPlanni
 import { ContextMenu, ModalForm } from '../components/common'
 import type { ContextMenuItem } from '../components/common/ContextMenu'
 import type { ModalField } from '../components/common/ModalForm'
-import { usePlanningStore, useAppStore } from '../store'
+import { usePlanningStore, useAppStore, useAuthStore } from '../store'
 import type { PlanningMode, PlanningUnit } from '../components/planner/calendar'
 import { addMonthsISO } from '../components/planner/calendar'
 
 const store = usePlanningStore()
 const app = useAppStore()
+const auth = useAuthStore()
 const { projectPlanning, loading, error } = storeToRefs(store)
 
 const mode = ref<PlanningMode>('quarter')
@@ -38,14 +39,38 @@ interface MenuState {
   projectId?: number
 }
 const menu = ref<MenuState | null>(null)
-const menuItems = computed<ContextMenuItem[]>(() =>
-  menu.value?.projectId != null
-    ? [
-        { id: 'edit-project', label: 'Редактировать' },
-        { id: 'delete-project', label: 'Удалить проект' },
-      ]
-    : [{ id: 'create-project', label: 'Создать проект' }],
+
+// === Права по ролям ===
+// dp (директор проектов): просматривает все, меняет только приоритет (переупорядочивание)
+// rp (руководитель проекта): создаёт проекты (сам становится owner), редактирует и удаляет свои
+const role = computed(() => auth.user?.role)
+const currentUserId = computed(() => auth.user?.id)
+
+const canCreateProject = computed(() => role.value === 'admin' || role.value === 'rp')
+const canReorderProjects = computed(() =>
+  role.value === 'admin' || role.value === 'dp' || role.value === 'rp',
 )
+
+/** Может ли пользователь редактировать/удалять/двигать проект: admin — любой, rp — только свой */
+function canManageProject(projectId: number): boolean {
+  if (role.value === 'admin') return true
+  if (role.value !== 'rp') return false
+  const project = store.projectPlanning?.projects?.find((x: any) => x.id === projectId)
+  return project?.owner_id != null && project.owner_id === currentUserId.value
+}
+
+const menuItems = computed<ContextMenuItem[]>(() => {
+  if (menu.value?.projectId != null) {
+    if (!canManageProject(menu.value.projectId)) return []
+    return [
+      { id: 'edit-project', label: 'Редактировать' },
+      { id: 'delete-project', label: 'Удалить проект' },
+    ]
+  }
+  return canCreateProject.value
+    ? [{ id: 'create-project', label: 'Создать проект' }]
+    : []
+})
 
 // Модалка редактирования проекта (код, владелец)
 interface EditState {
@@ -63,13 +88,27 @@ const ownerOptions = computed(() =>
 
 const editFields = computed<ModalField[]>(() => {
   if (!edit.value) return []
-  return [
+  const fields: ModalField[] = [
     { key: 'code', label: 'Код проекта', type: 'text', value: edit.value.code, required: true },
-    { key: 'owner_id', label: 'Владелец', type: 'select', value: edit.value.ownerId, options: ownerOptions.value },
   ]
+  // Владелец проекта не может быть изменён: у rp поле скрываем, admin его видит
+  if (role.value === 'admin') {
+    fields.push({
+      key: 'owner_id',
+      label: 'Владелец',
+      type: 'select',
+      value: edit.value.ownerId,
+      options: ownerOptions.value,
+    })
+  }
+  return fields
 })
 
 function onContextMenu(p: { clientX: number; clientY: number; date: string; rowIndex: number; projectId?: number }) {
+  // Бар проекта: меню открываем только если есть права на управление проектом
+  if (p.projectId != null && !canManageProject(p.projectId)) return
+  // Пустое место: меню создания только для ролей с правом создания
+  if (p.projectId == null && !canCreateProject.value) return
   menu.value = { x: p.clientX, y: p.clientY, date: p.date, rowIndex: p.rowIndex, projectId: p.projectId }
 }
 
@@ -109,8 +148,12 @@ async function onEditSave(values: Record<string, string | number>) {
   if (!edit.value) return
   saving.value = true
   editError.value = null
-  const ownerId = values.owner_id !== '' ? Number(values.owner_id) : undefined
-  const ok = await store.updateProjectMeta(edit.value.id, { code: String(values.code ?? ''), owner_id: ownerId })
+  const patch: { code: string; owner_id?: number } = { code: String(values.code ?? '') }
+  // Владельца проекта изменить нельзя: owner_id отправляем только для admin
+  if (role.value === 'admin' && values.owner_id !== '' && values.owner_id != null) {
+    patch.owner_id = Number(values.owner_id)
+  }
+  const ok = await store.updateProjectMeta(edit.value.id, patch)
   saving.value = false
   if (ok) edit.value = null
   else editError.value = store.error
@@ -159,6 +202,8 @@ onMounted(() => {
       :anchor="anchor"
       :mode="mode"
       :unit="unit"
+      :reorderable="canReorderProjects"
+      :can-manage="canManageProject"
       @change="(p) => store.updateProjectDates(p.id, p.start_date, p.end_date)"
       @contextmenu="onContextMenu"
       @reorder="onReorder"
