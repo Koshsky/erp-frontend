@@ -102,6 +102,7 @@ export interface DtoDetailedProcess {
     'id'?: number;
     'milestones'?: Array<DtoMilestone>;
     'owner_id'?: number;
+    'project_code'?: string;
     'project_id'?: number;
     'start_date'?: string;
     'tasks'?: Array<DtoDetailedTask>;
@@ -147,6 +148,7 @@ export interface DtoProcess {
     'end_date'?: string;
     'id'?: number;
     'owner_id'?: number;
+    'project_code'?: string;
     'project_id'?: number;
     'start_date'?: string;
     'title'?: string;

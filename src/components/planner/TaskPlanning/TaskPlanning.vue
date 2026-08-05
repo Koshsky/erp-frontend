@@ -45,7 +45,7 @@ const displayProcesses = computed<Process[]>(() =>
     title: dto.title ?? '',
     start_date: dto.start_date ?? '',
     end_date: dto.end_date ?? '',
-    project_code: '',
+    project_code: dto.project_code ?? '',
     tasks: [...(dto.tasks || [])]
       .sort((a, b) => (a.title || '').localeCompare(b.title || '', 'ru'))
       .map((t) => ({
