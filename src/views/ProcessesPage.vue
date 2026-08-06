@@ -8,7 +8,7 @@ import type { ModalField } from '../components/common/ModalForm'
 import { useConfirm } from '../composables/useConfirm'
 import { usePlanningStore, useAppStore, useAuthStore } from '../store'
 import type { PlanningUnit } from '../components/planner/calendar'
-import { addMonthsISO, clampSpanDates } from '../components/planner/calendar'
+import { addMonthsISO, shiftSpanDates } from '../components/planner/calendar'
 
 const store = usePlanningStore()
 const app = useAppStore()
@@ -103,9 +103,9 @@ async function onSelect(id: string) {
   if (id === 'create-process') {
     if (projectId == null || date == null) return
     const project = store.processPlanning?.projects?.find((p: any) => p.id === projectId)
-    // Процесс создаётся в пределах проекта-родителя: даты клика зажимаются в его границы,
-    // иначе триггер БД может молча удалить процесс, целиком оказавшийся вне диапазона.
-    const { start_date, end_date } = clampSpanDates(
+    // Процесс создаётся в пределах проекта-родителя с сохранением дефолтной длины:
+    // клик вне границ прижимает спана к началу/концу родителя, но не ужимает его.
+    const { start_date, end_date } = shiftSpanDates(
       date,
       addMonthsISO(date, 3),
       project?.start_date,

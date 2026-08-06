@@ -219,6 +219,46 @@ export function clampDateToBounds(
 }
 
 /**
+ * Вписывает интервал [start, end] в границы родителя [bStart, bEnd], сохраняя
+ * длительность (в отличие от clampSpanDates, который обрезает): если интервал
+ * целиком (или выступает) левее начала родителя — прижимается к началу и растёт
+ * вправо на свою длину; правее конца — прижимается к концу и растёт влево;
+ * если длительность больше родителя — занимает родителя целиком.
+ * Если границы не заданы — интервал как есть.
+ */
+export function shiftSpanDates(
+  start: Date | string | number,
+  end: Date | string | number,
+  bStart?: Date | string | number | null,
+  bEnd?: Date | string | number | null,
+): { start_date: string; end_date: string } {
+  const s = toDayStart(start)
+  const e = toDayStart(end)
+  if (bStart == null || bEnd == null) {
+    return { start_date: fmtDate(s), end_date: fmtDate(e) }
+  }
+  const bs = toDayStart(bStart).getTime()
+  const be = toDayStart(bEnd).getTime()
+  const len = e.getTime() - s.getTime()
+  let ns = s.getTime()
+  let ne = ns + len
+  if (len >= be - bs) {
+    ns = bs
+    ne = be
+  } else {
+    if (ns < bs) {
+      ns = bs
+      ne = ns + len
+    }
+    if (ne > be) {
+      ne = be
+      ns = ne - len
+    }
+  }
+  return { start_date: fmtDate(new Date(ns)), end_date: fmtDate(new Date(ne)) }
+}
+
+/**
  * Дата под указателем мыши в бесконечной шкале.
  * windowStartCell — абсолютный индекс ячейки у левого края шкалы (видимое окно),
  * cellPx — ширина ячейки в px, rect — контейнер (включая колонку названий LABEL_WIDTH),
