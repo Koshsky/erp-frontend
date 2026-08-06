@@ -8,6 +8,7 @@ import {
   TimelineSyncKey,
   type TimelineCtx,
 } from '../../../composables/useInfiniteTimeline'
+import { useTimelinePan } from '../../../composables/useTimelinePan'
 
 const props = defineProps<{
   /** Дата-якорь: ячейка с индексом 0 (начальная позиция шкалы) */
@@ -41,8 +42,24 @@ const tl = useInfiniteTimeline(originDate, unit, scrollEl, contentEl, props.id)
 provide(TimelineScrollKey, scrollEl)
 provide(TimelineSyncKey, tl.sync)
 
-onMounted(() => tl.mount())
-onBeforeUnmount(() => tl.unmount())
+onMounted(() => {
+  tl.mount()
+  pan.enable()
+})
+onBeforeUnmount(() => {
+  pan.disable()
+  tl.unmount()
+})
+
+/**
+ * Элементы, с которых нельзя начать панорамирование: на них висит свой интерактив
+ * (бары, вехи, реордер строк, липкие колонки, ресурсная лента). Шапку .tg-head
+ * тянуть можно — это «пустое место» шкалы.
+ */
+const PAN_IGNORE =
+  '.gantt-bar, .gb-handle, .ms-marker, .row-handle, .gg-label, .gg-merged, .tg-ms-label, .th-corner, .rs-label, .rs-block'
+
+const pan = useTimelinePan(scrollEl, PAN_IGNORE)
 
 /** Контекст таймлайна для слотов: ref-ы развёрнуты; Date не кладём (Proxy ломается) */
 const ctx: TimelineCtx = reactive({
@@ -106,6 +123,17 @@ function onContextMenu(e: MouseEvent) {
 .tg-scroll {
   overflow: auto;
   max-height: var(--planner-max-height, calc(100vh - 160px));
+}
+.tg-scroll :deep(.gg-bars) {
+  cursor: grab;
+}
+.tg-scroll.tg-panning,
+.tg-scroll.tg-panning :deep(.gg-bars) {
+  cursor: grabbing;
+}
+.tg-scroll.tg-panning :deep(*) {
+  user-select: none;
+  -webkit-user-select: none;
 }
 .tg-content {
   position: relative;

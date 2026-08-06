@@ -427,6 +427,9 @@ export function useInfiniteTimeline(
 
   let observer: ResizeObserver | null = null
 
+  /** Рестор scrollLeft/scrollTop применён (иначе unmount перезапишет хранилище дефолтом) */
+  let stateReady = false
+
   function onScroll() {
     sync()
   }
@@ -447,6 +450,7 @@ export function useInfiniteTimeline(
         el.scrollLeft = leftPad.value * cellPx.value
         windowStart.value = 0
       }
+      stateReady = true
     })
     observer = new ResizeObserver(() => {
       measure()
@@ -462,7 +466,9 @@ export function useInfiniteTimeline(
     observer?.disconnect()
     observer = null
     const el = container.value
-    if (id && el) {
+    // Если рестор не успел примениться (быстрое перемонтирование из-за
+    // loading-флипа), состояние в хранилище ещё валидно — не затираем его.
+    if (id && el && stateReady) {
       tableStates.set(id, {
         cellPx: cellPx.value,
         scale: tableScale.value,
@@ -470,6 +476,7 @@ export function useInfiniteTimeline(
         scrollTop: el.scrollTop,
       })
     }
+    stateReady = false
     el?.removeEventListener('scroll', onScroll)
     el?.removeEventListener('wheel', onWheel)
     el?.removeEventListener('dblclick', onDblClick)
