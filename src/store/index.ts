@@ -387,7 +387,7 @@ export const usePlanningStore = defineStore('planning', () => {
 
   async function loadProjectPlanning(silent = false) {
     if (!silent) loading.value = true
-    error.value = null
+    if (!silent) error.value = null
     try {
       const api = new PlanningApi(apiConfig())
       const resp = await api.planningProjectsGet()
@@ -401,7 +401,7 @@ export const usePlanningStore = defineStore('planning', () => {
 
   async function loadProcessPlanning(silent = false) {
     if (!silent) loading.value = true
-    error.value = null
+    if (!silent) error.value = null
     try {
       const api = new PlanningApi(apiConfig())
       const resp = await api.planningProcessesGet()
@@ -415,7 +415,7 @@ export const usePlanningStore = defineStore('planning', () => {
 
   async function loadTaskPlanning(silent = false) {
     if (!silent) loading.value = true
-    error.value = null
+    if (!silent) error.value = null
     try {
       const api = new PlanningApi(apiConfig())
       const resp = await api.planningTasksGet()
