@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/vue3-vite'
 import { ref } from 'vue'
 import TimelineGrid from './TimelineGrid.vue'
-import GanttBar from './GanttBar/GanttBar.vue'
+import GanttBar from '../GanttBar/GanttBar.vue'
 import { cellRangeForSpan, type PlanningUnit } from '../calendar'
 import { LABEL_WIDTH } from '../layout'
 

@@ -113,7 +113,7 @@ function onGridCtx(p: { clientX: number; clientY: number; date: string | null; r
     <template v-else>
       <p v-if="error" class="pg-error">{{ error }}</p>
 
-      <TimelineGrid v-if="displayProcesses.length" :origin="origin" :unit="unit" @ctxmenu="onGridCtx">
+      <TimelineGrid v-if="displayProcesses.length" id="task" :origin="origin" :unit="unit" @ctxmenu="onGridCtx">
         <template #default="{ t }">
           <CalendarHeader :t="t" />
           <ResourceHeader :t="t" :resources="displayResources" :usageFn="usageForDay" />

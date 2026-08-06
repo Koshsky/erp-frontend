@@ -59,7 +59,7 @@ export function useBarDrag(options: UseBarDragOptions): BarDrag {
     const el = options.scrollEl()
     if (!el) return startPointerCell
     const rect = el.getBoundingClientRect()
-    return t.windowStart + (clientX - rect.left - LABEL_WIDTH) / t.cellPx
+    return t.windowStart + ((clientX - rect.left) / t.scale - LABEL_WIDTH) / t.cellPx
   }
 
   function computeSpan(clientX: number) {
