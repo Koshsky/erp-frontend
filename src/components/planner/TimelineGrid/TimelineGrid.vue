@@ -9,6 +9,7 @@ import {
   type TimelineCtx,
 } from '../../../composables/useInfiniteTimeline'
 import { useTimelinePan } from '../../../composables/useTimelinePan'
+import TodayLine from '../TodayLine/TodayLine.vue'
 
 const props = defineProps<{
   /** Дата-якорь: ячейка с индексом 0 (начальная позиция шкалы) */
@@ -113,6 +114,9 @@ function onContextMenu(e: MouseEvent) {
           :style="{ left: (k - 1) * ctx.cellPx + 'px' }"
         />
       </div>
+
+      <!-- Красный луч текущей даты: граница между «вчера» и «сегодня» -->
+      <TodayLine :timeline="ctx" />
 
       <slot :t="ctx" />
     </div>
