@@ -5,6 +5,7 @@ import { MilestoneMarker } from '../../../MilestoneMarker'
 import TaskBar from './components/TaskBar/TaskBar.vue'
 import type { TaskGanttProps } from './types'
 import { LABEL_WIDTH } from '../../../layout'
+import { toDate } from '../../../calendar'
 
 const props = withDefaults(defineProps<TaskGanttProps>(), {
   canManage: true,
@@ -19,6 +20,10 @@ const emit = defineEmits<{
 }>()
 
 const groupItems = computed(() => props.tasks)
+
+function fmtDate(d: string | Date | number | null | undefined): string {
+  return d ? toDate(d).toLocaleDateString('ru') : ''
+}
 
 function onBarChange(id: number, d: { start_date: string; end_date: string }) {
   emit('change', { id, ...d })
@@ -56,6 +61,9 @@ function onMilestoneEdit(id: number) {
       <template #label>
         <div v-if="projectCode" class="gl-code">{{ projectCode }}</div>
         <div class="gl-title">{{ title }}</div>
+        <div v-if="groupStartDate && groupEndDate" class="gl-dates">
+          {{ fmtDate(groupStartDate) }} — {{ fmtDate(groupEndDate) }}
+        </div>
       </template>
 
       <template #bar="{ item }">
@@ -120,6 +128,15 @@ function onMilestoneEdit(id: number) {
   font-size: 12px;
   font-weight: 600;
   color: #555;
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.gl-dates {
+  font-size: 10px;
+  font-weight: 400;
+  color: #888;
   white-space: nowrap;
   max-width: 100%;
   overflow: hidden;

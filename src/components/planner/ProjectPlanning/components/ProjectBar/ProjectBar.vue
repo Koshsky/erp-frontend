@@ -29,6 +29,8 @@ const dateRange = computed(() =>
     :title="projectCode"
     :color="color"
     :opacity="opacity"
+    :height="40"
+    :top="6"
     :draggable="draggable"
     @change="(d) => emit('change', d)"
     @contextmenu="(p) => emit('contextmenu', p)"

@@ -45,6 +45,7 @@ function onBarEdit(id: number) {
     :timeline="timeline"
     :items="groupItems"
     :reorderable="reorderable"
+    :rowHeight="52"
     @reorder="(p) => emit('reorder', p)"
   >
     <template #bar="{ item }">

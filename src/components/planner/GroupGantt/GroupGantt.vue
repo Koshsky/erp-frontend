@@ -4,14 +4,13 @@ import type { GroupGanttProps } from './types'
 import { cellRangeForSpan, toDate } from '../calendar'
 import { LABEL_WIDTH } from '../layout'
 
-const ROW_HEIGHT = 26
-
 const props = withDefaults(defineProps<GroupGanttProps>(), {
   reorderable: false,
   mergedLabel: false,
   groupId: null,
   groupStartDate: null,
   groupEndDate: null,
+  rowHeight: 26,
 })
 
 const emit = defineEmits<{
@@ -35,7 +34,7 @@ const overlayStyle = computed(() => {
 })
 
 /** Высота объединённого лейбла = вся группа (строки фиксированной высоты) */
-const mergedHeight = computed(() => props.items.length * ROW_HEIGHT + 'px')
+const mergedHeight = computed(() => props.items.length * props.rowHeight + 'px')
 
 // === Вертикальный драг строк (reorder) ===
 const draggingFrom = ref<number | null>(null)
@@ -137,7 +136,7 @@ function fmt(d: string | Date | number | null | undefined): string {
     </div>
 
     <template v-for="(item, index) in items" :key="'gi' + item.id">
-      <div class="gg-row" :data-row-index="index">
+      <div class="gg-row" :style="{ height: rowHeight + 'px' }" :data-row-index="index">
         <div v-if="!mergedLabel" class="gg-label" :class="{ 'with-handle': reorderable }">
           <span
             v-if="reorderable"
@@ -191,7 +190,6 @@ function fmt(d: string | Date | number | null | undefined): string {
 }
 .gg-row {
   position: relative;
-  height: 26px;
 }
 .gg-label {
   position: sticky;

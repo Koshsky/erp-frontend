@@ -12,6 +12,8 @@ const props = withDefaults(defineProps<ProcessBarProps>(), {
   draggable: true,
   groupStartDate: null,
   groupEndDate: null,
+  height: 24,
+  top: 1,
 })
 
 const emit = defineEmits<{
@@ -35,8 +37,8 @@ const dateRange = computed(() =>
     :color="color"
     :opacity="opacity"
     :title="title"
-    :height="24"
-    :top="1"
+    :height="height"
+    :top="top"
     :minWidth="40"
     padding="0 10px"
     :shadow="true"
