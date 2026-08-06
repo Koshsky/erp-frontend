@@ -1,10 +1,9 @@
 <script setup lang="ts">
-import { computed, ref, onMounted, onBeforeUnmount, watch } from 'vue'
-import GanttBar from '../../../../../GanttBar/GanttBar.vue'
+import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
+import LabeledBar from '../../../../../LabeledBar/LabeledBar.vue'
 import { GanttTooltip } from '@/components/common'
 import type { Task } from './types'
 import type { TimelineCtx } from '@/composables/timeline-context'
-import { formatDateRange } from '../../../../../calendar'
 
 const props = withDefaults(
   defineProps<{
@@ -29,10 +28,6 @@ const emit = defineEmits<{
   contextmenu: [payload: { clientX: number; clientY: number }]
   edit: []
 }>()
-
-const dateRange = computed(() =>
-  formatDateRange(props.task.start_date, props.task.end_date),
-)
 
 /** Название ресурса для бейджа: код, при его отсутствии — полное название */
 function badgeLabel(r: { code?: string; title?: string }): string {
@@ -89,12 +84,13 @@ watch(
 </script>
 
 <template>
-  <GanttBar
+  <LabeledBar
     :timeline="timeline"
     :startDate="task.start_date"
     :endDate="task.end_date"
     :groupStartDate="groupStartDate"
     :groupEndDate="groupEndDate"
+    :title="task.title"
     :draggable="draggable"
     @change="(d) => emit('change', d)"
     @contextmenu="(p) => emit('contextmenu', p)"
@@ -112,14 +108,14 @@ watch(
         >{{ badgeLabel(r) }}×{{ r.quantity }}</span>
       </span>
     </span>
-    <template #tooltip>
+    <template #tooltip="{ dateRange }">
       <GanttTooltip
         :title="task.title"
         :rows="[dateRange]"
         :resources="(task.resources || []).map((r) => ({ label: r.title || r.code, quantity: r.quantity }))"
       />
     </template>
-  </GanttBar>
+  </LabeledBar>
 </template>
 
 <style scoped>
