@@ -130,7 +130,7 @@ export const useAuthStore = defineStore('auth', () => {
       if (body?.error) throw new Error(body.error)
       return true
     } catch (e: any) {
-      error.value = e.message || String(e)
+      error.value = (e?.response?.data?.error ?? e.message) || String(e)
       return false
     } finally {
       loading.value = false
