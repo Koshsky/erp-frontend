@@ -15,4 +15,8 @@ export interface ProcessBarProps {
   /** Границы проекта — ограничивают перетаскивание процесса */
   groupStartDate?: string | Date | number | null
   groupEndDate?: string | Date | number | null
+  /** Высота бара в px (default 24) */
+  height?: number
+  /** Смещение бара от верха строки в px (default 1) */
+  top?: number
 }

@@ -20,4 +20,6 @@ export interface GroupGanttProps {
   mergedLabel?: boolean
   /** Идентификатор родителя группы (project_id/process_id) — для создания внутри группы */
   groupId?: string | number | null
+  /** Высота строки в px (default 26); задаёт высоту .gg-row и merged-лейбла */
+  rowHeight?: number
 }

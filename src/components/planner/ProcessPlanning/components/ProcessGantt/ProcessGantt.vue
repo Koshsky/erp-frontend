@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { GroupGantt } from '../../../GroupGantt'
 import ProcessBar from '../ProcessBar/ProcessBar.vue'
 import type { ProcessGanttProps } from './types'
+import { toDate } from '../../../calendar'
 
 const props = withDefaults(defineProps<ProcessGanttProps>(), {
   canManage: true,
@@ -15,6 +16,10 @@ const emit = defineEmits<{
 }>()
 
 const groupItems = computed(() => props.processes)
+
+function fmtDate(d: string | Date | number | null | undefined): string {
+  return d ? toDate(d).toLocaleDateString('ru') : ''
+}
 
 function onBarChange(id: number, d: { start_date: string; end_date: string }) {
   emit('change', { id, ...d })
@@ -36,7 +41,15 @@ function onBarEdit(id: number) {
     :groupStartDate="groupStartDate"
     :groupEndDate="groupEndDate"
     :groupId="projectId"
+    mergedLabel
   >
+    <template #label>
+      <div v-if="projectCode" class="pg-code">{{ projectCode }}</div>
+      <div v-if="groupStartDate && groupEndDate" class="pg-dates">
+        {{ fmtDate(groupStartDate) }} — {{ fmtDate(groupEndDate) }}
+      </div>
+    </template>
+
     <template #bar="{ item }">
       <ProcessBar
         :timeline="timeline"
@@ -57,4 +70,24 @@ function onBarEdit(id: number) {
 </template>
 
 <style scoped>
+.pg-code {
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.2;
+  color: #1a73e8;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pg-dates {
+  font-size: 10px;
+  font-weight: 400;
+  color: #888;
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 </style>
