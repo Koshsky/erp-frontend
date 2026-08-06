@@ -86,6 +86,7 @@ const resourceCells = computed(() =>
   padding: 0 6px;
   font-size: 11px;
   cursor: default;
+  border-bottom: 1px solid #e8e8e8;
 }
 .rs-code {
   font-weight: 700;

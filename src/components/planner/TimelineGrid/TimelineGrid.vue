@@ -111,7 +111,7 @@ function onContextMenu(e: MouseEvent) {
   position: absolute;
   top: 0;
   bottom: 0;
-  z-index: 0;
+  z-index: 1;
   pointer-events: none;
 }
 .tg-line {
@@ -119,6 +119,6 @@ function onContextMenu(e: MouseEvent) {
   top: 0;
   bottom: 0;
   width: 1px;
-  background: #eef0f3;
+  background: #e4e6e8;
 }
 </style>
