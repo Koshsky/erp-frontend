@@ -9,6 +9,7 @@ const newPassword = ref('')
 const confirmPassword = ref('')
 const showPassword = ref(false)
 const changeMsg = ref<string | null>(null)
+const changeOk = ref(false)
 
 interface ProfileField {
   label: string
@@ -34,6 +35,7 @@ onMounted(() => {
 
 async function onChangePassword() {
   changeMsg.value = null
+  changeOk.value = false
   if (!oldPassword.value || !newPassword.value || !confirmPassword.value) {
     changeMsg.value = 'Заполните все поля'
     return
@@ -45,9 +47,13 @@ async function onChangePassword() {
   const ok = await auth.changePassword(oldPassword.value, newPassword.value)
   if (ok) {
     changeMsg.value = 'Пароль успешно изменён'
+    changeOk.value = true
     oldPassword.value = ''
     newPassword.value = ''
     confirmPassword.value = ''
+  } else {
+    changeMsg.value =
+      auth.error === 'invalid password' ? 'Неверный пароль' : auth.error ?? 'Не удалось изменить пароль'
   }
 }
 </script>
@@ -93,7 +99,7 @@ async function onChangePassword() {
         />
       </label>
 
-      <p v-if="changeMsg" class="pf-msg" :class="{ ok: !auth.error }">{{ changeMsg }}</p>
+      <p v-if="changeMsg" class="pf-msg" :class="{ ok: changeOk }">{{ changeMsg }}</p>
 
       <button type="submit" class="pf-btn" :disabled="auth.loading">
         {{ auth.loading ? 'Сохранение…' : 'Сменить пароль' }}
