@@ -74,7 +74,6 @@ const showWeekdayRow = computed(() => props.t.unit === 'day')
   top: 0;
   z-index: 30;
   background: #f8f9fa;
-  border-bottom: 2px solid #1a73e8;
 }
 .th-corner {
   position: sticky;

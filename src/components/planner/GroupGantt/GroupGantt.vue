@@ -129,7 +129,7 @@ function fmt(d: string | Date | number | null | undefined): string {
     </div>
 
     <template v-for="(item, index) in items" :key="'gi' + item.id">
-      <div class="gg-row" :class="{ 'gg-ta': index % 2 === 1 }" :data-row-index="index">
+      <div class="gg-row" :data-row-index="index">
         <div v-if="!mergedLabel" class="gg-label" :class="{ 'with-handle': reorderable }">
           <span
             v-if="reorderable"
@@ -179,13 +179,11 @@ function fmt(d: string | Date | number | null | undefined): string {
   padding: 8px 12px;
   box-sizing: border-box;
   border-right: 1px solid #f0f0f0;
+  border-bottom: 1px solid #e0e0e0;
 }
 .gg-row {
   position: relative;
   height: 36px;
-}
-.gg-row.gg-ta {
-  background: #fafafa;
 }
 .gg-label {
   position: sticky;
@@ -203,11 +201,9 @@ function fmt(d: string | Date | number | null | undefined): string {
   color: #333;
   padding: 4px 8px;
   border-right: 1px solid #f0f0f0;
+  border-bottom: 1px solid #e8e8e8;
   box-sizing: border-box;
   overflow: hidden;
-}
-.gg-row.gg-ta .gg-label {
-  background: #fafafa;
 }
 .gg-label.with-handle {
   padding-left: 24px;
@@ -252,6 +248,7 @@ function fmt(d: string | Date | number | null | undefined): string {
 .gg-bars {
   position: absolute;
   inset: 0;
+  z-index: 2;
 }
 .drop-line {
   position: absolute;
