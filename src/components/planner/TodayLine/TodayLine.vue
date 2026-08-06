@@ -1,9 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { cellIndexForDate } from '../calendar'
+import { DAY_MS } from '../../../utils'
 import type { TodayLineProps } from './types'
-
-const DAY_MS = 1000 * 60 * 60 * 24
 
 const props = withDefaults(defineProps<TodayLineProps>(), {
   color: '#e53935',

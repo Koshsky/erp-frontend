@@ -2,8 +2,8 @@
 import { computed, ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import GanttBar from '../../../../../GanttBar/GanttBar.vue'
 import type { Task } from './types'
-import type { TimelineCtx } from '@/composables/useInfiniteTimeline'
-import { toDate } from '../../../../../calendar'
+import type { TimelineCtx } from '@/composables/timeline-context'
+import { formatDateRange } from '../../../../../calendar'
 
 const props = withDefaults(
   defineProps<{
@@ -30,7 +30,7 @@ const emit = defineEmits<{
 }>()
 
 const dateRange = computed(() =>
-  `${toDate(props.task.start_date).toLocaleDateString('ru')} — ${toDate(props.task.end_date).toLocaleDateString('ru')}`,
+  formatDateRange(props.task.start_date, props.task.end_date),
 )
 
 /** Название ресурса для бейджа: код, при его отсутствии — полное название */

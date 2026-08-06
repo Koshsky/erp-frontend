@@ -8,8 +8,8 @@ import {
   clampDateToBounds,
   fmtDate,
 } from '../calendar'
-import type { TimelineCtx } from '../../../composables/useInfiniteTimeline'
-import { TimelineScrollKey, TimelineSyncKey } from '../../../composables/useInfiniteTimeline'
+import type { TimelineCtx } from '../../../composables/timeline-context'
+import { TimelineScrollKey, TimelineSyncKey } from '../../../composables/timeline-context'
 import { useBarDrag } from '../../../composables/useBarDrag'
 import { TooltipCell } from '../../common/TooltipCell'
 import type { MilestoneMarkerProps } from './types'

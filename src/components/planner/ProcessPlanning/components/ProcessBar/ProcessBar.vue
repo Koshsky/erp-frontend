@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import GanttBar from '../../../GanttBar/GanttBar.vue'
 import type { ProcessBarProps } from './types'
-import { toDate } from '../../../calendar'
+import { formatDateRange } from '../../../calendar'
 
 const props = withDefaults(defineProps<ProcessBarProps>(), {
   projectCode: '',
@@ -22,9 +22,7 @@ const emit = defineEmits<{
   edit: []
 }>()
 
-const dateRange = computed(() =>
-  `${toDate(props.startDate).toLocaleDateString('ru')} — ${toDate(props.endDate).toLocaleDateString('ru')}`,
-)
+const dateRange = computed(() => formatDateRange(props.startDate, props.endDate))
 </script>
 
 <template>

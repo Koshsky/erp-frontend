@@ -1,4 +1,4 @@
-import type { TimelineCtx } from '../../../composables/useInfiniteTimeline'
+import type { TimelineCtx } from '../../../composables/timeline-context'
 
 export interface GroupGanttItem {
   id: number

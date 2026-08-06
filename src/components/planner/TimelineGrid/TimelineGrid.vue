@@ -2,12 +2,13 @@
 import { computed, onBeforeUnmount, onMounted, provide, reactive, ref } from 'vue'
 import type { PlanningUnit } from '../calendar'
 import { fmtDate, toDate } from '../calendar'
+import { useInfiniteTimeline } from '../../../composables/useInfiniteTimeline'
 import {
-  useInfiniteTimeline,
+  INTERACTIVE_SELECTOR,
   TimelineScrollKey,
   TimelineSyncKey,
   type TimelineCtx,
-} from '../../../composables/useInfiniteTimeline'
+} from '../../../composables/timeline-context'
 import { useTimelinePan } from '../../../composables/useTimelinePan'
 import TodayLine from '../TodayLine/TodayLine.vue'
 import ScaleBadge from '../ScaleBadge/ScaleBadge.vue'
@@ -56,10 +57,9 @@ onBeforeUnmount(() => {
 /**
  * Элементы, с которых нельзя начать панорамирование: на них висит свой интерактив
  * (бары, вехи, реордер строк, липкие колонки, ресурсная лента). Шапку .tg-head
- * тянуть можно — это «пустое место» шкалы.
+ * тянуть можно — это «пустое место» шкалы. Полоса вех .tg-ms-label тоже не тянется.
  */
-const PAN_IGNORE =
-  '.gantt-bar, .gb-handle, .ms-marker, .row-handle, .gg-label, .gg-merged, .tg-ms-label, .th-corner, .rs-label, .rs-block'
+const PAN_IGNORE = INTERACTIVE_SELECTOR + ', .tg-ms-label'
 
 const pan = useTimelinePan(scrollEl, PAN_IGNORE)
 
@@ -85,7 +85,7 @@ const ctx: TimelineCtx = reactive({
 /** ПКМ по пустому месту шкалы (бары/лейблы/вехи перехватывают сами через .stop) */
 function onContextMenu(e: MouseEvent) {
   const target = e.target as HTMLElement
-  if (target.closest('.gantt-bar, .gb-handle, .ms, .row-handle, .gg-label, .gg-merged, .th-corner, .rs-label, .tg-head')) {
+  if (target.closest(INTERACTIVE_SELECTOR + ', .tg-head')) {
     return
   }
   const date = tl.dateAtPointer(scrollEl.value?.getBoundingClientRect() ?? null, e.clientX)
