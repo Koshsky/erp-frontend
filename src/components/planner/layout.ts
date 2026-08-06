@@ -13,7 +13,28 @@ export const CELL_WIDTH = 32
 export const HEADER_HEIGHT_DAY = 56
 export const HEADER_HEIGHT_DECADE = 38
 
-/** Высота календарного заголовка для единицы ячейки */
-export function headerHeight(unit: PlanningUnit): number {
-  return unit === 'day' ? HEADER_HEIGHT_DAY : HEADER_HEIGHT_DECADE
+/** Высоты сжатых состояний шапки (px): только месяц, месяц + числа */
+export const HEADER_HEIGHT_MONTH = 20
+export const HEADER_HEIGHT_DAY_NUM = 38
+
+/** Пороги ширины ячейки (px), ниже которых строки шапки скрываются */
+export const CELL_PX_NUM_DAY = 6
+export const CELL_PX_WD_DAY = 10
+export const CELL_PX_NUM_DECADE = 14
+
+/**
+ * Высота календарного заголовка для единицы ячейки. При переданной ширине
+ * ячейки (cellPx) шапка каскадно сжимается: числа/дни недели скрываются,
+ * когда ячейка слишком узкая, чтобы их прочитать.
+ */
+export function headerHeight(unit: PlanningUnit, cellPx?: number): number {
+  if (unit === 'day') {
+    if (cellPx == null) return HEADER_HEIGHT_DAY
+    if (cellPx < CELL_PX_NUM_DAY) return HEADER_HEIGHT_MONTH
+    if (cellPx < CELL_PX_WD_DAY) return HEADER_HEIGHT_DAY_NUM
+    return HEADER_HEIGHT_DAY
+  }
+  if (cellPx == null) return HEADER_HEIGHT_DECADE
+  if (cellPx < CELL_PX_NUM_DECADE) return HEADER_HEIGHT_MONTH
+  return HEADER_HEIGHT_DECADE
 }

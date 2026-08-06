@@ -2,7 +2,13 @@
 import { computed } from 'vue'
 import type { TimelineCtx } from '../../../composables/useInfiniteTimeline'
 import { cellIndexForDate } from '../calendar'
-import { LABEL_WIDTH, headerHeight } from '../layout'
+import {
+  LABEL_WIDTH,
+  headerHeight,
+  CELL_PX_NUM_DAY,
+  CELL_PX_NUM_DECADE,
+  CELL_PX_WD_DAY,
+} from '../layout'
 
 const props = defineProps<{
   t: TimelineCtx
@@ -39,11 +45,15 @@ const monthGroups = computed(() => {
   return out
 })
 
-const showWeekdayRow = computed(() => props.t.unit === 'day')
+/** Ряды чисел и дней недели скрываются, когда ячейка слишком узкая для их подписей */
+const showNumRow = computed(() =>
+  props.t.cellPx >= (props.t.unit === 'day' ? CELL_PX_NUM_DAY : CELL_PX_NUM_DECADE),
+)
+const showWdRow = computed(() => props.t.unit === 'day' && props.t.cellPx >= CELL_PX_WD_DAY)
 </script>
 
 <template>
-  <div class="tg-head" :style="{ height: headerHeight(t.unit) + 'px' }">
+  <div class="tg-head" :style="{ height: headerHeight(t.unit, t.cellPx) + 'px' }">
     <div class="th-corner" :style="{ width: LABEL_WIDTH + 'px' }"></div>
 
     <div v-for="m in monthGroups" :key="'m' + m.from"
@@ -52,13 +62,13 @@ const showWeekdayRow = computed(() => props.t.unit === 'day')
       {{ m.label }}
     </div>
 
-    <div v-for="i in t.visibleIndices" :key="'n' + i"
+    <div v-if="showNumRow" v-for="i in t.visibleIndices" :key="'n' + i"
       class="th-num"
       :style="{ left: t.cellLeft(i) + 'px', width: t.cellPx + 'px' }">
       {{ numLabel(i) }}
     </div>
 
-    <template v-if="showWeekdayRow">
+    <template v-if="showWdRow">
       <div v-for="i in t.visibleIndices" :key="'w' + i"
         class="th-wd"
         :style="{ left: t.cellLeft(i) + 'px', width: t.cellPx + 'px' }">
@@ -79,11 +89,13 @@ const showWeekdayRow = computed(() => props.t.unit === 'day')
   position: sticky;
   left: 0;
   height: 100%;
+  width: 180px;
   background: #f8f9fa;
   z-index: 3;
   display: flex;
   align-items: center;
   padding: 0 10px;
+  box-sizing: border-box;
   font-weight: 700;
   font-size: 12px;
   color: #444;
@@ -114,6 +126,7 @@ const showWeekdayRow = computed(() => props.t.unit === 'day')
   justify-content: center;
   border-left: 1px solid #e6e6e6;
   background: #f8f9fa;
+  overflow: hidden;
 }
 .th-wd {
   position: absolute;
@@ -126,5 +139,6 @@ const showWeekdayRow = computed(() => props.t.unit === 'day')
   justify-content: center;
   border-left: 1px solid #e6e6e6;
   background: #f8f9fa;
+  overflow: hidden;
 }
 </style>
