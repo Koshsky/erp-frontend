@@ -196,23 +196,3 @@ function onContextMenu(e: MouseEvent) {
   background: rgba(255, 255, 255, 0.35);
 }
 </style>
-
-<style>
-.gb-tooltip {
-  font-size: 12px;
-  line-height: 1.45;
-}
-.gb-tooltip-title {
-  font-weight: 700;
-  margin-bottom: 2px;
-}
-.gb-tooltip-row {
-  color: rgba(255, 255, 255, 0.85);
-  white-space: nowrap;
-}
-.gb-tooltip-resources {
-  margin-top: 4px;
-  padding-top: 4px;
-  border-top: 1px solid rgba(255, 255, 255, 0.2);
-}
-</style>

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import TooltipCell from '../../../../common/TooltipCell/TooltipCell.vue'
+import TooltipCell from '../TooltipCell/TooltipCell.vue'
 import UsageCell from '../UsageCell/UsageCell.vue'
 import type { TimelineCtx } from '@/composables/timeline-context'
 import { LABEL_WIDTH, headerHeight } from '@/components/planner/layout'

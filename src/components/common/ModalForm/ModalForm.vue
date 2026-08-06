@@ -6,6 +6,7 @@ const props = withDefaults(defineProps<ModalFormProps>(), {
   submitLabel: 'Сохранить',
   busy: false,
   error: null,
+  fields: () => [],
 })
 
 const emit = defineEmits<{
@@ -64,7 +65,9 @@ function onKeydown(e: KeyboardEvent) {
           <button type="button" class="mf-close" aria-label="Закрыть" @click="emit('close')">×</button>
         </div>
 
-        <form class="mf-form" @submit.prevent="onSubmit">
+        <slot v-if="$slots.default" />
+
+        <form v-else class="mf-form" @submit.prevent="onSubmit">
           <label v-for="f in fields" :key="f.key" class="mf-field">
             <span class="mf-label">
               {{ f.label }}
