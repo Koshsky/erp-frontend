@@ -1,5 +1,5 @@
 import { computed, nextTick, ref } from 'vue'
-import type { ComputedRef, InjectionKey, Ref } from 'vue'
+import type { ComputedRef, Ref } from 'vue'
 import {
   cellEndDate,
   cellStartDate,
@@ -10,48 +10,9 @@ import {
   type PlanningUnit,
 } from '../components/planner/calendar'
 import { CELL_WIDTH, LABEL_WIDTH } from '../components/planner/layout'
-
-/** Ключ provide/inject: элемент-скролл-контейнер бесконечной шкалы */
-export const TimelineScrollKey: InjectionKey<Ref<HTMLElement | null>> = Symbol('timeline-scroll')
-/** Ключ provide/inject: пересчёт окна + расширение диапазона (для драга/автопрокрутки) */
-export const TimelineSyncKey: InjectionKey<() => void> = Symbol('timeline-sync')
-
-/**
- * Контекст бесконечной шкалы для потребителей (шапка, бары, вехи).
- * Значения развёрнуты (не ref-ы); даты — через функции cellStart/cellEnd,
- * чтобы избежать оборачивания Date в reactive-Proxy.
- */
-export interface TimelineCtx {
-  /** Якорь-дата YYYY-MM-DD (индекс ячейки 0) */
-  origin: string
-  unit: PlanningUnit
-  /** Ширина ячейки в px */
-  cellPx: number
-  /** CSS-зум контейнера: делить viewport-координаты на scale */
-  scale: number
-  /** Счётчик изменений масштаба: инкремент на каждом зуме — сигнал для бейджа масштаба */
-  scaleBump: number
-  /** Абсолютный индекс ячейки у левого края видимой шкалы */
-  windowStart: number
-  /** Сколько ячеек помещается в видимую область */
-  viewportCells: number
-  /** Ячеек слева от origin (для расчёта content-координат) */
-  leftPad: number
-  /** Общая ширина контента в px */
-  contentWidth: number
-  /** content-координата левого края сетки видимого окна */
-  gridLeft: number
-  /** Индексы видимых ячеек */
-  visibleIndices: number[]
-  /** content-координата левого края ячейки i */
-  cellLeft: (i: number) => number
-  /** Дата начала ячейки i */
-  cellStart: (i: number) => Date
-  /** Дата конца ячейки i (включительно) */
-  cellEnd: (i: number) => Date
-  /** Дата под указателем */
-  dateAtPointer: (rect: DOMRect | null, clientX: number) => string | null
-}
+import { clamp } from '../utils'
+import { INTERACTIVE_SELECTOR, TimelineScrollKey, TimelineSyncKey } from './timeline-context'
+import type { TimelineCtx } from './timeline-context'
 
 export interface InfiniteTimeline {
   /** Ширина ячейки в px (из CSS-переменной --cell-width, адаптивная) */
@@ -96,10 +57,6 @@ export interface InfiniteTimeline {
  *  чтобы rebase при левой прокрутке происходил не на каждую ячейку */
 function growStep(viewportCells: number): number {
   return Math.max(Math.ceil(viewportCells * 0.5), 12)
-}
-
-function clamp(v: number, min: number, max: number): number {
-  return Math.min(Math.max(v, min), max)
 }
 
 /** Верхняя граница зума ширины ячейки (px). Минимум не ограничен —
@@ -388,7 +345,7 @@ export function useInfiniteTimeline(
   /** Двойной клик по пустому месту шкалы — сброс обоих масштабов */
   function onDblClick(e: MouseEvent) {
     const target = e.target as HTMLElement
-    if (target.closest('.gantt-bar, .gb-handle, .ms, .row-handle, .gg-label, .gg-merged, .th-corner, .rs-label, .tg-head')) {
+    if (target.closest(INTERACTIVE_SELECTOR + ', .tg-head')) {
       return
     }
     const el = container.value

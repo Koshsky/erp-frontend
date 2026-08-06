@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import TooltipCell from '../../../../common/TooltipCell/TooltipCell.vue'
 import UsageCell from '../UsageCell/UsageCell.vue'
-import type { TimelineCtx } from '@/composables/useInfiniteTimeline'
+import type { TimelineCtx } from '@/composables/timeline-context'
 import { LABEL_WIDTH, headerHeight } from '@/components/planner/layout'
 import type { Resource } from './types'
 

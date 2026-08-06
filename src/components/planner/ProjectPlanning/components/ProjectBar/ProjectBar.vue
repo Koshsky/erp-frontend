@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import ProcessBar from '../../../ProcessPlanning/components/ProcessBar/ProcessBar.vue'
 import type { ProjectBarProps } from './types'
-import { toDate } from '../../../calendar'
+import { formatDateRange } from '../../../calendar'
 
 const props = withDefaults(defineProps<ProjectBarProps>(), {
   color: '#1a73e8',
@@ -16,9 +16,7 @@ const emit = defineEmits<{
   edit: []
 }>()
 
-const dateRange = computed(() =>
-  `${toDate(props.startDate).toLocaleDateString('ru')} — ${toDate(props.endDate).toLocaleDateString('ru')}`,
-)
+const dateRange = computed(() => formatDateRange(props.startDate, props.endDate))
 </script>
 
 <template>

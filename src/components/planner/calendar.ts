@@ -2,8 +2,7 @@
 export type PlanningUnit = 'day' | 'decade'
 
 import { LABEL_WIDTH } from './layout'
-
-const DAY_MS = 1000 * 60 * 60 * 24
+import { DAY_MS, clamp } from '../../utils'
 
 /** Дата в локальной временной зоне. Строки «YYYY-MM-DD» парсятся как локальная полночь,
  * а не UTC (иначе getTime() не совпадёт с локальной полночью ячеек). */
@@ -41,8 +40,9 @@ export function addMonthsISO(date: Date | string | number, months: number): stri
   return fmtDate(new Date(d.getFullYear(), d.getMonth() + months, d.getDate()))
 }
 
-function clamp(v: number, min: number, max: number): number {
-  return Math.min(Math.max(v, min), max)
+/** Диапазон дат «дд.мм.гггг — дд.мм.гггг» (локальная зона) для тултипов баров */
+export function formatDateRange(start: Date | string | number, end: Date | string | number): string {
+  return `${toDate(start).toLocaleDateString('ru')} — ${toDate(end).toLocaleDateString('ru')}`
 }
 
 /** Последний день месяца даты d (новый Date, чтобы не мутировать исходный) */

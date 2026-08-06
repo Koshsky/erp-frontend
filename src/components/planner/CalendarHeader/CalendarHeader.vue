@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { TimelineCtx } from '../../../composables/useInfiniteTimeline'
+import type { TimelineCtx } from '../../../composables/timeline-context'
 import { cellIndexForDate } from '../calendar'
 import {
   LABEL_WIDTH,

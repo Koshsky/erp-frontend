@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, ref } from 'vue'
 import type { GroupGanttProps } from './types'
 import { cellRangeForSpan, toDate } from '../calendar'
 import { LABEL_WIDTH } from '../layout'
+import { useWindowPointerTrack } from '../../../utils'
 
 const props = withDefaults(defineProps<GroupGanttProps>(), {
   reorderable: false,
@@ -84,10 +85,7 @@ function onRowDragMove(e: PointerEvent) {
 }
 
 function endRowDrag() {
-  window.removeEventListener('pointermove', onRowDragMove)
-  window.removeEventListener('pointerup', onRowDragUp)
-  window.removeEventListener('pointercancel', onRowDragUp)
-  document.body.style.userSelect = ''
+  track.stop()
   rowDragCursor.value = false
   draggingFrom.value = null
   dragTo.value = null
@@ -112,11 +110,14 @@ function startRowDrag(e: PointerEvent, from: number) {
   draggingFrom.value = from
   dragTo.value = from
   rowDragCursor.value = true
-  document.body.style.userSelect = 'none'
-  window.addEventListener('pointermove', onRowDragMove)
-  window.addEventListener('pointerup', onRowDragUp)
-  window.addEventListener('pointercancel', onRowDragUp)
+  track.start()
 }
+
+const track = useWindowPointerTrack({
+  onMove: onRowDragMove,
+  onUp: onRowDragUp,
+  onCancel: endRowDrag,
+})
 
 defineSlots<{
   label(): any

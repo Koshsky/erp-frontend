@@ -1,4 +1,4 @@
-import type { TimelineCtx } from '@/composables/useInfiniteTimeline'
+import type { TimelineCtx } from '@/composables/timeline-context'
 import type { Task } from './components/TaskBar/types'
 
 /** Веха процесса — одна точка на шкале с заголовком и описанием */

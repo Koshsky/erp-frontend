@@ -1,8 +1,9 @@
 import { onBeforeUnmount, ref } from 'vue'
 import type { Ref } from 'vue'
 import type { CellSpan } from '../components/planner/calendar'
-import type { TimelineCtx } from './useInfiniteTimeline'
+import type { TimelineCtx } from './timeline-context'
 import { LABEL_WIDTH } from '../components/planner/layout'
+import { clamp, useWindowPointerTrack } from '../utils'
 
 export type BarDragMode = 'move' | 'resizeStart' | 'resizeEnd'
 
@@ -30,10 +31,6 @@ export interface BarDrag {
 
 const EDGE_MARGIN = 48
 const SCROLL_SPEED = 28
-
-function clamp(v: number, min: number, max: number): number {
-  return Math.min(Math.max(v, min), max)
-}
 
 /**
  * Драг бара в бесконечной шкале: движение переводится в абсолютные ячейки через
@@ -139,6 +136,12 @@ export function useBarDrag(options: UseBarDragOptions): BarDrag {
     if (changed && span) options.onCommit({ ...span })
   }
 
+  const track = useWindowPointerTrack({
+    onMove,
+    onUp,
+    onCancel: endDrag,
+  })
+
   function endDrag() {
     stopAutoscroll()
     mode = null
@@ -147,10 +150,7 @@ export function useBarDrag(options: UseBarDragOptions): BarDrag {
     isDragging.value = false
     cursor.value = null
     previewStyle.value = null
-    window.removeEventListener('pointermove', onMove)
-    window.removeEventListener('pointerup', onUp)
-    window.removeEventListener('pointercancel', endDrag)
-    document.body.style.userSelect = ''
+    track.stop()
   }
 
   function startDrag(e: PointerEvent, m: BarDragMode) {
@@ -166,10 +166,7 @@ export function useBarDrag(options: UseBarDragOptions): BarDrag {
     isDragging.value = true
     cursor.value = m === 'move' ? 'grabbing' : 'ew-resize'
     previewStyle.value = null
-    document.body.style.userSelect = 'none'
-    window.addEventListener('pointermove', onMove)
-    window.addEventListener('pointerup', onUp)
-    window.addEventListener('pointercancel', endDrag)
+    track.start()
   }
 
   // Компонент мог размонтироваться посреди драга (смена данных/страницы):
