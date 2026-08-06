@@ -45,3 +45,5 @@ coverage/
 
 *.log
 logs/
+# Локальные заметки по коду
+CODE_REVIEW.md
