@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
-import LabeledBar from '../../../../../LabeledBar/LabeledBar.vue'
+import LabeledBar from '../../../../../Bar/Bar.vue'
 import { GanttTooltip } from '@/components/common'
 import type { Task } from './types'
 import type { TimelineCtx } from '@/composables/timeline-context'

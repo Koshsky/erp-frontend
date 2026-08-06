@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import LabeledBar from '../../../LabeledBar/LabeledBar.vue'
+import LabeledBar from '../../../Bar/Bar.vue'
 import { GanttTooltip } from '@/components/common'
 import type { ProjectBarProps } from './types'
 
