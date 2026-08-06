@@ -1,9 +1,8 @@
 <script setup lang="ts">
-import { computed, inject, ref, useSlots } from 'vue'
+import { computed, ref, useSlots } from 'vue'
 import { cellRangeForSpan, clampSpanDates, spanToDates } from '../calendar'
 import type { TimelineCtx } from '../../../composables/timeline-context'
-import { TimelineScrollKey, TimelineSyncKey } from '../../../composables/timeline-context'
-import { useBarDrag } from '../../../composables/useBarDrag'
+import { useTimelineItem } from '../../../composables/useTimelineItem'
 import { TooltipCell } from '../../common/TooltipCell'
 
 const slots = useSlots()
@@ -53,8 +52,6 @@ const emit = defineEmits<{
 }>()
 
 const barEl = ref<HTMLElement | null>(null)
-const scrollEl = inject(TimelineScrollKey, null)
-const timelineSync = inject(TimelineSyncKey, () => {})
 
 /** Есть ли кастомный тултип: через проп `tooltip` или слот `#tooltip` */
 const hasTooltip = computed(() => Boolean(props.tooltip) || Boolean(slots.tooltip))
@@ -62,19 +59,16 @@ const hasTooltip = computed(() => Boolean(props.tooltip) || Boolean(slots.toolti
 const span = computed(() =>
   cellRangeForSpan(props.timeline.origin, props.timeline.unit, props.startDate, props.endDate),
 )
-const bounds = computed(() =>
-  props.groupStartDate != null && props.groupEndDate != null
-    ? cellRangeForSpan(props.timeline.origin, props.timeline.unit, props.groupStartDate, props.groupEndDate)
-    : null,
-)
 
-/** Бар скрывается, если его спана не пересекает видимое окно (±запас) */
-const visible = computed(() => {
-  if (!span.value) return false
-  const t = props.timeline
-  return (
-    span.value.endCell > t.windowStart - 4 && span.value.startCell < t.windowStart + t.viewportCells + 4
-  )
+const { bounds, visible, isDragging, cursor, previewStyle, startDrag } = useTimelineItem({
+  timeline: () => props.timeline,
+  groupStartDate: props.groupStartDate,
+  groupEndDate: props.groupEndDate,
+  getSpan: () => span.value,
+  onCommit: (sp) => {
+    const d = spanToDates(props.timeline.origin, props.timeline.unit, sp.startCell, sp.endCell)
+    emit('change', clampSpanDates(d.start_date, d.end_date, props.groupStartDate, props.groupEndDate))
+  },
 })
 
 const barStyle = computed<Record<string, string | number> | null>(() => {
@@ -91,18 +85,6 @@ const barStyle = computed<Record<string, string | number> | null>(() => {
     minWidth: props.minWidth + 'px',
     padding: props.padding,
   }
-})
-
-const { isDragging, cursor, previewStyle, startDrag } = useBarDrag({
-  timeline: () => props.timeline,
-  scrollEl: () => scrollEl?.value ?? null,
-  sync: timelineSync,
-  getSpan: () => span.value,
-  getBounds: () => bounds.value,
-  onCommit: (sp) => {
-    const d = spanToDates(props.timeline.origin, props.timeline.unit, sp.startCell, sp.endCell)
-    emit('change', clampSpanDates(d.start_date, d.end_date, props.groupStartDate, props.groupEndDate))
-  },
 })
 
 const cursorStyle = computed<Record<string, string>>(() => {
