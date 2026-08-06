@@ -29,7 +29,7 @@ const tooltip = computed(() => `Занято: ${props.used}/${props.total}`)
 </script>
 
 <template>
-  <div class="uc" :class="state" :title="tooltip"><span v-if="showText">{{ displayText }}</span></div>
+  <div class="uc" :class="[state, { 'uc--compact': !showText }]" :title="tooltip"><span v-if="showText">{{ displayText }}</span></div>
 </template>
 
 <style scoped>
@@ -48,6 +48,11 @@ const tooltip = computed(() => `Занято: ${props.used}/${props.total}`)
   overflow: hidden;
   white-space: nowrap;
   transition: background 0.15s, color 0.15s;
+}
+
+/* Узкие ячейки: текст скрыт, ячейка вдвое тоньше */
+.uc--compact {
+  min-height: 9px;
 }
 
 /* 1. Недобор — ресурс не полностью занят */
