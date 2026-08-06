@@ -13,6 +13,8 @@ const props = withDefaults(defineProps<GroupGanttProps>(), {
   rowHeight: 26,
 })
 
+const groupEl = ref<HTMLElement | null>(null)
+
 const emit = defineEmits<{
   reorder: [payload: { from: number; to: number }]
 }>()
@@ -42,9 +44,14 @@ const dragTo = ref<number | null>(null)
 const dropStyle = ref<{ top: string } | null>(null)
 const rowDragCursor = ref(false)
 
+/** Строки только своей группы (на странице может быть несколько .gg-group) */
+function groupRows(): HTMLElement[] {
+  return Array.from(groupEl.value?.querySelectorAll('.gg-row[data-row-index]') ?? [])
+}
+
 /** Целевой индекс вставки [0..n] по позиции курсора: число строк, середина которых выше курсора */
 function targetBoundary(clientY: number): number {
-  const rows = document.querySelectorAll('.gg-row[data-row-index]')
+  const rows = groupRows()
   if (!rows.length) return 0
   let b = 0
   for (const el of rows) {
@@ -56,18 +63,18 @@ function targetBoundary(clientY: number): number {
 
 function onRowDragMove(e: PointerEvent) {
   if (draggingFrom.value == null) return
+  const rows = groupRows()
   const b = targetBoundary(e.clientY)
   const n = props.items.length
   dragTo.value = b
   if (b === 0) {
-    const first = document.querySelector('.gg-row[data-row-index]') as HTMLElement | null
+    const first = rows[0]
     dropStyle.value = { top: (first?.offsetTop ?? 0) + 'px' }
   } else if (b >= n) {
-    const rows = document.querySelectorAll('.gg-row[data-row-index]')
-    const last = rows[n - 1] as HTMLElement | null
+    const last = rows[n - 1]
     dropStyle.value = { top: ((last?.offsetTop ?? 0) + (last?.offsetHeight ?? 0)) + 'px' }
   } else {
-    const el = document.querySelectorAll('.gg-row[data-row-index]')[b] as HTMLElement | null
+    const el = rows[b]
     dropStyle.value = { top: (el?.offsetTop ?? 0) + 'px' }
   }
 }
@@ -123,7 +130,7 @@ function fmt(d: string | Date | number | null | undefined): string {
 </script>
 
 <template>
-  <div class="gg-group" :data-group="groupId ?? ''" :data-rows="items.length">
+  <div ref="groupEl" class="gg-group" :data-group="groupId ?? ''" :data-rows="items.length">
     <div v-if="overlayStyle" class="gg-overlay" :style="overlayStyle" />
 
     <!-- Объединённый лейбл группы (код объекта + процесс): липкий слева, на всю высоту -->
