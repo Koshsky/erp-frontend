@@ -48,7 +48,7 @@ const showText = computed(() => props.t.cellPx >= 12)
 <template>
   <div class="rs-block" :style="{ top: headerHeight(t.unit, t.cellPx) + 'px' }">
     <template v-for="rc in resourceCells" :key="'r' + rc.res.id">
-      <div class="rs-row">
+      <div class="rs-row" :class="{ 'rs-row--compact': !showText }">
         <div class="rs-label" :style="{ width: LABEL_WIDTH + 'px' }">
           <TooltipCell v-if="showText" :text="`${rc.res.title} (всего: ${rc.res.quantity})`">
             <span class="rs-code">{{ rc.res.code }}</span>
@@ -78,6 +78,10 @@ const showText = computed(() => props.t.cellPx >= 12)
   position: relative;
   height: 18px;
   background: #fff;
+}
+/* Текст скрыт (узкие ячейки) — строка ресурса вдвое тоньше, остаётся только заливка */
+.rs-row--compact {
+  height: 9px;
 }
 .rs-label {
   position: sticky;
