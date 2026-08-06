@@ -146,6 +146,7 @@ export function cellRangeForSpan(
 ): CellSpan | null {
   const s = toDayStart(start)
   const e = toDayStart(end)
+  if (Number.isNaN(s.getTime()) || Number.isNaN(e.getTime())) return null
   if (e.getTime() < s.getTime()) return null
   const startCell = cellIndexForDate(origin, unit, s)
   const endCell = Math.max(cellIndexForDate(origin, unit, e) + 1, startCell + 1)
