@@ -40,12 +40,12 @@ const resourceCells = computed(() =>
   })),
 )
 
-/** Ячейка слишком узкая для текста занятости — прячем подпись */
-const cellWide = computed(() => props.t.cellPx >= 28)
+/** Ячейки слишком узкие, чтобы подписи/блок ресурсов имели смысл — скрываем блок целиком */
+const showBlock = computed(() => props.t.cellPx >= 12)
 </script>
 
 <template>
-  <div class="rs-block" :style="{ top: headerHeight(t.unit) + 'px' }">
+  <div v-if="showBlock" class="rs-block" :style="{ top: headerHeight(t.unit, t.cellPx) + 'px' }">
     <template v-for="rc in resourceCells" :key="'r' + rc.res.id">
       <div class="rs-row">
         <div class="rs-label" :style="{ width: LABEL_WIDTH + 'px' }">
@@ -59,7 +59,7 @@ const cellWide = computed(() => props.t.cellPx >= 28)
           class="rs-cell"
           :style="{ left: t.cellLeft(t.visibleIndices[k]) + 'px', width: t.cellPx + 'px' }"
         >
-          <UsageCell :used="u.used" :total="rc.res.quantity" :isWeekend="u.isWeekend" :showText="cellWide" />
+          <UsageCell :used="u.used" :total="rc.res.quantity" :isWeekend="u.isWeekend" />
         </div>
       </div>
     </template>
@@ -87,6 +87,7 @@ const cellWide = computed(() => props.t.cellPx >= 28)
   display: flex;
   align-items: center;
   padding: 0 6px;
+  box-sizing: border-box;
   font-size: 11px;
   cursor: default;
   border-bottom: 1px solid #e8e8e8;
