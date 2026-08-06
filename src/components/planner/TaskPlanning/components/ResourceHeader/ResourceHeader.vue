@@ -40,16 +40,17 @@ const resourceCells = computed(() =>
   })),
 )
 
-/** Ячейки слишком узкие, чтобы подписи/блок ресурсов имели смысл — скрываем блок целиком */
-const showBlock = computed(() => props.t.cellPx >= 12)
+/** Ячейки слишком узкие — прячем текст (коды ресурсов и числа загрузки),
+ *  но сам блок с раскрашенными ячейками оставляем видимым */
+const showText = computed(() => props.t.cellPx >= 12)
 </script>
 
 <template>
-  <div v-if="showBlock" class="rs-block" :style="{ top: headerHeight(t.unit, t.cellPx) + 'px' }">
+  <div class="rs-block" :style="{ top: headerHeight(t.unit, t.cellPx) + 'px' }">
     <template v-for="rc in resourceCells" :key="'r' + rc.res.id">
       <div class="rs-row">
         <div class="rs-label" :style="{ width: LABEL_WIDTH + 'px' }">
-          <TooltipCell :text="`${rc.res.title} (всего: ${rc.res.quantity})`">
+          <TooltipCell v-if="showText" :text="`${rc.res.title} (всего: ${rc.res.quantity})`">
             <span class="rs-code">{{ rc.res.code }}</span>
           </TooltipCell>
         </div>
@@ -59,7 +60,7 @@ const showBlock = computed(() => props.t.cellPx >= 12)
           class="rs-cell"
           :style="{ left: t.cellLeft(t.visibleIndices[k]) + 'px', width: t.cellPx + 'px' }"
         >
-          <UsageCell :used="u.used" :total="rc.res.quantity" :isWeekend="u.isWeekend" />
+          <UsageCell :used="u.used" :total="rc.res.quantity" :isWeekend="u.isWeekend" :show-text="showText" />
         </div>
       </div>
     </template>
