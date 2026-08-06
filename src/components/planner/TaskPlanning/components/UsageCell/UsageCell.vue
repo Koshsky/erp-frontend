@@ -1,11 +1,18 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
-const props = defineProps<{
-  used: number
-  total: number
-  isWeekend: boolean
-}>()
+const props = withDefaults(
+  defineProps<{
+    used: number
+    total: number
+    isWeekend: boolean
+    /** Показывать ли подпись used/total (прячется в узких ячейках) */
+    showText?: boolean
+  }>(),
+  {
+    showText: true,
+  },
+)
 
 type CellState = 'under' | 'full' | 'over' | 'weekend'
 
@@ -22,7 +29,7 @@ const tooltip = computed(() => `Занято: ${props.used}/${props.total}`)
 </script>
 
 <template>
-  <div class="uc" :class="state" :title="tooltip">{{ displayText }}</div>
+  <div class="uc" :class="state" :title="tooltip"><span v-if="showText">{{ displayText }}</span></div>
 </template>
 
 <style scoped>
