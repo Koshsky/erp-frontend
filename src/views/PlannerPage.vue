@@ -4,9 +4,10 @@ import { storeToRefs } from 'pinia'
 import TaskPlanning from '../components/planner/TaskPlanning/TaskPlanning.vue'
 import { ResourceManagerModal } from '../components/planner'
 import type { AssignedResource, AddResourcePayload } from '../components/planner/ResourceManagerModal'
-import { ContextMenu, ModalForm } from '../components/common'
+import { ContextMenu, ModalForm, ConfirmDialog } from '../components/common'
 import type { ContextMenuItem } from '../components/common/ContextMenu'
 import type { ModalField } from '../components/common/ModalForm'
+import { useConfirm } from '../composables/useConfirm'
 import { usePlanningStore, useAppStore, useAuthStore } from '../store'
 import type { PlanningUnit } from '../components/planner/calendar'
 import { addDaysISO } from '../components/planner/calendar'
@@ -39,6 +40,9 @@ interface MenuState {
   milestoneId?: number
 }
 const menu = ref<MenuState | null>(null)
+
+// Диалог подтверждения удаления (вместо window.confirm — блокируется в iframe/песочнице)
+const { confirm: confirmDialog, ask, proceed, cancel } = useConfirm()
 
 // dp (директор проектов) — read-only: может менять только приоритет проектов,
 // поэтому задачи, вехи и назначения ресурсов ему недоступны для изменения.
@@ -142,11 +146,13 @@ async function onSelect(id: string) {
   } else if (id === 'edit-milestone' && milestoneId != null) {
     openMilestoneEdit(milestoneId)
   } else if (id === 'delete-task' && taskId != null) {
-    if (!window.confirm('Удалить задачу?')) return
-    await planning.deleteTask(taskId)
+    ask('Удалить задачу?', () => {
+      void planning.deleteTask(taskId)
+    })
   } else if (id === 'delete-milestone' && milestoneId != null) {
-    if (!window.confirm('Удалить веху?')) return
-    await planning.deleteMilestone(milestoneId)
+    ask('Удалить веху?', () => {
+      void planning.deleteMilestone(milestoneId)
+    })
   }
 }
 
@@ -266,6 +272,14 @@ onMounted(async () => {
       :items="menuItems"
       @select="onSelect"
       @close="menu = null"
+    />
+
+    <ConfirmDialog
+      :open="!!confirmDialog"
+      :message="confirmDialog?.message ?? ''"
+      :confirm-label="confirmDialog?.confirmLabel"
+      @confirm="proceed"
+      @close="cancel"
     />
 
     <ModalForm

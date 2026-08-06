@@ -22,4 +22,6 @@ export interface GroupGanttProps {
   groupId?: string | number | null
   /** Высота строки в px (default 26); задаёт высоту .gg-row и merged-лейбла */
   rowHeight?: number
+  /** Мин. высота объединённого лейбла (px): чтобы при 0–1 строках код/имя/даты не сжимались и не исчезали */
+  minLabelHeight?: number
 }

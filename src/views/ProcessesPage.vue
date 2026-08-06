@@ -2,9 +2,10 @@
 import { ref, onMounted, computed } from 'vue'
 import { storeToRefs } from 'pinia'
 import ProcessPlanning from '../components/planner/ProcessPlanning/ProcessPlanning.vue'
-import { ContextMenu, ModalForm } from '../components/common'
+import { ContextMenu, ModalForm, ConfirmDialog } from '../components/common'
 import type { ContextMenuItem } from '../components/common/ContextMenu'
 import type { ModalField } from '../components/common/ModalForm'
+import { useConfirm } from '../composables/useConfirm'
 import { usePlanningStore, useAppStore, useAuthStore } from '../store'
 import type { PlanningUnit } from '../components/planner/calendar'
 import { addMonthsISO } from '../components/planner/calendar'
@@ -39,6 +40,9 @@ interface MenuState {
   processId?: number
 }
 const menu = ref<MenuState | null>(null)
+
+// Диалог подтверждения удаления (вместо window.confirm — блокируется в iframe/песочнице)
+const { confirm: confirmDialog, ask, proceed, cancel } = useConfirm()
 
 // dp (директор проектов) — read-only: может менять только приоритет проектов,
 // поэтому создание/редактирование/удаление процессов и перенос их дат недоступны.
@@ -108,9 +112,9 @@ async function onSelect(id: string) {
   } else if (id === 'edit-process' && processId != null) {
     openProcessEdit(processId)
   } else if (id === 'delete-process' && processId != null) {
-    if (!window.confirm('Удалить процесс? Это удалит все его задачи и вехи.')) return
-    const ok = await store.deleteProcess(processId)
-    if (!ok) error.value = store.error
+    ask('Удалить процесс? Это удалит все его задачи и вехи.', () => {
+      void store.deleteProcess(processId)
+    })
   }
 }
 
@@ -168,6 +172,14 @@ onMounted(() => {
       :items="menuItems"
       @select="onSelect"
       @close="menu = null"
+    />
+
+    <ConfirmDialog
+      :open="!!confirmDialog"
+      :message="confirmDialog?.message ?? ''"
+      :confirm-label="confirmDialog?.confirmLabel"
+      @confirm="proceed"
+      @close="cancel"
     />
 
     <ModalForm

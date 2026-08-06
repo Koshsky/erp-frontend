@@ -17,6 +17,9 @@ const emit = defineEmits<{
 
 const groupItems = computed(() => props.processes)
 
+/** Мин. высота объединённого лейбла: код (19px) + даты (11px) + отступы ≈ 43px */
+const MIN_LABEL_HEIGHT = 46
+
 function fmtDate(d: string | Date | number | null | undefined): string {
   return d ? toDate(d).toLocaleDateString('ru') : ''
 }
@@ -41,6 +44,7 @@ function onBarEdit(id: number) {
     :groupStartDate="groupStartDate"
     :groupEndDate="groupEndDate"
     :groupId="projectId"
+    :minLabelHeight="MIN_LABEL_HEIGHT"
     mergedLabel
   >
     <template #label>

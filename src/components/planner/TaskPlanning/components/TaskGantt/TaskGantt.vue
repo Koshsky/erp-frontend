@@ -21,6 +21,9 @@ const emit = defineEmits<{
 
 const groupItems = computed(() => props.tasks)
 
+/** Мин. высота объединённого лейбла: код (19px) + имя (14px) + даты (11px) + отступы ≈ 60px */
+const MS_MIN_LABEL_HEIGHT = 64
+
 function fmtDate(d: string | Date | number | null | undefined): string {
   return d ? toDate(d).toLocaleDateString('ru') : ''
 }
@@ -56,6 +59,7 @@ function onMilestoneEdit(id: number) {
       :groupStartDate="groupStartDate"
       :groupEndDate="groupEndDate"
       :groupId="processId"
+      :minLabelHeight="MS_MIN_LABEL_HEIGHT"
       mergedLabel
     >
       <template #label>
@@ -103,6 +107,7 @@ function onMilestoneEdit(id: number) {
 <style scoped>
 .tg-task-group {
   position: relative;
+  box-sizing: border-box;
   padding-top: 20px;
 }
 .tg-ms-label {

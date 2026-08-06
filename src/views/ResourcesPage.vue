@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { storeToRefs } from 'pinia'
-import { ContextMenu, ModalForm } from '../components/common'
+import { ContextMenu, ModalForm, ConfirmDialog } from '../components/common'
 import type { ContextMenuItem } from '../components/common/ContextMenu'
 import type { ModalField } from '../components/common/ModalForm'
+import { useConfirm } from '../composables/useConfirm'
 import { useAppStore, useAuthStore } from '../store'
 import type { DtoResource } from '@/api'
 
@@ -26,6 +27,9 @@ const menuItems = computed<ContextMenuItem[]>(() => [
   { id: 'edit-resource', label: 'Редактировать' },
   { id: 'delete-resource', label: 'Удалить ресурс' },
 ])
+
+// Диалог подтверждения удаления (вместо window.confirm — блокируется в iframe/песочнице)
+const { confirm: confirmDialog, ask, proceed, cancel } = useConfirm()
 
 type ModalMode =
   | { type: 'create' }
@@ -71,8 +75,10 @@ async function onSelect(id: string) {
   if (id === 'edit-resource') {
     openEdit(menu.value.resourceId)
   } else if (id === 'delete-resource') {
-    if (!window.confirm('Удалить ресурс?')) return
-    await store.deleteResource(menu.value.resourceId)
+    const resourceId = menu.value.resourceId
+    ask('Удалить ресурс?', () => {
+      void store.deleteResource(resourceId)
+    })
   }
 }
 
@@ -135,6 +141,14 @@ onMounted(() => {
       :items="menuItems"
       @select="onSelect"
       @close="menu = null"
+    />
+
+    <ConfirmDialog
+      :open="!!confirmDialog"
+      :message="confirmDialog?.message ?? ''"
+      :confirm-label="confirmDialog?.confirmLabel"
+      @confirm="proceed"
+      @close="cancel"
     />
 
     <ModalForm

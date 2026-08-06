@@ -91,12 +91,20 @@ function onContextMenu(e: MouseEvent) {
   const date = tl.dateAtPointer(scrollEl.value?.getBoundingClientRect() ?? null, e.clientX)
   const rowEl = target.closest<HTMLElement>('.gg-row')
   const groupEl = target.closest<HTMLElement>('.gg-group')
+  // Полоса вех (.tg-task-group) лежит рядом с .gg-group, а не внутри неё, но это та же
+  // группа процесса — резолвим её через вложенный .gg-group (вставка в конец, как у пустого места).
+  const tgGroupEl = target.closest<HTMLElement>('.tg-task-group')
+  const msGroupEl = !rowEl && !groupEl && tgGroupEl
+    ? tgGroupEl.querySelector<HTMLElement>('.gg-group')
+    : null
   const rowIndex = rowEl
     ? Number(rowEl.dataset.rowIndex)
     : groupEl
       ? Number(groupEl.dataset.rows ?? 0)
-      : undefined
-  const groupId = groupEl?.dataset.group ?? undefined
+      : msGroupEl
+        ? Number(msGroupEl.dataset.rows ?? 0)
+        : undefined
+  const groupId = (groupEl ?? msGroupEl)?.dataset.group ?? undefined
   emit('ctxmenu', { clientX: e.clientX, clientY: e.clientY, date, rowIndex, groupId })
 }
 </script>

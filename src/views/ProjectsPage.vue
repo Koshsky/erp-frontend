@@ -2,9 +2,10 @@
 import { ref, onMounted, computed } from 'vue'
 import { storeToRefs } from 'pinia'
 import ProjectPlanning from '../components/planner/ProjectPlanning/ProjectPlanning.vue'
-import { ContextMenu, ModalForm } from '../components/common'
+import { ContextMenu, ModalForm, ConfirmDialog } from '../components/common'
 import type { ContextMenuItem } from '../components/common/ContextMenu'
 import type { ModalField } from '../components/common/ModalForm'
+import { useConfirm } from '../composables/useConfirm'
 import { usePlanningStore, useAppStore, useAuthStore } from '../store'
 import type { PlanningUnit } from '../components/planner/calendar'
 import { addMonthsISO } from '../components/planner/calendar'
@@ -37,6 +38,9 @@ interface MenuState {
   projectId?: number
 }
 const menu = ref<MenuState | null>(null)
+
+// Диалог подтверждения удаления (вместо window.confirm — блокируется в iframe/песочнице)
+const { confirm: confirmDialog, ask, proceed, cancel } = useConfirm()
 
 // === Права по ролям ===
 // dp (директор проектов): просматривает все, меняет только приоритет (переупорядочивание)
@@ -135,9 +139,9 @@ async function onSelect(id: string) {
   } else if (id === 'edit-project' && projectId != null) {
     openProjectEdit(projectId)
   } else if (id === 'delete-project' && projectId != null) {
-    if (!window.confirm('Удалить проект? Это удалит все его процессы, задачи и вехи.')) return
-    const ok = await store.deleteProject(projectId)
-    if (!ok) error.value = store.error
+    ask('Удалить проект? Это удалит все его процессы, задачи и вехи.', () => {
+      void store.deleteProject(projectId)
+    })
   }
 }
 
@@ -206,6 +210,14 @@ onMounted(() => {
       :items="menuItems"
       @select="onSelect"
       @close="menu = null"
+    />
+
+    <ConfirmDialog
+      :open="!!confirmDialog"
+      :message="confirmDialog?.message ?? ''"
+      :confirm-label="confirmDialog?.confirmLabel"
+      @confirm="proceed"
+      @close="cancel"
     />
 
     <ModalForm
