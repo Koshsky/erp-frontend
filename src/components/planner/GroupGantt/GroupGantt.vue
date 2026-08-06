@@ -11,6 +11,7 @@ const props = withDefaults(defineProps<GroupGanttProps>(), {
   groupStartDate: null,
   groupEndDate: null,
   rowHeight: 26,
+  minLabelHeight: 0,
 })
 
 const groupEl = ref<HTMLElement | null>(null)
@@ -35,8 +36,11 @@ const overlayStyle = computed(() => {
   }
 })
 
-/** Высота объединённого лейбла = вся группа (строки фиксированной высоты) */
-const mergedHeight = computed(() => props.items.length * props.rowHeight + 'px')
+/** Высота объединённого лейбла = вся группа (строки фиксированной высоты),
+ *  но не меньше minLabelHeight — чтобы при 0–1 строках код/имя/даты не сжимались */
+const mergedHeight = computed(() =>
+  Math.max(props.items.length * props.rowHeight, props.minLabelHeight) + 'px',
+)
 
 // === Вертикальный драг строк (reorder) ===
 const draggingFrom = ref<number | null>(null)
@@ -130,12 +134,12 @@ function fmt(d: string | Date | number | null | undefined): string {
 </script>
 
 <template>
-  <div ref="groupEl" class="gg-group" :data-group="groupId ?? ''" :data-rows="items.length">
+  <div ref="groupEl" class="gg-group" :data-group="groupId ?? ''" :data-rows="items.length" :style="{ minHeight: mergedHeight }">
     <div v-if="overlayStyle" class="gg-overlay" :style="overlayStyle" />
 
     <!-- Объединённый лейбл группы (код объекта + процесс): липкий слева, на всю высоту -->
     <div
-      v-if="mergedLabel && mergedHeight !== '0px'"
+      v-if="mergedLabel"
       class="gg-merged"
       :style="{ height: mergedHeight, marginBottom: '-' + mergedHeight }"
     >
