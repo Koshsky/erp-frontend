@@ -385,46 +385,41 @@ export const usePlanningStore = defineStore('planning', () => {
   const loading = ref(false)
   const error = ref<string | null>(null)
 
-  async function loadProjectPlanning(silent = false) {
-    if (!silent) loading.value = true
-    if (!silent) error.value = null
+  /** Общий путь загрузки планирования: silent-режим не трогает loading/error,
+   *  чтобы фоновый reload после мутации не сбрасывал видимую ошибку и не показывал спиннер. */
+  async function runLoad(silent: boolean, load: () => Promise<unknown>) {
+    if (!silent) {
+      loading.value = true
+      error.value = null
+    }
     try {
-      const api = new PlanningApi(apiConfig())
-      const resp = await api.planningProjectsGet()
-      projectPlanning.value = resp.data?.data ?? null
+      await load()
     } catch (e: any) {
       if (!silent) error.value = e.message || String(e)
     } finally {
       if (!silent) loading.value = false
     }
+  }
+
+  async function loadProjectPlanning(silent = false) {
+    await runLoad(silent, async () => {
+      const resp = await new PlanningApi(apiConfig()).planningProjectsGet()
+      projectPlanning.value = resp.data?.data ?? null
+    })
   }
 
   async function loadProcessPlanning(silent = false) {
-    if (!silent) loading.value = true
-    if (!silent) error.value = null
-    try {
-      const api = new PlanningApi(apiConfig())
-      const resp = await api.planningProcessesGet()
+    await runLoad(silent, async () => {
+      const resp = await new PlanningApi(apiConfig()).planningProcessesGet()
       processPlanning.value = resp.data?.data ?? null
-    } catch (e: any) {
-      if (!silent) error.value = e.message || String(e)
-    } finally {
-      if (!silent) loading.value = false
-    }
+    })
   }
 
   async function loadTaskPlanning(silent = false) {
-    if (!silent) loading.value = true
-    if (!silent) error.value = null
-    try {
-      const api = new PlanningApi(apiConfig())
-      const resp = await api.planningTasksGet()
+    await runLoad(silent, async () => {
+      const resp = await new PlanningApi(apiConfig()).planningTasksGet()
       taskPlanning.value = resp.data?.data ?? null
-    } catch (e: any) {
-      if (!silent) error.value = e.message || String(e)
-    } finally {
-      if (!silent) loading.value = false
-    }
+    })
   }
 
   /** Сохраняет новые даты бара, затем тихо перезагружает данные (без спиннера).

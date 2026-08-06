@@ -4,29 +4,26 @@ import { storeToRefs } from 'pinia'
 import ProcessPlanning from '../components/planner/ProcessPlanning/ProcessPlanning.vue'
 import { ContextMenu, ModalForm, ConfirmDialog } from '../components/common'
 import type { ContextMenuItem } from '../components/common/ContextMenu'
-import type { ModalField } from '../components/common/ModalForm'
 import { useConfirm } from '../composables/useConfirm'
-import { usePlanningStore, useAppStore, useAuthStore } from '../store'
-import type { PlanningUnit } from '../components/planner/calendar'
+import { useContextMenu } from '../composables/useContextMenu'
+import { useEditModal } from '../composables/useEditModal'
+import { usePlanningOrigin } from '../composables/usePlanningOrigin'
+import { useRoleAccess } from '../composables/useRoleAccess'
+import { useFindPlanningItem } from '../composables/useFindPlanningItem'
+import { usePlanningStore, useAppStore } from '../store'
 import { addMonthsISO, shiftSpanDates } from '../components/planner/calendar'
 
 const store = usePlanningStore()
 const app = useAppStore()
-const auth = useAuthStore()
 const { processPlanning, loading, error } = storeToRefs(store)
 
-const unit = ref<PlanningUnit>('day')
+const { unit, origin, unitOptions } = usePlanningOrigin()
 
-/** Якорь шкалы: первое число предыдущего месяца от сегодня */
-const origin = computed(() => {
-  const now = new Date()
-  return new Date(now.getFullYear(), now.getMonth() - 1, 1)
-})
+// dp (директор проектов) — read-only: может менять только приоритет проектов,
+// поэтому создание/редактирование/удаление процессов и перенос их дат недоступны.
+const { canManage } = useRoleAccess()
 
-const unitOptions: { value: PlanningUnit; label: string }[] = [
-  { value: 'day', label: 'День' },
-  { value: 'decade', label: 'Декада' },
-]
+const { findProcess } = useFindPlanningItem()
 
 // ПКМ по пустому месту группы: создание процесса в проекте-родителе.
 // Дата под курсором, вставка строки в позицию ПКМ.
@@ -44,10 +41,6 @@ const menu = ref<MenuState | null>(null)
 // Диалог подтверждения удаления (вместо window.confirm — блокируется в iframe/песочнице)
 const { confirm: confirmDialog, ask, proceed, cancel } = useConfirm()
 
-// dp (директор проектов) — read-only: может менять только приоритет проектов,
-// поэтому создание/редактирование/удаление процессов и перенос их дат недоступны.
-const canManage = computed(() => auth.user?.role !== 'dp')
-
 const menuItems = computed<ContextMenuItem[]>(() => {
   if (!canManage.value) return []
   return menu.value?.processId != null
@@ -58,46 +51,46 @@ const menuItems = computed<ContextMenuItem[]>(() => {
     : [{ id: 'create-process', label: 'Создать процесс' }]
 })
 
+const ownerOptions = computed(() =>
+  app.users.map((u) => ({ value: u.id ?? 0, label: u.name ?? '' })),
+)
+
 // Модалка редактирования процесса (название, владелец)
 interface EditState {
   id: number
   title: string
   ownerId?: number
 }
-const edit = ref<EditState | null>(null)
-const saving = ref(false)
-const editError = ref<string | null>(null)
-
-const ownerOptions = computed(() =>
-  app.users.map((u) => ({ value: u.id ?? 0, label: u.name ?? '' })),
+const { open: openEdit, close: closeEdit, submit: submitEdit, bind: editBind } = useEditModal<EditState>(
+  (state) => [
+    { key: 'title', label: 'Название', type: 'text', value: state.title, required: true },
+    { key: 'owner_id', label: 'Владелец', type: 'select', value: state.ownerId, options: ownerOptions.value },
+  ],
+  async (state, values) => {
+    const ownerId = values.owner_id !== '' ? Number(values.owner_id) : undefined
+    const ok = await store.updateProcessMeta(state.id, { title: String(values.title ?? ''), owner_id: ownerId })
+    return { ok, error: ok ? null : store.error }
+  },
+  () => 'Редактировать процесс',
 )
-
-const editFields = computed<ModalField[]>(() => {
-  if (!edit.value) return []
-  return [
-    { key: 'title', label: 'Название', type: 'text', value: edit.value.title, required: true },
-    { key: 'owner_id', label: 'Владелец', type: 'select', value: edit.value.ownerId, options: ownerOptions.value },
-  ]
-})
 
 function onContextMenu(p: { clientX: number; clientY: number; date: string | null; rowIndex: number; projectId?: number; processId?: number }) {
   if (!canManage.value) return
   // Пустое место группы: создание процесса требует проект-родителя и известной даты
   if (p.processId == null && (p.projectId == null || p.date == null)) return
-  menu.value = { x: p.clientX, y: p.clientY, date: p.date, rowIndex: p.rowIndex, projectId: p.projectId, processId: p.processId }
+  openMenu({ x: p.clientX, y: p.clientY, date: p.date, rowIndex: p.rowIndex, projectId: p.projectId, processId: p.processId })
 }
 
+const { open: openMenu, close: closeMenu, select, bind: menuBind } = useContextMenu(menu, menuItems, handleSelect)
+
 function openProcessEdit(id: number) {
-  const proc = store.processPlanning?.projects
-    ?.flatMap((p: any) => p.processes ?? [])
-    .find((x: any) => x.id === id)
+  const proc = findProcess(id)
   if (proc) {
-    edit.value = { id, title: proc.title ?? '', ownerId: proc.owner_id }
-    editError.value = null
+    openEdit({ id, title: proc.title ?? '', ownerId: proc.owner_id })
   }
 }
 
-async function onSelect(id: string) {
+async function handleSelect(id: string) {
   if (!menu.value) return
   const { date, rowIndex, projectId, processId } = menu.value
   if (id === 'create-process') {
@@ -125,17 +118,6 @@ async function onSelect(id: string) {
       void store.deleteProcess(processId)
     })
   }
-}
-
-async function onEditSave(values: Record<string, string | number>) {
-  if (!edit.value) return
-  saving.value = true
-  editError.value = null
-  const ownerId = values.owner_id !== '' ? Number(values.owner_id) : undefined
-  const ok = await store.updateProcessMeta(edit.value.id, { title: String(values.title ?? ''), owner_id: ownerId })
-  saving.value = false
-  if (ok) edit.value = null
-  else editError.value = store.error
 }
 
 onMounted(() => {
@@ -174,14 +156,7 @@ onMounted(() => {
       @edit="openProcessEdit"
     />
 
-    <ContextMenu
-      :open="!!menu"
-      :x="menu?.x ?? 0"
-      :y="menu?.y ?? 0"
-      :items="menuItems"
-      @select="onSelect"
-      @close="menu = null"
-    />
+    <ContextMenu v-bind="menuBind" @select="select" @close="closeMenu" />
 
     <ConfirmDialog
       :open="!!confirmDialog"
@@ -191,15 +166,7 @@ onMounted(() => {
       @close="cancel"
     />
 
-    <ModalForm
-      :open="!!edit"
-      title="Редактировать процесс"
-      :fields="editFields"
-      :busy="saving"
-      :error="editError"
-      @save="onEditSave"
-      @close="edit = null"
-    />
+    <ModalForm v-bind="editBind" @save="submitEdit" @close="closeEdit" />
   </section>
 </template>
 
