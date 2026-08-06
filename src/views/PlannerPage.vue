@@ -10,7 +10,7 @@ import type { ModalField } from '../components/common/ModalForm'
 import { useConfirm } from '../composables/useConfirm'
 import { usePlanningStore, useAppStore, useAuthStore } from '../store'
 import type { PlanningUnit } from '../components/planner/calendar'
-import { addDaysISO } from '../components/planner/calendar'
+import { addDaysISO, clampSpanDates, clampDateToBounds } from '../components/planner/calendar'
 
 const planning = usePlanningStore()
 const app = useAppStore()
@@ -125,19 +125,29 @@ async function onSelect(id: string) {
   const { date, rowIndex, processId, taskId, milestoneId } = menu.value
   if (id === 'create-task') {
     if (processId == null || date == null) return
+    const proc = planning.taskPlanning?.processes?.find((p: any) => p.id === processId)
+    // Задача создаётся в пределах процесса-родителя: даты клика зажимаются в его границы,
+    // иначе триггер БД может молча удалить задачу, целиком оказавшуюся вне диапазона.
+    const { start_date, end_date } = clampSpanDates(
+      date,
+      addDaysISO(date, 7),
+      proc?.start_date,
+      proc?.end_date,
+    )
     const ok = await planning.createTask({
       title: 'Новая задача',
       process_id: processId,
-      start_date: date,
-      end_date: addDaysISO(date, 7),
+      start_date,
+      end_date,
     }, rowIndex)
   } else if (id === 'create-milestone') {
     if (processId == null || date == null) return
+    const proc = planning.taskPlanning?.processes?.find((p: any) => p.id === processId)
     await planning.createMilestone({
       title: 'Новая веха',
       content: 'Новая веха',
       process_id: processId,
-      date,
+      date: clampDateToBounds(date, proc?.start_date, proc?.end_date),
     })
   } else if (id === 'edit-task' && taskId != null) {
     openTaskEdit(taskId)
