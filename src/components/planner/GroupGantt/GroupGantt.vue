@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref } from 'vue'
+import { computed, ref } from 'vue'
 import type { GroupGanttProps } from './types'
 import { cellRangeForSpan, toDate } from '../calendar'
 import { LABEL_WIDTH } from '../layout'
-import { useWindowPointerTrack } from '../../../utils'
+import { useRowReorder } from '../../../composables/useRowReorder'
 
 const props = withDefaults(defineProps<GroupGanttProps>(), {
   reorderable: false,
@@ -44,90 +44,18 @@ const mergedHeight = computed(() =>
 )
 
 // === Вертикальный драг строк (reorder) ===
-const draggingFrom = ref<number | null>(null)
-const dragTo = ref<number | null>(null)
-const dropStyle = ref<{ top: string } | null>(null)
-const rowDragCursor = ref(false)
-
-/** Строки только своей группы (на странице может быть несколько .gg-group) */
-function groupRows(): HTMLElement[] {
-  return Array.from(groupEl.value?.querySelectorAll('.gg-row[data-row-index]') ?? [])
-}
-
-/** Целевой индекс вставки [0..n] по позиции курсора: число строк, середина которых выше курсора */
-function targetBoundary(clientY: number): number {
-  const rows = groupRows()
-  if (!rows.length) return 0
-  let b = 0
-  for (const el of rows) {
-    const r = el.getBoundingClientRect()
-    if (clientY > r.top + r.height / 2) b += 1
-  }
-  return b
-}
-
-function onRowDragMove(e: PointerEvent) {
-  if (draggingFrom.value == null) return
-  const rows = groupRows()
-  const b = targetBoundary(e.clientY)
-  const n = props.items.length
-  dragTo.value = b
-  if (b === 0) {
-    const first = rows[0]
-    dropStyle.value = { top: (first?.offsetTop ?? 0) + 'px' }
-  } else if (b >= n) {
-    const last = rows[n - 1]
-    dropStyle.value = { top: ((last?.offsetTop ?? 0) + (last?.offsetHeight ?? 0)) + 'px' }
-  } else {
-    const el = rows[b]
-    dropStyle.value = { top: (el?.offsetTop ?? 0) + 'px' }
-  }
-}
-
-function endRowDrag() {
-  track.stop()
-  rowDragCursor.value = false
-  draggingFrom.value = null
-  dragTo.value = null
-  dropStyle.value = null
-}
-
-function onRowDragUp() {
-  const from = draggingFrom.value
-  const b = dragTo.value
-  endRowDrag()
-  if (from == null || b == null) return
-  const n = props.items.length
-  const to = b > from ? b - 1 : b
-  if (to >= 0 && to < n && to !== from) emit('reorder', { from, to })
-}
-
-function startRowDrag(e: PointerEvent, from: number) {
-  if (e.button !== 0 || e.ctrlKey || e.metaKey) return
-  if (!props.reorderable || props.items.length < 2) return
-  e.preventDefault()
-  e.stopPropagation()
-  draggingFrom.value = from
-  dragTo.value = from
-  rowDragCursor.value = true
-  track.start()
-}
-
-const track = useWindowPointerTrack({
-  onMove: onRowDragMove,
-  onUp: onRowDragUp,
-  onCancel: endRowDrag,
-})
+const { draggingFrom, dropStyle, rowDragCursor, startRowDrag } = useRowReorder(
+  () => props.items.length,
+  () => props.reorderable,
+  groupEl,
+  (p) => emit('reorder', p),
+)
 
 defineSlots<{
   label(): any
   row(props: { item: any; index: number }): any
   bar(props: { item: any; index: number; count: number }): any
 }>()
-
-// Размонтирование посреди драга строки (смена данных/страницы):
-// без этого слушатели и userSelect=«none» остаются навсегда.
-onBeforeUnmount(endRowDrag)
 
 function fmt(d: string | Date | number | null | undefined): string {
   return d ? toDate(d).toLocaleDateString('ru') : ''

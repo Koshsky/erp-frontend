@@ -1,16 +1,12 @@
 <script setup lang="ts">
-import { computed, inject, ref } from 'vue'
+import { computed, ref } from 'vue'
 import {
   cellIndexForDate,
   cellStartDate,
-  cellEndDate,
-  cellRangeForSpan,
   clampDateToBounds,
   fmtDate,
 } from '../calendar'
-import type { TimelineCtx } from '../../../composables/timeline-context'
-import { TimelineScrollKey, TimelineSyncKey } from '../../../composables/timeline-context'
-import { useBarDrag } from '../../../composables/useBarDrag'
+import { useTimelineItem } from '../../../composables/useTimelineItem'
 import { TooltipCell } from '../../common/TooltipCell'
 import type { MilestoneMarkerProps } from './types'
 
@@ -30,8 +26,6 @@ const emit = defineEmits<{
 }>()
 
 const rootEl = ref<HTMLElement | null>(null)
-const scrollEl = inject(TimelineScrollKey, null)
-const timelineSync = inject(TimelineSyncKey, () => {})
 
 /** Дата вехи в формате для тултипа (локализованная) */
 const formattedDate = computed(() => {
@@ -44,24 +38,11 @@ const idx = computed(() =>
   cellIndexForDate(props.timeline.origin, props.timeline.unit, props.date),
 )
 
-/** Веха скрывается вне видимого окна (±запас) */
-const visible = computed(() => {
-  const t = props.timeline
-  return idx.value > t.windowStart - 4 && idx.value < t.windowStart + t.viewportCells + 4
-})
-
-const bounds = computed(() =>
-  props.groupStartDate != null && props.groupEndDate != null
-    ? cellRangeForSpan(props.timeline.origin, props.timeline.unit, props.groupStartDate, props.groupEndDate)
-    : null,
-)
-
-const { isDragging, cursor, previewStyle, startDrag } = useBarDrag({
+const { visible, isDragging, cursor, previewStyle, startDrag } = useTimelineItem({
   timeline: () => props.timeline,
-  scrollEl: () => scrollEl?.value ?? null,
-  sync: timelineSync,
+  groupStartDate: props.groupStartDate,
+  groupEndDate: props.groupEndDate,
   getSpan: () => ({ startCell: idx.value, endCell: idx.value + 1 }),
-  getBounds: () => bounds.value,
   onCommit: (sp) => {
     const date = clampDateToBounds(
       fmtDate(cellStartDate(props.timeline.origin, props.timeline.unit, sp.startCell)),
