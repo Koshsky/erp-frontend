@@ -220,7 +220,8 @@ export function clampDateToBounds(
 /**
  * Дата под указателем мыши в бесконечной шкале.
  * windowStartCell — абсолютный индекс ячейки у левого края шкалы (видимое окно),
- * cellPx — ширина ячейки в px, rect — контейнер (включая колонку названий LABEL_WIDTH).
+ * cellPx — ширина ячейки в px, rect — контейнер (включая колонку названий LABEL_WIDTH),
+ * scale — CSS-зум контейнера (viewport-координаты делятся на масштаб).
  * Возвращает YYYY-MM-DD (локальная зона) либо null, если клик левее шкалы.
  */
 export function dateForPointer(
@@ -230,9 +231,10 @@ export function dateForPointer(
   cellPx: number,
   rect: DOMRect | null,
   clientX: number,
+  scale = 1,
 ): string | null {
   if (!rect || cellPx <= 0) return null
-  const x = clientX - rect.left
+  const x = (clientX - rect.left) / scale
   if (x < LABEL_WIDTH) return null
   const raw = (x - LABEL_WIDTH) / cellPx
   const i = Math.floor(raw)

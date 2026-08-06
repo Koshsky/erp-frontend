@@ -14,6 +14,8 @@ const props = defineProps<{
   origin: Date | string
   /** Единица ячейки: день или декада */
   unit: PlanningUnit
+  /** Стабильный id таблицы: масштаб и прокрутка сохраняются между переключениями вкладок */
+  id?: string
 }>()
 
 const emit = defineEmits<{
@@ -28,12 +30,13 @@ const emit = defineEmits<{
 }>()
 
 const scrollEl = ref<HTMLElement | null>(null)
+const contentEl = ref<HTMLElement | null>(null)
 const unit = computed(() => props.unit)
 
 /** Дата-якорь; при пустом origin — сегодня */
 const originDate = props.origin ? toDate(props.origin) : new Date()
 
-const tl = useInfiniteTimeline(originDate, unit, scrollEl)
+const tl = useInfiniteTimeline(originDate, unit, scrollEl, contentEl, props.id)
 
 provide(TimelineScrollKey, scrollEl)
 provide(TimelineSyncKey, tl.sync)
@@ -46,6 +49,7 @@ const ctx: TimelineCtx = reactive({
   origin: fmtDate(originDate),
   unit,
   cellPx: tl.cellPx,
+  scale: tl.tableScale,
   windowStart: tl.windowStart,
   viewportCells: tl.viewportCells,
   leftPad: tl.leftPad,
@@ -79,7 +83,7 @@ function onContextMenu(e: MouseEvent) {
 
 <template>
   <div ref="scrollEl" class="tg-scroll" @contextmenu.prevent="onContextMenu">
-    <div class="tg-content" :style="{ width: ctx.contentWidth + 'px' }">
+    <div ref="contentEl" class="tg-content" :style="{ width: ctx.contentWidth + 'px' }">
       <!-- Сеточные линии только для видимого окна (под контентом) -->
       <div
         class="tg-gridlines"
