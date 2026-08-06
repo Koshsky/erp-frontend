@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import ProcessBar from '../../../ProcessPlanning/components/ProcessBar/ProcessBar.vue'
+import { GanttTooltip } from '@/components/common'
 import type { ProjectBarProps } from './types'
 import { formatDateRange } from '../../../calendar'
 
@@ -17,6 +18,13 @@ const emit = defineEmits<{
 }>()
 
 const dateRange = computed(() => formatDateRange(props.startDate, props.endDate))
+
+/** Строки тултипа проекта: приоритет, владелец, диапазон дат */
+const tooltipRows = computed(() => [
+  props.priority != null ? `Приоритет: ${props.priority}` : '',
+  props.ownerName ? `Владелец: ${props.ownerName}` : '',
+  dateRange.value,
+].filter(Boolean))
 </script>
 
 <template>
@@ -35,12 +43,7 @@ const dateRange = computed(() => formatDateRange(props.startDate, props.endDate)
     @edit="() => emit('edit')"
   >
     <template #tooltip>
-      <div class="gb-tooltip">
-        <div class="gb-tooltip-title">{{ projectCode }}</div>
-        <div v-if="priority != null" class="gb-tooltip-row">Приоритет: {{ priority }}</div>
-        <div v-if="ownerName" class="gb-tooltip-row">Владелец: {{ ownerName }}</div>
-        <div class="gb-tooltip-row">{{ dateRange }}</div>
-      </div>
+      <GanttTooltip :title="projectCode" :rows="tooltipRows" />
     </template>
   </ProcessBar>
 </template>

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import GanttBar from '../../../../../GanttBar/GanttBar.vue'
+import { GanttTooltip } from '@/components/common'
 import type { Task } from './types'
 import type { TimelineCtx } from '@/composables/timeline-context'
 import { formatDateRange } from '../../../../../calendar'
@@ -112,15 +113,11 @@ watch(
       </span>
     </span>
     <template #tooltip>
-      <div class="gb-tooltip">
-        <div class="gb-tooltip-title">{{ task.title }}</div>
-        <div class="gb-tooltip-row">{{ dateRange }}</div>
-        <div v-if="task.resources && task.resources.length" class="gb-tooltip-resources">
-          <div v-for="r in task.resources" :key="r.resource_id" class="gb-tooltip-row">
-            {{ r.title || r.code }} × {{ r.quantity }}
-          </div>
-        </div>
-      </div>
+      <GanttTooltip
+        :title="task.title"
+        :rows="[dateRange]"
+        :resources="(task.resources || []).map((r) => ({ label: r.title || r.code, quantity: r.quantity }))"
+      />
     </template>
   </GanttBar>
 </template>

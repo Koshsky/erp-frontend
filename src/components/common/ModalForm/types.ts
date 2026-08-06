@@ -21,8 +21,8 @@ export interface ModalFormProps {
   open: boolean
   /** Заголовок окна */
   title: string
-  /** Описание полей формы */
-  fields: ModalField[]
+  /** Описание полей формы; не нужно, если используется default-слот */
+  fields?: ModalField[]
   /** Текст кнопки подтверждения; по умолчанию «Сохранить» */
   submitLabel?: string
   /** Идёт сохранение: кнопка заблокирована, показывается спиннер */

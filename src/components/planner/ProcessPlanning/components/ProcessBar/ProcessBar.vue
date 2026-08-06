@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import GanttBar from '../../../GanttBar/GanttBar.vue'
+import { GanttTooltip } from '@/components/common'
 import type { ProcessBarProps } from './types'
 import { formatDateRange } from '../../../calendar'
 
@@ -23,6 +24,12 @@ const emit = defineEmits<{
 }>()
 
 const dateRange = computed(() => formatDateRange(props.startDate, props.endDate))
+
+/** Строки тултипа: владелец (если есть) + диапазон дат */
+const tooltipRows = computed(() => [
+  props.ownerName ? `Владелец: ${props.ownerName}` : '',
+  dateRange.value,
+].filter(Boolean))
 </script>
 
 <template>
@@ -49,11 +56,7 @@ const dateRange = computed(() => formatDateRange(props.startDate, props.endDate)
     <span v-if="projectCode" class="pb-code">{{ projectCode }}</span>
     <template #tooltip>
       <slot name="tooltip">
-        <div class="gb-tooltip">
-          <div class="gb-tooltip-title">{{ title }}</div>
-          <div v-if="ownerName" class="gb-tooltip-row">Владелец: {{ ownerName }}</div>
-          <div class="gb-tooltip-row">{{ dateRange }}</div>
-        </div>
+        <GanttTooltip :title="title" :rows="tooltipRows" />
       </slot>
     </template>
   </GanttBar>
