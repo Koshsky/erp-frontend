@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
-import { useAuthStore } from '../../store'
-import { useRoleAccess } from '../../composables/useRoleAccess'
+import { useAuthStore } from '../../../store'
+import { useRoleAccess } from '../../../composables/useRoleAccess'
 
-const brand = 'MVS ERP'
+const props = withDefaults(defineProps<{ brand?: string }>(), { brand: 'MVS ERP' })
+
 const router = useRouter()
 const authStore = useAuthStore()
 
@@ -18,7 +19,7 @@ function onLogout() {
 
 <template>
   <header class="ah">
-    <div class="ah-brand">{{ brand }}</div>
+    <div class="ah-brand">{{ props.brand }}</div>
     <nav class="ah-nav">
       <RouterLink to="/">Дашборд</RouterLink>
       <RouterLink v-if="!hideProjectsNav" to="/projects">Проекты</RouterLink>

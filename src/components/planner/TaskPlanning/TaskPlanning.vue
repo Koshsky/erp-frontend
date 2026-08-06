@@ -2,10 +2,11 @@
 import { computed } from 'vue'
 import CalendarHeader from '../CalendarHeader/CalendarHeader.vue'
 import TimelineGrid from '../TimelineGrid/TimelineGrid.vue'
-import ResourceHeader from './components/ResourceHeader/ResourceHeader.vue'
+import { PlannerStates } from '@/components/common'
+import ResourceHeader from '@/components/common/ResourceHeader/ResourceHeader.vue'
 import TaskGantt from './components/TaskGantt/TaskGantt.vue'
 import type { DtoDetailedProcess, DtoResource } from '@/api'
-import type { Resource } from './components/ResourceHeader/types'
+import type { Resource } from '@/components/common/ResourceHeader/types'
 import type { Process } from './types'
 import type { PlanningUnit } from '../calendar'
 import { toDate } from '../calendar'
@@ -108,62 +109,31 @@ function onGridCtx(p: { clientX: number; clientY: number; date: string | null; r
 </script>
 
 <template>
-  <div class="pg">
-    <div v-if="loading" class="st">Загрузка...</div>
-    <template v-else>
-      <p v-if="error" class="pg-error">{{ error }}</p>
+  <PlannerStates :loading="loading" :error="error" :has-data="displayProcesses.length > 0">
+    <TimelineGrid v-if="displayProcesses.length" id="task" :origin="origin" :unit="unit" @ctxmenu="onGridCtx">
+      <template #default="{ t }">
+        <CalendarHeader :t="t" />
+        <ResourceHeader :t="t" :resources="displayResources" :usageFn="usageForDay" />
 
-      <TimelineGrid v-if="displayProcesses.length" id="task" :origin="origin" :unit="unit" @ctxmenu="onGridCtx">
-        <template #default="{ t }">
-          <CalendarHeader :t="t" />
-          <ResourceHeader :t="t" :resources="displayResources" :usageFn="usageForDay" />
-
-          <TaskGantt
-            v-for="proc in displayProcesses"
-            :key="'proc' + proc.id"
-            :timeline="t"
-            :title="proc.title"
-            :projectCode="proc.project_code"
-            :processId="proc.id"
-            :tasks="proc.tasks || []"
-            :milestones="proc.milestones || []"
-            :groupStartDate="proc.start_date"
-            :groupEndDate="proc.end_date"
-            :can-manage="canManage"
-            @change="(p) => emit('change', p)"
-            @milestone-change="(p) => emit('milestone-change', p)"
-            @contextmenu="(p) => emit('contextmenu', p)"
-            @task-edit="(id) => emit('task-edit', id)"
-            @milestone-edit="(id) => emit('milestone-edit', id)"
-          />
-        </template>
-      </TimelineGrid>
-
-      <div v-else-if="error" class="st er">{{ error }}</div>
-      <div v-else class="st">Нет данных</div>
-    </template>
-  </div>
+        <TaskGantt
+          v-for="proc in displayProcesses"
+          :key="'proc' + proc.id"
+          :timeline="t"
+          :title="proc.title"
+          :projectCode="proc.project_code"
+          :processId="proc.id"
+          :tasks="proc.tasks || []"
+          :milestones="proc.milestones || []"
+          :groupStartDate="proc.start_date"
+          :groupEndDate="proc.end_date"
+          :can-manage="canManage"
+          @change="(p) => emit('change', p)"
+          @milestone-change="(p) => emit('milestone-change', p)"
+          @contextmenu="(p) => emit('contextmenu', p)"
+          @task-edit="(id) => emit('task-edit', id)"
+          @milestone-edit="(id) => emit('milestone-edit', id)"
+        />
+      </template>
+    </TimelineGrid>
+  </PlannerStates>
 </template>
-
-<style scoped>
-.pg {
-  background: #fff;
-  border-radius: 10px;
-  padding: 12px;
-  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.08);
-}
-.st {
-  text-align: center;
-  padding: 30px;
-  color: #666;
-  font-size: 14px;
-}
-.pg-error {
-  color: #d93025;
-  font-size: 13px;
-  padding: 8px 4px;
-}
-.er {
-  color: #d93025;
-}
-</style>
