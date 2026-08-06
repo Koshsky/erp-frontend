@@ -1,4 +1,4 @@
-import { ref } from 'vue'
+import { onBeforeUnmount, ref } from 'vue'
 import type { Ref } from 'vue'
 import type { CellSpan } from '../components/planner/calendar'
 import type { TimelineCtx } from './useInfiniteTimeline'
@@ -171,6 +171,10 @@ export function useBarDrag(options: UseBarDragOptions): BarDrag {
     window.addEventListener('pointerup', onUp)
     window.addEventListener('pointercancel', endDrag)
   }
+
+  // Компонент мог размонтироваться посреди драга (смена данных/страницы):
+  // без этого слушатели и userSelect=«none» остаются навсегда.
+  onBeforeUnmount(endDrag)
 
   return { isDragging, cursor, previewStyle, startDrag }
 }

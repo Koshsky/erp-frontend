@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, ref } from 'vue'
 import type { GroupGanttProps } from './types'
 import { cellRangeForSpan, toDate } from '../calendar'
 import { LABEL_WIDTH } from '../layout'
@@ -73,9 +73,7 @@ function onRowDragMove(e: PointerEvent) {
   }
 }
 
-function onRowDragUp() {
-  const from = draggingFrom.value
-  const b = dragTo.value
+function endRowDrag() {
   window.removeEventListener('pointermove', onRowDragMove)
   window.removeEventListener('pointerup', onRowDragUp)
   window.removeEventListener('pointercancel', onRowDragUp)
@@ -84,6 +82,12 @@ function onRowDragUp() {
   draggingFrom.value = null
   dragTo.value = null
   dropStyle.value = null
+}
+
+function onRowDragUp() {
+  const from = draggingFrom.value
+  const b = dragTo.value
+  endRowDrag()
   if (from == null || b == null) return
   const n = props.items.length
   const to = b > from ? b - 1 : b
@@ -109,6 +113,10 @@ defineSlots<{
   row(props: { item: any; index: number }): any
   bar(props: { item: any; index: number; count: number }): any
 }>()
+
+// Размонтирование посреди драга строки (смена данных/страницы):
+// без этого слушатели и userSelect=«none» остаются навсегда.
+onBeforeUnmount(endRowDrag)
 
 function fmt(d: string | Date | number | null | undefined): string {
   return d ? toDate(d).toLocaleDateString('ru') : ''
