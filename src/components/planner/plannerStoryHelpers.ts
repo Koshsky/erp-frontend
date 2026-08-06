@@ -26,6 +26,7 @@ export function makeDemoTimeline(
     unit,
     cellPx,
     scale: 1,
+    scaleBump: 0,
     windowStart,
     viewportCells,
     leftPad: 0,

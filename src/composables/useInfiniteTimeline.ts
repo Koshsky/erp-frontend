@@ -29,6 +29,8 @@ export interface TimelineCtx {
   cellPx: number
   /** CSS-зум контейнера: делить viewport-координаты на scale */
   scale: number
+  /** Счётчик изменений масштаба: инкремент на каждом зуме — сигнал для бейджа масштаба */
+  scaleBump: number
   /** Абсолютный индекс ячейки у левого края видимой шкалы */
   windowStart: number
   /** Сколько ячеек помещается в видимую область */
@@ -56,6 +58,8 @@ export interface InfiniteTimeline {
   cellPx: Ref<number>
   /** Масштаб таблицы (zoom на .tg-content): ячейки, строки, шрифты */
   tableScale: Ref<number>
+  /** Счётчик изменений масштаба: инкрементируется на каждом зуме — сигнал для бейджа масштаба */
+  scaleBump: Ref<number>
   /** Абсолютный индекс ячейки у левого края видимой шкалы (floor) */
   windowStart: Ref<number>
   /** Сколько ячеек помещается в видимую область шкалы */
@@ -152,6 +156,8 @@ export function useInfiniteTimeline(
   const windowStart = ref(0)
   const viewportWidth = ref(0)
   const tableScale = ref(1)
+  /** Инкрементируется при каждом реальном изменении масштаба (зум/сброс) */
+  const scaleBump = ref(0)
 
   const viewportCells = computed(() =>
     Math.max(
@@ -291,6 +297,7 @@ export function useInfiniteTimeline(
     const s = clamp(newScale, SCALE_MIN, SCALE_MAX)
     if (s === tableScale.value) return
     const old = tableScale.value
+    scaleBump.value++
     // Локальные content-координаты под курсором (в px) до смены масштаба
     const x = (el.scrollLeft + vpX) / old
     const y = (el.scrollTop + vpY) / old
@@ -338,6 +345,7 @@ export function useInfiniteTimeline(
     cellPx.value = px
     el.style.removeProperty('--cell-width')
     tableScale.value = 1
+    scaleBump.value++
     if (contentEl.value) contentEl.value.style.zoom = ''
     let nsl = LABEL_WIDTH + (cellFloat + leftPad.value) * px - anchorLocal
     const vs = Math.floor(nsl / px - leftPad.value)
@@ -367,7 +375,8 @@ export function useInfiniteTimeline(
     const rect = el.getBoundingClientRect()
     const vpX = e.clientX - rect.left
     const vpY = e.clientY - rect.top
-    const factor = Math.pow(1.1, clamp(e.deltaY / 100, -4, 4))
+    // Шаг зума: ровно ±10% на один щелчок колеса (deltaY = 120), не более 10% за событие
+    const factor = Math.pow(1.1, clamp(e.deltaY / 120, -1, 1))
     if (e.shiftKey) {
       const local = clamp(vpX / tableScale.value, LABEL_WIDTH, rect.width / tableScale.value)
       zoomTo(cellPx.value * factor, local)
@@ -485,6 +494,7 @@ export function useInfiniteTimeline(
   return {
     cellPx,
     tableScale,
+    scaleBump,
     windowStart,
     viewportCells,
     leftPad,

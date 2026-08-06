@@ -10,6 +10,7 @@ import {
 } from '../../../composables/useInfiniteTimeline'
 import { useTimelinePan } from '../../../composables/useTimelinePan'
 import TodayLine from '../TodayLine/TodayLine.vue'
+import ScaleBadge from '../ScaleBadge/ScaleBadge.vue'
 
 const props = defineProps<{
   /** Дата-якорь: ячейка с индексом 0 (начальная позиция шкалы) */
@@ -68,6 +69,7 @@ const ctx: TimelineCtx = reactive({
   unit,
   cellPx: tl.cellPx,
   scale: tl.tableScale,
+  scaleBump: tl.scaleBump,
   windowStart: tl.windowStart,
   viewportCells: tl.viewportCells,
   leftPad: tl.leftPad,
@@ -120,6 +122,9 @@ function onContextMenu(e: MouseEvent) {
 
       <slot :t="ctx" />
     </div>
+
+    <!-- Бейдж масштаба: всплывает при зумме Ctrl+колесо -->
+    <ScaleBadge :scale="ctx.scale" :bump="ctx.scaleBump" />
   </div>
 </template>
 
