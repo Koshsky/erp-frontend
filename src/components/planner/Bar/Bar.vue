@@ -1,48 +1,27 @@
 <script setup lang="ts">
-import { computed, ref, useSlots } from 'vue'
-import { cellRangeForSpan, clampSpanDates, spanToDates } from '../calendar'
-import type { TimelineCtx } from '../../../composables/timeline-context'
+import { computed, useSlots } from 'vue'
+import { cellRangeForSpan, clampSpanDates, spanToDates, formatDateRange } from '../calendar'
 import { useTimelineItem } from '../../../composables/useTimelineItem'
-import { TooltipCell } from '../../common/TooltipCell'
+import { TooltipCell, GanttTooltip } from '../../common'
+import type { BarProps } from './types'
 
 const slots = useSlots()
 
-const props = withDefaults(
-  defineProps<{
-    timeline: TimelineCtx
-    startDate: string | Date | number
-    endDate: string | Date | number
-    /** Границы родителя (процесса/проекта) — ограничивают перетаскивание */
-    groupStartDate?: string | Date | number | null
-    groupEndDate?: string | Date | number | null
-    color?: string
-    opacity?: number
-    /** Нативный тултип при наведении */
-    title?: string
-    /** Текст кастомного тултипа (показывается, если не передан слот #tooltip) */
-    tooltip?: string
-    height?: number
-    top?: number
-    minWidth?: number
-    padding?: string
-    shadow?: boolean
-    /** Включает перетаскивание и ручки изменения длительности */
-    draggable?: boolean
-  }>(),
-  {
-    color: '#34a853',
-    opacity: 0.75,
-    title: '',
-    height: 24,
-    top: 1,
-    minWidth: 4,
-    padding: '0 8px',
-    shadow: false,
-    draggable: false,
-    groupStartDate: null,
-    groupEndDate: null,
-  },
-)
+const props = withDefaults(defineProps<BarProps>(), {
+  title: '',
+  projectCode: '',
+  color: '#34a853',
+  opacity: 0.75,
+  tooltip: '',
+  height: 24,
+  top: 1,
+  minWidth: 4,
+  padding: '0 8px',
+  shadow: false,
+  draggable: true,
+  groupStartDate: null,
+  groupEndDate: null,
+})
 
 const emit = defineEmits<{
   change: [payload: { start_date: string; end_date: string }]
@@ -50,8 +29,6 @@ const emit = defineEmits<{
   /** Дабл клик по бару — открыть редактирование */
   edit: []
 }>()
-
-const barEl = ref<HTMLElement | null>(null)
 
 /** Есть ли кастомный тултип: через проп `tooltip` или слот `#tooltip` */
 const hasTooltip = computed(() => Boolean(props.tooltip) || Boolean(slots.tooltip))
@@ -93,6 +70,9 @@ const cursorStyle = computed<Record<string, string>>(() => {
   return { cursor: 'default' }
 })
 
+/** Диапазон дат бара «дд.мм.гггг — дд.мм.гггг» (для тултипа и слотов) */
+const dateRange = computed(() => formatDateRange(props.startDate, props.endDate))
+
 function onBodyPointerDown(e: PointerEvent) {
   if (props.draggable) startDrag(e, 'move')
 }
@@ -114,7 +94,6 @@ function onContextMenu(e: MouseEvent) {
 <template>
   <div
     v-if="barStyle"
-    ref="barEl"
     class="gantt-bar"
     :class="{ 'gb-draggable': draggable, 'gb-shadow': shadow, 'is-dragging': isDragging }"
     :style="[barStyle, previewStyle, cursorStyle]"
@@ -124,12 +103,20 @@ function onContextMenu(e: MouseEvent) {
     @contextmenu.prevent.stop="onContextMenu"
   >
     <TooltipCell v-if="hasTooltip" :text="tooltip ?? ''" :multiline="true">
-      <slot />
+      <slot>
+        <span class="lb-title">{{ title }}</span>
+        <span v-if="projectCode" class="lb-code">{{ projectCode }}</span>
+      </slot>
       <template #popup>
-        <slot name="tooltip" />
+        <slot name="tooltip" :dateRange="dateRange">
+          <GanttTooltip :title="title" :rows="[dateRange]" />
+        </slot>
       </template>
     </TooltipCell>
-    <slot v-else />
+    <slot v-else>
+      <span class="lb-title">{{ title }}</span>
+      <span v-if="projectCode" class="lb-code">{{ projectCode }}</span>
+    </slot>
     <template v-if="draggable">
       <span
         class="gb-handle gb-handle-l"
@@ -194,5 +181,24 @@ function onContextMenu(e: MouseEvent) {
 }
 .gb-handle:hover {
   background: rgba(255, 255, 255, 0.35);
+}
+.lb-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  white-space: nowrap;
+  pointer-events: none;
+}
+.lb-code {
+  font-size: 10px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.85);
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 3px;
+  padding: 0 5px;
+  margin-left: 6px;
+  white-space: nowrap;
+  pointer-events: none;
 }
 </style>

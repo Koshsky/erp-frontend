@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/vue3-vite'
 import { ref } from 'vue'
 import TimelineGrid from './TimelineGrid.vue'
-import GanttBar from '../GanttBar/GanttBar.vue'
+import Bar from '../Bar/Bar.vue'
 import { cellRangeForSpan, type PlanningUnit } from '../calendar'
 import { LABEL_WIDTH } from '../layout'
 
@@ -106,11 +106,11 @@ export const Decades: Story = {
   }),
 }
 
-/** Драг + автопрокрутка: реальные GanttBar внутри TimelineGrid.
+/** Драг + автопрокрутка: реальные Bar внутри TimelineGrid.
  *  Перетащи бар к краю — шкала автоматически прокрутится (диапазон расширится). */
 export const DragAutoscroll: Story = {
   render: () => ({
-    components: { TimelineGrid, GanttBar },
+    components: { TimelineGrid, Bar },
     setup() {
       const rows = ref([
         { id: 1, start: '2026-07-03', end: '2026-07-18', color: '#1a73e8' },
@@ -137,7 +137,7 @@ export const DragAutoscroll: Story = {
             <div v-for="row in rows" :key="row.id" style="position:relative;height:40px;border-bottom:1px solid #f0f0f0;">
               <div style="position:sticky;left:0;width:${LABEL_WIDTH}px;height:100%;background:#fff;z-index:10;display:flex;align-items:center;padding:0 10px;font-size:12px;font-weight:600;">Задача {{ row.id }}</div>
               <div style="position:absolute;inset:0;">
-                <GanttBar
+                <Bar
                   :timeline="t"
                   :startDate="row.start"
                   :endDate="row.end"

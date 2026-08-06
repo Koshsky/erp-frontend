@@ -1,10 +1,10 @@
 import type { Meta, StoryObj } from '@storybook/vue3-vite'
-import LabeledBar from './LabeledBar.vue'
+import Bar from './Bar.vue'
 import { makeDemoTimeline } from '@/components/planner/plannerStoryHelpers'
 
-const meta: Meta<typeof LabeledBar> = {
-  title: 'Components/Planner/LabeledBar',
-  component: LabeledBar,
+const meta: Meta<typeof Bar> = {
+  title: 'Components/Planner/Bar',
+  component: Bar,
   parameters: { layout: 'padded' },
   tags: ['autodocs'],
 }
@@ -19,7 +19,7 @@ const base = {
 }
 
 export const Default: Story = {
-  args: { ...base, title: 'Инсталляция', projectCode: 'КО-01' },
+  args: { ...base, title: 'Задача', projectCode: 'КО-01' },
 }
 
 export const Process: Story = {
@@ -44,4 +44,8 @@ export const Project: Story = {
     height: 40,
     top: 6,
   },
+}
+
+export const Bare: Story = {
+  args: { ...base, title: '' },
 }
