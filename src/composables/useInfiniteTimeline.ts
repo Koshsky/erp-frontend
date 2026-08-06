@@ -90,6 +90,42 @@ function growStep(viewportCells: number): number {
   return Math.max(Math.ceil(viewportCells * 0.5), 12)
 }
 
+function clamp(v: number, min: number, max: number): number {
+  return Math.min(Math.max(v, min), max)
+}
+
+/** Верхняя граница зума ширины ячейки (px) и ключ localStorage (общий для всех таблиц).
+ *  Минимум не ограничен — ячейки могут сжиматься как угодно (технический пол 1px). */
+const ZOOM_MAX = 100
+const ZOOM_KEY = 'mvs_erp_planner_zoom'
+
+function storedZoom(): number | null {
+  try {
+    const raw = localStorage.getItem(ZOOM_KEY)
+    if (raw == null) return null
+    const n = parseFloat(raw)
+    return Number.isFinite(n) ? clamp(n, 1, ZOOM_MAX) : null
+  } catch {
+    return null
+  }
+}
+
+function saveZoom(px: number) {
+  try {
+    localStorage.setItem(ZOOM_KEY, String(px))
+  } catch {
+    /* localStorage недоступен — зум просто не сохраняется */
+  }
+}
+
+function clearZoom() {
+  try {
+    localStorage.removeItem(ZOOM_KEY)
+  } catch {
+    /* ignore */
+  }
+}
+
 /**
  * Бесконечная горизонтальная шкала с динамическим расширением.
  * origin — дата-якорь (индекс ячейки 0). Слева/справа «материализуется» ровно
@@ -180,7 +216,81 @@ export function useInfiniteTimeline(
     }
   }
 
+  /**
+   * Масштабирование шкалы: меняет ширину ячейки, оставляя ячейку под anchorX
+   * (content-координата внутри контейнера) на месте — курсор — центр зума.
+   * Диапазон (leftPad/rightCells) расширяется сразу по новой шкале, чтобы
+   * scrollLeft не зажался в старую ширину контента.
+   */
+  function zoomTo(newPx: number, anchorX: number, persist = true) {
+    const el = container.value
+    if (!el) return
+    const px = clamp(newPx, 1, ZOOM_MAX)
+    if (px === cellPx.value) return
+    const oldPx = cellPx.value
+    const cellFloat = (el.scrollLeft + anchorX - LABEL_WIDTH) / oldPx - leftPad.value
+    cellPx.value = px
+    if (persist) {
+      el.style.setProperty('--cell-width', px + 'px')
+      saveZoom(px)
+    } else {
+      el.style.removeProperty('--cell-width')
+    }
+    let nsl = LABEL_WIDTH + (cellFloat + leftPad.value) * px - anchorX
+    const vs = Math.floor(nsl / px - leftPad.value)
+    const step = growStep(viewportCells.value)
+    const visibleEnd = vs + viewportCells.value + 1
+    if (visibleEnd + step > rightCells.value) rightCells.value = visibleEnd + step
+    if (vs - step < -leftPad.value) {
+      leftPad.value += step
+      nsl += step * px
+    }
+    windowStart.value = Math.floor(nsl / px - leftPad.value)
+    void nextTick().then(() => {
+      el.scrollLeft = nsl
+      sync()
+    })
+  }
+
+  /** Сброс масштаба к дефолту из :root (--cell-width), точка под курсором неподвижна */
+  function resetZoom(anchorX: number) {
+    clearZoom()
+    const rootVar = getComputedStyle(document.documentElement).getPropertyValue('--cell-width').trim()
+    const rootPx = rootVar ? parseFloat(rootVar) : CELL_WIDTH
+    zoomTo(Number.isFinite(rootPx) && rootPx > 0 ? rootPx : CELL_WIDTH, anchorX, false)
+  }
+
+  /** Ctrl+колесо — зум ширины ячеек вокруг курсора; иначе обычная прокрутка */
+  function onWheel(e: WheelEvent) {
+    if (!e.ctrlKey && !e.metaKey) return
+    const el = container.value
+    if (!el) return
+    e.preventDefault()
+    const rect = el.getBoundingClientRect()
+    const anchorX = clamp(e.clientX - rect.left, LABEL_WIDTH, rect.width)
+    const factor = Math.pow(1.1, clamp(e.deltaY / 100, -4, 4))
+    zoomTo(cellPx.value * factor, anchorX)
+  }
+
+  /** Двойной клик по пустому месту шкалы — сброс масштаба */
+  function onDblClick(e: MouseEvent) {
+    const target = e.target as HTMLElement
+    if (target.closest('.gantt-bar, .gb-handle, .ms, .row-handle, .gg-label, .gg-merged, .th-corner, .rs-label, .tg-head')) {
+      return
+    }
+    const el = container.value
+    if (!el) return
+    const rect = el.getBoundingClientRect()
+    const anchorX = clamp(e.clientX - rect.left, LABEL_WIDTH, rect.width)
+    resetZoom(anchorX)
+  }
+
   function initialize() {
+    const el0 = container.value
+    if (el0) {
+      const z = storedZoom()
+      if (z != null) el0.style.setProperty('--cell-width', z + 'px')
+    }
     measure()
     const step = growStep(viewportCells.value)
     leftPad.value = step
@@ -212,12 +322,17 @@ export function useInfiniteTimeline(
     })
     observer.observe(el)
     el.addEventListener('scroll', onScroll, { passive: true })
+    el.addEventListener('wheel', onWheel, { passive: false })
+    el.addEventListener('dblclick', onDblClick)
   }
 
   function unmount() {
     observer?.disconnect()
     observer = null
-    container.value?.removeEventListener('scroll', onScroll)
+    const el = container.value
+    el?.removeEventListener('scroll', onScroll)
+    el?.removeEventListener('wheel', onWheel)
+    el?.removeEventListener('dblclick', onDblClick)
   }
 
   return {
