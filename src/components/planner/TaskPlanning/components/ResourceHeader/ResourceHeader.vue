@@ -39,6 +39,9 @@ const resourceCells = computed(() =>
     cells: props.t.visibleIndices.map((i) => cellUsage(res.id, i)),
   })),
 )
+
+/** Ячейка слишком узкая для текста занятости — прячем подпись */
+const cellWide = computed(() => props.t.cellPx >= 28)
 </script>
 
 <template>
@@ -56,7 +59,7 @@ const resourceCells = computed(() =>
           class="rs-cell"
           :style="{ left: t.cellLeft(t.visibleIndices[k]) + 'px', width: t.cellPx + 'px' }"
         >
-          <UsageCell :used="u.used" :total="rc.res.quantity" :isWeekend="u.isWeekend" />
+          <UsageCell :used="u.used" :total="rc.res.quantity" :isWeekend="u.isWeekend" :showText="cellWide" />
         </div>
       </div>
     </template>

@@ -4,7 +4,7 @@ import type { GroupGanttProps } from './types'
 import { cellRangeForSpan, toDate } from '../calendar'
 import { LABEL_WIDTH } from '../layout'
 
-const ROW_HEIGHT = 36
+const ROW_HEIGHT = 26
 
 const props = withDefaults(defineProps<GroupGanttProps>(), {
   reorderable: false,
@@ -176,14 +176,14 @@ function fmt(d: string | Date | number | null | undefined): string {
   align-items: flex-start;
   justify-content: center;
   gap: 4px;
-  padding: 8px 12px;
+  padding: 4px 12px;
   box-sizing: border-box;
   border-right: 1px solid #f0f0f0;
   border-bottom: 1px solid #e0e0e0;
 }
 .gg-row {
   position: relative;
-  height: 36px;
+  height: 26px;
 }
 .gg-label {
   position: sticky;
@@ -199,7 +199,7 @@ function fmt(d: string | Date | number | null | undefined): string {
   font-size: 12px;
   font-weight: 500;
   color: #333;
-  padding: 4px 8px;
+  padding: 1px 8px;
   border-right: 1px solid #f0f0f0;
   border-bottom: 1px solid #e8e8e8;
   box-sizing: border-box;
@@ -233,6 +233,7 @@ function fmt(d: string | Date | number | null | undefined): string {
 }
 .item-title {
   font-weight: 400;
+  font-size: 11px;
   color: #444;
   max-width: 100%;
   overflow: hidden;
@@ -240,7 +241,7 @@ function fmt(d: string | Date | number | null | undefined): string {
   white-space: nowrap;
 }
 .item-dates {
-  font-size: 10px;
+  font-size: 9px;
   color: #999;
   font-weight: 400;
   margin-top: 1px;
