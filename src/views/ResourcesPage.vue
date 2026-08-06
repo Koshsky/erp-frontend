@@ -3,18 +3,19 @@ import { ref, onMounted, computed } from 'vue'
 import { storeToRefs } from 'pinia'
 import { ContextMenu, ModalForm, ConfirmDialog } from '../components/common'
 import type { ContextMenuItem } from '../components/common/ContextMenu'
-import type { ModalField } from '../components/common/ModalForm'
 import { useConfirm } from '../composables/useConfirm'
-import { useAppStore, useAuthStore } from '../store'
+import { useContextMenu } from '../composables/useContextMenu'
+import { useEditModal } from '../composables/useEditModal'
+import { useRoleAccess } from '../composables/useRoleAccess'
+import { useAppStore } from '../store'
 import type { DtoResource } from '@/api'
 
 const store = useAppStore()
-const auth = useAuthStore()
 const { resources, resourcesLoading, resourcesError } = storeToRefs(store)
 
 // dp (директор проектов) — read-only: может менять только приоритет проектов,
 // поэтому создание/редактирование/удаление ресурсов ему недоступно.
-const canManage = computed(() => auth.user?.role !== 'dp')
+const { canManage } = useRoleAccess()
 
 // ПКМ по строке ресурса: редактирование/удаление
 interface MenuState {
@@ -34,43 +35,53 @@ const { confirm: confirmDialog, ask, proceed, cancel } = useConfirm()
 type ModalMode =
   | { type: 'create' }
   | { type: 'edit'; id: number; code: string; title: string; quantity: number }
-const modal = ref<ModalMode | null>(null)
-const saving = ref(false)
-const modalError = ref<string | null>(null)
-
-const modalFields = computed<ModalField[]>(() => {
-  const m = modal.value
-  if (!m) return []
-  const isCreate = m.type === 'create'
-  const base = isCreate
-    ? { code: '', title: '', quantity: 1 }
-    : { code: m.code, title: m.title, quantity: m.quantity }
-  return [
-    { key: 'code', label: 'Код', type: 'text', value: base.code, required: true },
-    { key: 'title', label: 'Название', type: 'text', value: base.title },
-    { key: 'quantity', label: 'Количество', type: 'number', value: base.quantity, required: true },
-  ]
-})
+const { open: openModal, close: closeModal, submit: submitModal, bind: modalBind } = useEditModal<ModalMode>(
+  (state) => {
+    const isCreate = state.type === 'create'
+    const base = isCreate
+      ? { code: '', title: '', quantity: 1 }
+      : { code: state.code, title: state.title, quantity: state.quantity }
+    return [
+      { key: 'code', label: 'Код', type: 'text', value: base.code, required: true },
+      { key: 'title', label: 'Название', type: 'text', value: base.title },
+      { key: 'quantity', label: 'Количество', type: 'number', value: base.quantity, required: true },
+    ]
+  },
+  async (state, values) => {
+    const payload = {
+      code: String(values.code ?? '').trim(),
+      title: String(values.title ?? '').trim(),
+      quantity: Number(values.quantity),
+    }
+    const ok =
+      state.type === 'create'
+        ? await store.createResource(payload)
+        : await store.updateResource(state.id, payload)
+    return { ok, error: ok ? null : store.resourcesError }
+  },
+  (state) => (state.type === 'create' ? 'Создать ресурс' : 'Редактировать ресурс'),
+  (state) => (state.type === 'create' ? 'Создать' : 'Сохранить'),
+)
 
 function onRowContextMenu(e: MouseEvent, res: DtoResource) {
   if (res.id == null || !canManage.value) return
-  menu.value = { x: e.clientX, y: e.clientY, resourceId: res.id }
+  openMenu({ x: e.clientX, y: e.clientY, resourceId: res.id })
 }
 
+const { open: openMenu, close: closeMenu, select, bind: menuBind } = useContextMenu(menu, menuItems, handleSelect)
+
 function openCreate() {
-  modal.value = { type: 'create' }
-  modalError.value = null
+  openModal({ type: 'create' })
 }
 
 function openEdit(id: number) {
   const res = resources.value.find((r) => r.id === id)
   if (res) {
-    modal.value = { type: 'edit', id, code: res.code ?? '', title: res.title ?? '', quantity: res.quantity ?? 1 }
-    modalError.value = null
+    openModal({ type: 'edit', id, code: res.code ?? '', title: res.title ?? '', quantity: res.quantity ?? 1 })
   }
 }
 
-async function onSelect(id: string) {
+function handleSelect(id: string) {
   if (!menu.value) return
   if (id === 'edit-resource') {
     openEdit(menu.value.resourceId)
@@ -80,24 +91,6 @@ async function onSelect(id: string) {
       void store.deleteResource(resourceId)
     })
   }
-}
-
-async function onSave(values: Record<string, string | number>) {
-  if (!modal.value) return
-  saving.value = true
-  modalError.value = null
-  const payload = {
-    code: String(values.code ?? '').trim(),
-    title: String(values.title ?? '').trim(),
-    quantity: Number(values.quantity),
-  }
-  const ok =
-    modal.value.type === 'create'
-      ? await store.createResource(payload)
-      : await store.updateResource(modal.value.id, payload)
-  saving.value = false
-  if (ok) modal.value = null
-  else modalError.value = store.resourcesError
 }
 
 onMounted(() => {
@@ -134,14 +127,7 @@ onMounted(() => {
     </div>
     <p v-else-if="!resourcesLoading && !resourcesError" class="rp-st">Нет данных о ресурсах</p>
 
-    <ContextMenu
-      :open="!!menu"
-      :x="menu?.x ?? 0"
-      :y="menu?.y ?? 0"
-      :items="menuItems"
-      @select="onSelect"
-      @close="menu = null"
-    />
+    <ContextMenu v-bind="menuBind" @select="select" @close="closeMenu" />
 
     <ConfirmDialog
       :open="!!confirmDialog"
@@ -151,16 +137,7 @@ onMounted(() => {
       @close="cancel"
     />
 
-    <ModalForm
-      :open="!!modal"
-      :title="modal?.type === 'create' ? 'Создать ресурс' : 'Редактировать ресурс'"
-      :fields="modalFields"
-      :busy="saving"
-      :error="modalError"
-      :submit-label="modal?.type === 'create' ? 'Создать' : 'Сохранить'"
-      @save="onSave"
-      @close="modal = null"
-    />
+    <ModalForm v-bind="modalBind" @save="submitModal" @close="closeModal" />
   </section>
 </template>
 

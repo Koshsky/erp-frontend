@@ -6,27 +6,26 @@ import { ContextMenu, ModalForm, ConfirmDialog } from '../components/common'
 import type { ContextMenuItem } from '../components/common/ContextMenu'
 import type { ModalField } from '../components/common/ModalForm'
 import { useConfirm } from '../composables/useConfirm'
-import { usePlanningStore, useAppStore, useAuthStore } from '../store'
-import type { PlanningUnit } from '../components/planner/calendar'
+import { useContextMenu } from '../composables/useContextMenu'
+import { useEditModal } from '../composables/useEditModal'
+import { usePlanningOrigin } from '../composables/usePlanningOrigin'
+import { useRoleAccess } from '../composables/useRoleAccess'
+import { useFindPlanningItem } from '../composables/useFindPlanningItem'
+import { usePlanningStore, useAppStore } from '../store'
 import { addMonthsISO } from '../components/planner/calendar'
 
 const store = usePlanningStore()
 const app = useAppStore()
-const auth = useAuthStore()
 const { projectPlanning, loading, error } = storeToRefs(store)
 
-const unit = ref<PlanningUnit>('day')
+const { unit, origin, unitOptions } = usePlanningOrigin()
 
-/** Якорь шкалы: первое число предыдущего месяца от сегодня */
-const origin = computed(() => {
-  const now = new Date()
-  return new Date(now.getFullYear(), now.getMonth() - 1, 1)
-})
+// === Права по ролям ===
+// dp (директор проектов): просматривает все, меняет только приоритет (переупорядочивание)
+// rp (руководитель проекта): создаёт проекты (сам становится owner), редактирует и удаляет свои
+const { role, canCreateProject, canReorderProjects, canManageProject } = useRoleAccess()
 
-const unitOptions: { value: PlanningUnit; label: string }[] = [
-  { value: 'day', label: 'День' },
-  { value: 'decade', label: 'Декада' },
-]
+const { findProject } = useFindPlanningItem()
 
 // ПКМ по пустому месту: меню создания проекта (дата под курсором, вставка в позицию ПКМ)
 // ПКМ по бару проекта: меню редактирования/удаления проекта
@@ -42,25 +41,6 @@ const menu = ref<MenuState | null>(null)
 // Диалог подтверждения удаления (вместо window.confirm — блокируется в iframe/песочнице)
 const { confirm: confirmDialog, ask, proceed, cancel } = useConfirm()
 
-// === Права по ролям ===
-// dp (директор проектов): просматривает все, меняет только приоритет (переупорядочивание)
-// rp (руководитель проекта): создаёт проекты (сам становится owner), редактирует и удаляет свои
-const role = computed(() => auth.user?.role)
-const currentUserId = computed(() => auth.user?.id)
-
-const canCreateProject = computed(() => role.value === 'admin' || role.value === 'rp')
-const canReorderProjects = computed(() =>
-  role.value === 'admin' || role.value === 'dp' || role.value === 'rp',
-)
-
-/** Может ли пользователь редактировать/удалять/двигать проект: admin — любой, rp — только свой */
-function canManageProject(projectId: number): boolean {
-  if (role.value === 'admin') return true
-  if (role.value !== 'rp') return false
-  const project = store.projectPlanning?.projects?.find((x: any) => x.id === projectId)
-  return project?.owner_id != null && project.owner_id === currentUserId.value
-}
-
 const menuItems = computed<ContextMenuItem[]>(() => {
   if (menu.value?.projectId != null) {
     if (!canManageProject(menu.value.projectId)) return []
@@ -74,59 +54,67 @@ const menuItems = computed<ContextMenuItem[]>(() => {
     : []
 })
 
+const ownerOptions = computed(() =>
+  app.users.map((u) => ({ value: u.id ?? 0, label: u.name ?? '' })),
+)
+
 // Модалка редактирования проекта (код, владелец)
 interface EditState {
   id: number
   code: string
   ownerId?: number
 }
-const edit = ref<EditState | null>(null)
-const saving = ref(false)
-const editError = ref<string | null>(null)
-
-const ownerOptions = computed(() =>
-  app.users.map((u) => ({ value: u.id ?? 0, label: u.name ?? '' })),
+const { open: openEdit, close: closeEdit, submit: submitEdit, bind: editBind } = useEditModal<EditState>(
+  (state) => {
+    const fields: ModalField[] = [
+      { key: 'code', label: 'Код проекта', type: 'text', value: state.code, required: true },
+    ]
+    // Владелец проекта не может быть изменён: у rp поле скрываем, admin его видит
+    if (role.value === 'admin') {
+      fields.push({
+        key: 'owner_id',
+        label: 'Владелец',
+        type: 'select',
+        value: state.ownerId,
+        options: ownerOptions.value,
+      })
+    }
+    return fields
+  },
+  async (state, values) => {
+    const patch: { code: string; owner_id?: number } = { code: String(values.code ?? '') }
+    // Владельца проекта изменить нельзя: owner_id отправляем только для admin
+    if (role.value === 'admin' && values.owner_id !== '' && values.owner_id != null) {
+      patch.owner_id = Number(values.owner_id)
+    }
+    const ok = await store.updateProjectMeta(state.id, patch)
+    return { ok, error: ok ? null : store.error }
+  },
+  () => 'Редактировать проект',
 )
-
-const editFields = computed<ModalField[]>(() => {
-  if (!edit.value) return []
-  const fields: ModalField[] = [
-    { key: 'code', label: 'Код проекта', type: 'text', value: edit.value.code, required: true },
-  ]
-  // Владелец проекта не может быть изменён: у rp поле скрываем, admin его видит
-  if (role.value === 'admin') {
-    fields.push({
-      key: 'owner_id',
-      label: 'Владелец',
-      type: 'select',
-      value: edit.value.ownerId,
-      options: ownerOptions.value,
-    })
-  }
-  return fields
-})
 
 function onContextMenu(p: { clientX: number; clientY: number; date: string | null; rowIndex: number; projectId?: number }) {
   // Бар проекта: меню открываем только если есть права на управление проектом
   if (p.projectId != null) {
     if (!canManageProject(p.projectId)) return
-    menu.value = { x: p.clientX, y: p.clientY, date: p.date, rowIndex: p.rowIndex, projectId: p.projectId }
+    openMenu({ x: p.clientX, y: p.clientY, date: p.date, rowIndex: p.rowIndex, projectId: p.projectId })
     return
   }
   // Пустое место: меню создания только для ролей с правом создания и при известной дате
   if (!canCreateProject.value || p.date == null) return
-  menu.value = { x: p.clientX, y: p.clientY, date: p.date, rowIndex: p.rowIndex }
+  openMenu({ x: p.clientX, y: p.clientY, date: p.date, rowIndex: p.rowIndex })
 }
 
+const { open: openMenu, close: closeMenu, select, bind: menuBind } = useContextMenu(menu, menuItems, handleSelect)
+
 function openProjectEdit(id: number) {
-  const p = store.projectPlanning?.projects?.find((x: any) => x.id === id)
+  const p = findProject(id)
   if (p) {
-    edit.value = { id, code: p.project_code ?? '', ownerId: p.owner_id }
-    editError.value = null
+    openEdit({ id, code: p.project_code ?? '', ownerId: p.owner_id })
   }
 }
 
-async function onSelect(id: string) {
+async function handleSelect(id: string) {
   if (!menu.value) return
   const { date, rowIndex, projectId } = menu.value
   if (id === 'create-project' && date != null) {
@@ -148,21 +136,6 @@ async function onSelect(id: string) {
 async function onReorder(e: { from: number; to: number }) {
   const ok = await store.reorderProjects(e.from, e.to)
   if (!ok) error.value = store.error
-}
-
-async function onEditSave(values: Record<string, string | number>) {
-  if (!edit.value) return
-  saving.value = true
-  editError.value = null
-  const patch: { code: string; owner_id?: number } = { code: String(values.code ?? '') }
-  // Владельца проекта изменить нельзя: owner_id отправляем только для admin
-  if (role.value === 'admin' && values.owner_id !== '' && values.owner_id != null) {
-    patch.owner_id = Number(values.owner_id)
-  }
-  const ok = await store.updateProjectMeta(edit.value.id, patch)
-  saving.value = false
-  if (ok) edit.value = null
-  else editError.value = store.error
 }
 
 onMounted(() => {
@@ -203,14 +176,7 @@ onMounted(() => {
       @edit="openProjectEdit"
     />
 
-    <ContextMenu
-      :open="!!menu"
-      :x="menu?.x ?? 0"
-      :y="menu?.y ?? 0"
-      :items="menuItems"
-      @select="onSelect"
-      @close="menu = null"
-    />
+    <ContextMenu v-bind="menuBind" @select="select" @close="closeMenu" />
 
     <ConfirmDialog
       :open="!!confirmDialog"
@@ -220,15 +186,7 @@ onMounted(() => {
       @close="cancel"
     />
 
-    <ModalForm
-      :open="!!edit"
-      title="Редактировать проект"
-      :fields="editFields"
-      :busy="saving"
-      :error="editError"
-      @save="onEditSave"
-      @close="edit = null"
-    />
+    <ModalForm v-bind="editBind" @save="submitEdit" @close="closeEdit" />
   </section>
 </template>
 

@@ -1,14 +1,14 @@
 <script setup lang="ts">
-import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../../store'
+import { useRoleAccess } from '../../composables/useRoleAccess'
 
 const brand = 'MVS ERP'
 const router = useRouter()
 const authStore = useAuthStore()
 
 // ВП (владелец процессов) не видит вкладки проектов и процессов
-const role = computed(() => authStore.user?.role)
+const { hideProjectsNav } = useRoleAccess()
 
 function onLogout() {
   authStore.logout()
@@ -21,8 +21,8 @@ function onLogout() {
     <div class="ah-brand">{{ brand }}</div>
     <nav class="ah-nav">
       <RouterLink to="/">Дашборд</RouterLink>
-      <RouterLink v-if="role !== 'vp'" to="/projects">Проекты</RouterLink>
-      <RouterLink v-if="role !== 'vp'" to="/processes">Процессы</RouterLink>
+      <RouterLink v-if="!hideProjectsNav" to="/projects">Проекты</RouterLink>
+      <RouterLink v-if="!hideProjectsNav" to="/processes">Процессы</RouterLink>
       <RouterLink to="/planner">Задачи</RouterLink>
       <RouterLink to="/resources">Ресурсы</RouterLink>
       <RouterLink to="/profile">Профиль</RouterLink>

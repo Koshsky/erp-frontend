@@ -8,24 +8,27 @@ import { ContextMenu, ModalForm, ConfirmDialog } from '../components/common'
 import type { ContextMenuItem } from '../components/common/ContextMenu'
 import type { ModalField } from '../components/common/ModalForm'
 import { useConfirm } from '../composables/useConfirm'
-import { usePlanningStore, useAppStore, useAuthStore } from '../store'
-import type { PlanningUnit } from '../components/planner/calendar'
+import { useContextMenu } from '../composables/useContextMenu'
+import { useEditModal } from '../composables/useEditModal'
+import { usePlanningOrigin } from '../composables/usePlanningOrigin'
+import { useRoleAccess } from '../composables/useRoleAccess'
+import { useFindPlanningItem } from '../composables/useFindPlanningItem'
+import { usePlanningStore, useAppStore } from '../store'
 import { addDaysISO, shiftSpanDates, clampDateToBounds } from '../components/planner/calendar'
 
 const planning = usePlanningStore()
 const app = useAppStore()
-const auth = useAuthStore()
 
 const { taskPlanning, loading, error } = storeToRefs(planning)
 const { resources } = storeToRefs(app)
 
-const unit = ref<PlanningUnit>('day')
+const { unit, origin } = usePlanningOrigin()
 
-/** Якорь шкалы: первое число предыдущего месяца от сегодня */
-const origin = computed(() => {
-  const now = new Date()
-  return new Date(now.getFullYear(), now.getMonth() - 1, 1)
-})
+// dp (директор проектов) — read-only: может менять только приоритет проектов,
+// поэтому задачи, вехи и назначения ресурсов ему недоступны для изменения.
+const { canManage } = useRoleAccess()
+
+const { findTask, findMilestone } = useFindPlanningItem()
 
 // ПКМ по пустому месту группы: создание задачи или вехи в процессе-родителе.
 // Дата под курсором; задача вставляется строкой в позицию ПКМ, веха — точка на шкале.
@@ -43,10 +46,6 @@ const menu = ref<MenuState | null>(null)
 
 // Диалог подтверждения удаления (вместо window.confirm — блокируется в iframe/песочнице)
 const { confirm: confirmDialog, ask, proceed, cancel } = useConfirm()
-
-// dp (директор проектов) — read-only: может менять только приоритет проектов,
-// поэтому задачи, вехи и назначения ресурсов ему недоступны для изменения.
-const canManage = computed(() => auth.user?.role !== 'dp')
 
 const menuItems = computed<ContextMenuItem[]>(() => {
   if (!canManage.value) return []
@@ -71,56 +70,59 @@ const menuItems = computed<ContextMenuItem[]>(() => {
 type EditState =
   | { type: 'task'; id: number; title: string }
   | { type: 'milestone'; id: number; title: string; content: string }
-const edit = ref<EditState | null>(null)
-const saving = ref(false)
-const editError = ref<string | null>(null)
-
-const editFields = computed<ModalField[]>(() => {
-  if (!edit.value) return []
-  const base: ModalField = {
-    key: 'title',
-    label: 'Название',
-    type: 'text',
-    value: edit.value.title,
-    required: true,
-  }
-  if (edit.value.type === 'milestone') {
-    return [
-      base,
-      { key: 'content', label: 'Контент', type: 'textarea', value: edit.value.content },
-    ]
-  }
-  return [base]
-})
+const { open: openEdit, close: closeEdit, submit: submitEdit, bind: editBind } = useEditModal<EditState>(
+  (state) => {
+    const base: ModalField = {
+      key: 'title',
+      label: 'Название',
+      type: 'text',
+      value: state.title,
+      required: true,
+    }
+    if (state.type === 'milestone') {
+      return [
+        base,
+        { key: 'content', label: 'Контент', type: 'textarea', value: state.content },
+      ]
+    }
+    return [base]
+  },
+  async (state, values) => {
+    const title = String(values.title ?? '')
+    const ok =
+      state.type === 'task'
+        ? await planning.updateTaskMeta(state.id, { title })
+        : await planning.updateMilestoneMeta(state.id, {
+            title,
+            content: String(values.content ?? ''),
+          })
+    return { ok, error: ok ? null : planning.error }
+  },
+  (state) => (state.type === 'task' ? 'Редактировать задачу' : 'Редактировать веху'),
+)
 
 function onContextMenu(p: { clientX: number; clientY: number; date: string | null; rowIndex: number; processId?: number; taskId?: number; milestoneId?: number }) {
   if (!canManage.value) return
   // Пустое место группы: создание требует процесс-родитель и известную дату
   if (p.taskId == null && p.milestoneId == null && (p.processId == null || p.date == null)) return
-  menu.value = { x: p.clientX, y: p.clientY, date: p.date, rowIndex: p.rowIndex, processId: p.processId, taskId: p.taskId, milestoneId: p.milestoneId }
+  openMenu({ x: p.clientX, y: p.clientY, date: p.date, rowIndex: p.rowIndex, processId: p.processId, taskId: p.taskId, milestoneId: p.milestoneId })
 }
 
+const { open: openMenu, close: closeMenu, select, bind: menuBind } = useContextMenu(menu, menuItems, handleSelect)
+
 function openTaskEdit(id: number) {
-  const task = planning.taskPlanning?.processes
-    ?.flatMap((p: any) => p.tasks ?? [])
-    .find((x: any) => x.id === id)
-  if (task) {
-    edit.value = { type: 'task', id, title: task.title ?? '' }
-    editError.value = null
-  }
+  const task = findTask(id)
+  if (task) openEdit({ type: 'task', id, title: task.title ?? '' })
 }
 
 function openMilestoneEdit(id: number) {
-  const ms = planning.taskPlanning?.processes
-    ?.flatMap((p: any) => p.milestones ?? [])
-    .find((x: any) => x.id === id)
+  const ms = findMilestone(id)
   if (ms) {
-    edit.value = { type: 'milestone', id, title: ms.title ?? '', content: ms.content ?? '' }
-    editError.value = null
+    openEdit({ type: 'milestone', id, title: ms.title ?? '', content: ms.content ?? '' })
   }
 }
 
-async function onSelect(id: string) {
+async function handleSelect(id: string) {
   if (!menu.value) return
   const { date, rowIndex, processId, taskId, milestoneId } = menu.value
   if (id === 'create-task') {
@@ -166,23 +168,6 @@ async function onSelect(id: string) {
   }
 }
 
-async function onEditSave(values: Record<string, string | number>) {
-  if (!edit.value) return
-  saving.value = true
-  editError.value = null
-  const title = String(values.title ?? '')
-  const ok =
-    edit.value.type === 'task'
-      ? await planning.updateTaskMeta(edit.value.id, { title })
-      : await planning.updateMilestoneMeta(edit.value.id, {
-          title,
-          content: String(values.content ?? ''),
-        })
-  saving.value = false
-  if (ok) edit.value = null
-  else editError.value = planning.error
-}
-
 // Модалка «Управление ресурсами» задачи (назначение/снятие ресурсов)
 const resourcesModalTaskId = ref<number | null>(null)
 const resourcesBusy = ref(false)
@@ -191,19 +176,13 @@ const resourcesError = ref<string | null>(null)
 /** Название задачи для заголовка модалки */
 const resourcesTaskTitle = computed(() => {
   if (resourcesModalTaskId.value == null) return ''
-  return (
-    planning.taskPlanning?.processes
-      ?.flatMap((p: any) => p.tasks ?? [])
-      .find((t: any) => t.id === resourcesModalTaskId.value)?.title ?? ''
-  )
+  return findTask(resourcesModalTaskId.value)?.title ?? ''
 })
 
 /** Назначенные задаче ресурсы из /planning/tasks (обновляются после тихого reload) */
 const assignedResources = computed<AssignedResource[]>(() => {
   if (resourcesModalTaskId.value == null) return []
-  const task = planning.taskPlanning?.processes
-    ?.flatMap((p: any) => p.tasks ?? [])
-    .find((t: any) => t.id === resourcesModalTaskId.value)
+  const task = findTask(resourcesModalTaskId.value)
   return (task?.resources ?? []).map((r: any) => ({
     assignment_id: r.assignment_id,
     resource_id: r.id ?? 0,
@@ -275,14 +254,7 @@ onMounted(async () => {
       @milestone-edit="openMilestoneEdit"
     />
 
-    <ContextMenu
-      :open="!!menu"
-      :x="menu?.x ?? 0"
-      :y="menu?.y ?? 0"
-      :items="menuItems"
-      @select="onSelect"
-      @close="menu = null"
-    />
+    <ContextMenu v-bind="menuBind" @select="select" @close="closeMenu" />
 
     <ConfirmDialog
       :open="!!confirmDialog"
@@ -292,15 +264,7 @@ onMounted(async () => {
       @close="cancel"
     />
 
-    <ModalForm
-      :open="!!edit"
-      :title="edit?.type === 'task' ? 'Редактировать задачу' : 'Редактировать веху'"
-      :fields="editFields"
-      :busy="saving"
-      :error="editError"
-      @save="onEditSave"
-      @close="edit = null"
-    />
+    <ModalForm v-bind="editBind" @save="submitEdit" @close="closeEdit" />
 
     <ResourceManagerModal
       :open="resourcesModalTaskId != null"
