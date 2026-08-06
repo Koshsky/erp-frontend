@@ -75,25 +75,27 @@ export function useTimelineZoom(opts: TimelineZoomOptions) {
 
   /**
    * Масштабирование таблицы целиком (ячейки, строки, шрифты, бары) CSS-zoom'ом
-   * на .tg-content. Точка под курсором (vpX/vpY — визуальные px-координаты внутри
-   * контейнера) остаётся на месте; scrollLeft/scrollTop — в масштабированных px.
+   * на .tg-content. Якорь зума: по горизонтали — точка под курсором (vpX),
+   * по вертикали — самый верх контейнера (scrollTop масштабируется, верхний край
+   * остаётся на месте). scrollLeft/scrollTop — в масштабированных px.
    */
-  function applyTableScale(newScale: number, vpX: number, vpY: number) {
+  function applyTableScale(newScale: number, vpX: number) {
     const el = container.value
     if (!el) return
     const s = clamp(newScale, SCALE_MIN, SCALE_MAX)
     if (s === tableScale.value) return
     const old = tableScale.value
     scaleBump.value++
-    // Локальные content-координаты под курсором (в px) до смены масштаба
+    // Локальные content-координаты под курсором (в px) до смены масштаба;
+    // по вертикали якорь — верх контейнера (y = scrollTop/old), не курсор.
     const x = (el.scrollLeft + vpX) / old
-    const y = (el.scrollTop + vpY) / old
+    const y = el.scrollTop / old
     tableScale.value = s
     if (contentEl.value) contentEl.value.style.zoom = String(s)
-    // Новые scrollLeft/scrollTop в масштабированных px, чтобы точка под
-    // курсором не сдвинулась.
+    // Новые scrollLeft/scrollTop в масштабированных px, чтобы якорь
+    // (мышь по X, верх по Y) не сдвинулся.
     let nsl = x * s - vpX
-    const nst = y * s - vpY
+    const nst = y * s
     // Расширяем диапазон под новый scrollLeft до flush, иначе браузер зажмёт
     // его в меньшую ширину контента и якорь потеряется.
     const vs = windowStartFor(nsl / s, cellPx.value, leftPad.value)
@@ -139,8 +141,9 @@ export function useTimelineZoom(opts: TimelineZoomOptions) {
   }
 
   /**
-   * Ctrl+колесо — масштабирование всей таблицы вокруг курсора;
-   * Ctrl+Shift+колесо — зум ширины ячеек вокруг курсора; иначе обычная прокрутка.
+   * Ctrl+колесо — масштабирование всей таблицы вокруг курсора (якорь по X — мышь,
+   * по Y — верх контейнера); Ctrl+Shift+колесо — зум ширины ячеек вокруг курсора;
+   * иначе обычная прокрутка.
    */
   function onWheel(e: WheelEvent) {
     if (!e.ctrlKey && !e.metaKey) return
@@ -149,7 +152,6 @@ export function useTimelineZoom(opts: TimelineZoomOptions) {
     e.preventDefault()
     const rect = el.getBoundingClientRect()
     const vpX = e.clientX - rect.left
-    const vpY = e.clientY - rect.top
     // Шаг зума: ровно ±10% на один щелчок колеса (deltaY = 120), не более 10% за событие
     const factor = Math.pow(1.1, clamp(e.deltaY / 120, -1, 1))
     if (e.shiftKey) {
@@ -157,7 +159,7 @@ export function useTimelineZoom(opts: TimelineZoomOptions) {
       zoomTo(cellPx.value * factor, local)
       return
     }
-    applyTableScale(tableScale.value * factor, vpX, vpY)
+    applyTableScale(tableScale.value * factor, vpX)
   }
 
   /** Двойной клик по пустому месту шкалы — сброс обоих масштабов */
