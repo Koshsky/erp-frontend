@@ -127,16 +127,14 @@ async function onSelect(id: string) {
       start_date: date,
       end_date: addDaysISO(date, 7),
     }, rowIndex)
-    if (!ok) error.value = planning.error
   } else if (id === 'create-milestone') {
     if (processId == null || date == null) return
-    const ok = await planning.createMilestone({
+    await planning.createMilestone({
       title: 'Новая веха',
       content: 'Новая веха',
       process_id: processId,
       date,
     })
-    if (!ok) error.value = planning.error
   } else if (id === 'edit-task' && taskId != null) {
     openTaskEdit(taskId)
   } else if (id === 'manage-resources' && taskId != null) {
@@ -145,12 +143,10 @@ async function onSelect(id: string) {
     openMilestoneEdit(milestoneId)
   } else if (id === 'delete-task' && taskId != null) {
     if (!window.confirm('Удалить задачу?')) return
-    const ok = await planning.deleteTask(taskId)
-    if (!ok) error.value = planning.error
+    await planning.deleteTask(taskId)
   } else if (id === 'delete-milestone' && milestoneId != null) {
     if (!window.confirm('Удалить веху?')) return
-    const ok = await planning.deleteMilestone(milestoneId)
-    if (!ok) error.value = planning.error
+    await planning.deleteMilestone(milestoneId)
   }
 }
 
