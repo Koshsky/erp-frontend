@@ -8,7 +8,7 @@ import type { ModalField } from '../components/common/ModalForm'
 import { useConfirm } from '../composables/useConfirm'
 import { usePlanningStore, useAppStore, useAuthStore } from '../store'
 import type { PlanningUnit } from '../components/planner/calendar'
-import { addMonthsISO } from '../components/planner/calendar'
+import { addMonthsISO, clampSpanDates } from '../components/planner/calendar'
 
 const store = usePlanningStore()
 const app = useAppStore()
@@ -102,11 +102,20 @@ async function onSelect(id: string) {
   const { date, rowIndex, projectId, processId } = menu.value
   if (id === 'create-process') {
     if (projectId == null || date == null) return
+    const project = store.processPlanning?.projects?.find((p: any) => p.id === projectId)
+    // Процесс создаётся в пределах проекта-родителя: даты клика зажимаются в его границы,
+    // иначе триггер БД может молча удалить процесс, целиком оказавшийся вне диапазона.
+    const { start_date, end_date } = clampSpanDates(
+      date,
+      addMonthsISO(date, 3),
+      project?.start_date,
+      project?.end_date,
+    )
     const ok = await store.createProcess({
       title: 'Новый процесс',
       project_id: projectId,
-      start_date: date,
-      end_date: addMonthsISO(date, 3),
+      start_date,
+      end_date,
     }, rowIndex)
     if (!ok) error.value = store.error
   } else if (id === 'edit-process' && processId != null) {
