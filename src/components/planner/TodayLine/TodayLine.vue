@@ -56,7 +56,9 @@ const lineStyle = computed<Record<string, string> | null>(() =>
   position: absolute;
   top: 0;
   bottom: 0;
-  z-index: 4;
+  /* Выше всех слоёв таблицы (шапка 30, ресурсная лента 20, бейдж масштаба 50):
+     линия текущей даты пересекает и шапку */
+  z-index: 60;
   pointer-events: none;
 }
 </style>
