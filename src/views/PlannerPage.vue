@@ -232,6 +232,23 @@ async function onRemoveResource(payload: { resource_id: number }) {
 onMounted(async () => {
   await planning.loadTaskPlanning()
   if (!resources.value.length) await app.loadResources()
+  if (!app.projects.length) await app.loadProjects()
+})
+
+/**
+ * Процессы на странице Задач отсортированы по приоритету проекта, к которому они
+ * относятся (сначала приоритет, внутри — по id). Приоритеты берём из app.projects.
+ */
+const processesByPriority = computed(() => {
+  const prio = new Map<number, number>()
+  for (const p of app.projects) {
+    if (p.id != null) prio.set(p.id, p.priority ?? Number.MAX_SAFE_INTEGER)
+  }
+  return [...(taskPlanning.value?.processes ?? [])].sort((a, b) => {
+    const pa = prio.get(a.project_id ?? -1) ?? Number.MAX_SAFE_INTEGER
+    const pb = prio.get(b.project_id ?? -1) ?? Number.MAX_SAFE_INTEGER
+    return pa - pb || (a.id ?? 0) - (b.id ?? 0)
+  })
 })
 </script>
 
@@ -240,7 +257,7 @@ onMounted(async () => {
     <!-- Диаграмма Задач: данные загружает PlannerPage (view) через store,
          TaskPlanning получает их через props -->
     <TaskPlanning
-      :processes="taskPlanning?.processes || null"
+      :processes="processesByPriority"
       :resources="resources"
       :loading="loading"
       :error="error"
