@@ -15,9 +15,9 @@ export function useRoleAccess() {
   /** Создание проекта: admin и rp (rp становится владельцем) */
   const canCreateProject = computed(() => role.value === 'admin' || role.value === 'rp')
 
-  /** Переупорядочивание проектов (смена приоритетов) */
+  /** Переупорядочивание проектов (смена приоритетов): только admin и dp */
   const canReorderProjects = computed(() =>
-    role.value === 'admin' || role.value === 'dp' || role.value === 'rp',
+    role.value === 'admin' || role.value === 'dp',
   )
 
   /** Редактирование/удаление проекта: admin — любой, rp — только свой */
