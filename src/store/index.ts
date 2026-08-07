@@ -530,6 +530,7 @@ export const useTimesheetStore = defineStore('timesheet', () => {
   /** Поля запроса создания/изменения сотрудника */
   interface EmployeePayload {
     name: string
+    resource_id?: number
     manager_id?: number
     hire_date?: string
     termination_date?: string

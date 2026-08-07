@@ -36,6 +36,16 @@ function managerLabel(managerId?: number | null): string {
   return u?.name ?? `#${managerId}`
 }
 
+/** Поиск по ФИО и должности (регистронезависимый) */
+const search = ref('')
+const filteredEmployees = computed(() => {
+  const q = search.value.trim().toLowerCase()
+  if (!q) return employees.value
+  return employees.value.filter((e) =>
+    `${e.name ?? ''} ${e.resource_title ?? ''}`.toLowerCase().includes(q),
+  )
+})
+
 // ПКМ по строке: редактирование/удаление (только свои сотрудники / admin)
 interface MenuState {
   x: number
@@ -57,6 +67,7 @@ type ModalMode =
       type: 'edit'
       id: number
       name: string
+      resourceId?: number
       managerId?: number | null
       hireDate?: string
       terminationDate?: string
@@ -87,17 +98,15 @@ const { open: openModal, close: closeModal, submit: submitModal, bind: modalBind
         value: state.type === 'edit' ? state.name : '',
         required: true,
       },
-    ]
-    // Должность задаётся только при создании (в PUT контракте resource_id нет)
-    if (state.type === 'create') {
-      fields.push({
+      {
         key: 'resourceId',
         label: 'Должность',
         type: 'select',
         options: resourceOptions.value,
         required: true,
-      })
-    }
+        value: state.type === 'edit' ? (state.resourceId ?? '') : '',
+      },
+    ]
     fields.push(
       { key: 'hireDate', label: 'Дата приёма', type: 'date', value: state.type === 'edit' ? state.hireDate : '' },
       { key: 'terminationDate', label: 'Дата увольнения', type: 'date', value: state.type === 'edit' ? state.terminationDate : '' },
@@ -115,8 +124,13 @@ const { open: openModal, close: closeModal, submit: submitModal, bind: modalBind
     return fields
   },
   async (state, values) => {
-    const payload: { name: string; manager_id?: number; hire_date?: string; termination_date?: string } = {
+    const payload: { name: string; resource_id?: number; manager_id?: number; hire_date?: string; termination_date?: string } = {
       name: String(values.name ?? '').trim(),
+    }
+    if (state.type === 'create') {
+      payload.resource_id = Number(values.resourceId)
+    } else if (values.resourceId != null) {
+      payload.resource_id = Number(values.resourceId)
     }
     if (values.hireDate) payload.hire_date = String(values.hireDate)
     if (values.terminationDate) payload.termination_date = String(values.terminationDate)
@@ -152,6 +166,7 @@ function openEdit(id: number) {
       type: 'edit',
       id,
       name: emp.name ?? '',
+      resourceId: emp.resource_id ?? undefined,
       managerId: emp.manager_id ?? null,
       hireDate: emp.hire_date,
       terminationDate: emp.termination_date,
@@ -182,13 +197,16 @@ onMounted(async () => {
   <section class="ep">
     <div class="ep-head">
       <h2 class="ep-title">Сотрудники</h2>
-      <button v-if="canManageEmployees" type="button" class="ep-add" @click="openCreate">Создать сотрудника</button>
+      <div class="ep-actions">
+        <input v-model="search" type="search" class="ep-search" placeholder="Поиск по ФИО или должности" />
+        <button v-if="canManageEmployees" type="button" class="ep-add" @click="openCreate">Создать сотрудника</button>
+      </div>
     </div>
 
     <p v-if="loading && !employees.length" class="ep-st">Загрузка...</p>
     <p v-if="error && !employees.length" class="ep-st er">{{ error }}</p>
 
-    <div v-if="employees.length" class="table">
+    <div v-if="filteredEmployees.length" class="table">
       <div class="tr th">
         <div>ФИО</div>
         <div>Должность</div>
@@ -197,7 +215,7 @@ onMounted(async () => {
         <div>Руководитель</div>
       </div>
       <div
-        v-for="emp in employees"
+        v-for="emp in filteredEmployees"
         :key="emp.id"
         class="tr"
         @contextmenu.prevent.stop="onRowContextMenu($event, emp)"
@@ -209,6 +227,7 @@ onMounted(async () => {
         <div>{{ managerLabel(emp.manager_id) }}</div>
       </div>
     </div>
+    <p v-else-if="!loading && !error && employees.length" class="ep-st">Ничего не найдено</p>
     <p v-else-if="!loading && !error" class="ep-st">Нет данных о сотрудниках</p>
 
     <ContextMenu v-bind="menuBind" @select="select" @close="closeMenu" />
@@ -251,6 +270,28 @@ onMounted(async () => {
 }
 .ep-add:hover {
   background: #1765cc;
+}
+.ep-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.ep-search {
+  width: 240px;
+  box-sizing: border-box;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 9px 12px;
+  font-size: 14px;
+  font-family: inherit;
+  color: #333;
+  background: #fff;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.ep-search:focus {
+  border-color: #1a73e8;
+  box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.12);
 }
 .ep-st {
   color: #666;
