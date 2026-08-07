@@ -38,10 +38,10 @@ export const NAV_CATEGORIES: NavCategory[] = [
   },
 ]
 
-/** Прямые ссылки в шапке (вне категорий) */
+/** Прямые ссылки в шапке (вне категорий); Профиль — самый левый */
 export const STANDALONE_NAV: NavItem[] = [
-  { label: 'Дашборд', to: '/', name: 'dashboard' },
   { label: 'Профиль', to: '/profile', name: 'profile' },
+  { label: 'Дашборд', to: '/', name: 'dashboard' },
 ]
 
 /** Навигация с учётом роли текущего пользователя */
