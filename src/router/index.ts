@@ -58,6 +58,11 @@ const router = createRouter({
           component: () => import('../views/EmployeesPage.vue'),
         },
         {
+          path: 'statuses',
+          name: 'statuses',
+          component: () => import('../views/StatusesPage.vue'),
+        },
+        {
           path: 'profile',
           name: 'profile',
           component: () => import('../views/ProfilePage.vue'),
@@ -86,9 +91,9 @@ router.beforeEach(async (to) => {
     return { name: 'dashboard' }
   }
 
-  // Табель и Сотрудники доступны только vp и admin
+  // Табель, Сотрудники и Статусы доступны только vp и admin
   if (
-    (to.name === 'timesheet' || to.name === 'employees') &&
+    (to.name === 'timesheet' || to.name === 'employees' || to.name === 'statuses') &&
     !['vp', 'admin'].includes(auth.user?.role ?? '')
   ) {
     return { name: 'dashboard' }

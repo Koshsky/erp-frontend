@@ -28,14 +28,11 @@ export function useRoleAccess() {
     return project?.owner_id != null && project.owner_id === userId.value
   }
 
-  /** ВП (владелец процессов) не видит вкладки проектов и процессов */
-  const hideProjectsNav = computed(() => role.value === 'vp')
-
-  /** Табель состояний сотрудников: vp (свои подчинённые) и admin (все) */
-  const canManageTimesheet = computed(() => role.value === 'vp' || role.value === 'admin')
-
   /** Вкладка «Сотрудники»: vp (свои подчинённые) и admin (все) */
   const canManageEmployees = computed(() => role.value === 'vp' || role.value === 'admin')
+
+  /** Страница «Статусы»: vp и admin */
+  const canManageStates = computed(() => role.value === 'vp' || role.value === 'admin')
 
   /** Право изменить сотрудника: admin — любого, остальные — только подчинённых */
   function canEditEmployee(emp: { manager_id?: number | null }): boolean {
@@ -53,9 +50,8 @@ export function useRoleAccess() {
     canCreateProject,
     canReorderProjects,
     canManageProject,
-    hideProjectsNav,
-    canManageTimesheet,
     canManageEmployees,
+    canManageStates,
     canEditEmployee,
     canDeleteEmployee,
   }
