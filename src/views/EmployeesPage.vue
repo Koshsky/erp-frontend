@@ -36,13 +36,13 @@ function managerLabel(managerId?: number | null): string {
   return u?.name ?? `#${managerId}`
 }
 
-/** Поиск по ФИО и должности (регистронезависимый) */
+/** Поиск по ФИО, должности и типу ресурса (регистронезависимый) */
 const search = ref('')
 const filteredEmployees = computed(() => {
   const q = search.value.trim().toLowerCase()
   if (!q) return employees.value
   return employees.value.filter((e) =>
-    `${e.name ?? ''} ${e.resource_title ?? ''}`.toLowerCase().includes(q),
+    `${e.name ?? ''} ${e.position ?? ''} ${e.resource_title ?? ''}`.toLowerCase().includes(q),
   )
 })
 
@@ -67,13 +67,14 @@ type ModalMode =
       type: 'edit'
       id: number
       name: string
+      position?: string
       resourceId?: number
       managerId?: number | null
       hireDate?: string
       terminationDate?: string
     }
 
-/** Варианты должностей из справочника ресурсов */
+/** Варианты типов ресурсов (категорий) из справочника */
 const resourceOptions = computed(() =>
   resources.value
     .filter((r) => r.id != null)
@@ -99,8 +100,15 @@ const { open: openModal, close: closeModal, submit: submitModal, bind: modalBind
         required: true,
       },
       {
-        key: 'resourceId',
+        key: 'position',
         label: 'Должность',
+        type: 'text',
+        value: state.type === 'edit' ? (state.position ?? '') : '',
+        placeholder: 'Свободный текст, например «Ведущий инженер»',
+      },
+      {
+        key: 'resourceId',
+        label: 'Тип ресурса',
         type: 'select',
         options: resourceOptions.value,
         required: true,
@@ -124,8 +132,11 @@ const { open: openModal, close: closeModal, submit: submitModal, bind: modalBind
     return fields
   },
   async (state, values) => {
-    const payload: { name: string; resource_id?: number; manager_id?: number; hire_date?: string; termination_date?: string } = {
+    const payload: { name: string; resource_id?: number; position?: string; manager_id?: number; hire_date?: string; termination_date?: string } = {
       name: String(values.name ?? '').trim(),
+    }
+    if (values.position != null) {
+      payload.position = String(values.position).trim()
     }
     if (state.type === 'create') {
       payload.resource_id = Number(values.resourceId)
@@ -166,6 +177,7 @@ function openEdit(id: number) {
       type: 'edit',
       id,
       name: emp.name ?? '',
+      position: emp.position ?? '',
       resourceId: emp.resource_id ?? undefined,
       managerId: emp.manager_id ?? null,
       hireDate: emp.hire_date,
@@ -210,6 +222,7 @@ onMounted(async () => {
       <div class="tr th">
         <div>ФИО</div>
         <div>Должность</div>
+        <div>Тип ресурса</div>
         <div>Дата приёма</div>
         <div>Дата увольнения</div>
         <div>Руководитель</div>
@@ -221,6 +234,7 @@ onMounted(async () => {
         @contextmenu.prevent.stop="onRowContextMenu($event, emp)"
       >
         <div class="name">{{ emp.name }}</div>
+        <div class="pos">{{ emp.position || '—' }}</div>
         <div>{{ emp.resource_title }}</div>
         <div>{{ fmtDate(emp.hire_date) }}</div>
         <div>{{ fmtDate(emp.termination_date) }}</div>
@@ -309,7 +323,7 @@ onMounted(async () => {
 }
 .tr {
   display: grid;
-  grid-template-columns: 1.4fr 1.2fr 130px 150px 1fr;
+  grid-template-columns: 1.4fr 1.3fr 1.1fr 110px 140px 1fr;
   gap: 8px;
   padding: 12px 20px;
   border-bottom: 1px solid #f0f0f0;
@@ -327,5 +341,9 @@ onMounted(async () => {
 .name {
   font-weight: 700;
   color: #1a3a6b;
+}
+.pos {
+  color: #1a73e8;
+  font-weight: 600;
 }
 </style>

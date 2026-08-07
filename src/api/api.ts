@@ -79,6 +79,7 @@ export interface DtoCreateEmployeeRequest {
     'hire_date'?: string;
     'manager_id'?: number;
     'name'?: string;
+    'position'?: string;
     'termination_date'?: string;
 }
 export interface DtoCreateMilestoneRequest {
@@ -151,6 +152,7 @@ export interface DtoEmployeeResponse {
     'id'?: number;
     'manager_id'?: number;
     'name'?: string;
+    'position'?: string;
     'resource_id'?: number;
     'resource_title'?: string;
     'termination_date'?: string;
@@ -283,6 +285,7 @@ export interface DtoUpdateEmployeeRequest {
     'hire_date'?: string;
     'manager_id'?: number;
     'name'?: string;
+    'position'?: string;
     'resource_id'?: number;
     'termination_date'?: string;
 }
