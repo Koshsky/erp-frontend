@@ -7,7 +7,7 @@ export interface ModalField {
   /** Ключ поля — имя в payload при сохранении (save(values)) */
   key: string
   label: string
-  type: 'text' | 'textarea' | 'select' | 'number'
+  type: 'text' | 'textarea' | 'select' | 'number' | 'date'
   /** Начальное значение (подставляется при открытии) */
   value?: number | string
   /** Варианты для type: 'select' */
