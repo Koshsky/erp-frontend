@@ -132,7 +132,8 @@ function fmt(d: string | Date | number | null | undefined): string {
   left: 0;
   width: 180px;
   background: #fff;
-  z-index: 11;
+  /* Боковая панель — выше линии текущей даты (60) */
+  z-index: 70;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -152,7 +153,8 @@ function fmt(d: string | Date | number | null | undefined): string {
   width: 180px;
   height: 100%;
   background: #fff;
-  z-index: 10;
+  /* Боковая панель — выше линии текущей даты (60) */
+  z-index: 65;
   display: flex;
   flex-direction: column;
   align-items: flex-start;

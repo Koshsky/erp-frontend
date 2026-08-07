@@ -43,17 +43,40 @@ const resourceCells = computed(() =>
 /** Ячейки слишком узкие — прячем текст (коды ресурсов и числа загрузки),
  *  но сам блок с раскрашенными ячейками оставляем видимым */
 const showText = computed(() => props.t.cellPx >= 12)
+
+/** Высота строки ресурса и суммарная высота слоя кодов (для отрицательного margin) */
+const rowH = computed(() => (showText.value ? 18 : 9))
+const labelsH = computed(() => resourceCells.value.length * rowH.value)
 </script>
 
 <template>
+  <!-- Слой кодов ресурсов: отдельный sticky-элемент боковой панели (z 80), вне
+       stacking context ресурсного блока — выше линии текущей даты (60) -->
+  <div
+    class="rs-labels"
+    :style="{
+      top: headerHeight(t.unit, t.cellPx) + 'px',
+      width: LABEL_WIDTH + 'px',
+      height: labelsH + 'px',
+      marginBottom: '-' + labelsH + 'px',
+    }"
+  >
+    <div
+      v-for="rc in resourceCells"
+      :key="'rl' + rc.res.id"
+      class="rs-label"
+      :class="{ 'rs-label--compact': !showText }"
+    >
+      <TooltipCell v-if="showText" :text="`${rc.res.title} (всего: ${rc.res.quantity})`">
+        <span class="rs-code">{{ rc.res.code }}</span>
+      </TooltipCell>
+    </div>
+  </div>
+
+  <!-- Блок ячеек загрузки «4/5»: липнет под шапкой календаря, ниже линии текущей даты -->
   <div class="rs-block" :style="{ top: headerHeight(t.unit, t.cellPx) + 'px' }">
     <template v-for="rc in resourceCells" :key="'r' + rc.res.id">
       <div class="rs-row" :class="{ 'rs-row--compact': !showText }">
-        <div class="rs-label" :style="{ width: LABEL_WIDTH + 'px' }">
-          <TooltipCell v-if="showText" :text="`${rc.res.title} (всего: ${rc.res.quantity})`">
-            <span class="rs-code">{{ rc.res.code }}</span>
-          </TooltipCell>
-        </div>
         <div
           v-for="(u, k) in rc.cells"
           :key="'rc' + t.visibleIndices[k]"
@@ -68,7 +91,36 @@ const showText = computed(() => props.t.cellPx >= 12)
 </template>
 
 <style scoped>
-/* Ресурсный заголовок прилипает сразу под календарным заголовком при вертикальной прокрутке */
+/* Слой кодов ресурсов — боковая панель: липнет к левому и верхнему краю (под шапкой
+ * календаря), лежит выше линии текущей даты (60). Высота и отрицательный margin
+ * задаются инлайном, чтобы не сдвигать блок ячеек. */
+.rs-labels {
+  position: sticky;
+  left: 0;
+  background: #fff;
+  z-index: 80;
+  box-sizing: border-box;
+}
+.rs-label {
+  height: 18px;
+  display: flex;
+  align-items: center;
+  padding: 0 6px;
+  box-sizing: border-box;
+  font-size: 11px;
+  cursor: default;
+  border-bottom: 1px solid #e8e8e8;
+}
+.rs-label--compact {
+  height: 9px;
+}
+.rs-code {
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.5px;
+}
+/* Блок ячеек загрузки «4/5»: липнет сразу под календарным заголовком.
+ * z 20 — выше контента (бары 2, вехи 3), но ниже линии текущей даты (60). */
 .rs-block {
   position: sticky;
   z-index: 20;
@@ -82,25 +134,6 @@ const showText = computed(() => props.t.cellPx >= 12)
 /* Текст скрыт (узкие ячейки) — строка ресурса вдвое тоньше, остаётся только заливка */
 .rs-row--compact {
   height: 9px;
-}
-.rs-label {
-  position: sticky;
-  left: 0;
-  height: 100%;
-  background: #fff;
-  z-index: 10;
-  display: flex;
-  align-items: center;
-  padding: 0 6px;
-  box-sizing: border-box;
-  font-size: 11px;
-  cursor: default;
-  border-bottom: 1px solid #e8e8e8;
-}
-.rs-code {
-  font-weight: 700;
-  font-size: 13px;
-  letter-spacing: 0.5px;
 }
 .rs-cell {
   position: absolute;
