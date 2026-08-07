@@ -42,6 +42,7 @@ function onBarContextMenu(p: { clientX: number; clientY: number }, id: number) {
     :groupEndDate="groupEndDate"
     :groupId="projectId"
     :minLabelHeight="MIN_LABEL_HEIGHT"
+    :minRows="3"
     mergedLabel
   >
     <template #label>

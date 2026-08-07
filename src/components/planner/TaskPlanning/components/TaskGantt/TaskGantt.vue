@@ -55,6 +55,7 @@ function onMilestoneEdit(id: number) {
       :groupEndDate="groupEndDate"
       :groupId="processId"
       :minLabelHeight="MS_MIN_LABEL_HEIGHT"
+      :minRows="3"
       mergedLabel
     >
       <template #label>

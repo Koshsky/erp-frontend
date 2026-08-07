@@ -13,6 +13,7 @@ const props = withDefaults(defineProps<GroupGanttProps>(), {
   groupEndDate: null,
   rowHeight: 26,
   minLabelHeight: 0,
+  minRows: 0,
 })
 
 const groupEl = ref<HTMLElement | null>(null)
@@ -37,10 +38,16 @@ const overlayStyle = computed(() => {
   }
 })
 
+/** Сколько строк рисуется в группе: не меньше minRows (пустые строки-заглушки) */
+const displayCount = computed(() => Math.max(props.items.length, props.minRows))
+
+/** Сколько пустых строк-заглушек добавить до displayCount */
+const emptyCount = computed(() => displayCount.value - props.items.length)
+
 /** Высота объединённого лейбла = вся группа (строки фиксированной высоты),
  *  но не меньше minLabelHeight — чтобы при 0–1 строках код/имя/даты не сжимались */
 const mergedHeight = computed(() =>
-  Math.max(props.items.length * props.rowHeight, props.minLabelHeight) + 'px',
+  Math.max(displayCount.value * props.rowHeight, props.minLabelHeight) + 'px',
 )
 
 // === Вертикальный драг строк (reorder) ===
@@ -63,7 +70,7 @@ function fmt(d: string | Date | number | null | undefined): string {
 </script>
 
 <template>
-  <div ref="groupEl" class="gg-group" :data-group="groupId ?? ''" :data-rows="items.length" :style="{ minHeight: mergedHeight }">
+  <div ref="groupEl" class="gg-group" :data-group="groupId ?? ''" :data-rows="displayCount" :style="{ minHeight: mergedHeight }">
     <div v-if="overlayStyle" class="gg-overlay" :style="overlayStyle" />
 
     <!-- Объединённый лейбл группы (код объекта + процесс): липкий слева, на всю высоту -->
@@ -93,6 +100,14 @@ function fmt(d: string | Date | number | null | undefined): string {
         <div class="gg-bars">
           <slot name="bar" :item="item" :index="index" :count="items.length" />
         </div>
+      </div>
+    </template>
+
+    <!-- Пустые строки-заглушки до minRows: тот же фон группы, без баров -->
+    <template v-for="i in emptyCount" :key="'ge' + (items.length + i)">
+      <div class="gg-row" :style="{ height: rowHeight + 'px' }" :data-row-index="items.length + i - 1">
+        <div v-if="!mergedLabel" class="gg-label" />
+        <div class="gg-bars" />
       </div>
     </template>
 
