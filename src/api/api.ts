@@ -283,6 +283,7 @@ export interface DtoUpdateEmployeeRequest {
     'hire_date'?: string;
     'manager_id'?: number;
     'name'?: string;
+    'resource_id'?: number;
     'termination_date'?: string;
 }
 export interface DtoUpdateMilestoneRequest {
