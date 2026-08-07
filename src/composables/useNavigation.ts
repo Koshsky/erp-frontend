@@ -6,6 +6,8 @@ export interface NavItem {
   label: string
   to: string
   name: string
+  /** Роли, которым виден пункт; null — всем авторизованным */
+  roles?: string[] | null
 }
 
 export interface NavCategory {
@@ -21,9 +23,9 @@ export const NAV_CATEGORIES: NavCategory[] = [
     label: 'Планировщик',
     roles: null,
     items: [
+      { label: 'Проекты', to: '/projects', name: 'projects', roles: ['dp', 'rp', 'admin', 'worker'] },
+      { label: 'Процессы', to: '/processes', name: 'processes', roles: ['dp', 'rp', 'admin', 'worker'] },
       { label: 'Задачи', to: '/planner', name: 'planner' },
-      { label: 'Процессы', to: '/processes', name: 'processes' },
-      { label: 'Проекты', to: '/projects', name: 'projects' },
     ],
   },
   {
@@ -38,9 +40,8 @@ export const NAV_CATEGORIES: NavCategory[] = [
   },
 ]
 
-/** Прямые ссылки в шапке (вне категорий); Профиль — самый левый */
+/** Прямые ссылки в шапке (вне категорий) */
 export const STANDALONE_NAV: NavItem[] = [
-  { label: 'Профиль', to: '/profile', name: 'profile' },
   { label: 'Дашборд', to: '/', name: 'dashboard' },
 ]
 
@@ -49,8 +50,14 @@ export function useNavigation() {
   const auth = useAuthStore()
   const route = useRoute()
 
+  /** Категории с учётом роли: скрываются и закрытые для роли пункты, и опустевшие категории */
   const visibleCategories = computed(() =>
-    NAV_CATEGORIES.filter((c) => !c.roles || c.roles.includes(auth.user?.role ?? '')),
+    NAV_CATEGORIES.filter((c) => !c.roles || c.roles.includes(auth.user?.role ?? ''))
+      .map((c) => ({
+        ...c,
+        items: c.items.filter((i) => !i.roles || i.roles.includes(auth.user?.role ?? '')),
+      }))
+      .filter((c) => c.items.length > 0),
   )
 
   /** Категория, которой принадлежит текущий маршрут (для подсветки) */

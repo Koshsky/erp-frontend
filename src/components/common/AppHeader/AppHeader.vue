@@ -94,7 +94,10 @@ onBeforeUnmount(() => {
       </div>
     </nav>
     <div class="ah-spacer"></div>
-    <button type="button" class="ah-logout" @click="onLogout">Выйти</button>
+    <div class="ah-actions">
+      <RouterLink to="/profile" class="ah-link" :class="{ active: route.name === 'profile' }">Профиль</RouterLink>
+      <button type="button" class="ah-logout" @click="onLogout">Выйти</button>
+    </div>
   </header>
 </template>
 
@@ -150,7 +153,8 @@ onBeforeUnmount(() => {
   color: #fff;
 }
 
-.ah-cat.active {
+.ah-cat.active,
+.ah-link.active {
   background: rgba(255, 255, 255, 0.22);
   color: #fff;
   font-weight: 600;
@@ -204,6 +208,12 @@ onBeforeUnmount(() => {
 
 .ah-spacer {
   flex: 1;
+}
+
+.ah-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .ah-logout {
