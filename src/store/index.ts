@@ -507,10 +507,10 @@ export const useTimesheetStore = defineStore('timesheet', () => {
       const managerId =
         auth.user?.role === 'admin' ? undefined : auth.user?.id
       const resp = await api.timesheetEmployeesGet(managerId)
-      // Сортировка: сначала должность (категория ресурса), затем ФИО
+      // Сортировка: сначала должность (position, с запасом на resource_title), затем ФИО
       employees.value = (resp.data?.data ?? []).sort(
         (a, b) =>
-          (a.resource_title ?? '').localeCompare(b.resource_title ?? '', 'ru') ||
+          (a.position || a.resource_title || '').localeCompare(b.position || b.resource_title || '', 'ru') ||
           (a.name ?? '').localeCompare(b.name ?? '', 'ru'),
       )
     } catch (e: any) {
@@ -531,6 +531,7 @@ export const useTimesheetStore = defineStore('timesheet', () => {
   interface EmployeePayload {
     name: string
     resource_id?: number
+    position?: string
     manager_id?: number
     hire_date?: string
     termination_date?: string

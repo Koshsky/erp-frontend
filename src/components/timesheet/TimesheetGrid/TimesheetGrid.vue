@@ -252,10 +252,10 @@ const labelsH = computed(() => props.employees.length * ROW_H)
         :key="'tsl' + emp.id"
         class="ts-label"
         :style="{ height: ROW_H + 'px' }"
-        :title="emp.resource_title ? `${emp.name} — ${emp.resource_title}` : emp.name"
+        :title="emp.position || emp.resource_title ? `${emp.name} — ${emp.position || emp.resource_title}` : emp.name"
       >
         <span class="ts-label-name">{{ emp.name }}</span>
-        <span class="ts-label-pos">{{ emp.resource_title }}</span>
+        <span class="ts-label-pos">{{ emp.position || emp.resource_title }}</span>
       </div>
     </div>
 
