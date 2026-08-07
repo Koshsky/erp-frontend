@@ -497,8 +497,8 @@ export const useTimesheetStore = defineStore('timesheet', () => {
     return p && p.end_date != null && p.end_date >= iso ? p : undefined
   }
 
-  /** Загружает сотрудников: vp — подчинённых (manager_id = vp.id), admin — всех */
-  async function loadEmployees() {
+  /** Загружает список сотрудников: vp — подчинённых (manager_id = vp.id), admin — всех */
+  async function fetchEmployees() {
     loading.value = true
     error.value = null
     try {
@@ -513,12 +513,76 @@ export const useTimesheetStore = defineStore('timesheet', () => {
           (a.resource_title ?? '').localeCompare(b.resource_title ?? '', 'ru') ||
           (a.name ?? '').localeCompare(b.name ?? '', 'ru'),
       )
-      periodsByEmployee.value = {}
-      await loadInitialWindow()
     } catch (e: any) {
       setError(e)
     } finally {
       loading.value = false
+    }
+  }
+
+  /** Загружает сотрудников и инициализирует окно состояний (для табеля) */
+  async function loadEmployees() {
+    periodsByEmployee.value = {}
+    await fetchEmployees()
+    await loadInitialWindow()
+  }
+
+  /** Поля запроса создания/изменения сотрудника */
+  interface EmployeePayload {
+    name: string
+    manager_id?: number
+    hire_date?: string
+    termination_date?: string
+  }
+
+  /** Создаёт сотрудника на должности (ресурсе); для vp manager принудительно = текущему пользователю */
+  async function createEmployee(resourceId: number, payload: EmployeePayload): Promise<boolean> {
+    busy.value = true
+    error.value = null
+    try {
+      const api = new TimesheetEmployeesApi(apiConfig())
+      await api.timesheetResourcesIdEmployeesPost(resourceId, payload)
+      await fetchEmployees()
+      return true
+    } catch (e: any) {
+      setError(e)
+      return false
+    } finally {
+      busy.value = false
+    }
+  }
+
+  /** Изменяет сотрудника; для vp manager принудительно = текущему пользователю */
+  async function updateEmployee(id: number, payload: EmployeePayload): Promise<boolean> {
+    busy.value = true
+    error.value = null
+    try {
+      const api = new TimesheetEmployeesApi(apiConfig())
+      await api.timesheetEmployeesIdPut(id, payload)
+      await fetchEmployees()
+      return true
+    } catch (e: any) {
+      setError(e)
+      return false
+    } finally {
+      busy.value = false
+    }
+  }
+
+  /** Удаляет сотрудника (мягкое удаление) */
+  async function deleteEmployee(id: number): Promise<boolean> {
+    busy.value = true
+    error.value = null
+    try {
+      const api = new TimesheetEmployeesApi(apiConfig())
+      await api.timesheetEmployeesIdDelete(id)
+      await fetchEmployees()
+      return true
+    } catch (e: any) {
+      setError(e)
+      return false
+    } finally {
+      busy.value = false
     }
   }
 
@@ -614,6 +678,10 @@ export const useTimesheetStore = defineStore('timesheet', () => {
     busy,
     error,
     loadEmployees,
+    fetchEmployees,
+    createEmployee,
+    updateEmployee,
+    deleteEmployee,
     loadStates,
     ensureRange,
     periodFor,

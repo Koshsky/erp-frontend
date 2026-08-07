@@ -34,5 +34,29 @@ export function useRoleAccess() {
   /** Табель состояний сотрудников: vp (свои подчинённые) и admin (все) */
   const canManageTimesheet = computed(() => role.value === 'vp' || role.value === 'admin')
 
-  return { role, userId, canManage, canCreateProject, canReorderProjects, canManageProject, hideProjectsNav, canManageTimesheet }
+  /** Вкладка «Сотрудники»: vp (свои подчинённые) и admin (все) */
+  const canManageEmployees = computed(() => role.value === 'vp' || role.value === 'admin')
+
+  /** Право изменить сотрудника: admin — любого, остальные — только подчинённых */
+  function canEditEmployee(emp: { manager_id?: number | null }): boolean {
+    if (role.value === 'admin') return true
+    return emp.manager_id != null && emp.manager_id === userId.value
+  }
+
+  /** Право удалить сотрудника: то же правило, что и на редактирование */
+  const canDeleteEmployee = canEditEmployee
+
+  return {
+    role,
+    userId,
+    canManage,
+    canCreateProject,
+    canReorderProjects,
+    canManageProject,
+    hideProjectsNav,
+    canManageTimesheet,
+    canManageEmployees,
+    canEditEmployee,
+    canDeleteEmployee,
+  }
 }
