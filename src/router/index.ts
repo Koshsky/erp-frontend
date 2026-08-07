@@ -91,11 +91,16 @@ router.beforeEach(async (to) => {
     return { name: 'dashboard' }
   }
 
-  // Табель, Сотрудники и Статусы доступны только vp и admin
+  // Табель и Сотрудники доступны только vp и admin
   if (
-    (to.name === 'timesheet' || to.name === 'employees' || to.name === 'statuses') &&
+    (to.name === 'timesheet' || to.name === 'employees') &&
     !['vp', 'admin'].includes(auth.user?.role ?? '')
   ) {
+    return { name: 'dashboard' }
+  }
+
+  // Статусы — только admin
+  if (to.name === 'statuses' && auth.user?.role !== 'admin') {
     return { name: 'dashboard' }
   }
 

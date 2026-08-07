@@ -32,9 +32,15 @@ export const NAV_CATEGORIES: NavCategory[] = [
     label: 'Табель',
     roles: ['vp', 'admin'],
     items: [
-      { label: 'Ресурсы', to: '/resources', name: 'resources' },
-      { label: 'Сотрудники', to: '/employees', name: 'employees' },
       { label: 'Табель', to: '/timesheet', name: 'timesheet' },
+      { label: 'Сотрудники', to: '/employees', name: 'employees' },
+      { label: 'Ресурсы', to: '/resources', name: 'resources' },
+    ],
+  },
+  {
+    label: 'Админ',
+    roles: ['admin'],
+    items: [
       { label: 'Статусы', to: '/statuses', name: 'statuses' },
     ],
   },
