@@ -599,6 +599,61 @@ export const useTimesheetStore = defineStore('timesheet', () => {
     }
   }
 
+  /** Поля запроса создания/изменения статуса */
+  interface StatePayload {
+    code: string
+    name: string
+    is_available: boolean
+  }
+
+  /** Создаёт статус и обновляет справочник */
+  async function createState(payload: StatePayload): Promise<boolean> {
+    busy.value = true
+    error.value = null
+    try {
+      await new TimesheetStatesApi(apiConfig()).timesheetStatesPost(payload)
+      await loadStates()
+      return true
+    } catch (e: any) {
+      setError(e)
+      return false
+    } finally {
+      busy.value = false
+    }
+  }
+
+  /** Изменяет статус и обновляет справочник */
+  async function updateState(id: number, payload: StatePayload): Promise<boolean> {
+    busy.value = true
+    error.value = null
+    try {
+      await new TimesheetStatesApi(apiConfig()).timesheetStatesIdPut(id, payload)
+      await loadStates()
+      return true
+    } catch (e: any) {
+      setError(e)
+      return false
+    } finally {
+      busy.value = false
+    }
+  }
+
+  /** Удаляет статус (удаление занятого статуса может быть отклонено БД) */
+  async function deleteState(id: number): Promise<boolean> {
+    busy.value = true
+    error.value = null
+    try {
+      await new TimesheetStatesApi(apiConfig()).timesheetStatesIdDelete(id)
+      await loadStates()
+      return true
+    } catch (e: any) {
+      setError(e)
+      return false
+    } finally {
+      busy.value = false
+    }
+  }
+
   /** Инициализация окна «назад 180 / вперёд 360» */
   async function loadInitialWindow() {
     windowStart.value = shiftDate(todayISO(), -WINDOW_BACK_DAYS)
@@ -685,6 +740,9 @@ export const useTimesheetStore = defineStore('timesheet', () => {
     updateEmployee,
     deleteEmployee,
     loadStates,
+    createState,
+    updateState,
+    deleteState,
     ensureRange,
     periodFor,
     assignRange,
