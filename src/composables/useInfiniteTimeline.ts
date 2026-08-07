@@ -2,6 +2,7 @@ import { computed, nextTick, ref } from 'vue'
 import type { ComputedRef, Ref } from 'vue'
 import {
   cellEndDate,
+  cellIndexForDate,
   cellStartDate,
   dateForPointer,
   windowCells,
@@ -43,6 +44,8 @@ export interface InfiniteTimeline {
   cellEnd: (i: number) => Date
   /** Дата под указателем (для контекст-меню) */
   dateAtPointer: (rect: DOMRect | null, clientX: number) => string | null
+  /** Программная прокрутка к дате (ячейка с датой — у левого края окна) */
+  scrollToDate: (date: Date | string | number) => void
   /** Инициализация: стартовая позиция = origin у левого края шкалы */
   initialize: () => void
   /** Пересчёт окна и расширение диапазона (вызывается на scroll/resize) */
@@ -174,6 +177,26 @@ export function useInfiniteTimeline(
     windowStart.value = windowStartFor(el.scrollLeft / scale, cellPx.value, leftPad.value)
   }
 
+  /**
+   * Программная прокрутка к ячейке i: ячейка становится левым краем видимого окна.
+   * Диапазон расширяется под целевую позицию; применяется после flush DOM.
+   */
+  function scrollToCell(i: number) {
+    const el = container.value
+    if (!el) return
+    ensureRange(i, range)
+    const scale = tableScale.value
+    void nextTick().then(() => {
+      el.scrollLeft = (i + leftPad.value) * cellPx.value * scale
+      sync()
+    })
+  }
+
+  /** Программная прокрутка к дате: ячейка с этой датой — у левого края окна */
+  function scrollToDate(date: Date | string | number) {
+    scrollToCell(cellIndexForDate(toDate(origin), unit.value, date))
+  }
+
   function initialize() {
     // Восстановление сохранённого состояния (масштаб) до measure(),
     // чтобы measure() подхватил сохранённый --cell-width из computed style.
@@ -277,6 +300,7 @@ export function useInfiniteTimeline(
     cellStart,
     cellEnd,
     dateAtPointer,
+    scrollToDate,
     initialize,
     sync,
     mount,

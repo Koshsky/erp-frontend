@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
+import { useRoute } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import TaskPlanning from '../components/planner/TaskPlanning/TaskPlanning.vue'
 import { ResourceManagerModal } from '../components/planner'
@@ -18,11 +19,20 @@ import { addDaysISO, shiftSpanDates, clampDateToBounds } from '../components/pla
 
 const planning = usePlanningStore()
 const app = useAppStore()
+const route = useRoute()
 
 const { taskPlanning, loading, error } = storeToRefs(planning)
 const { resources } = storeToRefs(app)
 
 const { unit, origin } = usePlanningOrigin()
+
+/** Якорь шкалы при навигации с вкладки процессов (клик по бару процесса) */
+const focusDate = computed(() => {
+  const id = Number(route.query.process)
+  if (!id) return null
+  const proc = taskPlanning.value?.processes?.find((p: any) => p.id === id)
+  return proc?.start_date ?? null
+})
 
 // dp (директор проектов) — read-only: может менять только приоритет проектов,
 // поэтому задачи, вехи и назначения ресурсов ему недоступны для изменения.
@@ -264,6 +274,7 @@ const processesByPriority = computed(() => {
       :origin="origin"
       :unit="unit"
       :can-manage="canManage"
+      :focus-date="focusDate"
       @change="(p) => planning.updateTaskDates(p.id, p.start_date, p.end_date)"
       @milestone-change="(p) => planning.updateMilestoneDate(p.id, p.date)"
       @contextmenu="onContextMenu"

@@ -21,6 +21,8 @@ const props = withDefaults(defineProps<{
   reorderable?: boolean
   /** Проверка прав на управление проектом */
   canManage?: (projectId: number) => boolean
+  /** При открытии прокрутить шкалу к этой дате (навигация с другой вкладки) */
+  focusDate?: string | null
 }>(), {
   projects: null,
   loading: false,
@@ -30,6 +32,7 @@ const props = withDefaults(defineProps<{
   users: null,
   reorderable: true,
   canManage: () => true,
+  focusDate: null,
 })
 
 const emit = defineEmits<{
@@ -37,6 +40,7 @@ const emit = defineEmits<{
   contextmenu: [payload: { clientX: number; clientY: number; date: string | null; rowIndex: number; projectId?: number }]
   reorder: [payload: { from: number; to: number }]
   edit: [payload: number]
+  navigate: [payload: number]
 }>()
 
 const userNames = computed(() => new Map((props.users || []).map((u) => [u.id, u.name])))
@@ -65,7 +69,7 @@ function onGridCtx(p: { clientX: number; clientY: number; date: string | null; r
 
 <template>
   <PlannerStates :loading="loading" :error="error" :has-data="displayProjects.length > 0">
-    <TimelineGrid v-if="displayProjects.length" id="project" :origin="origin" :unit="unit" @ctxmenu="onGridCtx">
+    <TimelineGrid v-if="displayProjects.length" id="project" :origin="origin" :unit="unit" :focus-date="focusDate" @ctxmenu="onGridCtx">
       <template #default="{ t }">
         <CalendarHeader :t="t" />
         <ProjectGantt
@@ -77,6 +81,7 @@ function onGridCtx(p: { clientX: number; clientY: number; date: string | null; r
           @contextmenu="(p) => emit('contextmenu', p)"
           @reorder="(p) => emit('reorder', p)"
           @edit="(id) => emit('edit', id)"
+          @navigate="(id) => emit('navigate', id)"
         />
       </template>
     </TimelineGrid>

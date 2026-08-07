@@ -14,6 +14,8 @@ const emit = defineEmits<{
   contextmenu: [payload: { clientX: number; clientY: number; date: string; rowIndex: number; projectId?: number }]
   reorder: [payload: { from: number; to: number }]
   edit: [payload: number]
+  /** Одиночный клик по бару проекта — переход на вкладку процессов этого проекта */
+  navigate: [payload: number]
 }>()
 
 const groupItems = computed(() =>
@@ -60,6 +62,7 @@ function onBarEdit(id: number) {
         @change="(d) => onBarChange(item.id, d)"
         @contextmenu="(p) => onContextMenu({ ...p, id: item.id })"
         @edit="() => onBarEdit(item.id)"
+        @click="() => emit('navigate', item.id)"
       />
     </template>
   </GroupGantt>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import ProcessPlanning from '../components/planner/ProcessPlanning/ProcessPlanning.vue'
 import { ContextMenu, ModalForm, ConfirmDialog } from '../components/common'
@@ -15,6 +16,8 @@ import { addMonthsISO, shiftSpanDates } from '../components/planner/calendar'
 
 const store = usePlanningStore()
 const app = useAppStore()
+const router = useRouter()
+const route = useRoute()
 const { processPlanning, loading, error } = storeToRefs(store)
 
 const { unit, origin, unitOptions } = usePlanningOrigin()
@@ -24,6 +27,19 @@ const { unit, origin, unitOptions } = usePlanningOrigin()
 const { canManage } = useRoleAccess()
 
 const { findProcess } = useFindPlanningItem()
+
+/** Якорь шкалы при навигации с вкладки проектов (клик по бару проекта) */
+const focusDate = computed(() => {
+  const id = Number(route.query.project)
+  if (!id) return null
+  const project = store.processPlanning?.projects?.find((p: any) => p.id === id)
+  return project?.start_date ?? null
+})
+
+/** Клик по бару процесса — переход на вкладку задач с якорем на первые дни процесса */
+function goToTasks(processId: number) {
+  router.push({ path: '/planner', query: { process: String(processId) } })
+}
 
 // ПКМ по пустому месту группы: создание процесса в проекте-родителе.
 // Дата под курсором, вставка строки в позицию ПКМ.
@@ -151,9 +167,11 @@ onMounted(() => {
       :origin="origin"
       :unit="unit"
       :can-manage="canManage"
+      :focus-date="focusDate"
       @change="(p) => store.updateProcessDates(p.id, p.start_date, p.end_date)"
       @contextmenu="onContextMenu"
       @edit="openProcessEdit"
+      @navigate="goToTasks"
     />
 
     <ContextMenu v-bind="menuBind" @select="select" @close="closeMenu" />

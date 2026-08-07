@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, useSlots } from 'vue'
+import { computed, onBeforeUnmount, ref, useSlots } from 'vue'
 import { cellRangeForSpan, clampSpanDates, spanToDates, formatDateRange } from '../calendar'
 import { useTimelineItem } from '../../../composables/useTimelineItem'
 import { TooltipCell, GanttTooltip } from '../../common'
@@ -28,7 +28,45 @@ const emit = defineEmits<{
   contextmenu: [payload: { clientX: number; clientY: number }]
   /** Дабл клик по бару — открыть редактирование */
   edit: []
+  /** Одиночный клик (без перетаскивания) — навигация между вкладками */
+  click: []
 }>()
+
+// === Разграничение одиночного клика и даблклика ===
+// Одиночный клик запускает таймер (260мс); если пришёл второй клик (dblclick) —
+// таймер гасится и эмитится edit. Это позволяет клику по бару навигировать между
+// вкладками, не ломая даблклик-редактирование.
+const CLICK_DELAY_MS = 260
+const CLICK_MOVE_PX = 4
+let clickTimer: ReturnType<typeof setTimeout> | null = null
+const downPos = ref<{ x: number; y: number } | null>(null)
+
+function onBodyPointerDown(e: PointerEvent) {
+  if (e.button === 0) downPos.value = { x: e.clientX, y: e.clientY }
+  if (props.draggable) startDrag(e, 'move')
+}
+
+function onPointerUp(e: PointerEvent) {
+  const p = downPos.value
+  downPos.value = null
+  if (!p || e.button !== 0) return
+  // Было движение (драг/ресиз) — это не клик.
+  if (Math.abs(e.clientX - p.x) + Math.abs(e.clientY - p.y) >= CLICK_MOVE_PX) return
+  // Уже есть таймер — это второй клик из даблклика: гасим навигацию, ждём dblclick.
+  if (clickTimer) {
+    clearTimeout(clickTimer)
+    clickTimer = null
+    return
+  }
+  clickTimer = setTimeout(() => {
+    clickTimer = null
+    emit('click')
+  }, CLICK_DELAY_MS)
+}
+
+onBeforeUnmount(() => {
+  if (clickTimer) clearTimeout(clickTimer)
+})
 
 /** Есть ли кастомный тултип: через проп `tooltip` или слот `#tooltip` */
 const hasTooltip = computed(() => Boolean(props.tooltip) || Boolean(slots.tooltip))
@@ -73,16 +111,16 @@ const cursorStyle = computed<Record<string, string>>(() => {
 /** Диапазон дат бара «дд.мм.гггг — дд.мм.гггг» (для тултипа и слотов) */
 const dateRange = computed(() => formatDateRange(props.startDate, props.endDate))
 
-function onBodyPointerDown(e: PointerEvent) {
-  if (props.draggable) startDrag(e, 'move')
-}
-
 function onHandlePointerDown(e: PointerEvent, mode: 'resizeStart' | 'resizeEnd') {
   if (props.draggable) startDrag(e, mode)
 }
 
 function onDblClick(e: MouseEvent) {
   if ((e.target as HTMLElement).closest('.gb-handle')) return
+  if (clickTimer) {
+    clearTimeout(clickTimer)
+    clickTimer = null
+  }
   emit('edit')
 }
 
@@ -99,6 +137,7 @@ function onContextMenu(e: MouseEvent) {
     :style="[barStyle, previewStyle, cursorStyle]"
     :title="hasTooltip ? undefined : title"
     @pointerdown="onBodyPointerDown"
+    @pointerup="onPointerUp"
     @dblclick="onDblClick"
     @contextmenu.prevent.stop="onContextMenu"
   >
