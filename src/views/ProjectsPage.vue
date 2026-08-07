@@ -128,13 +128,13 @@ function openProjectEdit(id: number) {
 
 async function handleSelect(id: string) {
   if (!menu.value) return
-  const { date, rowIndex, projectId } = menu.value
+  const { date, projectId } = menu.value
   if (id === 'create-project' && date != null) {
     const ok = await store.createProject({
       code: 'КО_' + Date.now(),
       start_date: date,
       end_date: addMonthsISO(date, 6),
-    }, rowIndex)
+    })
     if (!ok) error.value = store.error
   } else if (id === 'edit-project' && projectId != null) {
     openProjectEdit(projectId)
