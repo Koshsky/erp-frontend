@@ -38,6 +38,7 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{
   change: [payload: { id: number; start_date: string; end_date: string }]
   contextmenu: [payload: { clientX: number; clientY: number; date: string | null; rowIndex: number; projectId?: number; processId?: number }]
+  'header-ctxmenu': [payload: { clientX: number; clientY: number }]
   navigate: [payload: number]
 }>()
 
@@ -80,7 +81,7 @@ function onGridCtx(p: { clientX: number; clientY: number; date: string | null; r
 
 <template>
   <PlannerStates :loading="loading" :error="error" :has-data="displayProjects.length > 0">
-    <TimelineGrid v-if="displayProjects.length" id="process" :origin="origin" :unit="unit" :focus-date="focusDate" :focus-group-id="focusGroupId" @ctxmenu="onGridCtx">
+    <TimelineGrid v-if="displayProjects.length" id="process" :origin="origin" :unit="unit" :focus-date="focusDate" :focus-group-id="focusGroupId" @ctxmenu="onGridCtx" @header-ctxmenu="(p) => emit('header-ctxmenu', p)">
       <template #default="{ t }">
         <CalendarHeader :t="t" />
         <ProcessGantt

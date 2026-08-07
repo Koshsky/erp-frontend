@@ -9,6 +9,7 @@ import { useConfirm } from '../composables/useConfirm'
 import { useContextMenu } from '../composables/useContextMenu'
 import { useEditModal } from '../composables/useEditModal'
 import { usePlanningOrigin } from '../composables/usePlanningOrigin'
+import { useUnitMenu } from '../composables/useUnitMenu'
 import { useRoleAccess } from '../composables/useRoleAccess'
 import { useFindPlanningItem } from '../composables/useFindPlanningItem'
 import { usePlanningStore, useAppStore } from '../store'
@@ -20,7 +21,10 @@ const router = useRouter()
 const route = useRoute()
 const { processPlanning, loading, error } = storeToRefs(store)
 
-const { unit, origin, unitOptions } = usePlanningOrigin()
+const { unit, origin } = usePlanningOrigin()
+
+// Меню ПКМ по шапке таблицы: переключение масштаба «День» / «Декада»
+const { open: openUnitMenu, close: closeUnitMenu, select: selectUnit, bind: unitMenuBind } = useUnitMenu(unit)
 
 // dp (директор проектов) — read-only: может менять только приоритет проектов,
 // поэтому создание/редактирование/удаление процессов и перенос их дат недоступны.
@@ -98,9 +102,15 @@ const { open: openEdit, close: closeEdit, submit: submitEdit, bind: editBind } =
 
 function onContextMenu(p: { clientX: number; clientY: number; date: string | null; rowIndex: number; projectId?: number; processId?: number }) {
   if (!canManage.value) return
-  // Пустое место группы: создание процесса требует проект-родителя и известной даты
+  // Пустое место группы: создание процесса требует проект-родитель и известной даты
   if (p.processId == null && (p.projectId == null || p.date == null)) return
   openMenu({ x: p.clientX, y: p.clientY, date: p.date, rowIndex: p.rowIndex, projectId: p.projectId, processId: p.processId })
+}
+
+/** ПКМ по шапке таблицы — меню масштаба «День»/«Декада» (закрыв меню действий) */
+function onHeaderCtx(p: { clientX: number; clientY: number }) {
+  closeMenu()
+  openUnitMenu(p.clientX, p.clientY)
 }
 
 const { open: openMenu, close: closeMenu, select, bind: menuBind } = useContextMenu(menu, menuItems, handleSelect)
@@ -150,21 +160,6 @@ onMounted(() => {
 
 <template>
   <section class="pp">
-    <div class="pp-head">
-      <div class="pp-period">
-        <button
-          v-for="opt in unitOptions"
-          :key="opt.value"
-          class="pp-period-btn"
-          :class="{ active: unit === opt.value }"
-          type="button"
-          @click="unit = opt.value"
-        >
-          {{ opt.label }}
-        </button>
-      </div>
-    </div>
-
     <ProcessPlanning
       :projects="processPlanning?.projects || []"
       :loading="loading"
@@ -177,10 +172,13 @@ onMounted(() => {
       :focus-group-id="focusGroupId"
       @change="(p) => store.updateProcessDates(p.id, p.start_date, p.end_date)"
       @contextmenu="onContextMenu"
+      @header-ctxmenu="onHeaderCtx"
       @navigate="goToTasks"
     />
 
     <ContextMenu v-bind="menuBind" @select="select" @close="closeMenu" />
+
+    <ContextMenu v-bind="unitMenuBind" @select="selectUnit" @close="closeUnitMenu" />
 
     <ConfirmDialog
       :open="!!confirmDialog"
@@ -195,41 +193,6 @@ onMounted(() => {
 </template>
 
 <style scoped>
-.pp-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-bottom: 20px;
-}
-.pp-period {
-  display: inline-flex;
-  background: #fff;
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
-  overflow: hidden;
-}
-.pp-period-btn {
-  border: none;
-  background: transparent;
-  padding: 8px 16px;
-  font-size: 13px;
-  color: #555;
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s;
-}
-.pp-period-btn + .pp-period-btn {
-  border-left: 1px solid #e0e0e0;
-}
-.pp-period-btn:hover:not(.active) {
-  background: #f6f8fa;
-}
-.pp-period-btn.active {
-  background: #1a73e8;
-  color: #fff;
-  font-weight: 600;
-}
 .pp-st {
   color: #666;
   font-size: 14px;

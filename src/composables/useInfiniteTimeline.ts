@@ -44,8 +44,12 @@ export interface InfiniteTimeline {
   cellEnd: (i: number) => Date
   /** Дата под указателем (для контекст-меню) */
   dateAtPointer: (rect: DOMRect | null, clientX: number) => string | null
+  /** Точная дата в локальной координате контейнера (для центрирования при смене масштаба) */
+  dateAtLocalX: (localX: number, unit?: PlanningUnit) => Date | null
   /** Программная прокрутка к дате (ячейка с датой — у левого края окна) */
   scrollToDate: (date: Date | string | number) => void
+  /** Программная прокрутка: дата становится центром окна (смена масштаба день/декада) */
+  scrollToCenterDate: (date: Date | string | number) => void
   /** Инициализация: стартовая позиция = origin у левого края шкалы */
   initialize: () => void
   /** Пересчёт окна и расширение диапазона (вызывается на scroll/resize) */
@@ -137,6 +141,25 @@ export function useInfiniteTimeline(
     )
   }
 
+  /**
+   * Точная дата в локальной координате x контейнера (px, без масштаба), согласованная
+   * с отрисованными ячейками: учитывает фактические scrollLeft/leftPad/cellPx.
+   * В отличие от dateAtPointer, дробная позиция внутри ячейки считается верно —
+   * это важно для центрирования при смене масштаба день/декада.
+   */
+  function dateAtLocalX(localX: number, u: PlanningUnit = unit.value): Date | null {
+    const el = container.value
+    if (!el) return null
+    const contentX = el.scrollLeft / tableScale.value + localX
+    if (contentX < LABEL_WIDTH) return null
+    const cell = Math.floor((contentX - LABEL_WIDTH) / cellPx.value) - leftPad.value
+    const s = cellStartDate(toDate(origin), u, cell).getTime()
+    const e = cellEndDate(toDate(origin), u, cell).getTime()
+    const cellLeftX = LABEL_WIDTH + (cell + leftPad.value) * cellPx.value
+    const frac = Math.min(Math.max((contentX - cellLeftX) / cellPx.value, 0), 1)
+    return new Date(e > s ? s + frac * (e - s) : s)
+  }
+
   const tableState = useTableState()
   const zoom = useTimelineZoom({
     container,
@@ -200,6 +223,42 @@ export function useInfiniteTimeline(
   /** Программная прокрутка к дате: ячейка с этой датой — у левого края окна */
   function scrollToDate(date: Date | string | number) {
     scrollToCell(cellIndexForDate(toDate(origin), unit.value, date))
+  }
+
+  /**
+   * Программная прокрутка: дата становится центром видимого окна.
+   * Используется при смене масштаба день/декада — центром сжатия/растяжения
+   * шкалы остаётся центр таблицы, а не левый край.
+   */
+  /**
+   * Программная прокрутка: дата становится центром видимого окна.
+   * Используется при смене масштаба день/декада — центром сжатия/растяжения
+   * шкалы остаётся центр таблицы, а не левый край. Тот же паттерн, что в
+   * zoomTo: диапазон расширяется до применения scrollLeft (колбэк мутирует
+   * nsl), поэтому sync() после установки ничего не сдвигает.
+   */
+  function scrollToCenterDate(date: Date | string | number) {
+    const el = container.value
+    if (!el) return
+    const scale = tableScale.value
+    const targetCell = cellIndexForDate(toDate(origin), unit.value, date)
+    // Дробная позиция даты внутри её ячейки в новом масштабе (0..1): для дня — 0
+    // (дата = начало ячейки), для декады — положение дня внутри декады.
+    const s = cellStartDate(toDate(origin), unit.value, targetCell).getTime()
+    const e = cellEndDate(toDate(origin), unit.value, targetCell).getTime()
+    const frac = e > s ? (toDate(date).getTime() - s) / (e - s) : 0
+    const anchorX = el.clientWidth / scale / 2
+    const cellFloat = targetCell + frac
+    let nsl = LABEL_WIDTH + (cellFloat + leftPad.value) * cellPx.value - anchorX
+    const vs = windowStartFor(nsl, cellPx.value, leftPad.value)
+    ensureRange(vs, range, (step) => {
+      nsl += step * cellPx.value
+    })
+    windowStart.value = windowStartFor(nsl, cellPx.value, leftPad.value)
+    void nextTick().then(() => {
+      el.scrollLeft = nsl * scale
+      sync()
+    })
   }
 
   function initialize() {
@@ -305,7 +364,9 @@ export function useInfiniteTimeline(
     cellStart,
     cellEnd,
     dateAtPointer,
+    dateAtLocalX,
     scrollToDate,
+    scrollToCenterDate,
     initialize,
     sync,
     mount,
