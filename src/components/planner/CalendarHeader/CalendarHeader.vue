@@ -53,8 +53,13 @@ const showWdRow = computed(() => props.t.unit === 'day' && props.t.cellPx >= CEL
 </script>
 
 <template>
+  <div class="th-corner"
+    :style="{
+      width: LABEL_WIDTH + 'px',
+      height: headerHeight(t.unit, t.cellPx) + 'px',
+      marginBottom: '-' + headerHeight(t.unit, t.cellPx) + 'px',
+    }"></div>
   <div class="tg-head" :style="{ height: headerHeight(t.unit, t.cellPx) + 'px' }">
-    <div class="th-corner" :style="{ width: LABEL_WIDTH + 'px' }"></div>
 
     <div v-for="m in monthGroups" :key="'m' + m.from"
       class="th-month"
@@ -85,13 +90,16 @@ const showWdRow = computed(() => props.t.unit === 'day' && props.t.cellPx >= CEL
   z-index: 30;
   background: #f8f9fa;
 }
+/* Корнер — часть боковой панели: липнет к левому и верхнему краю, лежит выше
+ * линии текущей даты (60), но вне stacking context шапки (30). Высота и
+ * отрицательный margin задаются инлайном, чтобы не сдвигать шапку. */
 .th-corner {
   position: sticky;
+  top: 0;
   left: 0;
-  height: 100%;
   width: 180px;
   background: #f8f9fa;
-  z-index: 3;
+  z-index: 70;
   display: flex;
   align-items: center;
   padding: 0 10px;
