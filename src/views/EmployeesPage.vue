@@ -234,7 +234,7 @@ onMounted(async () => {
         @contextmenu.prevent.stop="onRowContextMenu($event, emp)"
       >
         <div class="name">{{ emp.name }}</div>
-        <div class="pos">{{ emp.position || '—' }}</div>
+        <div>{{ emp.position || '—' }}</div>
         <div>{{ emp.resource_title }}</div>
         <div>{{ fmtDate(emp.hire_date) }}</div>
         <div>{{ fmtDate(emp.termination_date) }}</div>
@@ -341,9 +341,5 @@ onMounted(async () => {
 .name {
   font-weight: 700;
   color: #1a3a6b;
-}
-.pos {
-  color: #1a73e8;
-  font-weight: 600;
 }
 </style>
