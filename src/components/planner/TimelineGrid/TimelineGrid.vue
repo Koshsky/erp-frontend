@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, provide, reactive, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, provide, reactive, ref, watch } from 'vue'
 import type { PlanningUnit } from '../calendar'
 import { fmtDate, toDate } from '../calendar'
 import { useInfiniteTimeline } from '../../../composables/useInfiniteTimeline'
@@ -20,6 +20,8 @@ const props = defineProps<{
   unit: PlanningUnit
   /** Стабильный id таблицы: масштаб и прокрутка сохраняются между переключениями вкладок */
   id?: string
+  /** При открытии/изменении прокрутить шкалу так, чтобы эта дата была у левого края */
+  focusDate?: string | null
 }>()
 
 const emit = defineEmits<{
@@ -45,10 +47,25 @@ const tl = useInfiniteTimeline(originDate, unit, scrollEl, contentEl, props.id)
 provide(TimelineScrollKey, scrollEl)
 provide(TimelineSyncKey, tl.sync)
 
-onMounted(() => {
+onMounted(async () => {
   tl.mount()
   pan.enable()
+  // Якорь (навигация с другой вкладки): прокручиваем после того, как mount
+  // восстановил сохранённую позицию, чтобы якорь её перекрыл.
+  if (props.focusDate) {
+    await nextTick()
+    tl.scrollToDate(props.focusDate)
+  }
 })
+
+/** Изменение якоря без перемонтирования (смена query на той же странице) */
+watch(
+  () => props.focusDate,
+  (d) => {
+    if (d && scrollEl.value) void nextTick(() => tl.scrollToDate(d))
+  },
+)
+
 onBeforeUnmount(() => {
   pan.disable()
   tl.unmount()

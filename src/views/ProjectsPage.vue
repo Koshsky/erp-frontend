@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import ProjectPlanning from '../components/planner/ProjectPlanning/ProjectPlanning.vue'
 import { ContextMenu, ModalForm, ConfirmDialog } from '../components/common'
@@ -16,6 +17,7 @@ import { addMonthsISO } from '../components/planner/calendar'
 
 const store = usePlanningStore()
 const app = useAppStore()
+const router = useRouter()
 const { projectPlanning, loading, error } = storeToRefs(store)
 
 const { unit, origin, unitOptions } = usePlanningOrigin()
@@ -138,6 +140,11 @@ async function onReorder(e: { from: number; to: number }) {
   if (!ok) error.value = store.error
 }
 
+/** Клик по бару проекта — переход на вкладку процессов с якорем на начало проекта */
+function goToProcesses(projectId: number) {
+  router.push({ path: '/processes', query: { project: String(projectId) } })
+}
+
 onMounted(() => {
   store.loadProjectPlanning()
   if (!app.users.length) void app.loadUsers()
@@ -174,6 +181,7 @@ onMounted(() => {
       @contextmenu="onContextMenu"
       @reorder="onReorder"
       @edit="openProjectEdit"
+      @navigate="goToProcesses"
     />
 
     <ContextMenu v-bind="menuBind" @select="select" @close="closeMenu" />
