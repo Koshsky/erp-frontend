@@ -9,7 +9,7 @@ const router = useRouter()
 const authStore = useAuthStore()
 
 // ВП (владелец процессов) не видит вкладки проектов и процессов
-const { hideProjectsNav, canManageTimesheet } = useRoleAccess()
+const { hideProjectsNav, canManageTimesheet, canManageEmployees } = useRoleAccess()
 
 function onLogout() {
   authStore.logout()
@@ -27,6 +27,7 @@ function onLogout() {
       <RouterLink to="/planner">Задачи</RouterLink>
       <RouterLink to="/resources">Ресурсы</RouterLink>
       <RouterLink v-if="canManageTimesheet" to="/timesheet">Табель</RouterLink>
+      <RouterLink v-if="canManageEmployees" to="/employees">Сотрудники</RouterLink>
       <RouterLink to="/profile">Профиль</RouterLink>
     </nav>
     <div class="ah-spacer"></div>
