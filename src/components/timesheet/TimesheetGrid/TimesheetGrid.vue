@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { fmtDate } from '../../planner/calendar'
 import { LABEL_WIDTH } from '../../planner/layout'
 import { stateBackground } from '../stateColors'
@@ -32,6 +32,41 @@ const panel = ref<{
   startDate: string
   endDate: string
 } | null>(null)
+
+/** Ссылка на панель для измерения её фактического размера */
+const panelEl = ref<HTMLElement | null>(null)
+
+/** Отступ панели от краёв окна (px) */
+const PANEL_MARGIN = 8
+
+/**
+ * Проверяет, помещается ли панель в окно браузера; если нет —
+ * сдвигает её так, чтобы она целиком осталась в видимой области.
+ */
+function clampPanel() {
+  const el = panelEl.value
+  const p = panel.value
+  if (!el || !p) return
+  const rect = el.getBoundingClientRect()
+  let { x, y } = p
+  if (x + rect.width > window.innerWidth - PANEL_MARGIN) {
+    x = Math.max(PANEL_MARGIN, window.innerWidth - PANEL_MARGIN - rect.width)
+  }
+  if (y + rect.height > window.innerHeight - PANEL_MARGIN) {
+    y = Math.max(PANEL_MARGIN, window.innerHeight - PANEL_MARGIN - rect.height)
+  }
+  if (x !== p.x || y !== p.y) panel.value = { ...p, x, y }
+}
+
+/** После открытия панели измеряем её и корректируем позицию под размер окна */
+watch(panel, (p) => {
+  if (p) {
+    nextTick(clampPanel)
+    window.addEventListener('resize', clampPanel)
+  } else {
+    window.removeEventListener('resize', clampPanel)
+  }
+})
 
 function isoFor(i: number): string {
   return fmtDate(props.t.cellStart(i))
@@ -144,6 +179,7 @@ function onKeydown(e: KeyboardEvent) {
 onBeforeUnmount(() => {
   window.removeEventListener('pointermove', onPointerMove)
   window.removeEventListener('pointerup', onPointerUp)
+  window.removeEventListener('resize', clampPanel)
   document.body.style.userSelect = ''
 })
 
@@ -215,7 +251,7 @@ const labelsH = computed(() => props.employees.length * ROW_H)
     <Teleport to="body">
       <template v-if="panel">
         <div class="ts-overlay" @pointerdown="closePanel" />
-        <div class="ts-panel" :style="{ left: panel.x + 'px', top: panel.y + 'px' }" role="dialog" :aria-label="'Назначить состояние'">
+        <div class="ts-panel" ref="panelEl" :style="{ left: panel.x + 'px', top: panel.y + 'px' }" role="dialog" :aria-label="'Назначить состояние'">
           <div class="ts-panel-head">
             <span class="ts-panel-title">{{ employeeName(panel.employeeId) }}</span>
             <span class="ts-panel-range" :title="`${fmtFull(panel.startDate)} — ${fmtFull(panel.endDate)}`">{{ fmtDM(panel.startDate) }}–{{ fmtDM(panel.endDate) }}</span>
