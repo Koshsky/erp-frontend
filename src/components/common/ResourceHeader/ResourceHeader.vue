@@ -10,15 +10,19 @@ const props = defineProps<{
   t: TimelineCtx
   resources: Resource[]
   usageFn: (resourceId: number, day: Date) => number
+  availableFn: (resourceId: number, day: Date) => number | null
 }>()
 
 interface CellUsage {
   used: number
+  available: number | null
   isWeekend: boolean
 }
 
 function cellUsage(resourceId: number, idx: number): CellUsage {
   let peak = 0
+  let minAvail: number | null = null
+  let hasUnknown = false
   let weekend = true
   const start = props.t.cellStart(idx)
   const end = props.t.cellEnd(idx)
@@ -27,9 +31,15 @@ function cellUsage(resourceId: number, idx: number): CellUsage {
     const wd = cur.getDay() === 0 || cur.getDay() === 6
     if (!wd) weekend = false
     peak = Math.max(peak, props.usageFn(resourceId, cur))
+    const avail = props.availableFn(resourceId, cur)
+    if (avail == null) {
+      hasUnknown = true
+    } else if (minAvail == null || avail < minAvail) {
+      minAvail = avail
+    }
     cur.setDate(cur.getDate() + 1)
   }
-  return { used: peak, isWeekend: weekend }
+  return { used: peak, available: hasUnknown ? null : minAvail, isWeekend: weekend }
 }
 
 /** Занятость по ресурсам и видимым ячейкам (пик дневной загрузки внутри ячейки) */
@@ -67,7 +77,7 @@ const labelsH = computed(() => resourceCells.value.length * rowH.value)
       class="rs-label"
       :class="{ 'rs-label--compact': !showText }"
     >
-      <TooltipCell v-if="showText" :text="`${rc.res.title} (всего: ${rc.res.quantity})`">
+      <TooltipCell v-if="showText" :text="`${rc.res.title} (всего: ${rc.res.employeesCount})`">
         <span class="rs-code">{{ rc.res.code }}</span>
       </TooltipCell>
     </div>
@@ -83,7 +93,7 @@ const labelsH = computed(() => resourceCells.value.length * rowH.value)
           class="rs-cell"
           :style="{ left: t.cellLeft(t.visibleIndices[k]) + 'px', width: t.cellPx + 'px' }"
         >
-          <UsageCell :used="u.used" :total="rc.res.quantity" :isWeekend="u.isWeekend" :show-text="showText" />
+          <UsageCell :used="u.used" :available="u.available" :isWeekend="u.isWeekend" :show-text="showText" />
         </div>
       </div>
     </template>
