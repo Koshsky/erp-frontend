@@ -18,7 +18,6 @@ const props = withDefaults(defineProps<ProcessBarProps>(), {
 const emit = defineEmits<{
   change: [payload: { start_date: string; end_date: string }]
   contextmenu: [payload: { clientX: number; clientY: number }]
-  edit: []
   click: []
 }>()
 </script>
@@ -42,7 +41,6 @@ const emit = defineEmits<{
     :draggable="draggable"
     @change="(d) => emit('change', d)"
     @contextmenu="(p) => emit('contextmenu', p)"
-    @edit="() => emit('edit')"
     @click="() => emit('click')"
   >
     <template #tooltip="{ dateRange }">

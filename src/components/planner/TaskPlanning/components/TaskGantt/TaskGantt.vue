@@ -15,7 +15,6 @@ const emit = defineEmits<{
   change: [payload: { id: number; start_date: string; end_date: string }]
   'milestone-change': [payload: { id: number; date: string }]
   contextmenu: [payload: { clientX: number; clientY: number; date: string; rowIndex: number; processId?: number; taskId?: number; milestoneId?: number }]
-  'task-edit': [payload: number]
   'milestone-edit': [payload: number]
 }>()
 
@@ -38,10 +37,6 @@ function onBarContextMenu(p: { clientX: number; clientY: number }, id: number) {
 
 function onMilestoneContextMenu(p: { clientX: number; clientY: number }, id: number) {
   emit('contextmenu', { ...p, date: '', rowIndex: -1, processId: props.processId, milestoneId: id })
-}
-
-function onTaskEdit(id: number) {
-  if (props.canManage) emit('task-edit', id)
 }
 
 function onMilestoneEdit(id: number) {
@@ -80,7 +75,6 @@ function onMilestoneEdit(id: number) {
           :draggable="canManage"
           @change="(d) => onBarChange(item.id, d)"
           @contextmenu="(p) => onBarContextMenu(p, item.id)"
-          @edit="() => onTaskEdit(item.id)"
         />
       </template>
     </GroupGantt>

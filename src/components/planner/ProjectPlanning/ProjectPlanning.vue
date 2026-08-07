@@ -42,7 +42,6 @@ const emit = defineEmits<{
   change: [payload: { id: number; start_date: string; end_date: string }]
   contextmenu: [payload: { clientX: number; clientY: number; date: string | null; rowIndex: number; projectId?: number }]
   reorder: [payload: { from: number; to: number }]
-  edit: [payload: number]
   navigate: [payload: number]
 }>()
 
@@ -83,7 +82,6 @@ function onGridCtx(p: { clientX: number; clientY: number; date: string | null; r
           @change="(p) => emit('change', p)"
           @contextmenu="(p) => emit('contextmenu', p)"
           @reorder="(p) => emit('reorder', p)"
-          @edit="(id) => emit('edit', id)"
           @navigate="(id) => emit('navigate', id)"
         />
       </template>

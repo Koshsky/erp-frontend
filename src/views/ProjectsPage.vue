@@ -180,7 +180,6 @@ onMounted(() => {
       @change="(p) => store.updateProjectDates(p.id, p.start_date, p.end_date)"
       @contextmenu="onContextMenu"
       @reorder="onReorder"
-      @edit="openProjectEdit"
       @navigate="goToProcesses"
     />
 

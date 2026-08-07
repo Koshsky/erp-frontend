@@ -26,16 +26,14 @@ const props = withDefaults(defineProps<BarProps>(), {
 const emit = defineEmits<{
   change: [payload: { start_date: string; end_date: string }]
   contextmenu: [payload: { clientX: number; clientY: number }]
-  /** Дабл клик по бару — открыть редактирование */
-  edit: []
   /** Одиночный клик (без перетаскивания) — навигация между вкладками */
   click: []
 }>()
 
 // === Разграничение одиночного клика и даблклика ===
 // Одиночный клик запускает таймер (260мс); если пришёл второй клик (dblclick) —
-// таймер гасится и эмитится edit. Это позволяет клику по бару навигировать между
-// вкладками, не ломая даблклик-редактирование.
+// таймер гасится и даблклик не делает ничего. Это позволяет клику по бару
+// навигировать между вкладками, не срабатывая на двойном клике.
 const CLICK_DELAY_MS = 260
 const CLICK_MOVE_PX = 4
 let clickTimer: ReturnType<typeof setTimeout> | null = null
@@ -115,13 +113,12 @@ function onHandlePointerDown(e: PointerEvent, mode: 'resizeStart' | 'resizeEnd')
   if (props.draggable) startDrag(e, mode)
 }
 
-function onDblClick(e: MouseEvent) {
-  if ((e.target as HTMLElement).closest('.gb-handle')) return
+/** Даблклик по бару не делает ничего; гасим отложенный одиночный клик (навигацию) */
+function onDblClick() {
   if (clickTimer) {
     clearTimeout(clickTimer)
     clickTimer = null
   }
-  emit('edit')
 }
 
 function onContextMenu(e: MouseEvent) {

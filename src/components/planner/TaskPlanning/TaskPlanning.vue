@@ -42,7 +42,6 @@ const emit = defineEmits<{
   change: [payload: { id: number; start_date: string; end_date: string }]
   'milestone-change': [payload: { id: number; date: string }]
   contextmenu: [payload: { clientX: number; clientY: number; date: string | null; rowIndex: number; processId?: number; taskId?: number; milestoneId?: number }]
-  'task-edit': [payload: number]
   'milestone-edit': [payload: number]
 }>()
 
@@ -136,7 +135,6 @@ function onGridCtx(p: { clientX: number; clientY: number; date: string | null; r
           @change="(p) => emit('change', p)"
           @milestone-change="(p) => emit('milestone-change', p)"
           @contextmenu="(p) => emit('contextmenu', p)"
-          @task-edit="(id) => emit('task-edit', id)"
           @milestone-edit="(id) => emit('milestone-edit', id)"
         />
       </template>

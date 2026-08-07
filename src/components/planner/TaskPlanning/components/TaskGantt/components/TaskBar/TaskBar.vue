@@ -26,7 +26,6 @@ const props = withDefaults(
 const emit = defineEmits<{
   change: [payload: { start_date: string; end_date: string }]
   contextmenu: [payload: { clientX: number; clientY: number }]
-  edit: []
 }>()
 
 /** Название ресурса для бейджа: код, при его отсутствии — полное название */
@@ -94,7 +93,6 @@ watch(
     :draggable="draggable"
     @change="(d) => emit('change', d)"
     @contextmenu="(p) => emit('contextmenu', p)"
-    @edit="() => emit('edit')"
   >
     <span ref="contentRef" class="tb-content">
       <span ref="titleRef" class="tb-title">{{ task.title }}</span>

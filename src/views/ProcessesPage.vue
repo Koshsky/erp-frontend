@@ -177,7 +177,6 @@ onMounted(() => {
       :focus-group-id="focusGroupId"
       @change="(p) => store.updateProcessDates(p.id, p.start_date, p.end_date)"
       @contextmenu="onContextMenu"
-      @edit="openProcessEdit"
       @navigate="goToTasks"
     />
 
