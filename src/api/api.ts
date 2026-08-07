@@ -104,6 +104,7 @@ export interface DtoCreateProjectRequest {
 }
 export interface DtoCreateResourceRequest {
     'code'?: string;
+    'owner_id'?: number;
     'title'?: string;
 }
 export interface DtoCreateStateRequest {
@@ -252,6 +253,7 @@ export interface DtoResourceResponse {
     'code'?: string;
     'employees_count'?: number;
     'id'?: number;
+    'owner_id'?: number;
     'title'?: string;
 }
 export interface DtoSetDaysRequest {
@@ -311,6 +313,7 @@ export interface DtoUpdateProjectRequest {
 }
 export interface DtoUpdateResourceRequest {
     'code'?: string;
+    'owner_id'?: number;
     'title'?: string;
 }
 export interface DtoUpdateStateRequest {

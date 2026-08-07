@@ -38,12 +38,23 @@ function managerLabel(managerId?: number | null): string {
 
 /** Поиск по ФИО, должности и типу ресурса (регистронезависимый) */
 const search = ref('')
+
+/** Фильтр по руководителю (manager_id): '' — все, 'none' — без руководителя, число — конкретный */
+const managerFilter = ref<number | 'none' | ''>('')
 const filteredEmployees = computed(() => {
+  let list = employees.value
   const q = search.value.trim().toLowerCase()
-  if (!q) return employees.value
-  return employees.value.filter((e) =>
-    `${e.name ?? ''} ${e.position ?? ''} ${e.resource_title ?? ''}`.toLowerCase().includes(q),
-  )
+  if (q) {
+    list = list.filter((e) =>
+      `${e.name ?? ''} ${e.position ?? ''} ${e.resource_title ?? ''}`.toLowerCase().includes(q),
+    )
+  }
+  if (managerFilter.value !== '') {
+    list = list.filter((e) =>
+      managerFilter.value === 'none' ? e.manager_id == null : e.manager_id === managerFilter.value,
+    )
+  }
+  return list
 })
 
 // ПКМ по строке: редактирование/удаление (только свои сотрудники / admin)
@@ -211,6 +222,11 @@ onMounted(async () => {
       <h2 class="ep-title">Сотрудники</h2>
       <div class="ep-actions">
         <input v-model="search" type="search" class="ep-search" placeholder="Поиск по ФИО или должности" />
+        <select v-if="isAdmin" v-model="managerFilter" class="ep-filter">
+          <option value="">Все руководители</option>
+          <option value="none">Без руководителя</option>
+          <option v-for="u in users" :key="u.id" :value="u.id">{{ u.name ?? `#${u.id}` }}</option>
+        </select>
         <button v-if="canManageEmployees" type="button" class="ep-add" @click="openCreate">Создать сотрудника</button>
       </div>
     </div>
@@ -304,6 +320,22 @@ onMounted(async () => {
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 .ep-search:focus {
+  border-color: #1a73e8;
+  box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.12);
+}
+.ep-filter {
+  box-sizing: border-box;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 9px 12px;
+  font-size: 14px;
+  font-family: inherit;
+  color: #333;
+  background: #fff;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.ep-filter:focus {
   border-color: #1a73e8;
   box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.12);
 }
