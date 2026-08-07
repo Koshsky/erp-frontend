@@ -38,7 +38,6 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{
   change: [payload: { id: number; start_date: string; end_date: string }]
   contextmenu: [payload: { clientX: number; clientY: number; date: string | null; rowIndex: number; projectId?: number; processId?: number }]
-  edit: [payload: number]
   navigate: [payload: number]
 }>()
 
@@ -96,7 +95,6 @@ function onGridCtx(p: { clientX: number; clientY: number; date: string | null; r
           :can-manage="canManage"
           @change="(p) => emit('change', p)"
           @contextmenu="(p) => emit('contextmenu', p)"
-          @edit="(id) => emit('edit', id)"
           @navigate="(id) => emit('navigate', id)"
         />
       </template>

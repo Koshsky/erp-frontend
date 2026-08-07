@@ -12,7 +12,6 @@ const props = withDefaults(defineProps<ProcessGanttProps>(), {
 const emit = defineEmits<{
   change: [payload: { id: number; start_date: string; end_date: string }]
   contextmenu: [payload: { clientX: number; clientY: number; date: string; rowIndex: number; projectId?: number; processId?: number }]
-  edit: [payload: number]
   /** Одиночный клик по бару процесса — переход на вкладку задач этого процесса */
   navigate: [payload: number]
 }>()
@@ -32,10 +31,6 @@ function onBarChange(id: number, d: { start_date: string; end_date: string }) {
 
 function onBarContextMenu(p: { clientX: number; clientY: number }, id: number) {
   emit('contextmenu', { ...p, date: '', rowIndex: -1, projectId: props.projectId, processId: id })
-}
-
-function onBarEdit(id: number) {
-  if (props.canManage) emit('edit', id)
 }
 </script>
 
@@ -69,7 +64,6 @@ function onBarEdit(id: number) {
         :draggable="canManage"
         @change="(d) => onBarChange(item.id, d)"
         @contextmenu="(p) => onBarContextMenu(p, item.id)"
-        @edit="() => onBarEdit(item.id)"
         @click="() => emit('navigate', item.id)"
       />
     </template>

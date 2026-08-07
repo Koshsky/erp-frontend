@@ -287,7 +287,6 @@ const processesByPriority = computed(() => {
       @change="(p) => planning.updateTaskDates(p.id, p.start_date, p.end_date)"
       @milestone-change="(p) => planning.updateMilestoneDate(p.id, p.date)"
       @contextmenu="onContextMenu"
-      @task-edit="openTaskEdit"
       @milestone-edit="openMilestoneEdit"
     />
 
