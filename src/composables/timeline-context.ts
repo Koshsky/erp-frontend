@@ -13,6 +13,16 @@ export const INTERACTIVE_SELECTOR =
   '.gantt-bar, .gb-handle, .ms-marker, .row-handle, .gg-label, .gg-merged, ' +
   '.th-corner, .rs-label, .rs-block, .ts-labels, .ts-row'
 
+/**
+ * Элементы, даблклик по которым НЕ сбрасывает масштаб (интерактив + шапка).
+ * Отличается от INTERACTIVE_SELECTOR: липкие колонки/ряды табеля (.ts-labels,
+ * .ts-row) попадают в INTERACTIVE_SELECTOR только ради игнора панорамирования,
+ * но даблклик по ним должен сбрасывать зум.
+ */
+export const DBLCLICK_IGNORE_SELECTOR =
+  '.gantt-bar, .gb-handle, .ms-marker, .row-handle, .gg-label, .gg-merged, ' +
+  '.th-corner, .rs-label, .rs-block, .tg-head'
+
 /** Ключ provide/inject: элемент-скролл-контейнер бесконечной шкалы */
 export const TimelineScrollKey: InjectionKey<Ref<HTMLElement | null>> = Symbol('timeline-scroll')
 /** Ключ provide/inject: пересчёт окна + расширение диапазона (для драга/автопрокрутки) */

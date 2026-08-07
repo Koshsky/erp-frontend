@@ -21,6 +21,14 @@ const emit = defineEmits<{
 /** Высота строки сотрудника и слоя имён (px): две строки — ФИО + должность */
 const ROW_H = 32
 
+/**
+ * Задержка открытия панели назначения после отпускания мыши: различает одиночный
+ * клик (открыть меню) и даблклик (сброс зума). Если в этот интервал приходит
+ * второй клик — панель не открываем, сброс отработает по событию dblclick.
+ */
+const OPEN_DELAY_MS = 200
+let openTimer: ReturnType<typeof setTimeout> | null = null
+
 /** Активное выделение диапазона (drag) */
 const selection = ref<{ employeeId: number; startIdx: number; endIdx: number } | null>(null)
 
@@ -135,15 +143,25 @@ function onPointerUp(e: PointerEvent) {
   if (!s || Number.isNaN(s.endIdx)) return
   const lo = Math.min(s.startIdx, s.endIdx)
   const hi = Math.max(s.startIdx, s.endIdx)
-  panel.value = {
+  const payload = {
     x: Math.min(e.clientX, window.innerWidth - 220),
     y: Math.min(e.clientY, window.innerHeight - 140),
     employeeId: s.employeeId,
     startDate: fmtDate(props.t.cellStart(lo)),
     endDate: fmtDate(props.t.cellEnd(hi)),
   }
-  // Сохраняем визуальное выделение, пока панель открыта
+  // Второй клик из даблклика — панель не открываем: сброс зума отработает по dblclick
+  if (openTimer) {
+    clearTimeout(openTimer)
+    openTimer = null
+    return
+  }
+  // Выделение показываем сразу, панель — после задержки (для различения даблклика)
   selection.value = { employeeId: s.employeeId, startIdx: lo, endIdx: hi }
+  openTimer = setTimeout(() => {
+    openTimer = null
+    panel.value = payload
+  }, OPEN_DELAY_MS)
 }
 
 function onAssign(stateId: number) {
@@ -168,6 +186,24 @@ function onClear() {
 }
 
 function closePanel() {
+  if (openTimer) {
+    clearTimeout(openTimer)
+    openTimer = null
+  }
+  panel.value = null
+  selection.value = null
+}
+
+/**
+ * Даблклик по табелю — сброс масштаба к исходному (обрабатывает бесконечная
+ * шкала). Здесь гасим отложенное открытие панели и снимаем выделение, чтобы
+ * одиночный клик (открытие меню) не сработал на двойном.
+ */
+function onDblClick() {
+  if (openTimer) {
+    clearTimeout(openTimer)
+    openTimer = null
+  }
   panel.value = null
   selection.value = null
 }
@@ -177,6 +213,10 @@ function onKeydown(e: KeyboardEvent) {
 }
 
 onBeforeUnmount(() => {
+  if (openTimer) {
+    clearTimeout(openTimer)
+    openTimer = null
+  }
   window.removeEventListener('pointermove', onPointerMove)
   window.removeEventListener('pointerup', onPointerUp)
   window.removeEventListener('resize', clampPanel)
@@ -201,7 +241,7 @@ const labelsH = computed(() => props.employees.length * ROW_H)
 </script>
 
 <template>
-  <div class="ts" @pointerdown="onPointerDown">
+  <div class="ts" @pointerdown="onPointerDown" @dblclick="onDblClick">
     <!-- Слой имён сотрудников: строки липнут слева, вертикально едут с рядами -->
     <div
       class="ts-labels"
