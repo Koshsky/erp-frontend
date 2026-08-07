@@ -34,6 +34,12 @@ const focusDate = computed(() => {
   return proc?.start_date ?? null
 })
 
+/** Прокрутка по вертикали к строке (блоку задач) процесса */
+const focusGroupId = computed(() => {
+  const id = Number(route.query.process)
+  return id ? id : null
+})
+
 // dp (директор проектов) — read-only: может менять только приоритет проектов,
 // поэтому задачи, вехи и назначения ресурсов ему недоступны для изменения.
 const { canManage } = useRoleAccess()
@@ -240,9 +246,11 @@ async function onRemoveResource(payload: { resource_id: number }) {
 }
 
 onMounted(async () => {
-  await planning.loadTaskPlanning()
-  if (!resources.value.length) await app.loadResources()
+  // Приоритеты проектов и ресурсы нужны до задач: processesByPriority сортируется по ним,
+  // и при монтировании шкалы порядок групп уже финальный (иначе якорь навигации уезжает).
   if (!app.projects.length) await app.loadProjects()
+  if (!resources.value.length) await app.loadResources()
+  await planning.loadTaskPlanning()
 })
 
 /**
@@ -275,6 +283,7 @@ const processesByPriority = computed(() => {
       :unit="unit"
       :can-manage="canManage"
       :focus-date="focusDate"
+      :focus-group-id="focusGroupId"
       @change="(p) => planning.updateTaskDates(p.id, p.start_date, p.end_date)"
       @milestone-change="(p) => planning.updateMilestoneDate(p.id, p.date)"
       @contextmenu="onContextMenu"
