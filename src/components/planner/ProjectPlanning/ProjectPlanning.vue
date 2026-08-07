@@ -23,6 +23,8 @@ const props = withDefaults(defineProps<{
   canManage?: (projectId: number) => boolean
   /** При открытии прокрутить шкалу к этой дате (навигация с другой вкладки) */
   focusDate?: string | null
+  /** При открытии прокрутить по вертикали к группе (строке) проекта */
+  focusGroupId?: string | number | null
 }>(), {
   projects: null,
   loading: false,
@@ -33,6 +35,7 @@ const props = withDefaults(defineProps<{
   reorderable: true,
   canManage: () => true,
   focusDate: null,
+  focusGroupId: null,
 })
 
 const emit = defineEmits<{
@@ -69,7 +72,7 @@ function onGridCtx(p: { clientX: number; clientY: number; date: string | null; r
 
 <template>
   <PlannerStates :loading="loading" :error="error" :has-data="displayProjects.length > 0">
-    <TimelineGrid v-if="displayProjects.length" id="project" :origin="origin" :unit="unit" :focus-date="focusDate" @ctxmenu="onGridCtx">
+    <TimelineGrid v-if="displayProjects.length" id="project" :origin="origin" :unit="unit" :focus-date="focusDate" :focus-group-id="focusGroupId" @ctxmenu="onGridCtx">
       <template #default="{ t }">
         <CalendarHeader :t="t" />
         <ProjectGantt

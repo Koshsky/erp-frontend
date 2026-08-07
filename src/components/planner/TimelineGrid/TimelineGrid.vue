@@ -22,6 +22,8 @@ const props = defineProps<{
   id?: string
   /** При открытии/изменении прокрутить шкалу так, чтобы эта дата была у левого края */
   focusDate?: string | null
+  /** При открытии/изменении прокрутить контейнер по вертикали к группе с этим id */
+  focusGroupId?: string | number | null
 }>()
 
 const emit = defineEmits<{
@@ -52,19 +54,62 @@ onMounted(async () => {
   pan.enable()
   // Якорь (навигация с другой вкладки): прокручиваем после того, как mount
   // восстановил сохранённую позицию, чтобы якорь её перекрыл.
-  if (props.focusDate) {
+  if (props.focusDate || props.focusGroupId != null) {
     await nextTick()
-    tl.scrollToDate(props.focusDate)
+    applyFocus()
   }
 })
 
 /** Изменение якоря без перемонтирования (смена query на той же странице) */
 watch(
-  () => props.focusDate,
-  (d) => {
-    if (d && scrollEl.value) void nextTick(() => tl.scrollToDate(d))
+  () => [props.focusDate, props.focusGroupId] as const,
+  () => {
+    if ((props.focusDate || props.focusGroupId != null) && scrollEl.value) {
+      void nextTick(applyFocus)
+    }
   },
 )
+
+/**
+ * Прокрутка к якорю: по дате — целевая ячейка у левого края; по группе —
+ * строка .gg-group с этим id становится сразу под липкими шапками.
+ */
+function applyFocus() {
+  if (props.focusDate) tl.scrollToDate(props.focusDate)
+  if (props.focusGroupId != null) focusGroup(props.focusGroupId, 0, 0)
+}
+
+/**
+ * Вертикальная прокрутка к группе: группы рендерятся слотом после монтирования,
+ * а их позиция может меняться (дозагрузка данных/ресурсной ленты). Ретраим по
+ * кадрам, пока цель не встанет под липкие шапки и не «успокоится» на пару кадров.
+ */
+function focusGroup(groupId: string | number, attempt: number, settled: number) {
+  const sc = scrollEl.value
+  if (!sc || attempt > 120) return
+  const target = sc.querySelector<HTMLElement>(`.gg-group[data-group="${groupId}"]`)
+  if (!target) {
+    requestAnimationFrame(() => focusGroup(groupId, attempt + 1, 0))
+    return
+  }
+  const delta = scrollGroupToTop(target)
+  const nextSettled = Math.abs(delta) < 2 ? settled + 1 : 0
+  if (nextSettled >= 3) return
+  requestAnimationFrame(() => focusGroup(groupId, attempt + 1, nextSettled))
+}
+
+/** Вертикальная прокрутка: верх группы — под липкими шапками; возвращает смещение */
+function scrollGroupToTop(target: HTMLElement): number {
+  const sc = scrollEl.value
+  if (!sc) return 0
+  const scRect = sc.getBoundingClientRect()
+  const targetRect = target.getBoundingClientRect()
+  const headH = sc.querySelector<HTMLElement>('.tg-head')?.offsetHeight ?? 0
+  const rsH = sc.querySelector<HTMLElement>('.rs-block')?.offsetHeight ?? 0
+  const delta = targetRect.top - scRect.top - headH - rsH
+  sc.scrollTop += delta
+  return delta
+}
 
 onBeforeUnmount(() => {
   pan.disable()

@@ -179,12 +179,17 @@ export function useInfiniteTimeline(
 
   /**
    * Программная прокрутка к ячейке i: ячейка становится левым краем видимого окна.
-   * Диапазон расширяется под целевую позицию; применяется после flush DOM.
+   * Диапазон расширяется под целевую позицию (в т.ч. в далёкое прошлое — leftPad
+   * растёт до step − i); применяется после flush DOM.
    */
   function scrollToCell(i: number) {
     const el = container.value
     if (!el) return
-    ensureRange(i, range)
+    const step = growStep(viewportCells.value)
+    const visibleEnd = i + viewportCells.value + 1
+    if (visibleEnd + step > rightCells.value) rightCells.value = visibleEnd + step
+    const needLeft = step - i
+    if (needLeft > leftPad.value) leftPad.value = needLeft
     const scale = tableScale.value
     void nextTick().then(() => {
       el.scrollLeft = (i + leftPad.value) * cellPx.value * scale

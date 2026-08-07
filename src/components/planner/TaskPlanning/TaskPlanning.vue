@@ -24,6 +24,8 @@ const props = withDefaults(defineProps<{
   canManage?: boolean
   /** При открытии прокрутить шкалу к этой дате (навигация с другой вкладки) */
   focusDate?: string | null
+  /** При открытии прокрутить по вертикали к группе (строке) процесса */
+  focusGroupId?: string | number | null
 }>(), {
   processes: null,
   resources: null,
@@ -33,6 +35,7 @@ const props = withDefaults(defineProps<{
   unit: 'day',
   canManage: true,
   focusDate: null,
+  focusGroupId: null,
 })
 
 const emit = defineEmits<{
@@ -113,7 +116,7 @@ function onGridCtx(p: { clientX: number; clientY: number; date: string | null; r
 
 <template>
   <PlannerStates :loading="loading" :error="error" :has-data="displayProcesses.length > 0">
-    <TimelineGrid v-if="displayProcesses.length" id="task" :origin="origin" :unit="unit" :focus-date="focusDate" @ctxmenu="onGridCtx">
+    <TimelineGrid v-if="displayProcesses.length" id="task" :origin="origin" :unit="unit" :focus-date="focusDate" :focus-group-id="focusGroupId" @ctxmenu="onGridCtx">
       <template #default="{ t }">
         <CalendarHeader :t="t" />
         <ResourceHeader :t="t" :resources="displayResources" :usageFn="usageForDay" />

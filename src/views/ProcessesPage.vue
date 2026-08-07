@@ -36,6 +36,12 @@ const focusDate = computed(() => {
   return project?.start_date ?? null
 })
 
+/** Прокрутка по вертикали к группе (строке) проекта */
+const focusGroupId = computed(() => {
+  const id = Number(route.query.project)
+  return id ? id : null
+})
+
 /** Клик по бару процесса — переход на вкладку задач с якорем на первые дни процесса */
 function goToTasks(processId: number) {
   router.push({ path: '/planner', query: { process: String(processId) } })
@@ -168,6 +174,7 @@ onMounted(() => {
       :unit="unit"
       :can-manage="canManage"
       :focus-date="focusDate"
+      :focus-group-id="focusGroupId"
       @change="(p) => store.updateProcessDates(p.id, p.start_date, p.end_date)"
       @contextmenu="onContextMenu"
       @edit="openProcessEdit"
