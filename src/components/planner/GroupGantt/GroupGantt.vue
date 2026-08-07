@@ -119,6 +119,20 @@ function fmt(d: string | Date | number | null | undefined): string {
 .gg-group {
   position: relative;
 }
+/* Разделитель групп по всей ширине таймлайна. Начинается сразу за боковой
+ * панелью (180px = LABEL_WIDTH): в колонке названий линия уже есть (нижние
+ * границы .gg-merged/.gg-label), так что без двойных границ получается ровная
+ * линия. Абсолютное позиционирование не добавляет высоту группам. */
+.gg-group::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 180px;
+  right: 0;
+  height: 1px;
+  background: #e0e0e0;
+  z-index: 3;
+}
 .gg-overlay {
   position: absolute;
   top: 0;

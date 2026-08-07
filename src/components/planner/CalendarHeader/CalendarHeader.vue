@@ -91,15 +91,18 @@ const showWdRow = computed(() => props.t.unit === 'day' && props.t.cellPx >= CEL
   background: #f8f9fa;
 }
 /* Корнер — часть боковой панели: липнет к левому и верхнему краю, лежит выше
- * линии текущей даты (60), но вне stacking context шапки (30). Высота и
- * отрицательный margin задаются инлайном, чтобы не сдвигать шапку. */
+ * всех слоёв боковой панели (строки 65, объединённые лейблы 70, коды ресурсов 80)
+ * и линии текущей даты (60), но вне stacking context шапки (30). Иначе при
+ * вертикальном скролле лейблы групп проезжают поверх него — корнер выглядит
+ * «выбитым окном». Высота и отрицательный margin задаются инлайном, чтобы не
+ * сдвигать шапку. */
 .th-corner {
   position: sticky;
   top: 0;
   left: 0;
   width: 180px;
   background: #f8f9fa;
-  z-index: 70;
+  z-index: 90;
   display: flex;
   align-items: center;
   padding: 0 10px;
@@ -108,6 +111,7 @@ const showWdRow = computed(() => props.t.unit === 'day' && props.t.cellPx >= CEL
   font-size: 12px;
   color: #444;
   border-right: 1px solid #e0e0e0;
+  border-bottom: 1px solid #e0e0e0;
 }
 .th-month {
   position: absolute;
