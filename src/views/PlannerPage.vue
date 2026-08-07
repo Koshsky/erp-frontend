@@ -12,6 +12,7 @@ import { useConfirm } from '../composables/useConfirm'
 import { useContextMenu } from '../composables/useContextMenu'
 import { useEditModal } from '../composables/useEditModal'
 import { usePlanningOrigin } from '../composables/usePlanningOrigin'
+import { useUnitMenu } from '../composables/useUnitMenu'
 import { useRoleAccess } from '../composables/useRoleAccess'
 import { useFindPlanningItem } from '../composables/useFindPlanningItem'
 import { usePlanningStore, useAppStore } from '../store'
@@ -25,6 +26,9 @@ const { taskPlanning, loading, error } = storeToRefs(planning)
 const { resources } = storeToRefs(app)
 
 const { unit, origin } = usePlanningOrigin()
+
+// Меню ПКМ по шапке таблицы: переключение масштаба «День» / «Декада»
+const { open: openUnitMenu, close: closeUnitMenu, select: selectUnit, bind: unitMenuBind } = useUnitMenu(unit)
 
 /** Якорь шкалы при навигации с вкладки процессов (клик по бару процесса) */
 const focusDate = computed(() => {
@@ -122,6 +126,12 @@ function onContextMenu(p: { clientX: number; clientY: number; date: string | nul
   // Пустое место группы: создание требует процесс-родитель и известную дату
   if (p.taskId == null && p.milestoneId == null && (p.processId == null || p.date == null)) return
   openMenu({ x: p.clientX, y: p.clientY, date: p.date, rowIndex: p.rowIndex, processId: p.processId, taskId: p.taskId, milestoneId: p.milestoneId })
+}
+
+/** ПКМ по шапке таблицы — меню масштаба «День»/«Декада» (закрыв меню действий) */
+function onHeaderCtx(p: { clientX: number; clientY: number }) {
+  closeMenu()
+  openUnitMenu(p.clientX, p.clientY)
 }
 
 const { open: openMenu, close: closeMenu, select, bind: menuBind } = useContextMenu(menu, menuItems, handleSelect)
@@ -287,10 +297,13 @@ const processesByPriority = computed(() => {
       @change="(p) => planning.updateTaskDates(p.id, p.start_date, p.end_date)"
       @milestone-change="(p) => planning.updateMilestoneDate(p.id, p.date)"
       @contextmenu="onContextMenu"
+      @header-ctxmenu="onHeaderCtx"
       @milestone-edit="openMilestoneEdit"
     />
 
     <ContextMenu v-bind="menuBind" @select="select" @close="closeMenu" />
+
+    <ContextMenu v-bind="unitMenuBind" @select="selectUnit" @close="closeUnitMenu" />
 
     <ConfirmDialog
       :open="!!confirmDialog"

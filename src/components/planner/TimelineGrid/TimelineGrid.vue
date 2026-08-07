@@ -35,6 +35,8 @@ const emit = defineEmits<{
     rowIndex?: number
     groupId?: string
   }]
+  /** ПКМ по шапке таблицы (календарный заголовок / корнер): переключение масштаба */
+  'header-ctxmenu': [payload: { clientX: number; clientY: number }]
 }>()
 
 const scrollEl = ref<HTMLElement | null>(null)
@@ -67,6 +69,22 @@ watch(
     if ((props.focusDate || props.focusGroupId != null) && scrollEl.value) {
       void nextTick(applyFocus)
     }
+  },
+)
+
+/**
+ * Смена масштаба «День»/«Декада»: центром сжатия/растяжения остаётся центр таблицы,
+ * а не левый край. Ловим точную дату в центре окна по старому масштабу (layout от
+ * unit не зависит), затем прокручиваем так, чтобы эта дата снова оказалась в центре.
+ */
+watch(
+  () => props.unit,
+  async (newUnit, oldUnit) => {
+    const sc = scrollEl.value
+    if (!sc || newUnit === oldUnit) return
+    const centerDate = tl.dateAtLocalX(sc.clientWidth / 2, oldUnit)
+    await nextTick()
+    if (centerDate) tl.scrollToCenterDate(centerDate)
   },
 )
 
@@ -144,10 +162,15 @@ const ctx: TimelineCtx = reactive({
   dateAtPointer: tl.dateAtPointer,
 })
 
-/** ПКМ по пустому месту шкалы (бары/лейблы/вехи перехватывают сами через .stop) */
+/** ПКМ по пустому месту шкалы (бары/лейблы/вехи перехватывают сами через .stop).
+ *  ПКМ по шапке таблицы — меню переключения масштаба (день/декада). */
 function onContextMenu(e: MouseEvent) {
   const target = e.target as HTMLElement
-  if (target.closest(INTERACTIVE_SELECTOR + ', .tg-head')) {
+  if (target.closest('.tg-head, .th-corner')) {
+    emit('header-ctxmenu', { clientX: e.clientX, clientY: e.clientY })
+    return
+  }
+  if (target.closest(INTERACTIVE_SELECTOR)) {
     return
   }
   const date = tl.dateAtPointer(scrollEl.value?.getBoundingClientRect() ?? null, e.clientX)

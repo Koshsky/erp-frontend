@@ -87,9 +87,11 @@ onBeforeUnmount(() => {
         :key="item.id"
         type="button"
         class="cm-item"
+        :class="{ 'cm-item--active': item.active }"
         role="menuitem"
         @click="onSelect(item.id)"
       >
+        <span v-if="item.active" class="cm-check">✓</span>
         {{ item.label }}
       </button>
     </div>
@@ -122,5 +124,14 @@ onBeforeUnmount(() => {
 .cm-item:hover {
   background: #e6faf7;
   color: #00b3a6;
+}
+.cm-item--active {
+  color: #00b3a6;
+  font-weight: 600;
+}
+.cm-check {
+  display: inline-block;
+  width: 16px;
+  margin-left: -4px;
 }
 </style>

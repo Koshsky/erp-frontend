@@ -1,6 +1,8 @@
 export interface ContextMenuItem {
   id: string
   label: string
+  /** Активный (текущий) пункт — подсвечивается, например выбранный масштаб шкалы */
+  active?: boolean
 }
 
 export interface ContextMenuProps {

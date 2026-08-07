@@ -42,6 +42,7 @@ const emit = defineEmits<{
   change: [payload: { id: number; start_date: string; end_date: string }]
   'milestone-change': [payload: { id: number; date: string }]
   contextmenu: [payload: { clientX: number; clientY: number; date: string | null; rowIndex: number; processId?: number; taskId?: number; milestoneId?: number }]
+  'header-ctxmenu': [payload: { clientX: number; clientY: number }]
   'milestone-edit': [payload: number]
 }>()
 
@@ -115,7 +116,7 @@ function onGridCtx(p: { clientX: number; clientY: number; date: string | null; r
 
 <template>
   <PlannerStates :loading="loading" :error="error" :has-data="displayProcesses.length > 0">
-    <TimelineGrid v-if="displayProcesses.length" id="task" :origin="origin" :unit="unit" :focus-date="focusDate" :focus-group-id="focusGroupId" @ctxmenu="onGridCtx">
+    <TimelineGrid v-if="displayProcesses.length" id="task" :origin="origin" :unit="unit" :focus-date="focusDate" :focus-group-id="focusGroupId" @ctxmenu="onGridCtx" @header-ctxmenu="(p) => emit('header-ctxmenu', p)">
       <template #default="{ t }">
         <CalendarHeader :t="t" />
         <ResourceHeader :t="t" :resources="displayResources" :usageFn="usageForDay" />
