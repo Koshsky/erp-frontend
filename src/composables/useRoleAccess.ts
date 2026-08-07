@@ -31,5 +31,8 @@ export function useRoleAccess() {
   /** ВП (владелец процессов) не видит вкладки проектов и процессов */
   const hideProjectsNav = computed(() => role.value === 'vp')
 
-  return { role, userId, canManage, canCreateProject, canReorderProjects, canManageProject, hideProjectsNav }
+  /** Табель состояний сотрудников: vp (свои подчинённые) и admin (все) */
+  const canManageTimesheet = computed(() => role.value === 'vp' || role.value === 'admin')
+
+  return { role, userId, canManage, canCreateProject, canReorderProjects, canManageProject, hideProjectsNav, canManageTimesheet }
 }

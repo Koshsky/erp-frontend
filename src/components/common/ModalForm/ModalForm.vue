@@ -94,6 +94,13 @@ function onKeydown(e: KeyboardEvent) {
               </option>
             </select>
             <input
+              v-else-if="f.type === 'date'"
+              v-model="values[f.key]"
+              class="mf-input"
+              type="date"
+              :placeholder="f.placeholder"
+            />
+            <input
               v-else-if="f.type === 'number'"
               v-model.number="values[f.key]"
               class="mf-input"

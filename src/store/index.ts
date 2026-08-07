@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { AuthApi, ProjectsApi, ProcessesApi, TasksApi, TimesheetResourcesApi, TimesheetCalendarApi, PlanningApi, MilestonesApi, UsersApi, AssignmentsApi, Configuration } from '@/api'
-import type { DtoUserInfo, DtoProject, DtoResourceResponse, DtoResourceCalendar, DtoCreateResourceRequest, DtoUpdateResourceRequest, JwtTokenPair } from '@/api'
+import { AuthApi, ProjectsApi, ProcessesApi, TasksApi, TimesheetResourcesApi, TimesheetCalendarApi, TimesheetEmployeesApi, TimesheetStatesApi, PlanningApi, MilestonesApi, UsersApi, AssignmentsApi, Configuration } from '@/api'
+import type { DtoUserInfo, DtoProject, DtoResourceResponse, DtoResourceCalendar, DtoEmployeeResponse, DtoEmployeeStateResponse, DtoStateResponse, DtoCreateResourceRequest, DtoUpdateResourceRequest, JwtTokenPair } from '@/api'
 
 const TOKEN_KEY = 'mvs_erp_access_token'
 const REFRESH_KEY = 'mvs_erp_refresh_token'
@@ -413,6 +413,212 @@ export const useAppStore = defineStore('app', () => {
     createResource,
     updateResource,
     deleteResource,
+  }
+})
+
+// === Табель (состояния сотрудников, страница для vp/admin) ===
+export const useTimesheetStore = defineStore('timesheet', () => {
+  // Окно загрузки состояний: по умолчанию «назад 180 / вперёд 360 дней»; при
+  // инфинит-скролле шкалы расширяется через ensureRange (дозагрузка новых диапазонов).
+  const WINDOW_BACK_DAYS = 180
+  const WINDOW_FORWARD_DAYS = 360
+
+  const employees = ref<DtoEmployeeResponse[]>([])
+  const states = ref<DtoStateResponse[]>([])
+  const periodsByEmployee = ref<Record<number, DtoEmployeeStateResponse[]>>({})
+  const windowStart = ref('')
+  const windowEnd = ref('')
+  const loading = ref(false)
+  const busy = ref(false)
+  const error = ref<string | null>(null)
+
+  /** Дата YYYY-MM-DD через n дней от ISO-даты (локальная зона) */
+  function shiftDate(iso: string, days: number): string {
+    const d = new Date(`${iso}T00:00:00`)
+    d.setDate(d.getDate() + days)
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const dd = String(d.getDate()).padStart(2, '0')
+    return `${d.getFullYear()}-${m}-${dd}`
+  }
+
+  function todayISO(): string {
+    const d = new Date()
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const dd = String(d.getDate()).padStart(2, '0')
+    return `${d.getFullYear()}-${m}-${dd}`
+  }
+
+  function setError(e: any) {
+    error.value = e?.message || String(e)
+  }
+
+  /** Загружает состояния сотрудников за [start, end] и мёржит в кэш по id */
+  async function fetchPeriods(start: string, end: string) {
+    const api = new TimesheetEmployeesApi(apiConfig())
+    const results = await Promise.all(
+      employees.value.map((emp) =>
+        api
+          .timesheetEmployeesIdDaysGet(emp.id ?? 0, start, end)
+          .then((r) => ({ id: emp.id, list: r.data?.data ?? [] }))
+          .catch((e: any) => {
+            setError(e)
+            return { id: emp.id, list: [] }
+          }),
+      ),
+    )
+    for (const { id, list } of results) {
+      if (id == null) continue
+      const existing = periodsByEmployee.value[id] ?? []
+      const byId = new Map<number, DtoEmployeeStateResponse>()
+      for (const p of existing) if (p.id != null) byId.set(p.id, p)
+      for (const p of list) if (p.id != null) byId.set(p.id, p)
+      periodsByEmployee.value[id] = [...byId.values()].sort((a, b) =>
+        (a.start_date ?? '').localeCompare(b.start_date ?? ''),
+      )
+    }
+  }
+
+  /** Период сотрудника, покрывающий день (бинарный поиск по отсортированным периодам) */
+  function periodFor(employeeId: number, iso: string): DtoEmployeeStateResponse | undefined {
+    const list = periodsByEmployee.value[employeeId] ?? []
+    let lo = 0
+    let hi = list.length - 1
+    let ans = -1
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1
+      if ((list[mid].start_date ?? '') <= iso) {
+        ans = mid
+        lo = mid + 1
+      } else {
+        hi = mid - 1
+      }
+    }
+    const p = list[ans]
+    return p && p.end_date != null && p.end_date >= iso ? p : undefined
+  }
+
+  /** Загружает сотрудников: vp — подчинённых (manager_id = vp.id), admin — всех */
+  async function loadEmployees() {
+    loading.value = true
+    error.value = null
+    try {
+      const auth = useAuthStore()
+      const api = new TimesheetEmployeesApi(apiConfig())
+      const managerId =
+        auth.user?.role === 'admin' ? undefined : auth.user?.id
+      const resp = await api.timesheetEmployeesGet(managerId)
+      // Сортировка: сначала должность (категория ресурса), затем ФИО
+      employees.value = (resp.data?.data ?? []).sort(
+        (a, b) =>
+          (a.resource_title ?? '').localeCompare(b.resource_title ?? '', 'ru') ||
+          (a.name ?? '').localeCompare(b.name ?? '', 'ru'),
+      )
+      periodsByEmployee.value = {}
+      await loadInitialWindow()
+    } catch (e: any) {
+      setError(e)
+    } finally {
+      loading.value = false
+    }
+  }
+
+  /** Загружает справочник состояний */
+  async function loadStates() {
+    try {
+      const api = new TimesheetStatesApi(apiConfig())
+      const resp = await api.timesheetStatesGet()
+      states.value = resp.data?.data ?? []
+    } catch (e: any) {
+      setError(e)
+    }
+  }
+
+  /** Инициализация окна «назад 180 / вперёд 360» */
+  async function loadInitialWindow() {
+    windowStart.value = shiftDate(todayISO(), -WINDOW_BACK_DAYS)
+    windowEnd.value = shiftDate(todayISO(), WINDOW_FORWARD_DAYS)
+    await fetchPeriods(windowStart.value, windowEnd.value)
+  }
+
+  /** Расширяет загруженное окно под [start, end] и дозагружает только новые диапазоны */
+  async function ensureRange(startISO: string, endISO: string) {
+    if (startISO < windowStart.value) {
+      const from = startISO
+      const to = shiftDate(windowStart.value, -1)
+      windowStart.value = startISO
+      await fetchPeriods(from, to)
+    }
+    if (endISO > windowEnd.value) {
+      const from = shiftDate(windowEnd.value, 1)
+      const to = endISO
+      windowEnd.value = endISO
+      await fetchPeriods(from, to)
+    }
+  }
+
+  /** Назначает состояние на диапазон дат сотрудника (PUT days, перезаписывает пересечения) */
+  async function assignRange(
+    employeeId: number,
+    stateId: number,
+    startDate: string,
+    endDate: string,
+  ): Promise<boolean> {
+    busy.value = true
+    error.value = null
+    try {
+      const api = new TimesheetEmployeesApi(apiConfig())
+      await api.timesheetEmployeesIdDaysPut(employeeId, {
+        state_id: stateId,
+        start_date: startDate,
+        end_date: endDate,
+      })
+      await fetchPeriods(windowStart.value, windowEnd.value)
+      return true
+    } catch (e: any) {
+      setError(e)
+      return false
+    } finally {
+      busy.value = false
+    }
+  }
+
+  /** Очищает состояния на диапазоне дат сотрудника (DELETE days; без state_id — все) */
+  async function clearRange(
+    employeeId: number,
+    startDate: string,
+    endDate: string,
+    stateId?: number,
+  ): Promise<boolean> {
+    busy.value = true
+    error.value = null
+    try {
+      const api = new TimesheetEmployeesApi(apiConfig())
+      await api.timesheetEmployeesIdDaysDelete(employeeId, startDate, endDate, stateId)
+      await fetchPeriods(windowStart.value, windowEnd.value)
+      return true
+    } catch (e: any) {
+      setError(e)
+      return false
+    } finally {
+      busy.value = false
+    }
+  }
+
+  return {
+    employees,
+    states,
+    periodsByEmployee,
+    windowStart,
+    windowEnd,
+    loading,
+    busy,
+    error,
+    loadEmployees,
+    loadStates,
+    ensureRange,
+    periodFor,
+    assignRange,
+    clearRange,
   }
 })
 

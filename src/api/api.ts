@@ -399,6 +399,10 @@ export interface TimesheetCalendarGet200Response {
     'data'?: DtoCalendarPlanning;
     'error'?: string;
 }
+export interface TimesheetEmployeesGet200Response {
+    'data'?: Array<DtoEmployeeResponse>;
+    'error'?: string;
+}
 export interface TimesheetEmployeesIdDaysGet200Response {
     'data'?: Array<DtoEmployeeStateResponse>;
     'error'?: string;
@@ -409,10 +413,6 @@ export interface TimesheetEmployeesIdGet200Response {
 }
 export interface TimesheetResourcesGet200Response {
     'data'?: Array<DtoResourceResponse>;
-    'error'?: string;
-}
-export interface TimesheetResourcesIdEmployeesGet200Response {
-    'data'?: Array<DtoEmployeeResponse>;
     'error'?: string;
 }
 export interface TimesheetResourcesPost201Response {
@@ -2978,6 +2978,44 @@ export class TimesheetCalendarApi extends BaseAPI {
 export const TimesheetEmployeesApiAxiosParamCreator = function (configuration?: Configuration) {
     return {
         /**
+         * List employees, optionally filtered by manager (user) id
+         * @summary List all employees
+         * @param {number} [managerId] Manager (user) ID filter
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        timesheetEmployeesGet: async (managerId?: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            const localVarPath = `/timesheet/employees`;
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'GET', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication ApiKeyAuth required
+            await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
+
+            if (managerId !== undefined) {
+                localVarQueryParameter['manager_id'] = managerId;
+            }
+
+            localVarHeaderParameter['Accept'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
          * Clear state ranges of an employee overlapping a date range (splits overlaps, optional state filter)
          * @summary Delete employee days
          * @param {number} id Employee ID
@@ -3331,6 +3369,19 @@ export const TimesheetEmployeesApiFp = function(configuration?: Configuration) {
     const localVarAxiosParamCreator = TimesheetEmployeesApiAxiosParamCreator(configuration)
     return {
         /**
+         * List employees, optionally filtered by manager (user) id
+         * @summary List all employees
+         * @param {number} [managerId] Manager (user) ID filter
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async timesheetEmployeesGet(managerId?: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<TimesheetEmployeesGet200Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.timesheetEmployeesGet(managerId, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['TimesheetEmployeesApi.timesheetEmployeesGet']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
          * Clear state ranges of an employee overlapping a date range (splits overlaps, optional state filter)
          * @summary Delete employee days
          * @param {number} id Employee ID
@@ -3422,7 +3473,7 @@ export const TimesheetEmployeesApiFp = function(configuration?: Configuration) {
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async timesheetResourcesIdEmployeesGet(id: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<TimesheetResourcesIdEmployeesGet200Response>> {
+        async timesheetResourcesIdEmployeesGet(id: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<TimesheetEmployeesGet200Response>> {
             const localVarAxiosArgs = await localVarAxiosParamCreator.timesheetResourcesIdEmployeesGet(id, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
             const localVarOperationServerBasePath = operationServerMap['TimesheetEmployeesApi.timesheetResourcesIdEmployeesGet']?.[localVarOperationServerIndex]?.url;
@@ -3451,6 +3502,16 @@ export const TimesheetEmployeesApiFp = function(configuration?: Configuration) {
 export const TimesheetEmployeesApiFactory = function (configuration?: Configuration, basePath?: string, axios?: AxiosInstance) {
     const localVarFp = TimesheetEmployeesApiFp(configuration)
     return {
+        /**
+         * List employees, optionally filtered by manager (user) id
+         * @summary List all employees
+         * @param {number} [managerId] Manager (user) ID filter
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        timesheetEmployeesGet(managerId?: number, options?: RawAxiosRequestConfig): AxiosPromise<TimesheetEmployeesGet200Response> {
+            return localVarFp.timesheetEmployeesGet(managerId, options).then((request) => request(axios, basePath));
+        },
         /**
          * Clear state ranges of an employee overlapping a date range (splits overlaps, optional state filter)
          * @summary Delete employee days
@@ -3525,7 +3586,7 @@ export const TimesheetEmployeesApiFactory = function (configuration?: Configurat
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        timesheetResourcesIdEmployeesGet(id: number, options?: RawAxiosRequestConfig): AxiosPromise<TimesheetResourcesIdEmployeesGet200Response> {
+        timesheetResourcesIdEmployeesGet(id: number, options?: RawAxiosRequestConfig): AxiosPromise<TimesheetEmployeesGet200Response> {
             return localVarFp.timesheetResourcesIdEmployeesGet(id, options).then((request) => request(axios, basePath));
         },
         /**
@@ -3546,6 +3607,17 @@ export const TimesheetEmployeesApiFactory = function (configuration?: Configurat
  * TimesheetEmployeesApi - object-oriented interface
  */
 export class TimesheetEmployeesApi extends BaseAPI {
+    /**
+     * List employees, optionally filtered by manager (user) id
+     * @summary List all employees
+     * @param {number} [managerId] Manager (user) ID filter
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    public timesheetEmployeesGet(managerId?: number, options?: RawAxiosRequestConfig) {
+        return TimesheetEmployeesApiFp(this.configuration).timesheetEmployeesGet(managerId, options).then((request) => request(this.axios, this.basePath));
+    }
+
     /**
      * Clear state ranges of an employee overlapping a date range (splits overlaps, optional state filter)
      * @summary Delete employee days

@@ -28,8 +28,8 @@ export const modalFieldArgType: ArgTypes<ModalField> = {
   },
   type: {
     name: 'Тип',
-    control: { type: 'select', options: ['text', 'textarea', 'select'] },
-    table: { type: { summary: "'text' | 'textarea' | 'select'" } },
+    control: { type: 'select', options: ['text', 'textarea', 'select', 'number', 'date'] },
+    table: { type: { summary: "'text' | 'textarea' | 'select' | 'number' | 'date'" } },
   },
   value: {
     name: 'Начальное значение',

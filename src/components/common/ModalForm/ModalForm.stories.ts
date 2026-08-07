@@ -69,6 +69,27 @@ export const WithTextarea: Story = {
   },
 }
 
+export const WithDates: Story = {
+  args: {
+    title: 'Добавить период состояния',
+    fields: [
+      {
+        key: 'state_id',
+        label: 'Состояние',
+        type: 'select',
+        value: '',
+        options: [
+          { value: 1, label: 'Отпуск' },
+          { value: 2, label: 'Больничный' },
+          { value: 3, label: 'Командировка' },
+        ],
+      },
+      { key: 'start_date', label: 'Начало', type: 'date', value: '2026-07-20', required: true },
+      { key: 'end_date', label: 'Конец', type: 'date', value: '2026-08-02', required: true },
+    ],
+  },
+}
+
 export const Busy: Story = {
   args: {
     busy: true,

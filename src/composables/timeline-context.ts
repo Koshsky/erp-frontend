@@ -11,7 +11,7 @@ import type { PlanningUnit } from '../components/planner/calendar'
  */
 export const INTERACTIVE_SELECTOR =
   '.gantt-bar, .gb-handle, .ms-marker, .row-handle, .gg-label, .gg-merged, ' +
-  '.th-corner, .rs-label, .rs-block'
+  '.th-corner, .rs-label, .rs-block, .ts-labels, .ts-row'
 
 /** Ключ provide/inject: элемент-скролл-контейнер бесконечной шкалы */
 export const TimelineScrollKey: InjectionKey<Ref<HTMLElement | null>> = Symbol('timeline-scroll')
