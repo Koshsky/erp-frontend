@@ -21,25 +21,31 @@ export const AllStates: Story = {
           <div style="display:flex;flex-direction:column;gap:8px;align-items:center;">
             <div style="font-size:13px;font-weight:600;color:#444;">Under Used</div>
             <div style="font-size:11px;color:#999;">2 / 4 — недобор</div>
-            <div style="width:110px;"><UsageCell :used="2" :total="4" /></div>
+            <div style="width:110px;"><UsageCell :used="2" :available="4" /></div>
           </div>
 
           <div style="display:flex;flex-direction:column;gap:8px;align-items:center;">
             <div style="font-size:13px;font-weight:600;color:#444;">Full Used</div>
             <div style="font-size:11px;color:#999;">4 / 4 — идеально</div>
-            <div style="width:110px;"><UsageCell :used="4" :total="4" /></div>
+            <div style="width:110px;"><UsageCell :used="4" :available="4" /></div>
           </div>
 
           <div style="display:flex;flex-direction:column;gap:8px;align-items:center;">
             <div style="font-size:13px;font-weight:600;color:#444;">Over Used</div>
             <div style="font-size:11px;color:#999;">5 / 4 — перебор</div>
-            <div style="width:110px;"><UsageCell :used="5" :total="4" /></div>
+            <div style="width:110px;"><UsageCell :used="5" :available="4" /></div>
           </div>
 
           <div style="display:flex;flex-direction:column;gap:8px;align-items:center;">
             <div style="font-size:13px;font-weight:600;color:#444;">Weekend</div>
             <div style="font-size:11px;color:#999;">выходной день</div>
-            <div style="width:110px;"><UsageCell :used="0" :total="4" :is-weekend="true" /></div>
+            <div style="width:110px;"><UsageCell :used="0" :available="4" :is-weekend="true" /></div>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:8px;align-items:center;">
+            <div style="font-size:13px;font-weight:600;color:#444;">Unknown</div>
+            <div style="font-size:11px;color:#999;">нет данных о доступности</div>
+            <div style="width:110px;"><UsageCell :used="2" /></div>
           </div>
 
         </div>

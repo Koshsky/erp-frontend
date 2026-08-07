@@ -23,7 +23,7 @@ const app = useAppStore()
 const route = useRoute()
 
 const { taskPlanning, loading, error } = storeToRefs(planning)
-const { resources } = storeToRefs(app)
+const { resources, calendar } = storeToRefs(app)
 
 const { unit, origin } = usePlanningOrigin()
 
@@ -260,6 +260,7 @@ onMounted(async () => {
   // и при монтировании шкалы порядок групп уже финальный (иначе якорь навигации уезжает).
   if (!app.projects.length) await app.loadProjects()
   if (!resources.value.length) await app.loadResources()
+  if (!calendar.value.length) await app.loadCalendar()
   await planning.loadTaskPlanning()
 })
 
@@ -287,6 +288,7 @@ const processesByPriority = computed(() => {
     <TaskPlanning
       :processes="processesByPriority"
       :resources="resources"
+      :calendar="calendar"
       :loading="loading"
       :error="error"
       :origin="origin"

@@ -4,11 +4,12 @@ export interface Resource {
   id: number
   code: string
   title: string
-  quantity: number
+  employeesCount: number
 }
 
 export interface ResourceHeaderProps {
   t: TimelineCtx
   resources: Resource[]
   usageFn: (resourceId: number, day: Date) => number
+  availableFn: (resourceId: number, day: Date) => number | null
 }

@@ -8,11 +8,11 @@ export const usageCellArgTypes: ArgTypes<UsageCellProps> = {
     control: { type: 'number', min: 0, max: 10 },
     table: { type: { summary: 'number' }, category: 'Data' },
   },
-  total: {
-    name: 'Всего',
-    description: 'Сколько всего ресурса доступно',
+  available: {
+    name: 'Доступно',
+    description: 'Сколько ресурса доступно (из /timesheet/calendar); null — нет данных',
     control: { type: 'number', min: 1, max: 10 },
-    table: { type: { summary: 'number' }, category: 'Data' },
+    table: { type: { summary: 'number | null' }, category: 'Data' },
   },
   isWeekend: {
     name: 'Выходной',

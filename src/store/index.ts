@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { AuthApi, ProjectsApi, ProcessesApi, TasksApi, ResourcesApi, PlanningApi, MilestonesApi, UsersApi, AssignmentsApi, Configuration } from '@/api'
-import type { DtoUserInfo, DtoProject, DtoResource, DtoCreateResourceRequest, DtoUpdateResourceRequest, JwtTokenPair } from '@/api'
+import { AuthApi, ProjectsApi, ProcessesApi, TasksApi, TimesheetResourcesApi, TimesheetCalendarApi, PlanningApi, MilestonesApi, UsersApi, AssignmentsApi, Configuration } from '@/api'
+import type { DtoUserInfo, DtoProject, DtoResourceResponse, DtoResourceCalendar, DtoCreateResourceRequest, DtoUpdateResourceRequest, JwtTokenPair } from '@/api'
 
 const TOKEN_KEY = 'mvs_erp_access_token'
 const REFRESH_KEY = 'mvs_erp_refresh_token'
@@ -270,7 +270,7 @@ export const useAppStore = defineStore('app', () => {
     }
   }
 
-  const resources = ref<DtoResource[]>([])
+  const resources = ref<DtoResourceResponse[]>([])
   const resourcesLoading = ref(false)
   const resourcesError = ref<string | null>(null)
 
@@ -278,8 +278,8 @@ export const useAppStore = defineStore('app', () => {
     resourcesLoading.value = true
     resourcesError.value = null
     try {
-      const api = new ResourcesApi(apiConfig())
-      const resp = await api.resourceGet()
+      const api = new TimesheetResourcesApi(apiConfig())
+      const resp = await api.timesheetResourcesGet()
       resources.value = resp.data?.data ?? []
     } catch (e: any) {
       resourcesError.value = e.message || String(e)
@@ -291,8 +291,8 @@ export const useAppStore = defineStore('app', () => {
   async function createResource(payload: DtoCreateResourceRequest): Promise<boolean> {
     resourcesError.value = null
     try {
-      const api = new ResourcesApi(apiConfig())
-      const resp = await api.resourcePost(payload)
+      const api = new TimesheetResourcesApi(apiConfig())
+      const resp = await api.timesheetResourcesPost(payload)
       const body = resp.data
       if (body?.error) throw new Error(body.error)
       if (body?.data) resources.value.push(body.data)
@@ -306,8 +306,8 @@ export const useAppStore = defineStore('app', () => {
   async function updateResource(id: number, patch: DtoUpdateResourceRequest): Promise<boolean> {
     resourcesError.value = null
     try {
-      const api = new ResourcesApi(apiConfig())
-      const resp = await api.resourceIdPut(id, patch)
+      const api = new TimesheetResourcesApi(apiConfig())
+      const resp = await api.timesheetResourcesIdPut(id, patch)
       const body = resp.data
       if (body?.error) throw new Error(body.error)
       const updated = body?.data
@@ -325,13 +325,48 @@ export const useAppStore = defineStore('app', () => {
   async function deleteResource(id: number): Promise<boolean> {
     resourcesError.value = null
     try {
-      await new ResourcesApi(apiConfig()).resourceIdDelete(id)
+      await new TimesheetResourcesApi(apiConfig()).timesheetResourcesIdDelete(id)
       const i = resources.value.findIndex((r) => r.id === id)
       if (i >= 0) resources.value.splice(i, 1)
       return true
     } catch (e: any) {
       resourcesError.value = e.message || String(e)
       return false
+    }
+  }
+
+  // === Календарь доступности ресурсов (/timesheet/calendar) ===
+  // Окно загрузки: назад 180 дней, вперёд 360 (всего 540 < лимита бэкенда 730 дней).
+  const CALENDAR_BACK_DAYS = 180
+  const CALENDAR_FORWARD_DAYS = 360
+  const calendar = ref<DtoResourceCalendar[]>([])
+  const calendarLoading = ref(false)
+  const calendarError = ref<string | null>(null)
+
+  /** Дата YYYY-MM-DD через n дней от базовой (для окна загрузки календаря) */
+  function calendarDay(day: Date, offsetDays: number): string {
+    const d = new Date(day.getTime() + offsetDays * 86_400_000)
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const dd = String(d.getDate()).padStart(2, '0')
+    return `${d.getFullYear()}-${m}-${dd}`
+  }
+
+  /** Загружает доступность ресурсов за окно «назад 180 / вперёд 360 дней» (в лимите бэкенда) */
+  async function loadCalendar() {
+    calendarLoading.value = true
+    calendarError.value = null
+    try {
+      const today = new Date()
+      const api = new TimesheetCalendarApi(apiConfig())
+      const resp = await api.timesheetCalendarGet(
+        calendarDay(today, -CALENDAR_BACK_DAYS),
+        calendarDay(today, CALENDAR_FORWARD_DAYS),
+      )
+      calendar.value = resp.data?.data?.resources ?? []
+    } catch (e: any) {
+      calendarError.value = e.message || String(e)
+    } finally {
+      calendarLoading.value = false
     }
   }
 
@@ -368,8 +403,12 @@ export const useAppStore = defineStore('app', () => {
     usersError,
     totalProjects,
     totalResources,
+    calendar,
+    calendarLoading,
+    calendarError,
     loadProjects,
     loadResources,
+    loadCalendar,
     loadUsers,
     createResource,
     updateResource,

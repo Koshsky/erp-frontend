@@ -8,7 +8,7 @@ import { useContextMenu } from '../composables/useContextMenu'
 import { useEditModal } from '../composables/useEditModal'
 import { useRoleAccess } from '../composables/useRoleAccess'
 import { useAppStore } from '../store'
-import type { DtoResource } from '@/api'
+import type { DtoResourceResponse } from '@/api'
 
 const store = useAppStore()
 const { resources, resourcesLoading, resourcesError } = storeToRefs(store)
@@ -34,24 +34,21 @@ const { confirm: confirmDialog, ask, proceed, cancel } = useConfirm()
 
 type ModalMode =
   | { type: 'create' }
-  | { type: 'edit'; id: number; code: string; title: string; quantity: number }
+  | { type: 'edit'; id: number; code: string; title: string }
 const { open: openModal, close: closeModal, submit: submitModal, bind: modalBind } = useEditModal<ModalMode>(
   (state) => {
-    const isCreate = state.type === 'create'
-    const base = isCreate
-      ? { code: '', title: '', quantity: 1 }
-      : { code: state.code, title: state.title, quantity: state.quantity }
+    const base = state.type === 'create'
+      ? { code: '', title: '' }
+      : { code: state.code, title: state.title }
     return [
       { key: 'code', label: 'Код', type: 'text', value: base.code, required: true },
       { key: 'title', label: 'Название', type: 'text', value: base.title },
-      { key: 'quantity', label: 'Количество', type: 'number', value: base.quantity, required: true },
     ]
   },
   async (state, values) => {
     const payload = {
       code: String(values.code ?? '').trim(),
       title: String(values.title ?? '').trim(),
-      quantity: Number(values.quantity),
     }
     const ok =
       state.type === 'create'
@@ -63,7 +60,7 @@ const { open: openModal, close: closeModal, submit: submitModal, bind: modalBind
   (state) => (state.type === 'create' ? 'Создать' : 'Сохранить'),
 )
 
-function onRowContextMenu(e: MouseEvent, res: DtoResource) {
+function onRowContextMenu(e: MouseEvent, res: DtoResourceResponse) {
   if (res.id == null || !canManage.value) return
   openMenu({ x: e.clientX, y: e.clientY, resourceId: res.id })
 }
@@ -77,7 +74,7 @@ function openCreate() {
 function openEdit(id: number) {
   const res = resources.value.find((r) => r.id === id)
   if (res) {
-    openModal({ type: 'edit', id, code: res.code ?? '', title: res.title ?? '', quantity: res.quantity ?? 1 })
+    openModal({ type: 'edit', id, code: res.code ?? '', title: res.title ?? '' })
   }
 }
 
@@ -112,7 +109,7 @@ onMounted(() => {
       <div class="tr th">
         <div>Код</div>
         <div>Название</div>
-        <div>Количество</div>
+        <div>Сотрудников</div>
       </div>
       <div
         v-for="res in resources"
@@ -122,7 +119,7 @@ onMounted(() => {
       >
         <div class="code">{{ res.code }}</div>
         <div>{{ res.title }}</div>
-        <div>{{ res.quantity }}</div>
+        <div>{{ res.employees_count }}</div>
       </div>
     </div>
     <p v-else-if="!resourcesLoading && !resourcesError" class="rp-st">Нет данных о ресурсах</p>
