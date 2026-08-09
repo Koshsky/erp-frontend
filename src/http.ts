@@ -32,7 +32,21 @@ export function setupHttp() {
     (response) => response,
     async (error: AxiosError) => {
       const { config, response } = error
-      if (!config || !response || response.status !== 401) {
+      if (!config || !response) {
+        return Promise.reject(error)
+      }
+
+      // Подставляем текст ошибки из тела ответа ({ data, error }) вместо
+      // «Request failed with status code …», чтобы стора показывала причину.
+      if (response.status >= 400) {
+        const body = response.data as { error?: string; data?: { error?: string } } | undefined
+        const msg = body?.error || body?.data?.error
+        if (msg) {
+          ;(error as AxiosError & { message: string }).message = msg
+        }
+      }
+
+      if (response.status !== 401) {
         return Promise.reject(error)
       }
 

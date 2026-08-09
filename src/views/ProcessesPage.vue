@@ -26,9 +26,9 @@ const { unit, origin } = usePlanningOrigin()
 // Меню ПКМ по шапке таблицы: переключение масштаба «День» / «Декада»
 const { open: openUnitMenu, close: closeUnitMenu, select: selectUnit, bind: unitMenuBind } = useUnitMenu(unit)
 
-// dp (директор проектов) — read-only: может менять только приоритет проектов,
-// поэтому создание/редактирование/удаление процессов и перенос их дат недоступны.
-const { canManage } = useRoleAccess()
+// dp (директор проектов) — read-only; rp управляет процессами своих проектов,
+// vp/worker — без прав (список процессов для них уже отфильтрован бэкендом).
+const { canManageProcesses } = useRoleAccess()
 
 const { findProcess } = useFindPlanningItem()
 
@@ -68,7 +68,7 @@ const menu = ref<MenuState | null>(null)
 const { confirm: confirmDialog, ask, proceed, cancel } = useConfirm()
 
 const menuItems = computed<ContextMenuItem[]>(() => {
-  if (!canManage.value) return []
+  if (!canManageProcesses.value) return []
   return menu.value?.processId != null
     ? [
         { id: 'edit-process', label: 'Редактировать' },
@@ -101,7 +101,7 @@ const { open: openEdit, close: closeEdit, submit: submitEdit, bind: editBind } =
 )
 
 function onContextMenu(p: { clientX: number; clientY: number; date: string | null; rowIndex: number; projectId?: number; processId?: number }) {
-  if (!canManage.value) return
+  if (!canManageProcesses.value) return
   // Пустое место группы: создание процесса требует проект-родитель и известной даты
   if (p.processId == null && (p.projectId == null || p.date == null)) return
   openMenu({ x: p.clientX, y: p.clientY, date: p.date, rowIndex: p.rowIndex, projectId: p.projectId, processId: p.processId })
@@ -167,7 +167,7 @@ onMounted(() => {
       :users="app.users"
       :origin="origin"
       :unit="unit"
-      :can-manage="canManage"
+      :can-manage="canManageProcesses"
       :focus-date="focusDate"
       :focus-group-id="focusGroupId"
       @change="(p) => store.updateProcessDates(p.id, p.start_date, p.end_date)"

@@ -9,19 +9,34 @@ export function useRoleAccess() {
   const role = computed(() => auth.user?.role)
   const userId = computed(() => auth.user?.id)
 
-  /** CRUD задач/процессов/ресурсов: запрещено только dp (директор портфеля) */
-  const canManage = computed(() => role.value !== 'dp')
+  /** CRUD ресурсов табеля: admin и vp (vp — свои) */
+  const canManageResources = computed(() => role.value === 'admin' || role.value === 'vp')
+
+  /** Процессы (страница процессов): admin и rp — в своих проектах (список уже отфильтрован) */
+  const canManageProcesses = computed(() => role.value === 'admin' || role.value === 'rp')
+
+  /** Задачи/вехи/назначения (страница задач): admin и vp — в своих процессах; rp — view only */
+  const canManageTasks = computed(() => role.value === 'admin' || role.value === 'vp')
 
   /** Создание проекта: admin и rp (rp становится владельцем) */
   const canCreateProject = computed(() => role.value === 'admin' || role.value === 'rp')
 
-  /** Переупорядочивание проектов (смена приоритетов): только admin и dp */
+  /** Переупорядочивание проектов (смена приоритетов): admin/dp — все, rp — свои
+   *  (список rp уже отфильтрован бэкендом до его проектов) */
   const canReorderProjects = computed(() =>
-    role.value === 'admin' || role.value === 'dp',
+    role.value === 'admin' || role.value === 'dp' || role.value === 'rp',
   )
 
-  /** Редактирование/удаление проекта: admin — любой, rp — только свой */
+  /** Редактирование проекта: admin — любой, dp — все, rp — только свой */
   function canManageProject(projectId: number): boolean {
+    if (role.value === 'admin' || role.value === 'dp') return true
+    if (role.value !== 'rp') return false
+    const project = planning.projectPlanning?.projects?.find((p: any) => p.id === projectId)
+    return project?.owner_id != null && project.owner_id === userId.value
+  }
+
+  /** Удаление проекта: admin — любой, rp — только свой; dp не удаляет */
+  function canDeleteProject(projectId: number): boolean {
     if (role.value === 'admin') return true
     if (role.value !== 'rp') return false
     const project = planning.projectPlanning?.projects?.find((p: any) => p.id === projectId)
@@ -46,10 +61,13 @@ export function useRoleAccess() {
   return {
     role,
     userId,
-    canManage,
+    canManageResources,
+    canManageProcesses,
+    canManageTasks,
     canCreateProject,
     canReorderProjects,
     canManageProject,
+    canDeleteProject,
     canManageEmployees,
     canManageStates,
     canEditEmployee,
