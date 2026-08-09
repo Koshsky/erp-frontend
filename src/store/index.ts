@@ -68,9 +68,13 @@ export const useAuthStore = defineStore('auth', () => {
   const loading = ref(false)
   const error = ref<string | null>(null)
 
-  function applySession(data: { tokens?: JwtTokenPair; user?: DtoUserInfo } | undefined) {
-    const token = data?.tokens?.access_token
-    const refresh = data?.tokens?.refresh_token
+  function applySession(
+    data:
+      | { access_token?: string; refresh_token?: string; user?: DtoUserInfo; tokens?: JwtTokenPair }
+      | undefined,
+  ) {
+    const token = data?.access_token ?? data?.tokens?.access_token
+    const refresh = data?.refresh_token ?? data?.tokens?.refresh_token
     if (token) localStorage.setItem(TOKEN_KEY, token)
     if (refresh) localStorage.setItem(REFRESH_KEY, refresh)
     if (data?.user) {

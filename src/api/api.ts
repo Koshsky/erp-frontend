@@ -50,7 +50,10 @@ export interface DtoAssignmentResponse {
     'task_id'?: number;
 }
 export interface DtoAuthResponse {
-    'tokens'?: JwtTokenPair;
+    'access_token'?: string;
+    'expires_in'?: number;
+    'refresh_token'?: string;
+    'token_type'?: string;
     'user'?: DtoUserInfo;
 }
 export interface DtoAvailabilityPeriod {
