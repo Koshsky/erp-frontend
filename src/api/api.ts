@@ -1756,7 +1756,7 @@ export const ProcessesApiAxiosParamCreator = function (configuration?: Configura
             // authentication ApiKeyAuth required
             await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
 
-            localVarHeaderParameter['Accept'] = 'application/json';
+            localVarHeaderParameter['Accept'] = '*/*';
 
             setSearchParams(localVarUrlObj, localVarQueryParameter);
             let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
@@ -1793,7 +1793,7 @@ export const ProcessesApiAxiosParamCreator = function (configuration?: Configura
             // authentication ApiKeyAuth required
             await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
 
-            localVarHeaderParameter['Accept'] = 'application/json';
+            localVarHeaderParameter['Accept'] = '*/*';
 
             setSearchParams(localVarUrlObj, localVarQueryParameter);
             let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
@@ -2089,7 +2089,7 @@ export const ProjectsApiAxiosParamCreator = function (configuration?: Configurat
     return {
         /**
          * Get a list of all projects
-         * @summary List projects
+         * @summary List all projects
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
@@ -2121,8 +2121,8 @@ export const ProjectsApiAxiosParamCreator = function (configuration?: Configurat
             };
         },
         /**
-         * Delete a project by its ID
-         * @summary Delete project
+         * Delete a project by ID
+         * @summary Delete a project
          * @param {number} id Project ID
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
@@ -2158,8 +2158,8 @@ export const ProjectsApiAxiosParamCreator = function (configuration?: Configurat
             };
         },
         /**
-         * Get a project by ID
-         * @summary Get project
+         * Get a project by its ID
+         * @summary Get a project by ID
          * @param {number} id Project ID
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
@@ -2195,18 +2195,18 @@ export const ProjectsApiAxiosParamCreator = function (configuration?: Configurat
             };
         },
         /**
-         * Update a project by its ID
+         * Update code, dates, priority or owner of a project
          * @summary Update project
          * @param {number} id Project ID
-         * @param {DtoUpdateProjectRequest} project Project data
+         * @param {DtoUpdateProjectRequest} body Project data
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        projectIdPut: async (id: number, project: DtoUpdateProjectRequest, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+        projectIdPut: async (id: number, body: DtoUpdateProjectRequest, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
             // verify required parameter 'id' is not null or undefined
             assertParamExists('projectIdPut', 'id', id)
-            // verify required parameter 'project' is not null or undefined
-            assertParamExists('projectIdPut', 'project', project)
+            // verify required parameter 'body' is not null or undefined
+            assertParamExists('projectIdPut', 'body', body)
             const localVarPath = `/project/{id}`
                 .replace('{id}', encodeURIComponent(String(id)));
             // use dummy base URL string because the URL constructor only accepts absolute URLs.
@@ -2229,7 +2229,7 @@ export const ProjectsApiAxiosParamCreator = function (configuration?: Configurat
             setSearchParams(localVarUrlObj, localVarQueryParameter);
             let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
             localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
-            localVarRequestOptions.data = serializeDataIfNeeded(project, localVarRequestOptions, configuration)
+            localVarRequestOptions.data = serializeDataIfNeeded(body, localVarRequestOptions, configuration)
 
             return {
                 url: toPathString(localVarUrlObj),
@@ -2237,9 +2237,9 @@ export const ProjectsApiAxiosParamCreator = function (configuration?: Configurat
             };
         },
         /**
-         * Create a new project with the provided details
-         * @summary Create a new project
-         * @param {DtoCreateProjectRequest} project Project details
+         * Create a new project
+         * @summary Create project
+         * @param {DtoCreateProjectRequest} project Project data
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
@@ -2285,7 +2285,7 @@ export const ProjectsApiFp = function(configuration?: Configuration) {
     return {
         /**
          * Get a list of all projects
-         * @summary List projects
+         * @summary List all projects
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
@@ -2296,8 +2296,8 @@ export const ProjectsApiFp = function(configuration?: Configuration) {
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
-         * Delete a project by its ID
-         * @summary Delete project
+         * Delete a project by ID
+         * @summary Delete a project
          * @param {number} id Project ID
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
@@ -2309,8 +2309,8 @@ export const ProjectsApiFp = function(configuration?: Configuration) {
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
-         * Get a project by ID
-         * @summary Get project
+         * Get a project by its ID
+         * @summary Get a project by ID
          * @param {number} id Project ID
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
@@ -2322,23 +2322,23 @@ export const ProjectsApiFp = function(configuration?: Configuration) {
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
-         * Update a project by its ID
+         * Update code, dates, priority or owner of a project
          * @summary Update project
          * @param {number} id Project ID
-         * @param {DtoUpdateProjectRequest} project Project data
+         * @param {DtoUpdateProjectRequest} body Project data
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async projectIdPut(id: number, project: DtoUpdateProjectRequest, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<ProjectPost201Response>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.projectIdPut(id, project, options);
+        async projectIdPut(id: number, body: DtoUpdateProjectRequest, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<ProjectPost201Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.projectIdPut(id, body, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
             const localVarOperationServerBasePath = operationServerMap['ProjectsApi.projectIdPut']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
-         * Create a new project with the provided details
-         * @summary Create a new project
-         * @param {DtoCreateProjectRequest} project Project details
+         * Create a new project
+         * @summary Create project
+         * @param {DtoCreateProjectRequest} project Project data
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
@@ -2359,7 +2359,7 @@ export const ProjectsApiFactory = function (configuration?: Configuration, baseP
     return {
         /**
          * Get a list of all projects
-         * @summary List projects
+         * @summary List all projects
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
@@ -2367,8 +2367,8 @@ export const ProjectsApiFactory = function (configuration?: Configuration, baseP
             return localVarFp.projectGet(options).then((request) => request(axios, basePath));
         },
         /**
-         * Delete a project by its ID
-         * @summary Delete project
+         * Delete a project by ID
+         * @summary Delete a project
          * @param {number} id Project ID
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
@@ -2377,8 +2377,8 @@ export const ProjectsApiFactory = function (configuration?: Configuration, baseP
             return localVarFp.projectIdDelete(id, options).then((request) => request(axios, basePath));
         },
         /**
-         * Get a project by ID
-         * @summary Get project
+         * Get a project by its ID
+         * @summary Get a project by ID
          * @param {number} id Project ID
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
@@ -2387,20 +2387,20 @@ export const ProjectsApiFactory = function (configuration?: Configuration, baseP
             return localVarFp.projectIdGet(id, options).then((request) => request(axios, basePath));
         },
         /**
-         * Update a project by its ID
+         * Update code, dates, priority or owner of a project
          * @summary Update project
          * @param {number} id Project ID
-         * @param {DtoUpdateProjectRequest} project Project data
+         * @param {DtoUpdateProjectRequest} body Project data
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        projectIdPut(id: number, project: DtoUpdateProjectRequest, options?: RawAxiosRequestConfig): AxiosPromise<ProjectPost201Response> {
-            return localVarFp.projectIdPut(id, project, options).then((request) => request(axios, basePath));
+        projectIdPut(id: number, body: DtoUpdateProjectRequest, options?: RawAxiosRequestConfig): AxiosPromise<ProjectPost201Response> {
+            return localVarFp.projectIdPut(id, body, options).then((request) => request(axios, basePath));
         },
         /**
-         * Create a new project with the provided details
-         * @summary Create a new project
-         * @param {DtoCreateProjectRequest} project Project details
+         * Create a new project
+         * @summary Create project
+         * @param {DtoCreateProjectRequest} project Project data
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
@@ -2416,7 +2416,7 @@ export const ProjectsApiFactory = function (configuration?: Configuration, baseP
 export class ProjectsApi extends BaseAPI {
     /**
      * Get a list of all projects
-     * @summary List projects
+     * @summary List all projects
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      */
@@ -2425,8 +2425,8 @@ export class ProjectsApi extends BaseAPI {
     }
 
     /**
-     * Delete a project by its ID
-     * @summary Delete project
+     * Delete a project by ID
+     * @summary Delete a project
      * @param {number} id Project ID
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
@@ -2436,8 +2436,8 @@ export class ProjectsApi extends BaseAPI {
     }
 
     /**
-     * Get a project by ID
-     * @summary Get project
+     * Get a project by its ID
+     * @summary Get a project by ID
      * @param {number} id Project ID
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
@@ -2447,21 +2447,21 @@ export class ProjectsApi extends BaseAPI {
     }
 
     /**
-     * Update a project by its ID
+     * Update code, dates, priority or owner of a project
      * @summary Update project
      * @param {number} id Project ID
-     * @param {DtoUpdateProjectRequest} project Project data
+     * @param {DtoUpdateProjectRequest} body Project data
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      */
-    public projectIdPut(id: number, project: DtoUpdateProjectRequest, options?: RawAxiosRequestConfig) {
-        return ProjectsApiFp(this.configuration).projectIdPut(id, project, options).then((request) => request(this.axios, this.basePath));
+    public projectIdPut(id: number, body: DtoUpdateProjectRequest, options?: RawAxiosRequestConfig) {
+        return ProjectsApiFp(this.configuration).projectIdPut(id, body, options).then((request) => request(this.axios, this.basePath));
     }
 
     /**
-     * Create a new project with the provided details
-     * @summary Create a new project
-     * @param {DtoCreateProjectRequest} project Project details
+     * Create a new project
+     * @summary Create project
+     * @param {DtoCreateProjectRequest} project Project data
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      */
@@ -2985,13 +2985,12 @@ export class TimesheetCalendarApi extends BaseAPI {
 export const TimesheetEmployeesApiAxiosParamCreator = function (configuration?: Configuration) {
     return {
         /**
-         * List employees, optionally filtered by manager (user) id
+         * List all employees
          * @summary List all employees
-         * @param {number} [managerId] Manager (user) ID filter
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        timesheetEmployeesGet: async (managerId?: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+        timesheetEmployeesGet: async (options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
             const localVarPath = `/timesheet/employees`;
             // use dummy base URL string because the URL constructor only accepts absolute URLs.
             const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
@@ -3006,10 +3005,6 @@ export const TimesheetEmployeesApiAxiosParamCreator = function (configuration?: 
 
             // authentication ApiKeyAuth required
             await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
-
-            if (managerId !== undefined) {
-                localVarQueryParameter['manager_id'] = managerId;
-            }
 
             localVarHeaderParameter['Accept'] = 'application/json';
 
@@ -3376,14 +3371,13 @@ export const TimesheetEmployeesApiFp = function(configuration?: Configuration) {
     const localVarAxiosParamCreator = TimesheetEmployeesApiAxiosParamCreator(configuration)
     return {
         /**
-         * List employees, optionally filtered by manager (user) id
+         * List all employees
          * @summary List all employees
-         * @param {number} [managerId] Manager (user) ID filter
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async timesheetEmployeesGet(managerId?: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<TimesheetEmployeesGet200Response>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.timesheetEmployeesGet(managerId, options);
+        async timesheetEmployeesGet(options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<TimesheetEmployeesGet200Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.timesheetEmployeesGet(options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
             const localVarOperationServerBasePath = operationServerMap['TimesheetEmployeesApi.timesheetEmployeesGet']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
@@ -3510,14 +3504,13 @@ export const TimesheetEmployeesApiFactory = function (configuration?: Configurat
     const localVarFp = TimesheetEmployeesApiFp(configuration)
     return {
         /**
-         * List employees, optionally filtered by manager (user) id
+         * List all employees
          * @summary List all employees
-         * @param {number} [managerId] Manager (user) ID filter
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        timesheetEmployeesGet(managerId?: number, options?: RawAxiosRequestConfig): AxiosPromise<TimesheetEmployeesGet200Response> {
-            return localVarFp.timesheetEmployeesGet(managerId, options).then((request) => request(axios, basePath));
+        timesheetEmployeesGet(options?: RawAxiosRequestConfig): AxiosPromise<TimesheetEmployeesGet200Response> {
+            return localVarFp.timesheetEmployeesGet(options).then((request) => request(axios, basePath));
         },
         /**
          * Clear state ranges of an employee overlapping a date range (splits overlaps, optional state filter)
@@ -3615,14 +3608,13 @@ export const TimesheetEmployeesApiFactory = function (configuration?: Configurat
  */
 export class TimesheetEmployeesApi extends BaseAPI {
     /**
-     * List employees, optionally filtered by manager (user) id
+     * List all employees
      * @summary List all employees
-     * @param {number} [managerId] Manager (user) ID filter
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      */
-    public timesheetEmployeesGet(managerId?: number, options?: RawAxiosRequestConfig) {
-        return TimesheetEmployeesApiFp(this.configuration).timesheetEmployeesGet(managerId, options).then((request) => request(this.axios, this.basePath));
+    public timesheetEmployeesGet(options?: RawAxiosRequestConfig) {
+        return TimesheetEmployeesApiFp(this.configuration).timesheetEmployeesGet(options).then((request) => request(this.axios, this.basePath));
     }
 
     /**

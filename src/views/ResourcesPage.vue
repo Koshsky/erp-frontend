@@ -16,7 +16,7 @@ const { resources, resourcesLoading, resourcesError, users } = storeToRefs(store
 
 // dp (директор проектов) — read-only: может менять только приоритет проектов,
 // поэтому создание/редактирование/удаление ресурсов ему недоступно.
-const { canManage, role, userId } = useRoleAccess()
+const { canManageResources, role, userId } = useRoleAccess()
 const isAdmin = computed(() => role.value === 'admin')
 
 /** Подпись владельца ресурса: admin — имя, vp — «Я» */
@@ -97,7 +97,7 @@ const { open: openModal, close: closeModal, submit: submitModal, bind: modalBind
 )
 
 function onRowContextMenu(e: MouseEvent, res: DtoResourceResponse) {
-  if (res.id == null || !canManage.value) return
+  if (res.id == null || !canManageResources.value) return
   openMenu({ x: e.clientX, y: e.clientY, resourceId: res.id })
 }
 
@@ -141,7 +141,7 @@ onMounted(() => {
           <option value="">Все владельцы</option>
           <option v-for="u in users" :key="u.id" :value="u.id">{{ u.name ?? `#${u.id}` }}</option>
         </select>
-        <button v-if="canManage" type="button" class="rp-add" @click="openCreate">Создать ресурс</button>
+        <button v-if="canManageResources" type="button" class="rp-add" @click="openCreate">Создать ресурс</button>
       </div>
     </div>
 

@@ -71,7 +71,7 @@ const { open: openModal, close: closeModal, submit: submitModal, bind: modalBind
 )
 
 function onRowContextMenu(e: MouseEvent, st: DtoStateResponse) {
-  if (st.id == null || !canManageStates) return
+  if (st.id == null || !canManageStates.value) return
   openMenu({ x: e.clientX, y: e.clientY, stateId: st.id })
 }
 

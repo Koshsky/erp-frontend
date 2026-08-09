@@ -497,16 +497,13 @@ export const useTimesheetStore = defineStore('timesheet', () => {
     return p && p.end_date != null && p.end_date >= iso ? p : undefined
   }
 
-  /** Загружает список сотрудников: vp — подчинённых (manager_id = vp.id), admin — всех */
+  /** Загружает список сотрудников (бэкенд фильтрует по роли из JWT: vp — подчинённые, admin — все) */
   async function fetchEmployees() {
     loading.value = true
     error.value = null
     try {
-      const auth = useAuthStore()
       const api = new TimesheetEmployeesApi(apiConfig())
-      const managerId =
-        auth.user?.role === 'admin' ? undefined : auth.user?.id
-      const resp = await api.timesheetEmployeesGet(managerId)
+      const resp = await api.timesheetEmployeesGet()
       // Сортировка: сначала должность (position, с запасом на resource_title), затем ФИО
       employees.value = (resp.data?.data ?? []).sort(
         (a, b) =>

@@ -63,6 +63,11 @@ const router = createRouter({
           component: () => import('../views/StatusesPage.vue'),
         },
         {
+          path: 'permissions',
+          name: 'permissions',
+          component: () => import('../views/PermissionsPage.vue'),
+        },
+        {
           path: 'profile',
           name: 'profile',
           component: () => import('../views/ProfilePage.vue'),
@@ -99,8 +104,11 @@ router.beforeEach(async (to) => {
     return { name: 'dashboard' }
   }
 
-  // Статусы — только admin
-  if (to.name === 'statuses' && auth.user?.role !== 'admin') {
+  // Статусы и Права — только admin
+  if (
+    (to.name === 'statuses' || to.name === 'permissions') &&
+    auth.user?.role !== 'admin'
+  ) {
     return { name: 'dashboard' }
   }
 
