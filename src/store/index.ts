@@ -93,7 +93,8 @@ export const useAuthStore = defineStore('auth', () => {
       const api = new AuthApi(apiConfig())
       const resp = await api.authLoginPost({ username, password })
       const body = resp.data
-      if (body?.error) throw new Error(apiErrorMessage(body.error))
+      const errBody = body?.error as { code?: unknown; message?: string } | undefined
+      if (errBody && errBody.code != null) throw new Error(apiErrorMessage(errBody))
       applySession(body?.data)
       return true
     } catch (e: any) {
@@ -111,7 +112,8 @@ export const useAuthStore = defineStore('auth', () => {
       const api = new AuthApi(apiConfig())
       const resp = await api.authRegisterPost({ username, password, name })
       const body = resp.data
-      if (body?.error) throw new Error(apiErrorMessage(body.error))
+      const errBody = body?.error as { code?: unknown; message?: string } | undefined
+      if (errBody && errBody.code != null) throw new Error(apiErrorMessage(errBody))
       applySession(body?.data)
       return true
     } catch (e: any) {
@@ -132,7 +134,8 @@ export const useAuthStore = defineStore('auth', () => {
         new_password: newPassword,
       })
       const body = resp.data
-      if (body?.error) throw new Error(apiErrorMessage(body.error))
+      const errBody = body?.error as { code?: unknown; message?: string } | undefined
+      if (errBody && errBody.code != null) throw new Error(apiErrorMessage(errBody))
       return true
     } catch (e: any) {
       error.value = apiErrorMessage(e?.response?.data?.error, e?.message ?? String(e))
@@ -197,7 +200,8 @@ export const useAuthStore = defineStore('auth', () => {
       const api = new AuthApi(apiConfig())
       const resp = await api.authRefreshPost({ refresh_token: refresh })
       const body = resp.data
-      if (body?.error) throw new Error(apiErrorMessage(body.error))
+      const errBody = body?.error as { code?: unknown; message?: string } | undefined
+      if (errBody && errBody.code != null) throw new Error(apiErrorMessage(errBody))
       applySession(body?.data)
       return true
     } catch (e: any) {
@@ -225,7 +229,8 @@ export const useAuthStore = defineStore('auth', () => {
       const api = new UsersApi(apiConfig())
       const resp = await api.userIdGet(userId)
       const body = resp.data
-      if (body?.error) throw new Error(apiErrorMessage(body.error))
+      const errBody = body?.error as { code?: unknown; message?: string } | undefined
+      if (errBody && errBody.code != null) throw new Error(apiErrorMessage(errBody))
       if (body?.data) {
         user.value = body.data as DtoUserInfo
         localStorage.setItem(USER_KEY, JSON.stringify(user.value))
@@ -299,7 +304,8 @@ export const useAppStore = defineStore('app', () => {
       const api = new TimesheetResourcesApi(apiConfig())
       const resp = await api.timesheetResourcesPost(payload)
       const body = resp.data
-      if (body?.error) throw new Error(apiErrorMessage(body.error))
+      const errBody = body?.error as { code?: unknown; message?: string } | undefined
+      if (errBody && errBody.code != null) throw new Error(apiErrorMessage(errBody))
       if (body?.data) resources.value.push(body.data)
       return true
     } catch (e: any) {
@@ -314,7 +320,8 @@ export const useAppStore = defineStore('app', () => {
       const api = new TimesheetResourcesApi(apiConfig())
       const resp = await api.timesheetResourcesIdPut(id, patch)
       const body = resp.data
-      if (body?.error) throw new Error(apiErrorMessage(body.error))
+      const errBody = body?.error as { code?: unknown; message?: string } | undefined
+      if (errBody && errBody.code != null) throw new Error(apiErrorMessage(errBody))
       const updated = body?.data
       if (updated) {
         const i = resources.value.findIndex((r) => r.id === id)
