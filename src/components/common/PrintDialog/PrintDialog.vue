@@ -9,8 +9,8 @@ const title = computed(() => (state.mode === 'save' ? 'Сохранить в PDF
 const actionLabel = computed(() => (state.mode === 'save' ? 'Сохранить PDF' : 'Печать'))
 
 /** Габариты области preview (миниатюры страниц вписываются в неё). */
-const PREVIEW_W = 520
-const PREVIEW_H = 560
+const PREVIEW_W = 340
+const PREVIEW_H = 460
 
 const previewEl = ref<HTMLElement | null>(null)
 
@@ -95,51 +95,47 @@ onBeforeUnmount(() => {
           <button type="button" class="pd-close" aria-label="Закрыть" @click="close">×</button>
         </div>
 
-        <div class="pd-body">
-          <div class="pd-settings">
-            <div class="pd-row">
-              <span class="pd-label">Масштаб шкалы</span>
-              <div class="pd-seg">
-                <button
-                  v-for="o in UNIT_OPTIONS"
-                  :key="o.value"
-                  type="button"
-                  :class="['pd-seg-btn', { active: state.unit === o.value }]"
-                  @click="applyUnit(o.value)"
-                >
-                  {{ o.label }}
-                </button>
-              </div>
-            </div>
+        <div ref="previewEl" class="pd-preview"></div>
 
-            <div class="pd-row">
-              <span class="pd-label">Масштаб печати: {{ state.scale }}%</span>
-              <input v-model.number="state.scale" type="range" min="25" max="200" step="5" class="pd-range" />
-              <p class="pd-hint">100% — вся диаграмма на одном листе; больше — разбивается по страницам.</p>
-            </div>
-
-            <div class="pd-row">
-              <span class="pd-label">Ориентация страницы</span>
-              <div class="pd-seg">
-                <button
-                  type="button"
-                  :class="['pd-seg-btn', { active: state.orientation === 'portrait' }]"
-                  @click="state.orientation = 'portrait'"
-                >
-                  Портрет
-                </button>
-                <button
-                  type="button"
-                  :class="['pd-seg-btn', { active: state.orientation === 'landscape' }]"
-                  @click="state.orientation = 'landscape'"
-                >
-                  Ландшафт
-                </button>
-              </div>
-            </div>
+        <div class="pd-row">
+          <span class="pd-label">Масштаб шкалы</span>
+          <div class="pd-seg">
+            <button
+              v-for="o in UNIT_OPTIONS"
+              :key="o.value"
+              type="button"
+              :class="['pd-seg-btn', { active: state.unit === o.value }]"
+              @click="applyUnit(o.value)"
+            >
+              {{ o.label }}
+            </button>
           </div>
+        </div>
 
-          <div ref="previewEl" class="pd-preview"></div>
+        <div class="pd-row">
+          <span class="pd-label">Масштаб печати: {{ state.scale }}%</span>
+          <input v-model.number="state.scale" type="range" min="25" max="200" step="5" class="pd-range" />
+          <p class="pd-hint">100% — вся диаграмма на одном листе; больше — разбивается по страницам.</p>
+        </div>
+
+        <div class="pd-row">
+          <span class="pd-label">Ориентация страницы</span>
+          <div class="pd-seg">
+            <button
+              type="button"
+              :class="['pd-seg-btn', { active: state.orientation === 'portrait' }]"
+              @click="state.orientation = 'portrait'"
+            >
+              Портрет
+            </button>
+            <button
+              type="button"
+              :class="['pd-seg-btn', { active: state.orientation === 'landscape' }]"
+              @click="state.orientation = 'landscape'"
+            >
+              Ландшафт
+            </button>
+          </div>
         </div>
 
         <div class="pd-actions">
@@ -164,7 +160,7 @@ onBeforeUnmount(() => {
 }
 .pd {
   width: 100%;
-  max-width: 900px;
+  max-width: 460px;
   max-height: 92vh;
   background: #fff;
   border-radius: 12px;
@@ -200,29 +196,16 @@ onBeforeUnmount(() => {
   color: #1a73e8;
   background: #f1f4f9;
 }
-.pd-body {
-  display: grid;
-  grid-template-columns: 300px minmax(0, 1fr);
-  gap: 16px;
-  min-height: 0;
-}
-.pd-settings {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-  overflow-y: auto;
-}
 .pd-preview {
-  background: #fff;
-  border: 1px solid #e2e5ea;
+  background: #e8ebef;
   border-radius: 10px;
-  padding: 16px;
+  padding: 14px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 14px;
-  min-height: 0;
-  max-height: 62vh;
+  gap: 12px;
+  min-height: 120px;
+  max-height: 40vh;
   overflow-y: auto;
 }
 .pd-empty {
@@ -233,8 +216,7 @@ onBeforeUnmount(() => {
 .pd-page {
   position: relative;
   background: #fff;
-  border: 1px solid #e2e5ea;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
   border-radius: 2px;
   overflow: hidden;
   flex-shrink: 0;
