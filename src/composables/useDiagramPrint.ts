@@ -9,7 +9,7 @@ const PRINT_LANDSCAPE_W = 1042
 const PRINT_PORTRAIT_W = 736
 
 export interface DiagramPrintTarget {
-  /** Переключает масштаб диаграммы (День/Декада). */
+  /** Переключает масштаб диаграммы (День/Декада) для печати. */
   setUnit: (u: PlanningUnit) => void
   getUnit: () => PlanningUnit
   /** Возвращает элемент диаграммы (.tg-content) текущей страницы. */
@@ -23,14 +23,6 @@ export interface DiagramPrintState {
   /** Масштаб в процентах относительно «вписать по ширине» (100 = вся диаграмма на лист). */
   scale: number
   orientation: PrintOrientation
-}
-
-export interface PrintPageLayout {
-  pageW: number
-  scale: number
-  slices: number
-  contentWidth: number
-  contentHeight: number
 }
 
 const state = reactive<DiagramPrintState>({
@@ -54,43 +46,15 @@ function registerDiagram(t: DiagramPrintTarget | null) {
   if (t) state.unit = t.getUnit()
 }
 
-function getContent(): HTMLElement | null {
-  return target?.content() ?? null
-}
-
-/** Расчёт печатной раскладки: одна страница (вписано) или разбивка на полосы. */
-function buildPages(): PrintPageLayout | null {
-  const content = getContent()
-  if (!content) return null
-  const width = content.scrollWidth || content.offsetWidth
-  const height = content.scrollHeight || content.offsetHeight
-  const pageW = pageWidth()
-  const fitScale = width > 0 ? pageW / width : 1
-  const scale = fitScale * (state.scale / 100)
-  const slices = width * scale <= pageW + 1 ? 1 : Math.ceil((width * scale) / pageW)
-  return { pageW, scale, slices, contentWidth: width, contentHeight: height }
-}
-
-/** Применяет выбранный масштаб шкалы к живой диаграмме (чтобы preview отражал выбор). */
-function applyUnit(u: PlanningUnit) {
-  if (state.unit !== u) state.unit = u
-  target?.setUnit(u)
-}
-
 function open(mode: PrintMode) {
   if (!target) return
-  prevUnit = target.getUnit()
-  state.unit = prevUnit
+  state.unit = target.getUnit()
   state.mode = mode
   state.open = true
 }
 
 function close() {
   state.open = false
-  if (target && prevUnit != null) {
-    target.setUnit(prevUnit)
-    prevUnit = null
-  }
 }
 
 function clearContentStyles(content: HTMLElement) {
@@ -112,7 +76,7 @@ function cleanup() {
   }
   document.getElementById('diagram-print-slices')?.remove()
   document.getElementById('diagram-print-style')?.remove()
-  const content = getContent()
+  const content = target?.content()
   if (content) clearContentStyles(content)
   if (target && prevUnit != null) {
     target.setUnit(prevUnit)
@@ -171,7 +135,6 @@ function injectPrintStyle() {
       .tg-scroll { overflow: visible !important; }
       #diagram-print-slices { display: block; }
       .print-slice { break-after: page; break-inside: avoid; }
-      .pd-overlay, .pd, .cd-overlay, .cd { display: none !important; }
     }
   `
   document.head.appendChild(style)
@@ -180,20 +143,27 @@ function injectPrintStyle() {
 async function run() {
   if (!target) return
   state.open = false
-  // Дожидаемся удаления диалога настроек из DOM, иначе нативный диалог печати
-  // захватит модалку вместо диаграммы.
-  await nextTick()
-  const layout = buildPages()
-  const content = getContent()
-  if (!layout || !content) {
-    cleanup()
-    return
+  const content = target.content()
+  if (!content) return
+
+  prevUnit = target.getUnit()
+  if (state.unit !== prevUnit) {
+    target.setUnit(state.unit)
+    await nextTick()
   }
-  if (layout.slices === 1) {
-    applySinglePage(content, layout.scale, layout.contentHeight)
+
+  const width = content.scrollWidth || content.offsetWidth
+  const height = content.scrollHeight || content.offsetHeight
+  const pageW = pageWidth()
+  const fitScale = width > 0 ? pageW / width : 1
+  const scale = fitScale * (state.scale / 100)
+
+  if (width * scale <= pageW + 1) {
+    applySinglePage(content, scale, height)
   } else {
-    applySlices(content, layout.scale, layout.contentHeight, layout.pageW)
+    applySlices(content, scale, height, pageW)
   }
+
   injectPrintStyle()
   const done = () => cleanup()
   window.addEventListener('afterprint', done, { once: true })
@@ -201,26 +171,22 @@ async function run() {
   cleanupTimer = window.setTimeout(done, 1500)
 }
 
-/**
- * Перехват Ctrl+P / Ctrl+S на диаграммах: открывает диалог печати.
- * ВАЖНО: для буквенных клавиш используется e.code (физическая клавиша), а не
- * e.key — иначе бинды ломаются на других раскладках (ru: e.key === 'з'/'ы').
- * Будущие хоткеи-буквы добавлять только через e.code.
- */
+/** Перехват Ctrl+P / Ctrl+S на диаграммах: открывает диалог печати. */
 function onKeydown(e: KeyboardEvent) {
   if (!target) return
   if (!(e.ctrlKey || e.metaKey)) return
-  if (e.code === 'KeyP') {
+  const key = e.key.toLowerCase()
+  if (key === 'p') {
     e.preventDefault()
     open('print')
     return
   }
-  if (e.code === 'KeyS') {
+  if (key === 's') {
     e.preventDefault()
     open('save')
   }
 }
 
 export function useDiagramPrint() {
-  return { state, registerDiagram, getContent, buildPages, applyUnit, open, close, run, onKeydown }
+  return { state, registerDiagram, open, close, run, onKeydown }
 }
