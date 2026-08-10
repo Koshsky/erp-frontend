@@ -42,7 +42,7 @@ const MATRIX: MatrixBlock[] = [
   {
     entity: 'Процессы',
     rows: [
-      { action: 'Просмотр', cells: { admin: { label: 'все' }, dp: { label: 'все' }, rp: { label: 'своих проектов' }, vp: { label: 'свои' }, worker: empty } },
+      { action: 'Просмотр', cells: { admin: { label: 'все' }, dp: { label: 'все' }, rp: { label: 'своих проектов' }, vp: { label: 'все', hint: 'изменять может только свои' }, worker: empty } },
       { action: 'Создание', cells: { admin: { label: 'да' }, dp: empty, rp: { label: 'в своих проектах' }, vp: empty, worker: empty } },
       { action: 'Изменение', cells: { admin: { label: 'все' }, dp: empty, rp: { label: 'в своих проектах' }, vp: empty, worker: empty } },
       { action: 'Удаление', cells: { admin: { label: 'все' }, dp: empty, rp: { label: 'в своих проектах' }, vp: empty, worker: empty } },
@@ -149,7 +149,7 @@ const ROLE_SUMMARIES: RoleSummary[] = [
     title: 'Владелец процесса',
     description: 'Управляет табелем: задачи в своих процессах, свои ресурсы и сотрудники (скоуп «только своё»).',
     permissions: [
-      { title: 'Процессы — просмотр своих', description: 'Видит только свои процессы и процессы своих проектов.' },
+      { title: 'Процессы — просмотр всех', description: 'Видит все процессы во всех проектах; изменять может только свои.' },
       { title: 'Задачи, вехи, назначения — в своих процессах', description: 'Создание, изменение и удаление задач, вех и назначений в своих процессах.' },
       { title: 'Ресурсы — свои', description: 'Просмотр, создание, изменение и удаление своих ресурсов табеля.' },
       { title: 'Сотрудники — свои', description: 'Просмотр и управление своими подчинёнными (manager_id = пользователь).' },
