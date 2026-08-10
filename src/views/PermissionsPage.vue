@@ -180,23 +180,6 @@ const ROLE_SUMMARIES: RoleSummary[] = [
       </p>
     </div>
 
-    <h3 class="pm-section-title">Сводка по ролям</h3>
-    <div class="pm-roles">
-      <div v-for="role in ROLE_SUMMARIES" :key="role.key" class="pm-role-card">
-        <div class="pm-role-head">
-          <span class="pm-role-name">{{ role.title }}</span>
-          <span class="pm-role-key">{{ role.key }}</span>
-        </div>
-        <p class="pm-role-desc">{{ role.description }}</p>
-        <ul class="pm-role-list">
-          <li v-for="p in role.permissions" :key="p.title" class="pm-role-item">
-            <span class="pm-role-item-title">{{ p.title }}</span>
-            <span class="pm-role-item-desc">{{ p.description }}</span>
-          </li>
-        </ul>
-      </div>
-    </div>
-
     <h3 class="pm-section-title">Матрица операций</h3>
     <div v-for="block in MATRIX" :key="block.entity" class="pm-block">
       <h3 class="pm-entity">{{ block.entity }}</h3>
@@ -211,6 +194,23 @@ const ROLE_SUMMARIES: RoleSummary[] = [
             {{ row.cells[col.key]?.label }}
           </div>
         </div>
+      </div>
+    </div>
+
+    <h3 class="pm-section-title">Сводка по ролям</h3>
+    <div class="pm-roles">
+      <div v-for="role in ROLE_SUMMARIES" :key="role.key" class="pm-role-card">
+        <div class="pm-role-head">
+          <span class="pm-role-name">{{ role.title }}</span>
+          <span class="pm-role-key">{{ role.key }}</span>
+        </div>
+        <p class="pm-role-desc">{{ role.description }}</p>
+        <ul class="pm-role-list">
+          <li v-for="p in role.permissions" :key="p.title" class="pm-role-item">
+            <span class="pm-role-item-title">{{ p.title }}</span>
+            <span class="pm-role-item-desc">{{ p.description }}</span>
+          </li>
+        </ul>
       </div>
     </div>
   </section>
