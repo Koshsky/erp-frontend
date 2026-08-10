@@ -94,7 +94,7 @@ export const useAuthStore = defineStore('auth', () => {
     error.value = null
     try {
       const api = new AuthApi(apiConfig())
-      const resp = await api.authLoginPost({ username, password })
+      const resp = await api.authLoginPost({ username: username.trim(), password })
       const body = resp.data
       const errBody = body?.error as { code?: unknown; message?: string } | undefined
       if (errBody && errBody.code != null) throw new Error(apiErrorMessage(errBody))
@@ -113,7 +113,7 @@ export const useAuthStore = defineStore('auth', () => {
     error.value = null
     try {
       const api = new AuthApi(apiConfig())
-      const resp = await api.authRegisterPost({ username, password, name })
+      const resp = await api.authRegisterPost({ username: username.trim(), password, name: name.trim() })
       const body = resp.data
       const errBody = body?.error as { code?: unknown; message?: string } | undefined
       if (errBody && errBody.code != null) throw new Error(apiErrorMessage(errBody))
