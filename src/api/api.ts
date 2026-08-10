@@ -354,6 +354,24 @@ export interface DtoUserResponse {
     'role'?: string;
     'username'?: string;
 }
+export interface EmployeesGet200Response {
+    'data'?: EmployeesGet200ResponseAllOfData;
+    'error'?: object;
+}
+export interface EmployeesGet200ResponseAllOfData {
+    'items'?: Array<DtoEmployeeResponse>;
+    'limit'?: number;
+    'offset'?: number;
+    'total'?: number;
+}
+export interface EmployeesIdDaysGet200Response {
+    'data'?: Array<DtoEmployeeStateResponse>;
+    'error'?: object;
+}
+export interface EmployeesIdGet200Response {
+    'data'?: DtoEmployeeResponse;
+    'error'?: object;
+}
 export interface ErrorsDomainError {
     'code'?: string;
     'message'?: string;
@@ -422,6 +440,24 @@ export interface ProjectPost201Response {
     'data'?: DtoProjectResponse;
     'error'?: object;
 }
+export interface ResourcesGet200Response {
+    'data'?: ResourcesGet200ResponseAllOfData;
+    'error'?: object;
+}
+export interface ResourcesGet200ResponseAllOfData {
+    'items'?: Array<DtoResourceResponse>;
+    'limit'?: number;
+    'offset'?: number;
+    'total'?: number;
+}
+export interface ResourcesIdEmployeesGet200Response {
+    'data'?: Array<DtoEmployeeResponse>;
+    'error'?: object;
+}
+export interface ResourcesPost201Response {
+    'data'?: DtoResourceResponse;
+    'error'?: object;
+}
 export interface ResponseErrorResponse {
     'data'?: object;
     'error'?: ErrorsDomainError;
@@ -452,42 +488,6 @@ export interface TaskPost201Response {
 }
 export interface TimesheetCalendarGet200Response {
     'data'?: DtoCalendarPlanning;
-    'error'?: object;
-}
-export interface TimesheetEmployeesGet200Response {
-    'data'?: TimesheetEmployeesGet200ResponseAllOfData;
-    'error'?: object;
-}
-export interface TimesheetEmployeesGet200ResponseAllOfData {
-    'items'?: Array<DtoEmployeeResponse>;
-    'limit'?: number;
-    'offset'?: number;
-    'total'?: number;
-}
-export interface TimesheetEmployeesIdDaysGet200Response {
-    'data'?: Array<DtoEmployeeStateResponse>;
-    'error'?: object;
-}
-export interface TimesheetEmployeesIdGet200Response {
-    'data'?: DtoEmployeeResponse;
-    'error'?: object;
-}
-export interface TimesheetResourcesGet200Response {
-    'data'?: TimesheetResourcesGet200ResponseAllOfData;
-    'error'?: object;
-}
-export interface TimesheetResourcesGet200ResponseAllOfData {
-    'items'?: Array<DtoResourceResponse>;
-    'limit'?: number;
-    'offset'?: number;
-    'total'?: number;
-}
-export interface TimesheetResourcesIdEmployeesGet200Response {
-    'data'?: Array<DtoEmployeeResponse>;
-    'error'?: object;
-}
-export interface TimesheetResourcesPost201Response {
-    'data'?: DtoResourceResponse;
     'error'?: object;
 }
 export interface TimesheetStatesGet200Response {
@@ -3177,8 +3177,8 @@ export const TimesheetEmployeesApiAxiosParamCreator = function (configuration?: 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        timesheetEmployeesGet: async (limit?: number, managerId?: number, offset?: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
-            const localVarPath = `/timesheet/employees`;
+        employeesGet: async (limit?: number, managerId?: number, offset?: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            const localVarPath = `/employees`;
             // use dummy base URL string because the URL constructor only accepts absolute URLs.
             const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
             let baseOptions;
@@ -3226,14 +3226,14 @@ export const TimesheetEmployeesApiAxiosParamCreator = function (configuration?: 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        timesheetEmployeesIdDaysDelete: async (id: number, startDate: string, endDate: string, stateId?: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+        employeesIdDaysDelete: async (id: number, startDate: string, endDate: string, stateId?: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
             // verify required parameter 'id' is not null or undefined
-            assertParamExists('timesheetEmployeesIdDaysDelete', 'id', id)
+            assertParamExists('employeesIdDaysDelete', 'id', id)
             // verify required parameter 'startDate' is not null or undefined
-            assertParamExists('timesheetEmployeesIdDaysDelete', 'startDate', startDate)
+            assertParamExists('employeesIdDaysDelete', 'startDate', startDate)
             // verify required parameter 'endDate' is not null or undefined
-            assertParamExists('timesheetEmployeesIdDaysDelete', 'endDate', endDate)
-            const localVarPath = `/timesheet/employees/{id}/days`
+            assertParamExists('employeesIdDaysDelete', 'endDate', endDate)
+            const localVarPath = `/employees/{id}/days`
                 .replace('{id}', encodeURIComponent(String(id)));
             // use dummy base URL string because the URL constructor only accepts absolute URLs.
             const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
@@ -3281,14 +3281,14 @@ export const TimesheetEmployeesApiAxiosParamCreator = function (configuration?: 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        timesheetEmployeesIdDaysGet: async (id: number, startDate: string, endDate: string, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+        employeesIdDaysGet: async (id: number, startDate: string, endDate: string, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
             // verify required parameter 'id' is not null or undefined
-            assertParamExists('timesheetEmployeesIdDaysGet', 'id', id)
+            assertParamExists('employeesIdDaysGet', 'id', id)
             // verify required parameter 'startDate' is not null or undefined
-            assertParamExists('timesheetEmployeesIdDaysGet', 'startDate', startDate)
+            assertParamExists('employeesIdDaysGet', 'startDate', startDate)
             // verify required parameter 'endDate' is not null or undefined
-            assertParamExists('timesheetEmployeesIdDaysGet', 'endDate', endDate)
-            const localVarPath = `/timesheet/employees/{id}/days`
+            assertParamExists('employeesIdDaysGet', 'endDate', endDate)
+            const localVarPath = `/employees/{id}/days`
                 .replace('{id}', encodeURIComponent(String(id)));
             // use dummy base URL string because the URL constructor only accepts absolute URLs.
             const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
@@ -3331,12 +3331,12 @@ export const TimesheetEmployeesApiAxiosParamCreator = function (configuration?: 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        timesheetEmployeesIdDaysPut: async (id: number, body: DtoSetDaysRequest, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+        employeesIdDaysPut: async (id: number, body: DtoSetDaysRequest, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
             // verify required parameter 'id' is not null or undefined
-            assertParamExists('timesheetEmployeesIdDaysPut', 'id', id)
+            assertParamExists('employeesIdDaysPut', 'id', id)
             // verify required parameter 'body' is not null or undefined
-            assertParamExists('timesheetEmployeesIdDaysPut', 'body', body)
-            const localVarPath = `/timesheet/employees/{id}/days`
+            assertParamExists('employeesIdDaysPut', 'body', body)
+            const localVarPath = `/employees/{id}/days`
                 .replace('{id}', encodeURIComponent(String(id)));
             // use dummy base URL string because the URL constructor only accepts absolute URLs.
             const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
@@ -3372,10 +3372,10 @@ export const TimesheetEmployeesApiAxiosParamCreator = function (configuration?: 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        timesheetEmployeesIdDelete: async (id: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+        employeesIdDelete: async (id: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
             // verify required parameter 'id' is not null or undefined
-            assertParamExists('timesheetEmployeesIdDelete', 'id', id)
-            const localVarPath = `/timesheet/employees/{id}`
+            assertParamExists('employeesIdDelete', 'id', id)
+            const localVarPath = `/employees/{id}`
                 .replace('{id}', encodeURIComponent(String(id)));
             // use dummy base URL string because the URL constructor only accepts absolute URLs.
             const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
@@ -3409,10 +3409,10 @@ export const TimesheetEmployeesApiAxiosParamCreator = function (configuration?: 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        timesheetEmployeesIdGet: async (id: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+        employeesIdGet: async (id: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
             // verify required parameter 'id' is not null or undefined
-            assertParamExists('timesheetEmployeesIdGet', 'id', id)
-            const localVarPath = `/timesheet/employees/{id}`
+            assertParamExists('employeesIdGet', 'id', id)
+            const localVarPath = `/employees/{id}`
                 .replace('{id}', encodeURIComponent(String(id)));
             // use dummy base URL string because the URL constructor only accepts absolute URLs.
             const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
@@ -3447,12 +3447,12 @@ export const TimesheetEmployeesApiAxiosParamCreator = function (configuration?: 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        timesheetEmployeesIdPut: async (id: number, employee: DtoUpdateEmployeeRequest, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+        employeesIdPut: async (id: number, employee: DtoUpdateEmployeeRequest, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
             // verify required parameter 'id' is not null or undefined
-            assertParamExists('timesheetEmployeesIdPut', 'id', id)
+            assertParamExists('employeesIdPut', 'id', id)
             // verify required parameter 'employee' is not null or undefined
-            assertParamExists('timesheetEmployeesIdPut', 'employee', employee)
-            const localVarPath = `/timesheet/employees/{id}`
+            assertParamExists('employeesIdPut', 'employee', employee)
+            const localVarPath = `/employees/{id}`
                 .replace('{id}', encodeURIComponent(String(id)));
             // use dummy base URL string because the URL constructor only accepts absolute URLs.
             const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
@@ -3488,10 +3488,10 @@ export const TimesheetEmployeesApiAxiosParamCreator = function (configuration?: 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        timesheetResourcesIdEmployeesGet: async (id: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+        resourcesIdEmployeesGet: async (id: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
             // verify required parameter 'id' is not null or undefined
-            assertParamExists('timesheetResourcesIdEmployeesGet', 'id', id)
-            const localVarPath = `/timesheet/resources/{id}/employees`
+            assertParamExists('resourcesIdEmployeesGet', 'id', id)
+            const localVarPath = `/resources/{id}/employees`
                 .replace('{id}', encodeURIComponent(String(id)));
             // use dummy base URL string because the URL constructor only accepts absolute URLs.
             const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
@@ -3526,12 +3526,12 @@ export const TimesheetEmployeesApiAxiosParamCreator = function (configuration?: 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        timesheetResourcesIdEmployeesPost: async (id: number, employee: DtoCreateEmployeeRequest, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+        resourcesIdEmployeesPost: async (id: number, employee: DtoCreateEmployeeRequest, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
             // verify required parameter 'id' is not null or undefined
-            assertParamExists('timesheetResourcesIdEmployeesPost', 'id', id)
+            assertParamExists('resourcesIdEmployeesPost', 'id', id)
             // verify required parameter 'employee' is not null or undefined
-            assertParamExists('timesheetResourcesIdEmployeesPost', 'employee', employee)
-            const localVarPath = `/timesheet/resources/{id}/employees`
+            assertParamExists('resourcesIdEmployeesPost', 'employee', employee)
+            const localVarPath = `/resources/{id}/employees`
                 .replace('{id}', encodeURIComponent(String(id)));
             // use dummy base URL string because the URL constructor only accepts absolute URLs.
             const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
@@ -3578,10 +3578,10 @@ export const TimesheetEmployeesApiFp = function(configuration?: Configuration) {
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async timesheetEmployeesGet(limit?: number, managerId?: number, offset?: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<TimesheetEmployeesGet200Response>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.timesheetEmployeesGet(limit, managerId, offset, options);
+        async employeesGet(limit?: number, managerId?: number, offset?: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<EmployeesGet200Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.employeesGet(limit, managerId, offset, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
-            const localVarOperationServerBasePath = operationServerMap['TimesheetEmployeesApi.timesheetEmployeesGet']?.[localVarOperationServerIndex]?.url;
+            const localVarOperationServerBasePath = operationServerMap['TimesheetEmployeesApi.employeesGet']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
@@ -3594,10 +3594,10 @@ export const TimesheetEmployeesApiFp = function(configuration?: Configuration) {
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async timesheetEmployeesIdDaysDelete(id: number, startDate: string, endDate: string, stateId?: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<void>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.timesheetEmployeesIdDaysDelete(id, startDate, endDate, stateId, options);
+        async employeesIdDaysDelete(id: number, startDate: string, endDate: string, stateId?: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<void>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.employeesIdDaysDelete(id, startDate, endDate, stateId, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
-            const localVarOperationServerBasePath = operationServerMap['TimesheetEmployeesApi.timesheetEmployeesIdDaysDelete']?.[localVarOperationServerIndex]?.url;
+            const localVarOperationServerBasePath = operationServerMap['TimesheetEmployeesApi.employeesIdDaysDelete']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
@@ -3609,10 +3609,10 @@ export const TimesheetEmployeesApiFp = function(configuration?: Configuration) {
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async timesheetEmployeesIdDaysGet(id: number, startDate: string, endDate: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<TimesheetEmployeesIdDaysGet200Response>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.timesheetEmployeesIdDaysGet(id, startDate, endDate, options);
+        async employeesIdDaysGet(id: number, startDate: string, endDate: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<EmployeesIdDaysGet200Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.employeesIdDaysGet(id, startDate, endDate, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
-            const localVarOperationServerBasePath = operationServerMap['TimesheetEmployeesApi.timesheetEmployeesIdDaysGet']?.[localVarOperationServerIndex]?.url;
+            const localVarOperationServerBasePath = operationServerMap['TimesheetEmployeesApi.employeesIdDaysGet']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
@@ -3623,10 +3623,10 @@ export const TimesheetEmployeesApiFp = function(configuration?: Configuration) {
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async timesheetEmployeesIdDaysPut(id: number, body: DtoSetDaysRequest, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<void>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.timesheetEmployeesIdDaysPut(id, body, options);
+        async employeesIdDaysPut(id: number, body: DtoSetDaysRequest, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<void>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.employeesIdDaysPut(id, body, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
-            const localVarOperationServerBasePath = operationServerMap['TimesheetEmployeesApi.timesheetEmployeesIdDaysPut']?.[localVarOperationServerIndex]?.url;
+            const localVarOperationServerBasePath = operationServerMap['TimesheetEmployeesApi.employeesIdDaysPut']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
@@ -3636,10 +3636,10 @@ export const TimesheetEmployeesApiFp = function(configuration?: Configuration) {
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async timesheetEmployeesIdDelete(id: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<void>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.timesheetEmployeesIdDelete(id, options);
+        async employeesIdDelete(id: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<void>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.employeesIdDelete(id, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
-            const localVarOperationServerBasePath = operationServerMap['TimesheetEmployeesApi.timesheetEmployeesIdDelete']?.[localVarOperationServerIndex]?.url;
+            const localVarOperationServerBasePath = operationServerMap['TimesheetEmployeesApi.employeesIdDelete']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
@@ -3649,10 +3649,10 @@ export const TimesheetEmployeesApiFp = function(configuration?: Configuration) {
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async timesheetEmployeesIdGet(id: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<TimesheetEmployeesIdGet200Response>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.timesheetEmployeesIdGet(id, options);
+        async employeesIdGet(id: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<EmployeesIdGet200Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.employeesIdGet(id, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
-            const localVarOperationServerBasePath = operationServerMap['TimesheetEmployeesApi.timesheetEmployeesIdGet']?.[localVarOperationServerIndex]?.url;
+            const localVarOperationServerBasePath = operationServerMap['TimesheetEmployeesApi.employeesIdGet']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
@@ -3663,10 +3663,10 @@ export const TimesheetEmployeesApiFp = function(configuration?: Configuration) {
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async timesheetEmployeesIdPut(id: number, employee: DtoUpdateEmployeeRequest, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<TimesheetEmployeesIdGet200Response>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.timesheetEmployeesIdPut(id, employee, options);
+        async employeesIdPut(id: number, employee: DtoUpdateEmployeeRequest, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<EmployeesIdGet200Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.employeesIdPut(id, employee, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
-            const localVarOperationServerBasePath = operationServerMap['TimesheetEmployeesApi.timesheetEmployeesIdPut']?.[localVarOperationServerIndex]?.url;
+            const localVarOperationServerBasePath = operationServerMap['TimesheetEmployeesApi.employeesIdPut']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
@@ -3676,10 +3676,10 @@ export const TimesheetEmployeesApiFp = function(configuration?: Configuration) {
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async timesheetResourcesIdEmployeesGet(id: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<TimesheetResourcesIdEmployeesGet200Response>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.timesheetResourcesIdEmployeesGet(id, options);
+        async resourcesIdEmployeesGet(id: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<ResourcesIdEmployeesGet200Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.resourcesIdEmployeesGet(id, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
-            const localVarOperationServerBasePath = operationServerMap['TimesheetEmployeesApi.timesheetResourcesIdEmployeesGet']?.[localVarOperationServerIndex]?.url;
+            const localVarOperationServerBasePath = operationServerMap['TimesheetEmployeesApi.resourcesIdEmployeesGet']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
@@ -3690,10 +3690,10 @@ export const TimesheetEmployeesApiFp = function(configuration?: Configuration) {
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async timesheetResourcesIdEmployeesPost(id: number, employee: DtoCreateEmployeeRequest, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<TimesheetEmployeesIdGet200Response>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.timesheetResourcesIdEmployeesPost(id, employee, options);
+        async resourcesIdEmployeesPost(id: number, employee: DtoCreateEmployeeRequest, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<EmployeesIdGet200Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.resourcesIdEmployeesPost(id, employee, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
-            const localVarOperationServerBasePath = operationServerMap['TimesheetEmployeesApi.timesheetResourcesIdEmployeesPost']?.[localVarOperationServerIndex]?.url;
+            const localVarOperationServerBasePath = operationServerMap['TimesheetEmployeesApi.resourcesIdEmployeesPost']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
     }
@@ -3714,8 +3714,8 @@ export const TimesheetEmployeesApiFactory = function (configuration?: Configurat
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        timesheetEmployeesGet(limit?: number, managerId?: number, offset?: number, options?: RawAxiosRequestConfig): AxiosPromise<TimesheetEmployeesGet200Response> {
-            return localVarFp.timesheetEmployeesGet(limit, managerId, offset, options).then((request) => request(axios, basePath));
+        employeesGet(limit?: number, managerId?: number, offset?: number, options?: RawAxiosRequestConfig): AxiosPromise<EmployeesGet200Response> {
+            return localVarFp.employeesGet(limit, managerId, offset, options).then((request) => request(axios, basePath));
         },
         /**
          * Clear state ranges of an employee overlapping a date range (splits overlaps, optional state filter)
@@ -3727,8 +3727,8 @@ export const TimesheetEmployeesApiFactory = function (configuration?: Configurat
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        timesheetEmployeesIdDaysDelete(id: number, startDate: string, endDate: string, stateId?: number, options?: RawAxiosRequestConfig): AxiosPromise<void> {
-            return localVarFp.timesheetEmployeesIdDaysDelete(id, startDate, endDate, stateId, options).then((request) => request(axios, basePath));
+        employeesIdDaysDelete(id: number, startDate: string, endDate: string, stateId?: number, options?: RawAxiosRequestConfig): AxiosPromise<void> {
+            return localVarFp.employeesIdDaysDelete(id, startDate, endDate, stateId, options).then((request) => request(axios, basePath));
         },
         /**
          * List state ranges of an employee overlapping a date range
@@ -3739,8 +3739,8 @@ export const TimesheetEmployeesApiFactory = function (configuration?: Configurat
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        timesheetEmployeesIdDaysGet(id: number, startDate: string, endDate: string, options?: RawAxiosRequestConfig): AxiosPromise<TimesheetEmployeesIdDaysGet200Response> {
-            return localVarFp.timesheetEmployeesIdDaysGet(id, startDate, endDate, options).then((request) => request(axios, basePath));
+        employeesIdDaysGet(id: number, startDate: string, endDate: string, options?: RawAxiosRequestConfig): AxiosPromise<EmployeesIdDaysGet200Response> {
+            return localVarFp.employeesIdDaysGet(id, startDate, endDate, options).then((request) => request(axios, basePath));
         },
         /**
          * Overwrite a state on a date range of an employee\'s calendar (splits overlapping ranges)
@@ -3750,8 +3750,8 @@ export const TimesheetEmployeesApiFactory = function (configuration?: Configurat
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        timesheetEmployeesIdDaysPut(id: number, body: DtoSetDaysRequest, options?: RawAxiosRequestConfig): AxiosPromise<void> {
-            return localVarFp.timesheetEmployeesIdDaysPut(id, body, options).then((request) => request(axios, basePath));
+        employeesIdDaysPut(id: number, body: DtoSetDaysRequest, options?: RawAxiosRequestConfig): AxiosPromise<void> {
+            return localVarFp.employeesIdDaysPut(id, body, options).then((request) => request(axios, basePath));
         },
         /**
          * Delete an employee by id (soft delete)
@@ -3760,8 +3760,8 @@ export const TimesheetEmployeesApiFactory = function (configuration?: Configurat
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        timesheetEmployeesIdDelete(id: number, options?: RawAxiosRequestConfig): AxiosPromise<void> {
-            return localVarFp.timesheetEmployeesIdDelete(id, options).then((request) => request(axios, basePath));
+        employeesIdDelete(id: number, options?: RawAxiosRequestConfig): AxiosPromise<void> {
+            return localVarFp.employeesIdDelete(id, options).then((request) => request(axios, basePath));
         },
         /**
          * Get an employee by id
@@ -3770,8 +3770,8 @@ export const TimesheetEmployeesApiFactory = function (configuration?: Configurat
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        timesheetEmployeesIdGet(id: number, options?: RawAxiosRequestConfig): AxiosPromise<TimesheetEmployeesIdGet200Response> {
-            return localVarFp.timesheetEmployeesIdGet(id, options).then((request) => request(axios, basePath));
+        employeesIdGet(id: number, options?: RawAxiosRequestConfig): AxiosPromise<EmployeesIdGet200Response> {
+            return localVarFp.employeesIdGet(id, options).then((request) => request(axios, basePath));
         },
         /**
          * Update an employee by id
@@ -3781,8 +3781,8 @@ export const TimesheetEmployeesApiFactory = function (configuration?: Configurat
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        timesheetEmployeesIdPut(id: number, employee: DtoUpdateEmployeeRequest, options?: RawAxiosRequestConfig): AxiosPromise<TimesheetEmployeesIdGet200Response> {
-            return localVarFp.timesheetEmployeesIdPut(id, employee, options).then((request) => request(axios, basePath));
+        employeesIdPut(id: number, employee: DtoUpdateEmployeeRequest, options?: RawAxiosRequestConfig): AxiosPromise<EmployeesIdGet200Response> {
+            return localVarFp.employeesIdPut(id, employee, options).then((request) => request(axios, basePath));
         },
         /**
          * List concrete employees of a resource category
@@ -3791,8 +3791,8 @@ export const TimesheetEmployeesApiFactory = function (configuration?: Configurat
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        timesheetResourcesIdEmployeesGet(id: number, options?: RawAxiosRequestConfig): AxiosPromise<TimesheetResourcesIdEmployeesGet200Response> {
-            return localVarFp.timesheetResourcesIdEmployeesGet(id, options).then((request) => request(axios, basePath));
+        resourcesIdEmployeesGet(id: number, options?: RawAxiosRequestConfig): AxiosPromise<ResourcesIdEmployeesGet200Response> {
+            return localVarFp.resourcesIdEmployeesGet(id, options).then((request) => request(axios, basePath));
         },
         /**
          * Create a concrete employee for a resource category
@@ -3802,8 +3802,8 @@ export const TimesheetEmployeesApiFactory = function (configuration?: Configurat
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        timesheetResourcesIdEmployeesPost(id: number, employee: DtoCreateEmployeeRequest, options?: RawAxiosRequestConfig): AxiosPromise<TimesheetEmployeesIdGet200Response> {
-            return localVarFp.timesheetResourcesIdEmployeesPost(id, employee, options).then((request) => request(axios, basePath));
+        resourcesIdEmployeesPost(id: number, employee: DtoCreateEmployeeRequest, options?: RawAxiosRequestConfig): AxiosPromise<EmployeesIdGet200Response> {
+            return localVarFp.resourcesIdEmployeesPost(id, employee, options).then((request) => request(axios, basePath));
         },
     };
 };
@@ -3821,8 +3821,8 @@ export class TimesheetEmployeesApi extends BaseAPI {
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      */
-    public timesheetEmployeesGet(limit?: number, managerId?: number, offset?: number, options?: RawAxiosRequestConfig) {
-        return TimesheetEmployeesApiFp(this.configuration).timesheetEmployeesGet(limit, managerId, offset, options).then((request) => request(this.axios, this.basePath));
+    public employeesGet(limit?: number, managerId?: number, offset?: number, options?: RawAxiosRequestConfig) {
+        return TimesheetEmployeesApiFp(this.configuration).employeesGet(limit, managerId, offset, options).then((request) => request(this.axios, this.basePath));
     }
 
     /**
@@ -3835,8 +3835,8 @@ export class TimesheetEmployeesApi extends BaseAPI {
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      */
-    public timesheetEmployeesIdDaysDelete(id: number, startDate: string, endDate: string, stateId?: number, options?: RawAxiosRequestConfig) {
-        return TimesheetEmployeesApiFp(this.configuration).timesheetEmployeesIdDaysDelete(id, startDate, endDate, stateId, options).then((request) => request(this.axios, this.basePath));
+    public employeesIdDaysDelete(id: number, startDate: string, endDate: string, stateId?: number, options?: RawAxiosRequestConfig) {
+        return TimesheetEmployeesApiFp(this.configuration).employeesIdDaysDelete(id, startDate, endDate, stateId, options).then((request) => request(this.axios, this.basePath));
     }
 
     /**
@@ -3848,8 +3848,8 @@ export class TimesheetEmployeesApi extends BaseAPI {
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      */
-    public timesheetEmployeesIdDaysGet(id: number, startDate: string, endDate: string, options?: RawAxiosRequestConfig) {
-        return TimesheetEmployeesApiFp(this.configuration).timesheetEmployeesIdDaysGet(id, startDate, endDate, options).then((request) => request(this.axios, this.basePath));
+    public employeesIdDaysGet(id: number, startDate: string, endDate: string, options?: RawAxiosRequestConfig) {
+        return TimesheetEmployeesApiFp(this.configuration).employeesIdDaysGet(id, startDate, endDate, options).then((request) => request(this.axios, this.basePath));
     }
 
     /**
@@ -3860,8 +3860,8 @@ export class TimesheetEmployeesApi extends BaseAPI {
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      */
-    public timesheetEmployeesIdDaysPut(id: number, body: DtoSetDaysRequest, options?: RawAxiosRequestConfig) {
-        return TimesheetEmployeesApiFp(this.configuration).timesheetEmployeesIdDaysPut(id, body, options).then((request) => request(this.axios, this.basePath));
+    public employeesIdDaysPut(id: number, body: DtoSetDaysRequest, options?: RawAxiosRequestConfig) {
+        return TimesheetEmployeesApiFp(this.configuration).employeesIdDaysPut(id, body, options).then((request) => request(this.axios, this.basePath));
     }
 
     /**
@@ -3871,8 +3871,8 @@ export class TimesheetEmployeesApi extends BaseAPI {
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      */
-    public timesheetEmployeesIdDelete(id: number, options?: RawAxiosRequestConfig) {
-        return TimesheetEmployeesApiFp(this.configuration).timesheetEmployeesIdDelete(id, options).then((request) => request(this.axios, this.basePath));
+    public employeesIdDelete(id: number, options?: RawAxiosRequestConfig) {
+        return TimesheetEmployeesApiFp(this.configuration).employeesIdDelete(id, options).then((request) => request(this.axios, this.basePath));
     }
 
     /**
@@ -3882,8 +3882,8 @@ export class TimesheetEmployeesApi extends BaseAPI {
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      */
-    public timesheetEmployeesIdGet(id: number, options?: RawAxiosRequestConfig) {
-        return TimesheetEmployeesApiFp(this.configuration).timesheetEmployeesIdGet(id, options).then((request) => request(this.axios, this.basePath));
+    public employeesIdGet(id: number, options?: RawAxiosRequestConfig) {
+        return TimesheetEmployeesApiFp(this.configuration).employeesIdGet(id, options).then((request) => request(this.axios, this.basePath));
     }
 
     /**
@@ -3894,8 +3894,8 @@ export class TimesheetEmployeesApi extends BaseAPI {
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      */
-    public timesheetEmployeesIdPut(id: number, employee: DtoUpdateEmployeeRequest, options?: RawAxiosRequestConfig) {
-        return TimesheetEmployeesApiFp(this.configuration).timesheetEmployeesIdPut(id, employee, options).then((request) => request(this.axios, this.basePath));
+    public employeesIdPut(id: number, employee: DtoUpdateEmployeeRequest, options?: RawAxiosRequestConfig) {
+        return TimesheetEmployeesApiFp(this.configuration).employeesIdPut(id, employee, options).then((request) => request(this.axios, this.basePath));
     }
 
     /**
@@ -3905,8 +3905,8 @@ export class TimesheetEmployeesApi extends BaseAPI {
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      */
-    public timesheetResourcesIdEmployeesGet(id: number, options?: RawAxiosRequestConfig) {
-        return TimesheetEmployeesApiFp(this.configuration).timesheetResourcesIdEmployeesGet(id, options).then((request) => request(this.axios, this.basePath));
+    public resourcesIdEmployeesGet(id: number, options?: RawAxiosRequestConfig) {
+        return TimesheetEmployeesApiFp(this.configuration).resourcesIdEmployeesGet(id, options).then((request) => request(this.axios, this.basePath));
     }
 
     /**
@@ -3917,8 +3917,8 @@ export class TimesheetEmployeesApi extends BaseAPI {
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      */
-    public timesheetResourcesIdEmployeesPost(id: number, employee: DtoCreateEmployeeRequest, options?: RawAxiosRequestConfig) {
-        return TimesheetEmployeesApiFp(this.configuration).timesheetResourcesIdEmployeesPost(id, employee, options).then((request) => request(this.axios, this.basePath));
+    public resourcesIdEmployeesPost(id: number, employee: DtoCreateEmployeeRequest, options?: RawAxiosRequestConfig) {
+        return TimesheetEmployeesApiFp(this.configuration).resourcesIdEmployeesPost(id, employee, options).then((request) => request(this.axios, this.basePath));
     }
 }
 
@@ -3938,8 +3938,8 @@ export const TimesheetResourcesApiAxiosParamCreator = function (configuration?: 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        timesheetResourcesGet: async (limit?: number, ownerId?: number, offset?: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
-            const localVarPath = `/timesheet/resources`;
+        resourcesGet: async (limit?: number, ownerId?: number, offset?: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            const localVarPath = `/resources`;
             // use dummy base URL string because the URL constructor only accepts absolute URLs.
             const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
             let baseOptions;
@@ -3984,10 +3984,10 @@ export const TimesheetResourcesApiAxiosParamCreator = function (configuration?: 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        timesheetResourcesIdDelete: async (id: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+        resourcesIdDelete: async (id: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
             // verify required parameter 'id' is not null or undefined
-            assertParamExists('timesheetResourcesIdDelete', 'id', id)
-            const localVarPath = `/timesheet/resources/{id}`
+            assertParamExists('resourcesIdDelete', 'id', id)
+            const localVarPath = `/resources/{id}`
                 .replace('{id}', encodeURIComponent(String(id)));
             // use dummy base URL string because the URL constructor only accepts absolute URLs.
             const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
@@ -4021,10 +4021,10 @@ export const TimesheetResourcesApiAxiosParamCreator = function (configuration?: 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        timesheetResourcesIdGet: async (id: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+        resourcesIdGet: async (id: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
             // verify required parameter 'id' is not null or undefined
-            assertParamExists('timesheetResourcesIdGet', 'id', id)
-            const localVarPath = `/timesheet/resources/{id}`
+            assertParamExists('resourcesIdGet', 'id', id)
+            const localVarPath = `/resources/{id}`
                 .replace('{id}', encodeURIComponent(String(id)));
             // use dummy base URL string because the URL constructor only accepts absolute URLs.
             const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
@@ -4059,12 +4059,12 @@ export const TimesheetResourcesApiAxiosParamCreator = function (configuration?: 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        timesheetResourcesIdPut: async (id: number, resource: DtoUpdateResourceRequest, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+        resourcesIdPut: async (id: number, resource: DtoUpdateResourceRequest, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
             // verify required parameter 'id' is not null or undefined
-            assertParamExists('timesheetResourcesIdPut', 'id', id)
+            assertParamExists('resourcesIdPut', 'id', id)
             // verify required parameter 'resource' is not null or undefined
-            assertParamExists('timesheetResourcesIdPut', 'resource', resource)
-            const localVarPath = `/timesheet/resources/{id}`
+            assertParamExists('resourcesIdPut', 'resource', resource)
+            const localVarPath = `/resources/{id}`
                 .replace('{id}', encodeURIComponent(String(id)));
             // use dummy base URL string because the URL constructor only accepts absolute URLs.
             const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
@@ -4100,10 +4100,10 @@ export const TimesheetResourcesApiAxiosParamCreator = function (configuration?: 
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        timesheetResourcesPost: async (resource: DtoCreateResourceRequest, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+        resourcesPost: async (resource: DtoCreateResourceRequest, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
             // verify required parameter 'resource' is not null or undefined
-            assertParamExists('timesheetResourcesPost', 'resource', resource)
-            const localVarPath = `/timesheet/resources`;
+            assertParamExists('resourcesPost', 'resource', resource)
+            const localVarPath = `/resources`;
             // use dummy base URL string because the URL constructor only accepts absolute URLs.
             const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
             let baseOptions;
@@ -4149,10 +4149,10 @@ export const TimesheetResourcesApiFp = function(configuration?: Configuration) {
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async timesheetResourcesGet(limit?: number, ownerId?: number, offset?: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<TimesheetResourcesGet200Response>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.timesheetResourcesGet(limit, ownerId, offset, options);
+        async resourcesGet(limit?: number, ownerId?: number, offset?: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<ResourcesGet200Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.resourcesGet(limit, ownerId, offset, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
-            const localVarOperationServerBasePath = operationServerMap['TimesheetResourcesApi.timesheetResourcesGet']?.[localVarOperationServerIndex]?.url;
+            const localVarOperationServerBasePath = operationServerMap['TimesheetResourcesApi.resourcesGet']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
@@ -4162,10 +4162,10 @@ export const TimesheetResourcesApiFp = function(configuration?: Configuration) {
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async timesheetResourcesIdDelete(id: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<void>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.timesheetResourcesIdDelete(id, options);
+        async resourcesIdDelete(id: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<void>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.resourcesIdDelete(id, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
-            const localVarOperationServerBasePath = operationServerMap['TimesheetResourcesApi.timesheetResourcesIdDelete']?.[localVarOperationServerIndex]?.url;
+            const localVarOperationServerBasePath = operationServerMap['TimesheetResourcesApi.resourcesIdDelete']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
@@ -4175,10 +4175,10 @@ export const TimesheetResourcesApiFp = function(configuration?: Configuration) {
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async timesheetResourcesIdGet(id: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<TimesheetResourcesPost201Response>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.timesheetResourcesIdGet(id, options);
+        async resourcesIdGet(id: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<ResourcesPost201Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.resourcesIdGet(id, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
-            const localVarOperationServerBasePath = operationServerMap['TimesheetResourcesApi.timesheetResourcesIdGet']?.[localVarOperationServerIndex]?.url;
+            const localVarOperationServerBasePath = operationServerMap['TimesheetResourcesApi.resourcesIdGet']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
@@ -4189,10 +4189,10 @@ export const TimesheetResourcesApiFp = function(configuration?: Configuration) {
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async timesheetResourcesIdPut(id: number, resource: DtoUpdateResourceRequest, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<TimesheetResourcesPost201Response>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.timesheetResourcesIdPut(id, resource, options);
+        async resourcesIdPut(id: number, resource: DtoUpdateResourceRequest, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<ResourcesPost201Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.resourcesIdPut(id, resource, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
-            const localVarOperationServerBasePath = operationServerMap['TimesheetResourcesApi.timesheetResourcesIdPut']?.[localVarOperationServerIndex]?.url;
+            const localVarOperationServerBasePath = operationServerMap['TimesheetResourcesApi.resourcesIdPut']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
@@ -4202,10 +4202,10 @@ export const TimesheetResourcesApiFp = function(configuration?: Configuration) {
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async timesheetResourcesPost(resource: DtoCreateResourceRequest, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<TimesheetResourcesPost201Response>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.timesheetResourcesPost(resource, options);
+        async resourcesPost(resource: DtoCreateResourceRequest, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<ResourcesPost201Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.resourcesPost(resource, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
-            const localVarOperationServerBasePath = operationServerMap['TimesheetResourcesApi.timesheetResourcesPost']?.[localVarOperationServerIndex]?.url;
+            const localVarOperationServerBasePath = operationServerMap['TimesheetResourcesApi.resourcesPost']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
     }
@@ -4226,8 +4226,8 @@ export const TimesheetResourcesApiFactory = function (configuration?: Configurat
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        timesheetResourcesGet(limit?: number, ownerId?: number, offset?: number, options?: RawAxiosRequestConfig): AxiosPromise<TimesheetResourcesGet200Response> {
-            return localVarFp.timesheetResourcesGet(limit, ownerId, offset, options).then((request) => request(axios, basePath));
+        resourcesGet(limit?: number, ownerId?: number, offset?: number, options?: RawAxiosRequestConfig): AxiosPromise<ResourcesGet200Response> {
+            return localVarFp.resourcesGet(limit, ownerId, offset, options).then((request) => request(axios, basePath));
         },
         /**
          * Delete resource by id
@@ -4236,8 +4236,8 @@ export const TimesheetResourcesApiFactory = function (configuration?: Configurat
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        timesheetResourcesIdDelete(id: number, options?: RawAxiosRequestConfig): AxiosPromise<void> {
-            return localVarFp.timesheetResourcesIdDelete(id, options).then((request) => request(axios, basePath));
+        resourcesIdDelete(id: number, options?: RawAxiosRequestConfig): AxiosPromise<void> {
+            return localVarFp.resourcesIdDelete(id, options).then((request) => request(axios, basePath));
         },
         /**
          * Get resource by id
@@ -4246,8 +4246,8 @@ export const TimesheetResourcesApiFactory = function (configuration?: Configurat
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        timesheetResourcesIdGet(id: number, options?: RawAxiosRequestConfig): AxiosPromise<TimesheetResourcesPost201Response> {
-            return localVarFp.timesheetResourcesIdGet(id, options).then((request) => request(axios, basePath));
+        resourcesIdGet(id: number, options?: RawAxiosRequestConfig): AxiosPromise<ResourcesPost201Response> {
+            return localVarFp.resourcesIdGet(id, options).then((request) => request(axios, basePath));
         },
         /**
          * Update resource by id
@@ -4257,8 +4257,8 @@ export const TimesheetResourcesApiFactory = function (configuration?: Configurat
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        timesheetResourcesIdPut(id: number, resource: DtoUpdateResourceRequest, options?: RawAxiosRequestConfig): AxiosPromise<TimesheetResourcesPost201Response> {
-            return localVarFp.timesheetResourcesIdPut(id, resource, options).then((request) => request(axios, basePath));
+        resourcesIdPut(id: number, resource: DtoUpdateResourceRequest, options?: RawAxiosRequestConfig): AxiosPromise<ResourcesPost201Response> {
+            return localVarFp.resourcesIdPut(id, resource, options).then((request) => request(axios, basePath));
         },
         /**
          * Create resource
@@ -4267,8 +4267,8 @@ export const TimesheetResourcesApiFactory = function (configuration?: Configurat
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        timesheetResourcesPost(resource: DtoCreateResourceRequest, options?: RawAxiosRequestConfig): AxiosPromise<TimesheetResourcesPost201Response> {
-            return localVarFp.timesheetResourcesPost(resource, options).then((request) => request(axios, basePath));
+        resourcesPost(resource: DtoCreateResourceRequest, options?: RawAxiosRequestConfig): AxiosPromise<ResourcesPost201Response> {
+            return localVarFp.resourcesPost(resource, options).then((request) => request(axios, basePath));
         },
     };
 };
@@ -4286,8 +4286,8 @@ export class TimesheetResourcesApi extends BaseAPI {
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      */
-    public timesheetResourcesGet(limit?: number, ownerId?: number, offset?: number, options?: RawAxiosRequestConfig) {
-        return TimesheetResourcesApiFp(this.configuration).timesheetResourcesGet(limit, ownerId, offset, options).then((request) => request(this.axios, this.basePath));
+    public resourcesGet(limit?: number, ownerId?: number, offset?: number, options?: RawAxiosRequestConfig) {
+        return TimesheetResourcesApiFp(this.configuration).resourcesGet(limit, ownerId, offset, options).then((request) => request(this.axios, this.basePath));
     }
 
     /**
@@ -4297,8 +4297,8 @@ export class TimesheetResourcesApi extends BaseAPI {
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      */
-    public timesheetResourcesIdDelete(id: number, options?: RawAxiosRequestConfig) {
-        return TimesheetResourcesApiFp(this.configuration).timesheetResourcesIdDelete(id, options).then((request) => request(this.axios, this.basePath));
+    public resourcesIdDelete(id: number, options?: RawAxiosRequestConfig) {
+        return TimesheetResourcesApiFp(this.configuration).resourcesIdDelete(id, options).then((request) => request(this.axios, this.basePath));
     }
 
     /**
@@ -4308,8 +4308,8 @@ export class TimesheetResourcesApi extends BaseAPI {
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      */
-    public timesheetResourcesIdGet(id: number, options?: RawAxiosRequestConfig) {
-        return TimesheetResourcesApiFp(this.configuration).timesheetResourcesIdGet(id, options).then((request) => request(this.axios, this.basePath));
+    public resourcesIdGet(id: number, options?: RawAxiosRequestConfig) {
+        return TimesheetResourcesApiFp(this.configuration).resourcesIdGet(id, options).then((request) => request(this.axios, this.basePath));
     }
 
     /**
@@ -4320,8 +4320,8 @@ export class TimesheetResourcesApi extends BaseAPI {
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      */
-    public timesheetResourcesIdPut(id: number, resource: DtoUpdateResourceRequest, options?: RawAxiosRequestConfig) {
-        return TimesheetResourcesApiFp(this.configuration).timesheetResourcesIdPut(id, resource, options).then((request) => request(this.axios, this.basePath));
+    public resourcesIdPut(id: number, resource: DtoUpdateResourceRequest, options?: RawAxiosRequestConfig) {
+        return TimesheetResourcesApiFp(this.configuration).resourcesIdPut(id, resource, options).then((request) => request(this.axios, this.basePath));
     }
 
     /**
@@ -4331,8 +4331,8 @@ export class TimesheetResourcesApi extends BaseAPI {
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      */
-    public timesheetResourcesPost(resource: DtoCreateResourceRequest, options?: RawAxiosRequestConfig) {
-        return TimesheetResourcesApiFp(this.configuration).timesheetResourcesPost(resource, options).then((request) => request(this.axios, this.basePath));
+    public resourcesPost(resource: DtoCreateResourceRequest, options?: RawAxiosRequestConfig) {
+        return TimesheetResourcesApiFp(this.configuration).resourcesPost(resource, options).then((request) => request(this.axios, this.basePath));
     }
 }
 

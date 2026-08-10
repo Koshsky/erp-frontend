@@ -296,7 +296,7 @@ export const useAppStore = defineStore('app', () => {
     resourcesError.value = null
     try {
       const api = new TimesheetResourcesApi(apiConfig())
-      const resp = await api.timesheetResourcesGet(PAGE_SIZE, ownerId ?? undefined, 0)
+      const resp = await api.resourcesGet(PAGE_SIZE, ownerId ?? undefined, 0)
       const data = resp.data?.data
       resources.value = data?.items ?? []
       resourcesTotal.value = data?.total ?? 0
@@ -311,7 +311,7 @@ export const useAppStore = defineStore('app', () => {
     resourcesError.value = null
     try {
       const api = new TimesheetResourcesApi(apiConfig())
-      const resp = await api.timesheetResourcesPost(payload)
+      const resp = await api.resourcesPost(payload)
       const body = resp.data
       const errBody = body?.error as { code?: unknown; message?: string } | undefined
       if (errBody && errBody.code != null) throw new Error(apiErrorMessage(errBody))
@@ -327,7 +327,7 @@ export const useAppStore = defineStore('app', () => {
     resourcesError.value = null
     try {
       const api = new TimesheetResourcesApi(apiConfig())
-      const resp = await api.timesheetResourcesIdPut(id, patch)
+      const resp = await api.resourcesIdPut(id, patch)
       const body = resp.data
       const errBody = body?.error as { code?: unknown; message?: string } | undefined
       if (errBody && errBody.code != null) throw new Error(apiErrorMessage(errBody))
@@ -346,7 +346,7 @@ export const useAppStore = defineStore('app', () => {
   async function deleteResource(id: number): Promise<boolean> {
     resourcesError.value = null
     try {
-      await new TimesheetResourcesApi(apiConfig()).timesheetResourcesIdDelete(id)
+      await new TimesheetResourcesApi(apiConfig()).resourcesIdDelete(id)
       const i = resources.value.findIndex((r) => r.id === id)
       if (i >= 0) resources.value.splice(i, 1)
       return true
@@ -482,7 +482,7 @@ export const useTimesheetStore = defineStore('timesheet', () => {
     const results = await Promise.all(
       employees.value.map((emp) =>
         api
-          .timesheetEmployeesIdDaysGet(emp.id ?? 0, start, end)
+          .employeesIdDaysGet(emp.id ?? 0, start, end)
           .then((r) => ({ id: emp.id, list: r.data?.data ?? [] }))
           .catch((e: any) => {
             setError(e)
@@ -527,7 +527,7 @@ export const useTimesheetStore = defineStore('timesheet', () => {
     error.value = null
     try {
       const api = new TimesheetEmployeesApi(apiConfig())
-      const resp = await api.timesheetEmployeesGet(PAGE_SIZE, managerId ?? undefined, 0)
+      const resp = await api.employeesGet(PAGE_SIZE, managerId ?? undefined, 0)
       const data = resp.data?.data
       // Сортировка: сначала должность (position, с запасом на resource_title), затем ФИО
       employees.value = (data?.items ?? []).sort(
@@ -566,7 +566,7 @@ export const useTimesheetStore = defineStore('timesheet', () => {
     error.value = null
     try {
       const api = new TimesheetEmployeesApi(apiConfig())
-      await api.timesheetResourcesIdEmployeesPost(resourceId, payload)
+      await api.resourcesIdEmployeesPost(resourceId, payload)
       await fetchEmployees()
       return true
     } catch (e: any) {
@@ -583,7 +583,7 @@ export const useTimesheetStore = defineStore('timesheet', () => {
     error.value = null
     try {
       const api = new TimesheetEmployeesApi(apiConfig())
-      await api.timesheetEmployeesIdPut(id, payload)
+      await api.employeesIdPut(id, payload)
       await fetchEmployees()
       return true
     } catch (e: any) {
@@ -600,7 +600,7 @@ export const useTimesheetStore = defineStore('timesheet', () => {
     error.value = null
     try {
       const api = new TimesheetEmployeesApi(apiConfig())
-      await api.timesheetEmployeesIdDelete(id)
+      await api.employeesIdDelete(id)
       await fetchEmployees()
       return true
     } catch (e: any) {
@@ -711,7 +711,7 @@ export const useTimesheetStore = defineStore('timesheet', () => {
     error.value = null
     try {
       const api = new TimesheetEmployeesApi(apiConfig())
-      await api.timesheetEmployeesIdDaysPut(employeeId, {
+      await api.employeesIdDaysPut(employeeId, {
         state_id: stateId,
         start_date: startDate,
         end_date: endDate,
@@ -737,7 +737,7 @@ export const useTimesheetStore = defineStore('timesheet', () => {
     error.value = null
     try {
       const api = new TimesheetEmployeesApi(apiConfig())
-      await api.timesheetEmployeesIdDaysDelete(employeeId, startDate, endDate, stateId)
+      await api.employeesIdDaysDelete(employeeId, startDate, endDate, stateId)
       await fetchPeriods(windowStart.value, windowEnd.value)
       return true
     } catch (e: any) {
