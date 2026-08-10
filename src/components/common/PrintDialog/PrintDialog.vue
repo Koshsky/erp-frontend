@@ -1,29 +1,101 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useDiagramPrint } from '../../../composables/useDiagramPrint'
 import { UNIT_OPTIONS } from '../../../composables/usePlanningOrigin'
 
-const { state, run, close } = useDiagramPrint()
+const { state, run, close, applyUnit, buildPages, getContent } = useDiagramPrint()
 
 const title = computed(() => (state.mode === 'save' ? 'Сохранить в PDF' : 'Печать диаграммы'))
 const actionLabel = computed(() => (state.mode === 'save' ? 'Сохранить PDF' : 'Печать'))
+
+/** Габариты области preview (миниатюры страниц вписываются в неё). */
+const PREVIEW_W = 340
+const PREVIEW_H = 460
+
+const previewEl = ref<HTMLElement | null>(null)
+
+/** Рисует постраничные миниатюры печати (вписано в один лист или разбито). */
+function refreshPreview() {
+  const el = previewEl.value
+  if (!el) return
+  el.innerHTML = ''
+  const layout = buildPages()
+  const content = getContent()
+  if (!layout || !content || layout.contentWidth <= 0) {
+    const empty = document.createElement('p')
+    empty.className = 'pd-empty'
+    empty.textContent = 'Диаграмма ещё не загружена'
+    el.appendChild(empty)
+    return
+  }
+  const pageH = layout.contentHeight * layout.scale
+  const scale = Math.min(PREVIEW_W / layout.pageW, PREVIEW_H / Math.max(pageH, 1))
+  for (let i = 0; i < layout.slices; i++) {
+    const page = document.createElement('div')
+    page.className = 'pd-page'
+    page.style.width = `${layout.pageW * scale}px`
+    page.style.height = `${pageH * scale}px`
+    const clone = content.cloneNode(true) as HTMLElement
+    clone.style.transform = `scale(${layout.scale * scale})`
+    clone.style.transformOrigin = 'top left'
+    clone.style.position = 'absolute'
+    clone.style.left = `${-i * layout.pageW * scale}px`
+    clone.style.top = '0'
+    clone.style.width = `${layout.contentWidth}px`
+    clone.style.height = `${layout.contentHeight}px`
+    clone.style.overflow = 'hidden'
+    page.appendChild(clone)
+    if (layout.slices > 1) {
+      const num = document.createElement('span')
+      num.className = 'pd-page-num'
+      num.textContent = String(i + 1)
+      page.appendChild(num)
+    }
+    el.appendChild(page)
+  }
+}
+
+let previewTimer: number | null = null
+function schedulePreview() {
+  if (previewTimer != null) clearTimeout(previewTimer)
+  previewTimer = window.setTimeout(() => {
+    previewTimer = null
+    refreshPreview()
+  }, 150)
+}
 
 function onKeydown(e: KeyboardEvent) {
   if (e.key === 'Escape') close()
 }
 
-onMounted(() => document.addEventListener('keydown', onKeydown))
-onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
+watch([() => state.unit, () => state.scale, () => state.orientation], schedulePreview)
+watch(
+  () => state.open,
+  (o) => {
+    if (o) void nextTick().then(refreshPreview)
+  },
+)
+
+onMounted(() => {
+  document.addEventListener('keydown', onKeydown)
+  if (state.open) refreshPreview()
+})
+onBeforeUnmount(() => {
+  document.removeEventListener('keydown', onKeydown)
+  if (previewTimer != null) clearTimeout(previewTimer)
+})
 </script>
 
 <template>
   <Teleport to="body">
     <div v-if="state.open" class="pd-overlay" @mousedown.self="close">
-      <div class="pd" role="dialog" aria-modal="true" aria-label="Печать диаграммы">
+      <div class="pd" role="dialog" aria-modal="true" :aria-label="title">
         <div class="pd-head">
           <h3 class="pd-title">{{ title }}</h3>
           <button type="button" class="pd-close" aria-label="Закрыть" @click="close">×</button>
         </div>
+
+        <div ref="previewEl" class="pd-preview"></div>
 
         <div class="pd-row">
           <span class="pd-label">Масштаб шкалы</span>
@@ -33,7 +105,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
               :key="o.value"
               type="button"
               :class="['pd-seg-btn', { active: state.unit === o.value }]"
-              @click="state.unit = o.value"
+              @click="applyUnit(o.value)"
             >
               {{ o.label }}
             </button>
@@ -88,7 +160,8 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
 }
 .pd {
   width: 100%;
-  max-width: 440px;
+  max-width: 460px;
+  max-height: 92vh;
   background: #fff;
   border-radius: 12px;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
@@ -96,6 +169,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
   display: flex;
   flex-direction: column;
   gap: 16px;
+  overflow: hidden;
 }
 .pd-head {
   display: flex;
@@ -121,6 +195,43 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
 .pd-close:hover {
   color: #1a73e8;
   background: #f1f4f9;
+}
+.pd-preview {
+  background: #e8ebef;
+  border-radius: 10px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  min-height: 120px;
+  max-height: 40vh;
+  overflow-y: auto;
+}
+.pd-empty {
+  margin: auto;
+  color: #7a8699;
+  font-size: 13px;
+}
+.pd-page {
+  position: relative;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+  border-radius: 2px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.pd-page-num {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  z-index: 5;
+  font-size: 11px;
+  font-weight: 700;
+  color: #7a8699;
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 4px;
+  padding: 1px 6px;
 }
 .pd-row {
   display: flex;
