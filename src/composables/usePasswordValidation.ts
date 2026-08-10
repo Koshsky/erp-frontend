@@ -10,10 +10,10 @@ export interface PasswordRule {
 
 const DEFAULT_RULES: PasswordRule[] = [
   { id: 'length', label: 'не меньше 8 символов', test: (v) => v.length >= 8 },
-  { id: 'lower', label: 'строчные буквы', test: (v) => /[a-z]/.test(v) },
-  { id: 'upper', label: 'заглавные буквы', test: (v) => /[A-Z]/.test(v) },
-  { id: 'digit', label: 'цифры', test: (v) => /\d/.test(v) },
-  { id: 'special', label: 'спецсимволы', test: (v) => /[^A-Za-z0-9]/.test(v) },
+  { id: 'lower', label: 'строчные буквы', test: (v) => /\p{Ll}/u.test(v) },
+  { id: 'upper', label: 'заглавные буквы', test: (v) => /\p{Lu}/u.test(v) },
+  { id: 'digit', label: 'цифры', test: (v) => /\p{N}/u.test(v) },
+  { id: 'special', label: 'спецсимволы', test: (v) => /[^\p{L}\p{N}]/u.test(v) },
 ]
 
 /** Набор правил пароля (по умолчанию: длина, регистры, цифры, спецсимволы). */
