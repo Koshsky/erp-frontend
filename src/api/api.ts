@@ -25,23 +25,23 @@ import { BASE_PATH, COLLECTION_FORMATS, BaseAPI, RequiredError, operationServerM
 
 export interface AssignmentGet200Response {
     'data'?: Array<DtoAssignmentResponse>;
-    'error'?: string;
+    'error'?: ErrorsDomainError;
 }
 export interface AssignmentGet500Response {
     'data'?: object;
-    'error'?: string;
+    'error'?: ErrorsDomainError;
 }
 export interface AssignmentPost201Response {
     'data'?: DtoAssignmentResponse;
-    'error'?: string;
+    'error'?: ErrorsDomainError;
 }
 export interface AuthLoginPost200Response {
     'data'?: DtoAuthResponse;
-    'error'?: string;
+    'error'?: ErrorsDomainError;
 }
 export interface AuthRefreshPost200Response {
     'data'?: DtoRefreshResponse;
-    'error'?: string;
+    'error'?: ErrorsDomainError;
 }
 export interface DtoAssignmentResponse {
     'id'?: number;
@@ -348,6 +348,29 @@ export interface DtoUserResponse {
     'role'?: string;
     'username'?: string;
 }
+
+export const ErrorsCode = {
+    CodeInternal: 0,
+    CodeBadRequest: 1,
+    CodeUnauthorized: 2,
+    CodeForbidden: 3,
+    CodeNotFound: 4,
+    CodeTooManyRequests: 5,
+    CodeInvalidCredentials: 6,
+    CodeInvalidToken: 7,
+    CodeValidation: 8,
+} as const;
+
+export type ErrorsCode = typeof ErrorsCode[keyof typeof ErrorsCode];
+
+
+export interface ErrorsDomainError {
+    'code'?: ErrorsCode;
+    'message'?: string;
+    'timestamp'?: string;
+}
+
+
 export interface JwtTokenPair {
     'access_token'?: string;
     /**
@@ -359,95 +382,95 @@ export interface JwtTokenPair {
 }
 export interface MilestoneGet200Response {
     'data'?: Array<DtoMilestoneResponse>;
-    'error'?: string;
+    'error'?: ErrorsDomainError;
 }
 export interface MilestonePost201Response {
     'data'?: DtoMilestoneResponse;
-    'error'?: string;
+    'error'?: ErrorsDomainError;
 }
 export interface PlanningProcessesGet200Response {
     'data'?: DtoProcessPlanning;
-    'error'?: string;
+    'error'?: ErrorsDomainError;
 }
 export interface PlanningProjectsGet200Response {
     'data'?: DtoProjectPlanning;
-    'error'?: string;
+    'error'?: ErrorsDomainError;
 }
 export interface PlanningTasksGet200Response {
     'data'?: DtoTaskPlanning;
-    'error'?: string;
+    'error'?: ErrorsDomainError;
 }
 export interface ProcessGet200Response {
     'data'?: Array<DtoProcessResponse>;
-    'error'?: string;
+    'error'?: ErrorsDomainError;
 }
 export interface ProcessPost201Response {
     'data'?: DtoProcessResponse;
-    'error'?: string;
+    'error'?: ErrorsDomainError;
 }
 export interface ProjectGet200Response {
     'data'?: Array<DtoProjectResponse>;
-    'error'?: string;
+    'error'?: ErrorsDomainError;
 }
 export interface ProjectPost201Response {
     'data'?: DtoProjectResponse;
-    'error'?: string;
+    'error'?: ErrorsDomainError;
 }
 export interface ResponseResponse {
     'data'?: object;
-    'error'?: string;
+    'error'?: ErrorsDomainError;
 }
 export interface TaskGet200Response {
     'data'?: Array<DtoTaskResponse>;
-    'error'?: string;
+    'error'?: ErrorsDomainError;
 }
 export interface TaskPost201Response {
     'data'?: DtoTaskResponse;
-    'error'?: string;
+    'error'?: ErrorsDomainError;
 }
 export interface TimesheetCalendarGet200Response {
     'data'?: DtoCalendarPlanning;
-    'error'?: string;
+    'error'?: ErrorsDomainError;
 }
 export interface TimesheetEmployeesGet200Response {
     'data'?: Array<DtoEmployeeResponse>;
-    'error'?: string;
+    'error'?: ErrorsDomainError;
 }
 export interface TimesheetEmployeesIdDaysGet200Response {
     'data'?: Array<DtoEmployeeStateResponse>;
-    'error'?: string;
+    'error'?: ErrorsDomainError;
 }
 export interface TimesheetEmployeesIdGet200Response {
     'data'?: DtoEmployeeResponse;
-    'error'?: string;
+    'error'?: ErrorsDomainError;
 }
 export interface TimesheetResourcesGet200Response {
     'data'?: Array<DtoResourceResponse>;
-    'error'?: string;
+    'error'?: ErrorsDomainError;
 }
 export interface TimesheetResourcesPost201Response {
     'data'?: DtoResourceResponse;
-    'error'?: string;
+    'error'?: ErrorsDomainError;
 }
 export interface TimesheetStatesGet200Response {
     'data'?: Array<DtoStateResponse>;
-    'error'?: string;
+    'error'?: ErrorsDomainError;
 }
 export interface TimesheetStatesPost201Response {
     'data'?: DtoStateResponse;
-    'error'?: string;
+    'error'?: ErrorsDomainError;
 }
 export interface UserChangePasswordPost200Response {
     'data'?: DtoChangePasswordResponse;
-    'error'?: string;
+    'error'?: ErrorsDomainError;
 }
 export interface UserGet200Response {
     'data'?: Array<DtoUserResponse>;
-    'error'?: string;
+    'error'?: ErrorsDomainError;
 }
 export interface UserIdGet200Response {
     'data'?: DtoUserResponse;
-    'error'?: string;
+    'error'?: ErrorsDomainError;
 }
 
 /**

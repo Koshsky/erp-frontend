@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { AuthApi, ProjectsApi, ProcessesApi, TasksApi, TimesheetResourcesApi, TimesheetCalendarApi, TimesheetEmployeesApi, TimesheetStatesApi, PlanningApi, MilestonesApi, UsersApi, AssignmentsApi, Configuration } from '@/api'
 import type { DtoUserInfo, DtoProject, DtoResourceResponse, DtoResourceCalendar, DtoEmployeeResponse, DtoEmployeeStateResponse, DtoStateResponse, DtoCreateResourceRequest, DtoUpdateResourceRequest, JwtTokenPair } from '@/api'
+import { apiErrorMessage } from '@/utils'
 
 const TOKEN_KEY = 'mvs_erp_access_token'
 const REFRESH_KEY = 'mvs_erp_refresh_token'
@@ -92,7 +93,7 @@ export const useAuthStore = defineStore('auth', () => {
       const api = new AuthApi(apiConfig())
       const resp = await api.authLoginPost({ username, password })
       const body = resp.data
-      if (body?.error) throw new Error(body.error)
+      if (body?.error) throw new Error(apiErrorMessage(body.error))
       applySession(body?.data)
       return true
     } catch (e: any) {
@@ -110,7 +111,7 @@ export const useAuthStore = defineStore('auth', () => {
       const api = new AuthApi(apiConfig())
       const resp = await api.authRegisterPost({ username, password, name })
       const body = resp.data
-      if (body?.error) throw new Error(body.error)
+      if (body?.error) throw new Error(apiErrorMessage(body.error))
       applySession(body?.data)
       return true
     } catch (e: any) {
@@ -131,10 +132,10 @@ export const useAuthStore = defineStore('auth', () => {
         new_password: newPassword,
       })
       const body = resp.data
-      if (body?.error) throw new Error(body.error)
+      if (body?.error) throw new Error(apiErrorMessage(body.error))
       return true
     } catch (e: any) {
-      error.value = (e?.response?.data?.error ?? e.message) || String(e)
+      error.value = apiErrorMessage(e?.response?.data?.error, e?.message ?? String(e))
       return false
     } finally {
       loading.value = false
@@ -196,7 +197,7 @@ export const useAuthStore = defineStore('auth', () => {
       const api = new AuthApi(apiConfig())
       const resp = await api.authRefreshPost({ refresh_token: refresh })
       const body = resp.data
-      if (body?.error) throw new Error(body.error)
+      if (body?.error) throw new Error(apiErrorMessage(body.error))
       applySession(body?.data)
       return true
     } catch (e: any) {
@@ -224,7 +225,7 @@ export const useAuthStore = defineStore('auth', () => {
       const api = new UsersApi(apiConfig())
       const resp = await api.userIdGet(userId)
       const body = resp.data
-      if (body?.error) throw new Error(body.error)
+      if (body?.error) throw new Error(apiErrorMessage(body.error))
       if (body?.data) {
         user.value = body.data as DtoUserInfo
         localStorage.setItem(USER_KEY, JSON.stringify(user.value))
@@ -298,7 +299,7 @@ export const useAppStore = defineStore('app', () => {
       const api = new TimesheetResourcesApi(apiConfig())
       const resp = await api.timesheetResourcesPost(payload)
       const body = resp.data
-      if (body?.error) throw new Error(body.error)
+      if (body?.error) throw new Error(apiErrorMessage(body.error))
       if (body?.data) resources.value.push(body.data)
       return true
     } catch (e: any) {
@@ -313,7 +314,7 @@ export const useAppStore = defineStore('app', () => {
       const api = new TimesheetResourcesApi(apiConfig())
       const resp = await api.timesheetResourcesIdPut(id, patch)
       const body = resp.data
-      if (body?.error) throw new Error(body.error)
+      if (body?.error) throw new Error(apiErrorMessage(body.error))
       const updated = body?.data
       if (updated) {
         const i = resources.value.findIndex((r) => r.id === id)
