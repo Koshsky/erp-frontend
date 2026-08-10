@@ -1,3 +1,4 @@
 export { clamp } from './clamp'
 export { DAY_MS } from './date'
 export { useWindowPointerTrack } from './windowPointer'
+export { apiErrorMessage, errorTextByCode } from './apiError'

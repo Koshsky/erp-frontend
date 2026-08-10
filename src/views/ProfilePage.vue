@@ -1,15 +1,21 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useAuthStore } from '../store'
+import { PasswordField, PasswordRequirements } from '../components/common'
+import { passwordRules, validatePassword } from '../composables/usePasswordValidation'
 
 const auth = useAuthStore()
 
 const oldPassword = ref('')
 const newPassword = ref('')
 const confirmPassword = ref('')
-const showPassword = ref(false)
 const changeMsg = ref<string | null>(null)
 const changeOk = ref(false)
+
+const passwordChecks = passwordRules()
+
+const newPasswordValid = computed(() => validatePassword(newPassword.value, passwordChecks))
+const passwordConfirmed = computed(() => confirmPassword.value === newPassword.value)
 
 interface ProfileField {
   label: string
@@ -40,7 +46,11 @@ async function onChangePassword() {
     changeMsg.value = 'Заполните все поля'
     return
   }
-  if (newPassword.value !== confirmPassword.value) {
+  if (!newPasswordValid.value) {
+    changeMsg.value = 'Новый пароль не соответствует требованиям'
+    return
+  }
+  if (!passwordConfirmed.value) {
     changeMsg.value = 'Новый пароль не совпадает с подтверждением'
     return
   }
@@ -52,8 +62,7 @@ async function onChangePassword() {
     newPassword.value = ''
     confirmPassword.value = ''
   } else {
-    changeMsg.value =
-      auth.error === 'invalid password' ? 'Неверный пароль' : auth.error ?? 'Не удалось изменить пароль'
+    changeMsg.value = auth.error ?? 'Не удалось изменить пароль'
   }
 }
 </script>
@@ -62,49 +71,32 @@ async function onChangePassword() {
   <section class="pf">
     <h2 class="pf-title">Профиль</h2>
 
-    <div class="pf-card">
-      <div v-for="field in profile" :key="field.label" class="pf-row">
-        <span class="pf-label">{{ field.label }}</span>
-        <span class="pf-value">{{ field.value }}</span>
+    <div class="pf-columns">
+      <div class="pf-card">
+        <div v-for="field in profile" :key="field.label" class="pf-row">
+          <span class="pf-label">{{ field.label }}</span>
+          <span class="pf-value">{{ field.value }}</span>
+        </div>
+      </div>
+
+      <div class="pf-card pw-form">
+        <h3 class="pf-title sm">Смена пароля</h3>
+        <form @submit.prevent="onChangePassword">
+          <div class="pw-fields">
+            <PasswordField v-model="oldPassword" label="Старый пароль" autocomplete="current-password" placeholder="••••••••" />
+            <PasswordField v-model="newPassword" label="Новый пароль" autocomplete="new-password" placeholder="Придумайте новый пароль" />
+            <PasswordField v-model="confirmPassword" label="Подтверждение пароля" autocomplete="new-password" placeholder="Повторите пароль" />
+            <PasswordRequirements :model-value="newPassword" :rules="passwordChecks" />
+          </div>
+
+          <p v-if="changeMsg" class="pf-msg" :class="{ ok: changeOk }">{{ changeMsg }}</p>
+
+          <button type="submit" class="pf-btn" :disabled="auth.loading">
+            {{ auth.loading ? 'Сохранение…' : 'Сменить пароль' }}
+          </button>
+        </form>
       </div>
     </div>
-
-    <h3 class="pf-title sm">Смена пароля</h3>
-    <form class="pf-card pw-form" @submit.prevent="onChangePassword">
-      <label class="pf-field">
-        <span>Старый пароль</span>
-        <input
-          v-model="oldPassword"
-          :type="showPassword ? 'text' : 'password'"
-          autocomplete="current-password"
-          placeholder="••••••••"
-        />
-      </label>
-      <label class="pf-field">
-        <span>Новый пароль</span>
-        <input
-          v-model="newPassword"
-          :type="showPassword ? 'text' : 'password'"
-          autocomplete="new-password"
-          placeholder="••••••••"
-        />
-      </label>
-      <label class="pf-field">
-        <span>Подтверждение пароля</span>
-        <input
-          v-model="confirmPassword"
-          :type="showPassword ? 'text' : 'password'"
-          autocomplete="new-password"
-          placeholder="••••••••"
-        />
-      </label>
-
-      <p v-if="changeMsg" class="pf-msg" :class="{ ok: changeOk }">{{ changeMsg }}</p>
-
-      <button type="submit" class="pf-btn" :disabled="auth.loading">
-        {{ auth.loading ? 'Сохранение…' : 'Сменить пароль' }}
-      </button>
-    </form>
   </section>
 </template>
 
@@ -114,6 +106,19 @@ async function onChangePassword() {
   font-weight: 700;
   color: #2c3e50;
   margin-bottom: 20px;
+}
+
+.pf-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+
+@media (max-width: 860px) {
+  .pf-columns {
+    grid-template-columns: 1fr;
+  }
 }
 
 .pf-card {
@@ -143,15 +148,17 @@ async function onChangePassword() {
 
 .pf-title.sm {
   font-size: 18px;
-  margin-top: 28px;
-  margin-bottom: 12px;
+  margin: 0 0 16px;
 }
 
 .pw-form {
+  padding: 20px;
+}
+
+.pw-fields {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  padding: 20px;
 }
 
 .pf-field {
@@ -187,7 +194,8 @@ async function onChangePassword() {
 }
 
 .pf-btn {
-  margin-top: 4px;
+  margin-top: 18px;
+  width: 100%;
   padding: 12px;
   border: none;
   border-radius: 8px;
