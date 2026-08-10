@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import ProjectPlanning from '../components/planner/ProjectPlanning/ProjectPlanning.vue'
@@ -13,6 +13,7 @@ import { usePlanningOrigin } from '../composables/usePlanningOrigin'
 import { useUnitMenu } from '../composables/useUnitMenu'
 import { useRoleAccess } from '../composables/useRoleAccess'
 import { useFindPlanningItem } from '../composables/useFindPlanningItem'
+import { useDiagramPrint } from '../composables/useDiagramPrint'
 import { usePlanningStore, useAppStore } from '../store'
 import { addMonthsISO } from '../components/planner/calendar'
 
@@ -22,6 +23,7 @@ const router = useRouter()
 const { projectPlanning, loading, error } = storeToRefs(store)
 
 const { unit, origin } = usePlanningOrigin()
+const diagramPrint = useDiagramPrint()
 
 // Меню ПКМ по шапке таблицы: переключение масштаба «День» / «Декада»
 const { open: openUnitMenu, close: closeUnitMenu, select: selectUnit, bind: unitMenuBind } = useUnitMenu(unit)
@@ -162,6 +164,16 @@ function goToProcesses(projectId: number) {
 onMounted(() => {
   store.loadProjectPlanning()
   if (!app.users.length) void app.loadUsers()
+  diagramPrint.registerDiagram({
+    setUnit: (u) => (unit.value = u),
+    getUnit: () => unit.value,
+    content: () => document.querySelector('.tg-scroll .tg-content'),
+  })
+  window.addEventListener('keydown', diagramPrint.onKeydown)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', diagramPrint.onKeydown)
 })
 </script>
 
