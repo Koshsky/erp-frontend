@@ -275,7 +275,7 @@ export const useAppStore = defineStore('app', () => {
     projectsError.value = null
     try {
       const api = new ProjectsApi(apiConfig())
-      const resp = await api.projectGet(PAGE_SIZE, 0)
+      const resp = await api.projectGet(PAGE_SIZE, undefined, 0)
       const data = resp.data?.data
       projects.value = data?.items ?? []
       projectsTotal.value = data?.total ?? 0
@@ -291,12 +291,12 @@ export const useAppStore = defineStore('app', () => {
   const resourcesLoading = ref(false)
   const resourcesError = ref<string | null>(null)
 
-  async function loadResources() {
+  async function loadResources(ownerId?: number) {
     resourcesLoading.value = true
     resourcesError.value = null
     try {
       const api = new TimesheetResourcesApi(apiConfig())
-      const resp = await api.timesheetResourcesGet(PAGE_SIZE, 0)
+      const resp = await api.timesheetResourcesGet(PAGE_SIZE, ownerId ?? undefined, 0)
       const data = resp.data?.data
       resources.value = data?.items ?? []
       resourcesTotal.value = data?.total ?? 0
@@ -522,12 +522,12 @@ export const useTimesheetStore = defineStore('timesheet', () => {
   }
 
   /** Загружает список сотрудников (бэкенд фильтрует по роли из JWT: vp — подчинённые, admin — все) */
-  async function fetchEmployees() {
+  async function fetchEmployees(managerId?: number) {
     loading.value = true
     error.value = null
     try {
       const api = new TimesheetEmployeesApi(apiConfig())
-      const resp = await api.timesheetEmployeesGet(PAGE_SIZE, 0)
+      const resp = await api.timesheetEmployeesGet(PAGE_SIZE, managerId ?? undefined, 0)
       const data = resp.data?.data
       // Сортировка: сначала должность (position, с запасом на resource_title), затем ФИО
       employees.value = (data?.items ?? []).sort(
@@ -1141,7 +1141,7 @@ export const usePlanningStore = defineStore('planning', () => {
       assignmentId = found.assignment_id
     } else {
       try {
-        const resp = await new AssignmentsApi(apiConfig()).assignmentGet(500, 0)
+        const resp = await new AssignmentsApi(apiConfig()).assignmentGet(500, undefined, 0)
         const data = resp.data?.data
         const list = data?.items ?? []
         const a = list.find((x: any) => x.task_id === taskId && x.resource_id === resourceId)

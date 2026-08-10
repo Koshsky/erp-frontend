@@ -520,11 +520,12 @@ export const AssignmentsApiAxiosParamCreator = function (configuration?: Configu
          * Get a list of all assignments
          * @summary List assignments
          * @param {number} [limit] Page size (default 50, max 500)
+         * @param {number} [ownerId] Filter by project/process owner (admin/dp)
          * @param {number} [offset] Page offset
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        assignmentGet: async (limit?: number, offset?: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+        assignmentGet: async (limit?: number, ownerId?: number, offset?: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
             const localVarPath = `/assignment`;
             // use dummy base URL string because the URL constructor only accepts absolute URLs.
             const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
@@ -542,6 +543,10 @@ export const AssignmentsApiAxiosParamCreator = function (configuration?: Configu
 
             if (limit !== undefined) {
                 localVarQueryParameter['limit'] = limit;
+            }
+
+            if (ownerId !== undefined) {
+                localVarQueryParameter['owner_id'] = ownerId;
             }
 
             if (offset !== undefined) {
@@ -726,12 +731,13 @@ export const AssignmentsApiFp = function(configuration?: Configuration) {
          * Get a list of all assignments
          * @summary List assignments
          * @param {number} [limit] Page size (default 50, max 500)
+         * @param {number} [ownerId] Filter by project/process owner (admin/dp)
          * @param {number} [offset] Page offset
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async assignmentGet(limit?: number, offset?: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<AssignmentGet200Response>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.assignmentGet(limit, offset, options);
+        async assignmentGet(limit?: number, ownerId?: number, offset?: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<AssignmentGet200Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.assignmentGet(limit, ownerId, offset, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
             const localVarOperationServerBasePath = operationServerMap['AssignmentsApi.assignmentGet']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
@@ -802,12 +808,13 @@ export const AssignmentsApiFactory = function (configuration?: Configuration, ba
          * Get a list of all assignments
          * @summary List assignments
          * @param {number} [limit] Page size (default 50, max 500)
+         * @param {number} [ownerId] Filter by project/process owner (admin/dp)
          * @param {number} [offset] Page offset
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        assignmentGet(limit?: number, offset?: number, options?: RawAxiosRequestConfig): AxiosPromise<AssignmentGet200Response> {
-            return localVarFp.assignmentGet(limit, offset, options).then((request) => request(axios, basePath));
+        assignmentGet(limit?: number, ownerId?: number, offset?: number, options?: RawAxiosRequestConfig): AxiosPromise<AssignmentGet200Response> {
+            return localVarFp.assignmentGet(limit, ownerId, offset, options).then((request) => request(axios, basePath));
         },
         /**
          * Delete an assignment by ID
@@ -861,12 +868,13 @@ export class AssignmentsApi extends BaseAPI {
      * Get a list of all assignments
      * @summary List assignments
      * @param {number} [limit] Page size (default 50, max 500)
+     * @param {number} [ownerId] Filter by project/process owner (admin/dp)
      * @param {number} [offset] Page offset
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      */
-    public assignmentGet(limit?: number, offset?: number, options?: RawAxiosRequestConfig) {
-        return AssignmentsApiFp(this.configuration).assignmentGet(limit, offset, options).then((request) => request(this.axios, this.basePath));
+    public assignmentGet(limit?: number, ownerId?: number, offset?: number, options?: RawAxiosRequestConfig) {
+        return AssignmentsApiFp(this.configuration).assignmentGet(limit, ownerId, offset, options).then((request) => request(this.axios, this.basePath));
     }
 
     /**
@@ -1166,11 +1174,12 @@ export const MilestonesApiAxiosParamCreator = function (configuration?: Configur
          * List all milestones
          * @summary List milestones
          * @param {number} [limit] Page size (default 50, max 500)
+         * @param {number} [ownerId] Filter by process/project owner (admin/dp)
          * @param {number} [offset] Page offset
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        milestoneGet: async (limit?: number, offset?: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+        milestoneGet: async (limit?: number, ownerId?: number, offset?: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
             const localVarPath = `/milestone`;
             // use dummy base URL string because the URL constructor only accepts absolute URLs.
             const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
@@ -1188,6 +1197,10 @@ export const MilestonesApiAxiosParamCreator = function (configuration?: Configur
 
             if (limit !== undefined) {
                 localVarQueryParameter['limit'] = limit;
+            }
+
+            if (ownerId !== undefined) {
+                localVarQueryParameter['owner_id'] = ownerId;
             }
 
             if (offset !== undefined) {
@@ -1372,12 +1385,13 @@ export const MilestonesApiFp = function(configuration?: Configuration) {
          * List all milestones
          * @summary List milestones
          * @param {number} [limit] Page size (default 50, max 500)
+         * @param {number} [ownerId] Filter by process/project owner (admin/dp)
          * @param {number} [offset] Page offset
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async milestoneGet(limit?: number, offset?: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<MilestoneGet200Response>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.milestoneGet(limit, offset, options);
+        async milestoneGet(limit?: number, ownerId?: number, offset?: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<MilestoneGet200Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.milestoneGet(limit, ownerId, offset, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
             const localVarOperationServerBasePath = operationServerMap['MilestonesApi.milestoneGet']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
@@ -1448,12 +1462,13 @@ export const MilestonesApiFactory = function (configuration?: Configuration, bas
          * List all milestones
          * @summary List milestones
          * @param {number} [limit] Page size (default 50, max 500)
+         * @param {number} [ownerId] Filter by process/project owner (admin/dp)
          * @param {number} [offset] Page offset
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        milestoneGet(limit?: number, offset?: number, options?: RawAxiosRequestConfig): AxiosPromise<MilestoneGet200Response> {
-            return localVarFp.milestoneGet(limit, offset, options).then((request) => request(axios, basePath));
+        milestoneGet(limit?: number, ownerId?: number, offset?: number, options?: RawAxiosRequestConfig): AxiosPromise<MilestoneGet200Response> {
+            return localVarFp.milestoneGet(limit, ownerId, offset, options).then((request) => request(axios, basePath));
         },
         /**
          * Delete milestone by ID
@@ -1507,12 +1522,13 @@ export class MilestonesApi extends BaseAPI {
      * List all milestones
      * @summary List milestones
      * @param {number} [limit] Page size (default 50, max 500)
+     * @param {number} [ownerId] Filter by process/project owner (admin/dp)
      * @param {number} [offset] Page offset
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      */
-    public milestoneGet(limit?: number, offset?: number, options?: RawAxiosRequestConfig) {
-        return MilestonesApiFp(this.configuration).milestoneGet(limit, offset, options).then((request) => request(this.axios, this.basePath));
+    public milestoneGet(limit?: number, ownerId?: number, offset?: number, options?: RawAxiosRequestConfig) {
+        return MilestonesApiFp(this.configuration).milestoneGet(limit, ownerId, offset, options).then((request) => request(this.axios, this.basePath));
     }
 
     /**
@@ -1797,11 +1813,12 @@ export const ProcessesApiAxiosParamCreator = function (configuration?: Configura
          * Get a list of all processes
          * @summary List processes
          * @param {number} [limit] Page size (default 50, max 500)
+         * @param {number} [ownerId] Filter by process owner (admin/dp)
          * @param {number} [offset] Page offset
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        processGet: async (limit?: number, offset?: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+        processGet: async (limit?: number, ownerId?: number, offset?: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
             const localVarPath = `/process`;
             // use dummy base URL string because the URL constructor only accepts absolute URLs.
             const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
@@ -1819,6 +1836,10 @@ export const ProcessesApiAxiosParamCreator = function (configuration?: Configura
 
             if (limit !== undefined) {
                 localVarQueryParameter['limit'] = limit;
+            }
+
+            if (ownerId !== undefined) {
+                localVarQueryParameter['owner_id'] = ownerId;
             }
 
             if (offset !== undefined) {
@@ -2003,12 +2024,13 @@ export const ProcessesApiFp = function(configuration?: Configuration) {
          * Get a list of all processes
          * @summary List processes
          * @param {number} [limit] Page size (default 50, max 500)
+         * @param {number} [ownerId] Filter by process owner (admin/dp)
          * @param {number} [offset] Page offset
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async processGet(limit?: number, offset?: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<ProcessGet200Response>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.processGet(limit, offset, options);
+        async processGet(limit?: number, ownerId?: number, offset?: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<ProcessGet200Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.processGet(limit, ownerId, offset, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
             const localVarOperationServerBasePath = operationServerMap['ProcessesApi.processGet']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
@@ -2079,12 +2101,13 @@ export const ProcessesApiFactory = function (configuration?: Configuration, base
          * Get a list of all processes
          * @summary List processes
          * @param {number} [limit] Page size (default 50, max 500)
+         * @param {number} [ownerId] Filter by process owner (admin/dp)
          * @param {number} [offset] Page offset
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        processGet(limit?: number, offset?: number, options?: RawAxiosRequestConfig): AxiosPromise<ProcessGet200Response> {
-            return localVarFp.processGet(limit, offset, options).then((request) => request(axios, basePath));
+        processGet(limit?: number, ownerId?: number, offset?: number, options?: RawAxiosRequestConfig): AxiosPromise<ProcessGet200Response> {
+            return localVarFp.processGet(limit, ownerId, offset, options).then((request) => request(axios, basePath));
         },
         /**
          * Delete a process by ID
@@ -2138,12 +2161,13 @@ export class ProcessesApi extends BaseAPI {
      * Get a list of all processes
      * @summary List processes
      * @param {number} [limit] Page size (default 50, max 500)
+     * @param {number} [ownerId] Filter by process owner (admin/dp)
      * @param {number} [offset] Page offset
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      */
-    public processGet(limit?: number, offset?: number, options?: RawAxiosRequestConfig) {
-        return ProcessesApiFp(this.configuration).processGet(limit, offset, options).then((request) => request(this.axios, this.basePath));
+    public processGet(limit?: number, ownerId?: number, offset?: number, options?: RawAxiosRequestConfig) {
+        return ProcessesApiFp(this.configuration).processGet(limit, ownerId, offset, options).then((request) => request(this.axios, this.basePath));
     }
 
     /**
@@ -2203,11 +2227,12 @@ export const ProjectsApiAxiosParamCreator = function (configuration?: Configurat
          * Get a list of all projects
          * @summary List all projects
          * @param {number} [limit] Page size (default 50, max 500)
+         * @param {number} [ownerId] Filter by project owner (admin/dp)
          * @param {number} [offset] Page offset
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        projectGet: async (limit?: number, offset?: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+        projectGet: async (limit?: number, ownerId?: number, offset?: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
             const localVarPath = `/project`;
             // use dummy base URL string because the URL constructor only accepts absolute URLs.
             const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
@@ -2225,6 +2250,10 @@ export const ProjectsApiAxiosParamCreator = function (configuration?: Configurat
 
             if (limit !== undefined) {
                 localVarQueryParameter['limit'] = limit;
+            }
+
+            if (ownerId !== undefined) {
+                localVarQueryParameter['owner_id'] = ownerId;
             }
 
             if (offset !== undefined) {
@@ -2409,12 +2438,13 @@ export const ProjectsApiFp = function(configuration?: Configuration) {
          * Get a list of all projects
          * @summary List all projects
          * @param {number} [limit] Page size (default 50, max 500)
+         * @param {number} [ownerId] Filter by project owner (admin/dp)
          * @param {number} [offset] Page offset
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async projectGet(limit?: number, offset?: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<ProjectGet200Response>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.projectGet(limit, offset, options);
+        async projectGet(limit?: number, ownerId?: number, offset?: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<ProjectGet200Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.projectGet(limit, ownerId, offset, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
             const localVarOperationServerBasePath = operationServerMap['ProjectsApi.projectGet']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
@@ -2485,12 +2515,13 @@ export const ProjectsApiFactory = function (configuration?: Configuration, baseP
          * Get a list of all projects
          * @summary List all projects
          * @param {number} [limit] Page size (default 50, max 500)
+         * @param {number} [ownerId] Filter by project owner (admin/dp)
          * @param {number} [offset] Page offset
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        projectGet(limit?: number, offset?: number, options?: RawAxiosRequestConfig): AxiosPromise<ProjectGet200Response> {
-            return localVarFp.projectGet(limit, offset, options).then((request) => request(axios, basePath));
+        projectGet(limit?: number, ownerId?: number, offset?: number, options?: RawAxiosRequestConfig): AxiosPromise<ProjectGet200Response> {
+            return localVarFp.projectGet(limit, ownerId, offset, options).then((request) => request(axios, basePath));
         },
         /**
          * Delete a project by ID
@@ -2544,12 +2575,13 @@ export class ProjectsApi extends BaseAPI {
      * Get a list of all projects
      * @summary List all projects
      * @param {number} [limit] Page size (default 50, max 500)
+     * @param {number} [ownerId] Filter by project owner (admin/dp)
      * @param {number} [offset] Page offset
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      */
-    public projectGet(limit?: number, offset?: number, options?: RawAxiosRequestConfig) {
-        return ProjectsApiFp(this.configuration).projectGet(limit, offset, options).then((request) => request(this.axios, this.basePath));
+    public projectGet(limit?: number, ownerId?: number, offset?: number, options?: RawAxiosRequestConfig) {
+        return ProjectsApiFp(this.configuration).projectGet(limit, ownerId, offset, options).then((request) => request(this.axios, this.basePath));
     }
 
     /**
@@ -2609,11 +2641,12 @@ export const TasksApiAxiosParamCreator = function (configuration?: Configuration
          * Get a list of all tasks
          * @summary List all tasks
          * @param {number} [limit] Page size (default 50, max 500)
+         * @param {number} [ownerId] Filter by task owner (admin/dp)
          * @param {number} [offset] Page offset
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        taskGet: async (limit?: number, offset?: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+        taskGet: async (limit?: number, ownerId?: number, offset?: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
             const localVarPath = `/task`;
             // use dummy base URL string because the URL constructor only accepts absolute URLs.
             const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
@@ -2631,6 +2664,10 @@ export const TasksApiAxiosParamCreator = function (configuration?: Configuration
 
             if (limit !== undefined) {
                 localVarQueryParameter['limit'] = limit;
+            }
+
+            if (ownerId !== undefined) {
+                localVarQueryParameter['owner_id'] = ownerId;
             }
 
             if (offset !== undefined) {
@@ -2815,12 +2852,13 @@ export const TasksApiFp = function(configuration?: Configuration) {
          * Get a list of all tasks
          * @summary List all tasks
          * @param {number} [limit] Page size (default 50, max 500)
+         * @param {number} [ownerId] Filter by task owner (admin/dp)
          * @param {number} [offset] Page offset
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async taskGet(limit?: number, offset?: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<TaskGet200Response>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.taskGet(limit, offset, options);
+        async taskGet(limit?: number, ownerId?: number, offset?: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<TaskGet200Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.taskGet(limit, ownerId, offset, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
             const localVarOperationServerBasePath = operationServerMap['TasksApi.taskGet']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
@@ -2891,12 +2929,13 @@ export const TasksApiFactory = function (configuration?: Configuration, basePath
          * Get a list of all tasks
          * @summary List all tasks
          * @param {number} [limit] Page size (default 50, max 500)
+         * @param {number} [ownerId] Filter by task owner (admin/dp)
          * @param {number} [offset] Page offset
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        taskGet(limit?: number, offset?: number, options?: RawAxiosRequestConfig): AxiosPromise<TaskGet200Response> {
-            return localVarFp.taskGet(limit, offset, options).then((request) => request(axios, basePath));
+        taskGet(limit?: number, ownerId?: number, offset?: number, options?: RawAxiosRequestConfig): AxiosPromise<TaskGet200Response> {
+            return localVarFp.taskGet(limit, ownerId, offset, options).then((request) => request(axios, basePath));
         },
         /**
          * Delete a task by ID
@@ -2950,12 +2989,13 @@ export class TasksApi extends BaseAPI {
      * Get a list of all tasks
      * @summary List all tasks
      * @param {number} [limit] Page size (default 50, max 500)
+     * @param {number} [ownerId] Filter by task owner (admin/dp)
      * @param {number} [offset] Page offset
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      */
-    public taskGet(limit?: number, offset?: number, options?: RawAxiosRequestConfig) {
-        return TasksApiFp(this.configuration).taskGet(limit, offset, options).then((request) => request(this.axios, this.basePath));
+    public taskGet(limit?: number, ownerId?: number, offset?: number, options?: RawAxiosRequestConfig) {
+        return TasksApiFp(this.configuration).taskGet(limit, ownerId, offset, options).then((request) => request(this.axios, this.basePath));
     }
 
     /**
@@ -3132,11 +3172,12 @@ export const TimesheetEmployeesApiAxiosParamCreator = function (configuration?: 
          * List all employees
          * @summary List all employees
          * @param {number} [limit] Page size (default 50, max 500)
+         * @param {number} [managerId] Filter by manager (admin)
          * @param {number} [offset] Page offset
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        timesheetEmployeesGet: async (limit?: number, offset?: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+        timesheetEmployeesGet: async (limit?: number, managerId?: number, offset?: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
             const localVarPath = `/timesheet/employees`;
             // use dummy base URL string because the URL constructor only accepts absolute URLs.
             const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
@@ -3154,6 +3195,10 @@ export const TimesheetEmployeesApiAxiosParamCreator = function (configuration?: 
 
             if (limit !== undefined) {
                 localVarQueryParameter['limit'] = limit;
+            }
+
+            if (managerId !== undefined) {
+                localVarQueryParameter['manager_id'] = managerId;
             }
 
             if (offset !== undefined) {
@@ -3528,12 +3573,13 @@ export const TimesheetEmployeesApiFp = function(configuration?: Configuration) {
          * List all employees
          * @summary List all employees
          * @param {number} [limit] Page size (default 50, max 500)
+         * @param {number} [managerId] Filter by manager (admin)
          * @param {number} [offset] Page offset
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async timesheetEmployeesGet(limit?: number, offset?: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<TimesheetEmployeesGet200Response>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.timesheetEmployeesGet(limit, offset, options);
+        async timesheetEmployeesGet(limit?: number, managerId?: number, offset?: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<TimesheetEmployeesGet200Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.timesheetEmployeesGet(limit, managerId, offset, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
             const localVarOperationServerBasePath = operationServerMap['TimesheetEmployeesApi.timesheetEmployeesGet']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
@@ -3663,12 +3709,13 @@ export const TimesheetEmployeesApiFactory = function (configuration?: Configurat
          * List all employees
          * @summary List all employees
          * @param {number} [limit] Page size (default 50, max 500)
+         * @param {number} [managerId] Filter by manager (admin)
          * @param {number} [offset] Page offset
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        timesheetEmployeesGet(limit?: number, offset?: number, options?: RawAxiosRequestConfig): AxiosPromise<TimesheetEmployeesGet200Response> {
-            return localVarFp.timesheetEmployeesGet(limit, offset, options).then((request) => request(axios, basePath));
+        timesheetEmployeesGet(limit?: number, managerId?: number, offset?: number, options?: RawAxiosRequestConfig): AxiosPromise<TimesheetEmployeesGet200Response> {
+            return localVarFp.timesheetEmployeesGet(limit, managerId, offset, options).then((request) => request(axios, basePath));
         },
         /**
          * Clear state ranges of an employee overlapping a date range (splits overlaps, optional state filter)
@@ -3769,12 +3816,13 @@ export class TimesheetEmployeesApi extends BaseAPI {
      * List all employees
      * @summary List all employees
      * @param {number} [limit] Page size (default 50, max 500)
+     * @param {number} [managerId] Filter by manager (admin)
      * @param {number} [offset] Page offset
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      */
-    public timesheetEmployeesGet(limit?: number, offset?: number, options?: RawAxiosRequestConfig) {
-        return TimesheetEmployeesApiFp(this.configuration).timesheetEmployeesGet(limit, offset, options).then((request) => request(this.axios, this.basePath));
+    public timesheetEmployeesGet(limit?: number, managerId?: number, offset?: number, options?: RawAxiosRequestConfig) {
+        return TimesheetEmployeesApiFp(this.configuration).timesheetEmployeesGet(limit, managerId, offset, options).then((request) => request(this.axios, this.basePath));
     }
 
     /**
@@ -3885,11 +3933,12 @@ export const TimesheetResourcesApiAxiosParamCreator = function (configuration?: 
          * List all resources
          * @summary List resources
          * @param {number} [limit] Page size (default 50, max 500)
+         * @param {number} [ownerId] Filter by resource owner (admin)
          * @param {number} [offset] Page offset
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        timesheetResourcesGet: async (limit?: number, offset?: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+        timesheetResourcesGet: async (limit?: number, ownerId?: number, offset?: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
             const localVarPath = `/timesheet/resources`;
             // use dummy base URL string because the URL constructor only accepts absolute URLs.
             const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
@@ -3907,6 +3956,10 @@ export const TimesheetResourcesApiAxiosParamCreator = function (configuration?: 
 
             if (limit !== undefined) {
                 localVarQueryParameter['limit'] = limit;
+            }
+
+            if (ownerId !== undefined) {
+                localVarQueryParameter['owner_id'] = ownerId;
             }
 
             if (offset !== undefined) {
@@ -4091,12 +4144,13 @@ export const TimesheetResourcesApiFp = function(configuration?: Configuration) {
          * List all resources
          * @summary List resources
          * @param {number} [limit] Page size (default 50, max 500)
+         * @param {number} [ownerId] Filter by resource owner (admin)
          * @param {number} [offset] Page offset
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async timesheetResourcesGet(limit?: number, offset?: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<TimesheetResourcesGet200Response>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.timesheetResourcesGet(limit, offset, options);
+        async timesheetResourcesGet(limit?: number, ownerId?: number, offset?: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<TimesheetResourcesGet200Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.timesheetResourcesGet(limit, ownerId, offset, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
             const localVarOperationServerBasePath = operationServerMap['TimesheetResourcesApi.timesheetResourcesGet']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
@@ -4167,12 +4221,13 @@ export const TimesheetResourcesApiFactory = function (configuration?: Configurat
          * List all resources
          * @summary List resources
          * @param {number} [limit] Page size (default 50, max 500)
+         * @param {number} [ownerId] Filter by resource owner (admin)
          * @param {number} [offset] Page offset
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        timesheetResourcesGet(limit?: number, offset?: number, options?: RawAxiosRequestConfig): AxiosPromise<TimesheetResourcesGet200Response> {
-            return localVarFp.timesheetResourcesGet(limit, offset, options).then((request) => request(axios, basePath));
+        timesheetResourcesGet(limit?: number, ownerId?: number, offset?: number, options?: RawAxiosRequestConfig): AxiosPromise<TimesheetResourcesGet200Response> {
+            return localVarFp.timesheetResourcesGet(limit, ownerId, offset, options).then((request) => request(axios, basePath));
         },
         /**
          * Delete resource by id
@@ -4226,12 +4281,13 @@ export class TimesheetResourcesApi extends BaseAPI {
      * List all resources
      * @summary List resources
      * @param {number} [limit] Page size (default 50, max 500)
+     * @param {number} [ownerId] Filter by resource owner (admin)
      * @param {number} [offset] Page offset
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      */
-    public timesheetResourcesGet(limit?: number, offset?: number, options?: RawAxiosRequestConfig) {
-        return TimesheetResourcesApiFp(this.configuration).timesheetResourcesGet(limit, offset, options).then((request) => request(this.axios, this.basePath));
+    public timesheetResourcesGet(limit?: number, ownerId?: number, offset?: number, options?: RawAxiosRequestConfig) {
+        return TimesheetResourcesApiFp(this.configuration).timesheetResourcesGet(limit, ownerId, offset, options).then((request) => request(this.axios, this.basePath));
     }
 
     /**

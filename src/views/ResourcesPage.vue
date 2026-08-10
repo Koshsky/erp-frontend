@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { ContextMenu, ModalForm, ConfirmDialog } from '../components/common'
 import type { ContextMenuItem } from '../components/common/ContextMenu'
@@ -53,11 +53,13 @@ const ownerOptions = computed<ModalField['options']>(() =>
     .map((u) => ({ value: u.id as number, label: u.name ?? `#${u.id}` })),
 )
 
-/** Фильтр по владельцу (owner_id): admin видит все ресурсы, выбирает владельца */
+/** Фильтр по владельцу (owner_id): admin выбирает владельца, бэкенд фильтрует по скоупу */
 const ownerFilter = ref<number | ''>('')
-const filteredResources = computed(() => {
-  if (ownerFilter.value === '') return resources.value
-  return resources.value.filter((r) => r.owner_id === ownerFilter.value)
+const filteredResources = computed(() => resources.value)
+
+// Смена фильтра владельца перезагружает листинг с owner_id (только для admin)
+watch(ownerFilter, (v) => {
+  if (isAdmin.value) store.loadResources(typeof v === 'number' ? v : undefined)
 })
 
 const { open: openModal, close: closeModal, submit: submitModal, bind: modalBind } = useEditModal<ModalMode>(

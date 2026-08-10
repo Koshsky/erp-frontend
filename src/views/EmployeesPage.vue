@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { ContextMenu, ModalForm, ConfirmDialog } from '../components/common'
 import type { ContextMenuItem } from '../components/common/ContextMenu'
@@ -39,7 +39,7 @@ function managerLabel(managerId?: number | null): string {
 /** Поиск по ФИО, должности и типу ресурса (регистронезависимый) */
 const search = ref('')
 
-/** Фильтр по руководителю (manager_id): '' — все, 'none' — без руководителя, число — конкретный */
+/** Фильтр по руководителю (manager_id): '' — все, 'none' — без руководителя (клиент), число — серверный фильтр */
 const managerFilter = ref<number | 'none' | ''>('')
 const filteredEmployees = computed(() => {
   let list = employees.value
@@ -49,12 +49,16 @@ const filteredEmployees = computed(() => {
       `${e.name ?? ''} ${e.position ?? ''} ${e.resource_title ?? ''}`.toLowerCase().includes(q),
     )
   }
-  if (managerFilter.value !== '') {
-    list = list.filter((e) =>
-      managerFilter.value === 'none' ? e.manager_id == null : e.manager_id === managerFilter.value,
-    )
+  // 'none' (без руководителя) фильтруем на клиенте; числовой manager_id уже отфильтрован сервером
+  if (managerFilter.value === 'none') {
+    list = list.filter((e) => e.manager_id == null)
   }
   return list
+})
+
+// Смена фильтра руководителя перезагружает листинг с manager_id (только для admin)
+watch(managerFilter, (v) => {
+  if (isAdmin.value) ts.fetchEmployees(typeof v === 'number' ? v : undefined)
 })
 
 // ПКМ по строке: редактирование/удаление (только свои сотрудники / admin)
