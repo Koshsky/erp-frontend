@@ -12,7 +12,7 @@ import { useAppStore, useTimesheetStore } from '../store'
 import type { DtoEmployeeResponse } from '@/api'
 
 const ts = useTimesheetStore()
-const { employees, loading, error } = storeToRefs(ts)
+const { employees, employeesWithTitles, loading, error } = storeToRefs(ts)
 
 const app = useAppStore()
 const { resources, users } = storeToRefs(app)
@@ -42,7 +42,7 @@ const search = ref('')
 /** Фильтр по руководителю (manager_id): '' — все, 'none' — без руководителя (клиент), число — серверный фильтр */
 const managerFilter = ref<number | 'none' | ''>('')
 const filteredEmployees = computed(() => {
-  let list = employees.value
+  let list = employeesWithTitles.value
   const q = search.value.trim().toLowerCase()
   if (q) {
     list = list.filter((e) =>

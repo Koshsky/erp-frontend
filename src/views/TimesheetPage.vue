@@ -12,7 +12,7 @@ import { useAuthStore, useTimesheetStore } from '../store'
 
 const ts = useTimesheetStore()
 const auth = useAuthStore()
-const { employees, states, loading, busy, error } = storeToRefs(ts)
+const { employees: employeesWithTitles, states, loading, busy, error } = storeToRefs(ts)
 
 const unit = ref<PlanningUnit>('day')
 const origin = ref(toDate(new Date()))
@@ -59,9 +59,9 @@ async function onClear(p: ClearPayload) {
       <span v-if="isAdmin" class="tp-note">Все сотрудники</span>
     </div>
 
-    <PlannerStates :loading="loading" :error="null" :has-data="employees.length > 0">
+    <PlannerStates :loading="loading" :error="null" :has-data="employeesWithTitles.length > 0">
       <TimelineGrid
-        v-if="employees.length"
+        v-if="employeesWithTitles.length"
         id="timesheet"
         :origin="origin"
         :unit="unit"
@@ -71,7 +71,7 @@ async function onClear(p: ClearPayload) {
           <CalendarHeader :t="t" />
           <TimesheetGrid
             :t="t"
-            :employees="employees"
+            :employees="employeesWithTitles"
             :states="states"
             :state-for-day="(id, iso) => ts.periodFor(id, iso)"
             :busy="busy"

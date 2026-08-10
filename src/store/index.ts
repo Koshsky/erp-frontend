@@ -441,6 +441,8 @@ export const useAppStore = defineStore('app', () => {
 
 // === Табель (состояния сотрудников, страница для vp/admin) ===
 export const useTimesheetStore = defineStore('timesheet', () => {
+  const app = useAppStore()
+
   // Окно загрузки состояний: по умолчанию «назад 180 / вперёд 360 дней»; при
   // инфинит-скролле шкалы расширяется через ensureRange (дозагрузка новых диапазонов).
   const WINDOW_BACK_DAYS = 180
@@ -455,6 +457,24 @@ export const useTimesheetStore = defineStore('timesheet', () => {
   const loading = ref(false)
   const busy = ref(false)
   const error = ref<string | null>(null)
+
+  /** Сотрудники, обогащённые названием категории ресурса (resource_title) из app.resources */
+  const employeesWithTitles = computed<Array<DtoEmployeeResponse & { resource_title?: string }>>(() => {
+    const titleById = new Map<number, string>()
+    for (const r of app.resources) {
+      if (r.id != null) titleById.set(r.id, r.title ?? '')
+    }
+    return employees.value
+      .map((e) => ({
+        ...e,
+        resource_title: e.resource_id != null ? (titleById.get(e.resource_id) ?? '') : '',
+      }))
+      .sort(
+        (a, b) =>
+          (a.position || a.resource_title || '').localeCompare(b.position || b.resource_title || '', 'ru') ||
+          (a.name ?? '').localeCompare(b.name ?? '', 'ru'),
+      )
+  })
 
   /** Дата YYYY-MM-DD через n дней от ISO-даты (локальная зона) */
   function shiftDate(iso: string, days: number): string {
@@ -529,12 +549,8 @@ export const useTimesheetStore = defineStore('timesheet', () => {
       const api = new TimesheetEmployeesApi(apiConfig())
       const resp = await api.employeesGet(PAGE_SIZE, managerId ?? undefined, 0)
       const data = resp.data?.data
-      // Сортировка: сначала должность (position, с запасом на resource_title), затем ФИО
-      employees.value = (data?.items ?? []).sort(
-        (a, b) =>
-          (a.position || a.resource_title || '').localeCompare(b.position || b.resource_title || '', 'ru') ||
-          (a.name ?? '').localeCompare(b.name ?? '', 'ru'),
-      )
+      // Сортировку и resource_title добавляет computed employeesWithTitles.
+      employees.value = data?.items ?? []
       employeesTotal.value = data?.total ?? 0
     } catch (e: any) {
       setError(e)
@@ -750,6 +766,7 @@ export const useTimesheetStore = defineStore('timesheet', () => {
 
   return {
     employees,
+    employeesWithTitles,
     employeesTotal,
     states,
     periodsByEmployee,

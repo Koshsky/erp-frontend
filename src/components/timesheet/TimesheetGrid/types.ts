@@ -1,6 +1,9 @@
 import type { TimelineCtx } from '@/composables/timeline-context'
 import type { DtoEmployeeResponse, DtoEmployeeStateResponse, DtoStateResponse } from '@/api'
 
+/** Сотрудник, обогащённый названием категории ресурса (resource_title) на фронте. */
+export type EmployeeWithTitle = DtoEmployeeResponse & { resource_title?: string }
+
 export interface AssignPayload {
   employeeId: number
   stateId: number
@@ -16,7 +19,7 @@ export interface ClearPayload {
 
 export interface TimesheetGridProps {
   t: TimelineCtx
-  employees: DtoEmployeeResponse[]
+  employees: EmployeeWithTitle[]
   states: DtoStateResponse[]
   /** Состояние, покрывающее день сотрудника (undefined — рабочий день) */
   stateForDay: (employeeId: number, iso: string) => DtoEmployeeStateResponse | undefined
