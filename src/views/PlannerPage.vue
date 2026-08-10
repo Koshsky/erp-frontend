@@ -46,7 +46,7 @@ const focusGroupId = computed(() => {
 
 // vp владеет задачами/вехами/назначениями своих процессов; rp — view only
 // (список задач для него уже отфильтрован бэкендом), dp — read-only.
-const { canManageTasks } = useRoleAccess()
+const { canManageTasks, role, userId } = useRoleAccess()
 
 const { findTask, findMilestone } = useFindPlanningItem()
 
@@ -273,7 +273,15 @@ const processesByPriority = computed(() => {
   for (const p of app.projects) {
     if (p.id != null) prio.set(p.id, p.priority ?? Number.MAX_SAFE_INTEGER)
   }
-  return [...(taskPlanning.value?.processes ?? [])].sort((a, b) => {
+  let list = taskPlanning.value?.processes ?? []
+  // vp: показываем процессы только в проектах, где у vp есть хотя бы один процесс
+  if (role.value === 'vp' && userId.value != null) {
+    const myProjects = new Set(
+      list.filter((p: any) => p.owner_id === userId.value).map((p: any) => p.project_id),
+    )
+    list = list.filter((p: any) => myProjects.has(p.project_id))
+  }
+  return [...list].sort((a, b) => {
     const pa = prio.get(a.project_id ?? -1) ?? Number.MAX_SAFE_INTEGER
     const pb = prio.get(b.project_id ?? -1) ?? Number.MAX_SAFE_INTEGER
     return pa - pb || (a.id ?? 0) - (b.id ?? 0)
