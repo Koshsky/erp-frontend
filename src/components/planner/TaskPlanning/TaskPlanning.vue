@@ -5,15 +5,17 @@ import TimelineGrid from '../TimelineGrid/TimelineGrid.vue'
 import { PlannerStates } from '@/components/common'
 import ResourceHeader from '@/components/common/ResourceHeader/ResourceHeader.vue'
 import TaskGantt from './components/TaskGantt/TaskGantt.vue'
-import type { DtoDetailedProcess, DtoResource } from '@/api'
+import type { DtoDetailedProcess, DtoResource, DtoResourceResponse, DtoResourceCalendar, DtoAvailabilityPeriod } from '@/api'
 import type { Resource } from '@/components/common/ResourceHeader/types'
 import type { Process } from './types'
 import type { PlanningUnit } from '../calendar'
-import { toDate } from '../calendar'
+import { toDate, fmtDate } from '../calendar'
 
 const props = withDefaults(defineProps<{
   processes?: DtoDetailedProcess[] | null
-  resources?: DtoResource[] | null
+  resources?: DtoResourceResponse[] | null
+  /** Доступность ресурсов (periods из /timesheet/calendar), окно «сегодня ± 1 год» */
+  calendar?: DtoResourceCalendar[] | null
   loading?: boolean
   error?: string | null
   /** Якорь шкалы: ячейка с индексом 0 (начальная позиция) */
@@ -29,6 +31,7 @@ const props = withDefaults(defineProps<{
 }>(), {
   processes: null,
   resources: null,
+  calendar: null,
   loading: false,
   error: null,
   origin: '',
@@ -83,9 +86,33 @@ const displayResources = computed<Resource[]>(() =>
     id: r.id ?? 0,
     code: r.code ?? '',
     title: r.title ?? '',
-    quantity: r.quantity ?? 0,
+    employeesCount: r.employees_count ?? 0,
   })),
 )
+
+/** Периоды доступности по ресурсу (для быстрого поиска по дате) */
+const periodByResource = computed(() => {
+  const map = new Map<number, DtoAvailabilityPeriod[]>()
+  for (const rc of props.calendar ?? []) {
+    if (rc.resource_id != null && Array.isArray(rc.periods)) {
+      map.set(rc.resource_id, rc.periods)
+    }
+  }
+  return map
+})
+
+/** Доступность ресурса на день из /timesheet/calendar (null — вне окна загрузки ±год) */
+function availableForDay(resourceId: number, day: Date): number | null {
+  const periods = periodByResource.value.get(resourceId)
+  if (!periods || !periods.length) return null
+  const iso = fmtDate(day)
+  for (const p of periods) {
+    if (p.start_date != null && p.end_date != null && iso >= p.start_date && iso <= p.end_date) {
+      return p.available ?? 0
+    }
+  }
+  return null
+}
 
 function usageForDay(resourceId: number, day: Date): number {
   let used = 0
@@ -119,7 +146,7 @@ function onGridCtx(p: { clientX: number; clientY: number; date: string | null; r
     <TimelineGrid v-if="displayProcesses.length" id="task" :origin="origin" :unit="unit" :focus-date="focusDate" :focus-group-id="focusGroupId" @ctxmenu="onGridCtx" @header-ctxmenu="(p) => emit('header-ctxmenu', p)">
       <template #default="{ t }">
         <CalendarHeader :t="t" />
-        <ResourceHeader :t="t" :resources="displayResources" :usageFn="usageForDay" />
+        <ResourceHeader :t="t" :resources="displayResources" :usageFn="usageForDay" :availableFn="availableForDay" />
 
         <TaskGantt
           v-for="proc in displayProcesses"

@@ -27,9 +27,9 @@ const { unit, origin } = usePlanningOrigin()
 const { open: openUnitMenu, close: closeUnitMenu, select: selectUnit, bind: unitMenuBind } = useUnitMenu(unit)
 
 // === Права по ролям ===
-// dp (директор проектов): просматривает все, меняет только приоритет (переупорядочивание)
+// dp (директор проектов): просматривает и редактирует все проекты, не удаляет
 // rp (руководитель проекта): создаёт проекты (сам становится owner), редактирует и удаляет свои
-const { role, canCreateProject, canReorderProjects, canManageProject } = useRoleAccess()
+const { role, canCreateProject, canReorderProjects, canManageProject, canDeleteProject } = useRoleAccess()
 
 const { findProject } = useFindPlanningItem()
 
@@ -49,11 +49,15 @@ const { confirm: confirmDialog, ask, proceed, cancel } = useConfirm()
 
 const menuItems = computed<ContextMenuItem[]>(() => {
   if (menu.value?.projectId != null) {
-    if (!canManageProject(menu.value.projectId)) return []
-    return [
-      { id: 'edit-project', label: 'Редактировать' },
-      { id: 'delete-project', label: 'Удалить проект' },
-    ]
+    const id = menu.value.projectId
+    const items: ContextMenuItem[] = []
+    if (canManageProject(id)) {
+      items.push({ id: 'edit-project', label: 'Редактировать' })
+    }
+    if (canDeleteProject(id)) {
+      items.push({ id: 'delete-project', label: 'Удалить проект' })
+    }
+    return items
   }
   return canCreateProject.value
     ? [{ id: 'create-project', label: 'Создать проект' }]
@@ -128,13 +132,13 @@ function openProjectEdit(id: number) {
 
 async function handleSelect(id: string) {
   if (!menu.value) return
-  const { date, rowIndex, projectId } = menu.value
+  const { date, projectId } = menu.value
   if (id === 'create-project' && date != null) {
     const ok = await store.createProject({
       code: 'КО_' + Date.now(),
       start_date: date,
       end_date: addMonthsISO(date, 6),
-    }, rowIndex)
+    })
     if (!ok) error.value = store.error
   } else if (id === 'edit-project' && projectId != null) {
     openProjectEdit(projectId)

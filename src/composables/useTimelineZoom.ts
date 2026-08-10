@@ -2,7 +2,7 @@ import { nextTick } from 'vue'
 import type { ComputedRef, Ref } from 'vue'
 import { LABEL_WIDTH } from '../components/planner/layout'
 import { clamp } from '../utils'
-import { INTERACTIVE_SELECTOR } from './timeline-context'
+import { DBLCLICK_IGNORE_SELECTOR } from './timeline-context'
 import {
   ensureRange,
   readRootCellWidth,
@@ -165,7 +165,7 @@ export function useTimelineZoom(opts: TimelineZoomOptions) {
   /** Двойной клик по пустому месту шкалы — сброс обоих масштабов */
   function onDblClick(e: MouseEvent) {
     const target = e.target as HTMLElement
-    if (target.closest(INTERACTIVE_SELECTOR + ', .tg-head')) {
+    if (target.closest(DBLCLICK_IGNORE_SELECTOR)) {
       return
     }
     const el = container.value

@@ -1,6 +1,7 @@
 import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios'
 import { useAuthStore } from './store'
 import router from './router'
+import { apiErrorMessage } from './utils'
 
 const TOKEN_KEY = 'mvs_erp_access_token'
 const REFRESH_KEY = 'mvs_erp_refresh_token'
@@ -32,7 +33,20 @@ export function setupHttp() {
     (response) => response,
     async (error: AxiosError) => {
       const { config, response } = error
-      if (!config || !response || response.status !== 401) {
+      if (!config || !response) {
+        return Promise.reject(error)
+      }
+
+      // Подставляем локальный текст ошибки из тела ответа ({ data, error })
+      // вместо «Request failed with status code …», чтобы стора показывала причину.
+      if (response.status >= 400) {
+        const body = response.data as { error?: { message?: string; code?: string | number } } | undefined
+        if (body?.error) {
+          ;(error as AxiosError & { message: string }).message = apiErrorMessage(body.error)
+        }
+      }
+
+      if (response.status !== 401) {
         return Promise.reject(error)
       }
 

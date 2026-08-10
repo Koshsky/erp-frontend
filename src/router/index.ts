@@ -48,6 +48,26 @@ const router = createRouter({
           component: () => import('../views/ResourcesPage.vue'),
         },
         {
+          path: 'timesheet',
+          name: 'timesheet',
+          component: () => import('../views/TimesheetPage.vue'),
+        },
+        {
+          path: 'employees',
+          name: 'employees',
+          component: () => import('../views/EmployeesPage.vue'),
+        },
+        {
+          path: 'statuses',
+          name: 'statuses',
+          component: () => import('../views/StatusesPage.vue'),
+        },
+        {
+          path: 'permissions',
+          name: 'permissions',
+          component: () => import('../views/PermissionsPage.vue'),
+        },
+        {
           path: 'profile',
           name: 'profile',
           component: () => import('../views/ProfilePage.vue'),
@@ -73,6 +93,22 @@ router.beforeEach(async (to) => {
 
   // Уже авторизованных не пускаем на страницу входа
   if (to.name === 'login' && auth.isAuthenticated) {
+    return { name: 'dashboard' }
+  }
+
+  // Табель и Сотрудники доступны только vp и admin
+  if (
+    (to.name === 'timesheet' || to.name === 'employees') &&
+    !['vp', 'admin'].includes(auth.user?.role ?? '')
+  ) {
+    return { name: 'dashboard' }
+  }
+
+  // Статусы и Права — только admin
+  if (
+    (to.name === 'statuses' || to.name === 'permissions') &&
+    auth.user?.role !== 'admin'
+  ) {
     return { name: 'dashboard' }
   }
 

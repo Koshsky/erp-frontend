@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '../store'
+import { PasswordField, PasswordRequirements } from '../components/common'
+import { passwordRules, validatePassword } from '../composables/usePasswordValidation'
 
 const router = useRouter()
 const route = useRoute()
@@ -12,7 +14,6 @@ const mode = ref<'login' | 'register'>('login')
 // Поля для входа
 const username = ref('')
 const password = ref('')
-const showPassword = ref(false)
 
 // Поля для регистрации
 const regName = ref('')
@@ -21,6 +22,11 @@ const regPassword = ref('')
 const regPasswordConfirm = ref('')
 
 const localError = ref<string | null>(null)
+
+const passwordChecks = passwordRules()
+
+const passwordValid = computed(() => validatePassword(regPassword.value, passwordChecks))
+const passwordConfirmed = computed(() => regPasswordConfirm.value === regPassword.value)
 
 const features = [
   { icon: '📈', label: 'Диаграммы Гантта', desc: 'Наглядное планирование проектов' },
@@ -52,7 +58,11 @@ async function onSubmit() {
       localError.value = 'Заполните все поля'
       return
     }
-    if (regPassword.value !== regPasswordConfirm.value) {
+    if (!passwordValid.value) {
+      localError.value = 'Пароль не соответствует требованиям'
+      return
+    }
+    if (!passwordConfirmed.value) {
       localError.value = 'Пароли не совпадают'
       return
     }
@@ -110,20 +120,7 @@ function goToRedirect() {
             <input v-model="username" type="text" autocomplete="username" placeholder="например, ivanov" />
           </label>
 
-          <label class="lp-field">
-            <span>Пароль</span>
-            <div class="lp-input-wrap">
-              <input
-                v-model="password"
-                :type="showPassword ? 'text' : 'password'"
-                autocomplete="current-password"
-                placeholder="••••••••"
-              />
-              <button type="button" class="lp-eye" @click="showPassword = !showPassword">
-                {{ showPassword ? '🙈' : '👁' }}
-              </button>
-            </div>
-          </label>
+          <PasswordField v-model="password" label="Пароль" autocomplete="current-password" placeholder="••••••••" />
         </template>
 
         <!-- РЕГИСТРАЦИЯ -->
@@ -136,34 +133,19 @@ function goToRedirect() {
             <span>Логин</span>
             <input v-model="regUsername" type="text" autocomplete="username" placeholder="например, ivanov" />
           </label>
-          <label class="lp-field">
-            <span>Пароль</span>
-            <div class="lp-input-wrap">
-              <input
-                v-model="regPassword"
-                :type="showPassword ? 'text' : 'password'"
-                autocomplete="new-password"
-                placeholder="••••••••"
-              />
-              <button type="button" class="lp-eye" @click="showPassword = !showPassword">
-                {{ showPassword ? '🙈' : '👁' }}
-              </button>
-            </div>
-          </label>
-          <label class="lp-field">
-            <span>Подтверждение пароля</span>
-            <div class="lp-input-wrap">
-              <input
-                v-model="regPasswordConfirm"
-                :type="showPassword ? 'text' : 'password'"
-                autocomplete="new-password"
-                placeholder="••••••••"
-              />
-              <button type="button" class="lp-eye" @click="showPassword = !showPassword">
-                {{ showPassword ? '🙈' : '👁' }}
-              </button>
-            </div>
-          </label>
+          <PasswordField
+            v-model="regPassword"
+            label="Пароль"
+            autocomplete="new-password"
+            placeholder="Придумайте пароль"
+          />
+          <PasswordField
+            v-model="regPasswordConfirm"
+            label="Подтверждение пароля"
+            autocomplete="new-password"
+            placeholder="Повторите пароль"
+          />
+          <PasswordRequirements :model-value="regPassword" :rules="passwordChecks" />
         </template>
 
         <p v-if="getError()" class="lp-error">{{ getError() }}</p>

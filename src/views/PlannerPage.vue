@@ -23,7 +23,7 @@ const app = useAppStore()
 const route = useRoute()
 
 const { taskPlanning, loading, error } = storeToRefs(planning)
-const { resources } = storeToRefs(app)
+const { resources, calendar } = storeToRefs(app)
 
 const { unit, origin } = usePlanningOrigin()
 
@@ -44,9 +44,9 @@ const focusGroupId = computed(() => {
   return id ? id : null
 })
 
-// dp (директор проектов) — read-only: может менять только приоритет проектов,
-// поэтому задачи, вехи и назначения ресурсов ему недоступны для изменения.
-const { canManage } = useRoleAccess()
+// vp владеет задачами/вехами/назначениями своих процессов; rp — view only
+// (список задач для него уже отфильтрован бэкендом), dp — read-only.
+const { canManageTasks } = useRoleAccess()
 
 const { findTask, findMilestone } = useFindPlanningItem()
 
@@ -68,7 +68,7 @@ const menu = ref<MenuState | null>(null)
 const { confirm: confirmDialog, ask, proceed, cancel } = useConfirm()
 
 const menuItems = computed<ContextMenuItem[]>(() => {
-  if (!canManage.value) return []
+  if (!canManageTasks.value) return []
   if (menu.value?.taskId != null)
     return [
       { id: 'edit-task', label: 'Редактировать' },
@@ -122,7 +122,7 @@ const { open: openEdit, close: closeEdit, submit: submitEdit, bind: editBind } =
 )
 
 function onContextMenu(p: { clientX: number; clientY: number; date: string | null; rowIndex: number; processId?: number; taskId?: number; milestoneId?: number }) {
-  if (!canManage.value) return
+  if (!canManageTasks.value) return
   // Пустое место группы: создание требует процесс-родитель и известную дату
   if (p.taskId == null && p.milestoneId == null && (p.processId == null || p.date == null)) return
   openMenu({ x: p.clientX, y: p.clientY, date: p.date, rowIndex: p.rowIndex, processId: p.processId, taskId: p.taskId, milestoneId: p.milestoneId })
@@ -260,6 +260,7 @@ onMounted(async () => {
   // и при монтировании шкалы порядок групп уже финальный (иначе якорь навигации уезжает).
   if (!app.projects.length) await app.loadProjects()
   if (!resources.value.length) await app.loadResources()
+  if (!calendar.value.length) await app.loadCalendar()
   await planning.loadTaskPlanning()
 })
 
@@ -287,11 +288,12 @@ const processesByPriority = computed(() => {
     <TaskPlanning
       :processes="processesByPriority"
       :resources="resources"
+      :calendar="calendar"
       :loading="loading"
       :error="error"
       :origin="origin"
       :unit="unit"
-      :can-manage="canManage"
+      :can-manage="canManageTasks"
       :focus-date="focusDate"
       :focus-group-id="focusGroupId"
       @change="(p) => planning.updateTaskDates(p.id, p.start_date, p.end_date)"

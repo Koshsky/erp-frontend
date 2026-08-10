@@ -1,7 +1,8 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { AuthApi, ProjectsApi, ProcessesApi, TasksApi, ResourcesApi, PlanningApi, MilestonesApi, UsersApi, AssignmentsApi, Configuration } from '@/api'
-import type { DtoUserInfo, DtoProject, DtoResource, DtoCreateResourceRequest, DtoUpdateResourceRequest, JwtTokenPair } from '@/api'
+import { AuthApi, ProjectsApi, ProcessesApi, TasksApi, TimesheetResourcesApi, TimesheetCalendarApi, TimesheetEmployeesApi, TimesheetStatesApi, PlanningApi, MilestonesApi, UsersApi, AssignmentsApi, Configuration } from '@/api'
+import type { DtoUserInfo, DtoProject, DtoResourceResponse, DtoResourceCalendar, DtoEmployeeResponse, DtoEmployeeStateResponse, DtoStateResponse, DtoCreateResourceRequest, DtoUpdateResourceRequest, JwtTokenPair } from '@/api'
+import { apiErrorMessage } from '@/utils'
 
 const TOKEN_KEY = 'mvs_erp_access_token'
 const REFRESH_KEY = 'mvs_erp_refresh_token'
@@ -68,9 +69,13 @@ export const useAuthStore = defineStore('auth', () => {
   const loading = ref(false)
   const error = ref<string | null>(null)
 
-  function applySession(data: { tokens?: JwtTokenPair; user?: DtoUserInfo } | undefined) {
-    const token = data?.tokens?.access_token
-    const refresh = data?.tokens?.refresh_token
+  function applySession(
+    data:
+      | { access_token?: string; refresh_token?: string; user?: DtoUserInfo; tokens?: JwtTokenPair }
+      | undefined,
+  ) {
+    const token = data?.access_token ?? data?.tokens?.access_token
+    const refresh = data?.refresh_token ?? data?.tokens?.refresh_token
     if (token) localStorage.setItem(TOKEN_KEY, token)
     if (refresh) localStorage.setItem(REFRESH_KEY, refresh)
     if (data?.user) {
@@ -88,7 +93,8 @@ export const useAuthStore = defineStore('auth', () => {
       const api = new AuthApi(apiConfig())
       const resp = await api.authLoginPost({ username, password })
       const body = resp.data
-      if (body?.error) throw new Error(body.error)
+      const errBody = body?.error as { code?: unknown; message?: string } | undefined
+      if (errBody && errBody.code != null) throw new Error(apiErrorMessage(errBody))
       applySession(body?.data)
       return true
     } catch (e: any) {
@@ -106,7 +112,8 @@ export const useAuthStore = defineStore('auth', () => {
       const api = new AuthApi(apiConfig())
       const resp = await api.authRegisterPost({ username, password, name })
       const body = resp.data
-      if (body?.error) throw new Error(body.error)
+      const errBody = body?.error as { code?: unknown; message?: string } | undefined
+      if (errBody && errBody.code != null) throw new Error(apiErrorMessage(errBody))
       applySession(body?.data)
       return true
     } catch (e: any) {
@@ -127,10 +134,11 @@ export const useAuthStore = defineStore('auth', () => {
         new_password: newPassword,
       })
       const body = resp.data
-      if (body?.error) throw new Error(body.error)
+      const errBody = body?.error as { code?: unknown; message?: string } | undefined
+      if (errBody && errBody.code != null) throw new Error(apiErrorMessage(errBody))
       return true
     } catch (e: any) {
-      error.value = (e?.response?.data?.error ?? e.message) || String(e)
+      error.value = apiErrorMessage(e?.response?.data?.error, e?.message ?? String(e))
       return false
     } finally {
       loading.value = false
@@ -192,7 +200,8 @@ export const useAuthStore = defineStore('auth', () => {
       const api = new AuthApi(apiConfig())
       const resp = await api.authRefreshPost({ refresh_token: refresh })
       const body = resp.data
-      if (body?.error) throw new Error(body.error)
+      const errBody = body?.error as { code?: unknown; message?: string } | undefined
+      if (errBody && errBody.code != null) throw new Error(apiErrorMessage(errBody))
       applySession(body?.data)
       return true
     } catch (e: any) {
@@ -220,7 +229,8 @@ export const useAuthStore = defineStore('auth', () => {
       const api = new UsersApi(apiConfig())
       const resp = await api.userIdGet(userId)
       const body = resp.data
-      if (body?.error) throw new Error(body.error)
+      const errBody = body?.error as { code?: unknown; message?: string } | undefined
+      if (errBody && errBody.code != null) throw new Error(apiErrorMessage(errBody))
       if (body?.data) {
         user.value = body.data as DtoUserInfo
         localStorage.setItem(USER_KEY, JSON.stringify(user.value))
@@ -270,7 +280,7 @@ export const useAppStore = defineStore('app', () => {
     }
   }
 
-  const resources = ref<DtoResource[]>([])
+  const resources = ref<DtoResourceResponse[]>([])
   const resourcesLoading = ref(false)
   const resourcesError = ref<string | null>(null)
 
@@ -278,8 +288,8 @@ export const useAppStore = defineStore('app', () => {
     resourcesLoading.value = true
     resourcesError.value = null
     try {
-      const api = new ResourcesApi(apiConfig())
-      const resp = await api.resourceGet()
+      const api = new TimesheetResourcesApi(apiConfig())
+      const resp = await api.timesheetResourcesGet()
       resources.value = resp.data?.data ?? []
     } catch (e: any) {
       resourcesError.value = e.message || String(e)
@@ -291,10 +301,11 @@ export const useAppStore = defineStore('app', () => {
   async function createResource(payload: DtoCreateResourceRequest): Promise<boolean> {
     resourcesError.value = null
     try {
-      const api = new ResourcesApi(apiConfig())
-      const resp = await api.resourcePost(payload)
+      const api = new TimesheetResourcesApi(apiConfig())
+      const resp = await api.timesheetResourcesPost(payload)
       const body = resp.data
-      if (body?.error) throw new Error(body.error)
+      const errBody = body?.error as { code?: unknown; message?: string } | undefined
+      if (errBody && errBody.code != null) throw new Error(apiErrorMessage(errBody))
       if (body?.data) resources.value.push(body.data)
       return true
     } catch (e: any) {
@@ -306,10 +317,11 @@ export const useAppStore = defineStore('app', () => {
   async function updateResource(id: number, patch: DtoUpdateResourceRequest): Promise<boolean> {
     resourcesError.value = null
     try {
-      const api = new ResourcesApi(apiConfig())
-      const resp = await api.resourceIdPut(id, patch)
+      const api = new TimesheetResourcesApi(apiConfig())
+      const resp = await api.timesheetResourcesIdPut(id, patch)
       const body = resp.data
-      if (body?.error) throw new Error(body.error)
+      const errBody = body?.error as { code?: unknown; message?: string } | undefined
+      if (errBody && errBody.code != null) throw new Error(apiErrorMessage(errBody))
       const updated = body?.data
       if (updated) {
         const i = resources.value.findIndex((r) => r.id === id)
@@ -325,13 +337,48 @@ export const useAppStore = defineStore('app', () => {
   async function deleteResource(id: number): Promise<boolean> {
     resourcesError.value = null
     try {
-      await new ResourcesApi(apiConfig()).resourceIdDelete(id)
+      await new TimesheetResourcesApi(apiConfig()).timesheetResourcesIdDelete(id)
       const i = resources.value.findIndex((r) => r.id === id)
       if (i >= 0) resources.value.splice(i, 1)
       return true
     } catch (e: any) {
       resourcesError.value = e.message || String(e)
       return false
+    }
+  }
+
+  // === Календарь доступности ресурсов (/timesheet/calendar) ===
+  // Окно загрузки: назад 180 дней, вперёд 360 (всего 540 < лимита бэкенда 730 дней).
+  const CALENDAR_BACK_DAYS = 180
+  const CALENDAR_FORWARD_DAYS = 360
+  const calendar = ref<DtoResourceCalendar[]>([])
+  const calendarLoading = ref(false)
+  const calendarError = ref<string | null>(null)
+
+  /** Дата YYYY-MM-DD через n дней от базовой (для окна загрузки календаря) */
+  function calendarDay(day: Date, offsetDays: number): string {
+    const d = new Date(day.getTime() + offsetDays * 86_400_000)
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const dd = String(d.getDate()).padStart(2, '0')
+    return `${d.getFullYear()}-${m}-${dd}`
+  }
+
+  /** Загружает доступность ресурсов за окно «назад 180 / вперёд 360 дней» (в лимите бэкенда) */
+  async function loadCalendar() {
+    calendarLoading.value = true
+    calendarError.value = null
+    try {
+      const today = new Date()
+      const api = new TimesheetCalendarApi(apiConfig())
+      const resp = await api.timesheetCalendarGet(
+        calendarDay(today, -CALENDAR_BACK_DAYS),
+        calendarDay(today, CALENDAR_FORWARD_DAYS),
+      )
+      calendar.value = resp.data?.data?.resources ?? []
+    } catch (e: any) {
+      calendarError.value = e.message || String(e)
+    } finally {
+      calendarLoading.value = false
     }
   }
 
@@ -368,12 +415,347 @@ export const useAppStore = defineStore('app', () => {
     usersError,
     totalProjects,
     totalResources,
+    calendar,
+    calendarLoading,
+    calendarError,
     loadProjects,
     loadResources,
+    loadCalendar,
     loadUsers,
     createResource,
     updateResource,
     deleteResource,
+  }
+})
+
+// === Табель (состояния сотрудников, страница для vp/admin) ===
+export const useTimesheetStore = defineStore('timesheet', () => {
+  // Окно загрузки состояний: по умолчанию «назад 180 / вперёд 360 дней»; при
+  // инфинит-скролле шкалы расширяется через ensureRange (дозагрузка новых диапазонов).
+  const WINDOW_BACK_DAYS = 180
+  const WINDOW_FORWARD_DAYS = 360
+
+  const employees = ref<DtoEmployeeResponse[]>([])
+  const states = ref<DtoStateResponse[]>([])
+  const periodsByEmployee = ref<Record<number, DtoEmployeeStateResponse[]>>({})
+  const windowStart = ref('')
+  const windowEnd = ref('')
+  const loading = ref(false)
+  const busy = ref(false)
+  const error = ref<string | null>(null)
+
+  /** Дата YYYY-MM-DD через n дней от ISO-даты (локальная зона) */
+  function shiftDate(iso: string, days: number): string {
+    const d = new Date(`${iso}T00:00:00`)
+    d.setDate(d.getDate() + days)
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const dd = String(d.getDate()).padStart(2, '0')
+    return `${d.getFullYear()}-${m}-${dd}`
+  }
+
+  function todayISO(): string {
+    const d = new Date()
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const dd = String(d.getDate()).padStart(2, '0')
+    return `${d.getFullYear()}-${m}-${dd}`
+  }
+
+  function setError(e: any) {
+    error.value = e?.message || String(e)
+  }
+
+  /** Загружает состояния сотрудников за [start, end] и мёржит в кэш по id */
+  async function fetchPeriods(start: string, end: string) {
+    const api = new TimesheetEmployeesApi(apiConfig())
+    const results = await Promise.all(
+      employees.value.map((emp) =>
+        api
+          .timesheetEmployeesIdDaysGet(emp.id ?? 0, start, end)
+          .then((r) => ({ id: emp.id, list: r.data?.data ?? [] }))
+          .catch((e: any) => {
+            setError(e)
+            return { id: emp.id, list: [] }
+          }),
+      ),
+    )
+    for (const { id, list } of results) {
+      if (id == null) continue
+      const existing = periodsByEmployee.value[id] ?? []
+      const byId = new Map<number, DtoEmployeeStateResponse>()
+      for (const p of existing) if (p.id != null) byId.set(p.id, p)
+      for (const p of list) if (p.id != null) byId.set(p.id, p)
+      periodsByEmployee.value[id] = [...byId.values()].sort((a, b) =>
+        (a.start_date ?? '').localeCompare(b.start_date ?? ''),
+      )
+    }
+  }
+
+  /** Период сотрудника, покрывающий день (бинарный поиск по отсортированным периодам) */
+  function periodFor(employeeId: number, iso: string): DtoEmployeeStateResponse | undefined {
+    const list = periodsByEmployee.value[employeeId] ?? []
+    let lo = 0
+    let hi = list.length - 1
+    let ans = -1
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1
+      if ((list[mid].start_date ?? '') <= iso) {
+        ans = mid
+        lo = mid + 1
+      } else {
+        hi = mid - 1
+      }
+    }
+    const p = list[ans]
+    return p && p.end_date != null && p.end_date >= iso ? p : undefined
+  }
+
+  /** Загружает список сотрудников (бэкенд фильтрует по роли из JWT: vp — подчинённые, admin — все) */
+  async function fetchEmployees() {
+    loading.value = true
+    error.value = null
+    try {
+      const api = new TimesheetEmployeesApi(apiConfig())
+      const resp = await api.timesheetEmployeesGet()
+      // Сортировка: сначала должность (position, с запасом на resource_title), затем ФИО
+      employees.value = (resp.data?.data ?? []).sort(
+        (a, b) =>
+          (a.position || a.resource_title || '').localeCompare(b.position || b.resource_title || '', 'ru') ||
+          (a.name ?? '').localeCompare(b.name ?? '', 'ru'),
+      )
+    } catch (e: any) {
+      setError(e)
+    } finally {
+      loading.value = false
+    }
+  }
+
+  /** Загружает сотрудников и инициализирует окно состояний (для табеля) */
+  async function loadEmployees() {
+    periodsByEmployee.value = {}
+    await fetchEmployees()
+    await loadInitialWindow()
+  }
+
+  /** Поля запроса создания/изменения сотрудника */
+  interface EmployeePayload {
+    name: string
+    resource_id?: number
+    position?: string
+    manager_id?: number
+    hire_date?: string
+    termination_date?: string
+  }
+
+  /** Создаёт сотрудника на должности (ресурсе); для vp manager принудительно = текущему пользователю */
+  async function createEmployee(resourceId: number, payload: EmployeePayload): Promise<boolean> {
+    busy.value = true
+    error.value = null
+    try {
+      const api = new TimesheetEmployeesApi(apiConfig())
+      await api.timesheetResourcesIdEmployeesPost(resourceId, payload)
+      await fetchEmployees()
+      return true
+    } catch (e: any) {
+      setError(e)
+      return false
+    } finally {
+      busy.value = false
+    }
+  }
+
+  /** Изменяет сотрудника; для vp manager принудительно = текущему пользователю */
+  async function updateEmployee(id: number, payload: EmployeePayload): Promise<boolean> {
+    busy.value = true
+    error.value = null
+    try {
+      const api = new TimesheetEmployeesApi(apiConfig())
+      await api.timesheetEmployeesIdPut(id, payload)
+      await fetchEmployees()
+      return true
+    } catch (e: any) {
+      setError(e)
+      return false
+    } finally {
+      busy.value = false
+    }
+  }
+
+  /** Удаляет сотрудника (мягкое удаление) */
+  async function deleteEmployee(id: number): Promise<boolean> {
+    busy.value = true
+    error.value = null
+    try {
+      const api = new TimesheetEmployeesApi(apiConfig())
+      await api.timesheetEmployeesIdDelete(id)
+      await fetchEmployees()
+      return true
+    } catch (e: any) {
+      setError(e)
+      return false
+    } finally {
+      busy.value = false
+    }
+  }
+
+  /** Загружает справочник состояний */
+  async function loadStates() {
+    try {
+      const api = new TimesheetStatesApi(apiConfig())
+      const resp = await api.timesheetStatesGet()
+      states.value = resp.data?.data ?? []
+    } catch (e: any) {
+      setError(e)
+    }
+  }
+
+  /** Поля запроса создания/изменения статуса */
+  interface StatePayload {
+    code: string
+    name: string
+    is_available: boolean
+  }
+
+  /** Создаёт статус и обновляет справочник */
+  async function createState(payload: StatePayload): Promise<boolean> {
+    busy.value = true
+    error.value = null
+    try {
+      await new TimesheetStatesApi(apiConfig()).timesheetStatesPost(payload)
+      await loadStates()
+      return true
+    } catch (e: any) {
+      setError(e)
+      return false
+    } finally {
+      busy.value = false
+    }
+  }
+
+  /** Изменяет статус и обновляет справочник */
+  async function updateState(id: number, payload: StatePayload): Promise<boolean> {
+    busy.value = true
+    error.value = null
+    try {
+      await new TimesheetStatesApi(apiConfig()).timesheetStatesIdPut(id, payload)
+      await loadStates()
+      return true
+    } catch (e: any) {
+      setError(e)
+      return false
+    } finally {
+      busy.value = false
+    }
+  }
+
+  /** Удаляет статус (удаление занятого статуса может быть отклонено БД) */
+  async function deleteState(id: number): Promise<boolean> {
+    busy.value = true
+    error.value = null
+    try {
+      await new TimesheetStatesApi(apiConfig()).timesheetStatesIdDelete(id)
+      await loadStates()
+      return true
+    } catch (e: any) {
+      setError(e)
+      return false
+    } finally {
+      busy.value = false
+    }
+  }
+
+  /** Инициализация окна «назад 180 / вперёд 360» */
+  async function loadInitialWindow() {
+    windowStart.value = shiftDate(todayISO(), -WINDOW_BACK_DAYS)
+    windowEnd.value = shiftDate(todayISO(), WINDOW_FORWARD_DAYS)
+    await fetchPeriods(windowStart.value, windowEnd.value)
+  }
+
+  /** Расширяет загруженное окно под [start, end] и дозагружает только новые диапазоны */
+  async function ensureRange(startISO: string, endISO: string) {
+    if (startISO < windowStart.value) {
+      const from = startISO
+      const to = shiftDate(windowStart.value, -1)
+      windowStart.value = startISO
+      await fetchPeriods(from, to)
+    }
+    if (endISO > windowEnd.value) {
+      const from = shiftDate(windowEnd.value, 1)
+      const to = endISO
+      windowEnd.value = endISO
+      await fetchPeriods(from, to)
+    }
+  }
+
+  /** Назначает состояние на диапазон дат сотрудника (PUT days, перезаписывает пересечения) */
+  async function assignRange(
+    employeeId: number,
+    stateId: number,
+    startDate: string,
+    endDate: string,
+  ): Promise<boolean> {
+    busy.value = true
+    error.value = null
+    try {
+      const api = new TimesheetEmployeesApi(apiConfig())
+      await api.timesheetEmployeesIdDaysPut(employeeId, {
+        state_id: stateId,
+        start_date: startDate,
+        end_date: endDate,
+      })
+      await fetchPeriods(windowStart.value, windowEnd.value)
+      return true
+    } catch (e: any) {
+      setError(e)
+      return false
+    } finally {
+      busy.value = false
+    }
+  }
+
+  /** Очищает состояния на диапазоне дат сотрудника (DELETE days; без state_id — все) */
+  async function clearRange(
+    employeeId: number,
+    startDate: string,
+    endDate: string,
+    stateId?: number,
+  ): Promise<boolean> {
+    busy.value = true
+    error.value = null
+    try {
+      const api = new TimesheetEmployeesApi(apiConfig())
+      await api.timesheetEmployeesIdDaysDelete(employeeId, startDate, endDate, stateId)
+      await fetchPeriods(windowStart.value, windowEnd.value)
+      return true
+    } catch (e: any) {
+      setError(e)
+      return false
+    } finally {
+      busy.value = false
+    }
+  }
+
+  return {
+    employees,
+    states,
+    periodsByEmployee,
+    windowStart,
+    windowEnd,
+    loading,
+    busy,
+    error,
+    loadEmployees,
+    fetchEmployees,
+    createEmployee,
+    updateEmployee,
+    deleteEmployee,
+    loadStates,
+    createState,
+    updateState,
+    deleteState,
+    ensureRange,
+    periodFor,
+    assignRange,
+    clearRange,
   }
 })
 
@@ -557,6 +939,7 @@ export const usePlanningStore = defineStore('planning', () => {
     list.splice(i, 0, item)
   }
 
+  /** Создаёт проект с фиксированным приоритетом 100 — в конец списка */
   async function createProject(
     payload: {
       code: string
@@ -564,15 +947,9 @@ export const usePlanningStore = defineStore('planning', () => {
       end_date: string
       priority?: number
     },
-    index?: number,
   ): Promise<boolean> {
-    const list = projectPlanning.value?.projects
-    const i =
-      index == null || index < 0 || index > (list?.length ?? 0) ? (list?.length ?? 0) : index
-    const priority = i + 1
-
     const created = await postCreate(() =>
-      new ProjectsApi(apiConfig()).projectPost({ ...payload, priority }),
+      new ProjectsApi(apiConfig()).projectPost({ ...payload, priority: 100 }),
     )
     if (created == null) return false
     const dto = created as {
@@ -584,53 +961,17 @@ export const usePlanningStore = defineStore('planning', () => {
       owner_id?: number
     }
 
-    // Сдвинутые вниз проекты (позиции >= i) получают приоритет +1
-    const changes: { id: number; priority: number }[] = []
-    if (Array.isArray(list)) {
-      for (let j = i; j < list.length; j++) {
-        const p = list[j] as { id?: number; priority?: number }
-        const np = j + 2
-        if (p.id != null && p.priority !== np) changes.push({ id: p.id, priority: np })
-      }
-    }
-
-    let saveError: string | null = null
-    try {
-      await Promise.all(
-        changes.map((c) => new ProjectsApi(apiConfig()).projectIdPut(c.id, { priority: c.priority })),
-      )
-    } catch (e: any) {
-      saveError = e.message || String(e)
-    }
-
     const item = {
       id: dto.id ?? 0,
       project_code: dto.code ?? payload.code,
       start_date: dto.start_date ?? payload.start_date,
       end_date: dto.end_date ?? payload.end_date,
-      priority: dto.priority ?? priority,
+      priority: dto.priority ?? 100,
       owner_id: dto.owner_id,
     }
-    insertAt(projectPlanning.value?.projects, i, item)
-    insertAt(useAppStore().projects, i, item)
-
     const app = useAppStore()
-    if (Array.isArray(projectPlanning.value?.projects)) {
-      const plist = projectPlanning.value.projects as { priority?: number }[]
-      for (let j = i; j < plist.length; j++) plist[j].priority = j + 1
-    }
-    if (Array.isArray(app.projects)) {
-      for (const p of app.projects) {
-        const c = changes.find((x) => x.id === p.id)
-        if (c) p.priority = c.priority
-      }
-    }
-
-    if (saveError) {
-      error.value = saveError
-      await loadProjectPlanning(true)
-      return false
-    }
+    insertAt(projectPlanning.value?.projects, undefined, item)
+    insertAt(app.projects, undefined, item)
     return true
   }
 

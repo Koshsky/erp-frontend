@@ -1,35 +1,103 @@
 <script setup lang="ts">
-import { useRouter } from 'vue-router'
+import { onBeforeUnmount, ref, shallowRef, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../../../store'
-import { useRoleAccess } from '../../../composables/useRoleAccess'
+import { useNavigation } from '../../../composables/useNavigation'
+import type { NavCategory } from '../../../composables/useNavigation'
 
 const props = withDefaults(defineProps<{ brand?: string }>(), { brand: 'MVS ERP' })
 
 const router = useRouter()
+const route = useRoute()
 const authStore = useAuthStore()
 
-// ВП (владелец процессов) не видит вкладки проектов и процессов
-const { hideProjectsNav } = useRoleAccess()
+// Шапка — список категорий; подкатегории открываются выпадающим меню.
+const { visibleCategories, activeCategory, standalone } = useNavigation()
+
+// shallowRef: хранит объект категории как есть (без deep-reactive обёртки),
+// чтобы работало сравнение по идентичности openCategory === cat.
+const openCategory = shallowRef<NavCategory | null>(null)
+const navEl = ref<HTMLElement | null>(null)
+
+function toggleCategory(cat: NavCategory) {
+  openCategory.value = openCategory.value === cat ? null : cat
+}
+
+function closeCategory() {
+  openCategory.value = null
+}
 
 function onLogout() {
   authStore.logout()
   router.push('/login')
 }
+
+// Клик вне меню или Escape — закрыть
+function onDocClick(e: MouseEvent) {
+  if (navEl.value && !navEl.value.contains(e.target as Node)) closeCategory()
+}
+
+function onKeydown(e: KeyboardEvent) {
+  if (e.key === 'Escape') closeCategory()
+}
+
+watch(openCategory, (oc) => {
+  if (oc) {
+    window.addEventListener('click', onDocClick)
+    window.addEventListener('keydown', onKeydown)
+  } else {
+    window.removeEventListener('click', onDocClick)
+    window.removeEventListener('keydown', onKeydown)
+  }
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('click', onDocClick)
+  window.removeEventListener('keydown', onKeydown)
+})
 </script>
 
 <template>
   <header class="ah">
     <div class="ah-brand">{{ props.brand }}</div>
-    <nav class="ah-nav">
-      <RouterLink to="/">Дашборд</RouterLink>
-      <RouterLink v-if="!hideProjectsNav" to="/projects">Проекты</RouterLink>
-      <RouterLink v-if="!hideProjectsNav" to="/processes">Процессы</RouterLink>
-      <RouterLink to="/planner">Задачи</RouterLink>
-      <RouterLink to="/resources">Ресурсы</RouterLink>
-      <RouterLink to="/profile">Профиль</RouterLink>
+    <nav ref="navEl" class="ah-nav">
+      <RouterLink v-for="item in standalone" :key="item.to" :to="item.to" class="ah-link">
+        {{ item.label }}
+      </RouterLink>
+      <div
+        v-for="cat in visibleCategories"
+        :key="cat.label"
+        class="ah-cat-wrap"
+      >
+        <button
+          type="button"
+          class="ah-cat"
+          :class="{ active: activeCategory === cat || openCategory === cat }"
+          @click="toggleCategory(cat)"
+        >
+          {{ cat.label }}
+          <span class="ah-caret">▾</span>
+        </button>
+        <div v-if="openCategory === cat" class="ah-menu" role="menu">
+          <RouterLink
+            v-for="item in cat.items"
+            :key="item.to"
+            :to="item.to"
+            class="ah-menu-item"
+            :class="{ active: item.name === route.name }"
+            role="menuitem"
+            @click="closeCategory"
+          >
+            {{ item.label }}
+          </RouterLink>
+        </div>
+      </div>
     </nav>
     <div class="ah-spacer"></div>
-    <button type="button" class="ah-logout" @click="onLogout">Выйти</button>
+    <div class="ah-actions">
+      <RouterLink to="/profile" class="ah-link" :class="{ active: route.name === 'profile' }">Профиль</RouterLink>
+      <button type="button" class="ah-logout" @click="onLogout">Выйти</button>
+    </div>
   </header>
 </template>
 
@@ -45,7 +113,8 @@ function onLogout() {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
   position: sticky;
   top: 0;
-  z-index: 20;
+  /* Шапка и её выпадающие меню — поверх всех компонентов (включая модалки z-20000) */
+  z-index: 30000;
 }
 
 .ah-brand {
@@ -57,31 +126,94 @@ function onLogout() {
 
 .ah-nav {
   display: flex;
+  align-items: center;
   gap: 8px;
 }
 
-.ah-nav a {
+.ah-link,
+.ah-cat {
   color: rgba(255, 255, 255, 0.85);
   text-decoration: none;
   font-size: 14px;
   padding: 6px 12px;
   border-radius: 6px;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   transition: background 0.15s, color 0.15s;
 }
 
-.ah-nav a:hover {
+.ah-link:hover,
+.ah-cat:hover {
   background: rgba(255, 255, 255, 0.15);
   color: #fff;
 }
 
-.ah-nav a.router-link-exact-active {
+.ah-cat.active,
+.ah-link.active {
   background: rgba(255, 255, 255, 0.22);
   color: #fff;
   font-weight: 600;
 }
 
+.ah-caret {
+  font-size: 10px;
+  opacity: 0.8;
+}
+
+.ah-cat-wrap {
+  position: relative;
+}
+
+.ah-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  min-width: 200px;
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  border: 1px solid #e8e8e8;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  /* Внутри контекста шапки (z-30000) — поверх остального контента шапки */
+  z-index: 100;
+}
+
+.ah-menu-item {
+  display: block;
+  padding: 9px 12px;
+  border-radius: 7px;
+  color: #333;
+  text-decoration: none;
+  font-size: 14px;
+  transition: background 0.15s, color 0.15s;
+}
+
+.ah-menu-item:hover {
+  background: #f2f6fc;
+  color: #1a73e8;
+}
+
+.ah-menu-item.active {
+  background: #e8f0fe;
+  color: #1a73e8;
+  font-weight: 600;
+}
+
 .ah-spacer {
   flex: 1;
+}
+
+.ah-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .ah-logout {
@@ -105,4 +237,3 @@ function onLogout() {
   .ah-spacer { display: none; }
 }
 </style>
-
