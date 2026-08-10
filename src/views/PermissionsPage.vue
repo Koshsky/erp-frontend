@@ -85,15 +85,119 @@ const MATRIX: MatrixBlock[] = [
     ],
   },
 ]
+
+/** Одно право в сводке роли. */
+interface RolePermission {
+  /** Краткое название права (сущность + действие). */
+  title: string
+  /** Что именно может роль в рамках этого права. */
+  description: string
+}
+
+/** Сводка по одной роли. */
+interface RoleSummary {
+  key: string
+  title: string
+  /** Общее описание роли и её места в системе. */
+  description: string
+  /** Листинг прав роли с описаниями. */
+  permissions: RolePermission[]
+}
+
+/** Сводки по ролям — «кто что может», для быстрого ознакомления. */
+const ROLE_SUMMARIES: RoleSummary[] = [
+  {
+    key: 'admin',
+    title: 'Админ',
+    description: 'Полный доступ: все сущности и операции, листинги в скоупе «все».',
+    permissions: [
+      { title: 'Проекты — все операции', description: 'Просмотр, создание, изменение и удаление любых проектов, включая приоритет.' },
+      { title: 'Процессы — все операции', description: 'Полное управление процессами во всех проектах.' },
+      { title: 'Задачи, вехи, назначения — все операции', description: 'Полное управление задачами, вехами и назначениями ресурсов.' },
+      { title: 'Ресурсы табеля — все операции', description: 'Просмотр и управление ресурсами любого владельца.' },
+      { title: 'Сотрудники — все операции', description: 'Просмотр и управление всеми сотрудниками.' },
+      { title: 'Статусы — все операции', description: 'Просмотр и управление справочником статусов табеля.' },
+      { title: 'Листинги — фильтр по владельцу', description: 'Может запрашивать списки любого владельца (owner_id/manager_id) и пагинировать.' },
+    ],
+  },
+  {
+    key: 'dp',
+    title: 'Директор проектов',
+    description: 'Read-only директор портфеля: видит всё планирование, правит приоритеты проектов, но не создаёт и не удаляет.',
+    permissions: [
+      { title: 'Проекты — просмотр всех + изменение', description: 'Видит все проекты, может менять код, даты и приоритет.' },
+      { title: 'Процессы — просмотр всех', description: 'Видит все процессы во всех проектах.' },
+      { title: 'Задачи, вехи, назначения — просмотр всех', description: 'Видит все задачи, вехи и назначения.' },
+      { title: 'Создание / удаление — нет', description: 'Не может создавать или удалять проекты, процессы и задачи.' },
+      { title: 'Ресурсы, сотрудники, статусы — нет доступа', description: 'Управление табелем и справочниками недоступно.' },
+    ],
+  },
+  {
+    key: 'rp',
+    title: 'Руководитель проекта',
+    description: 'Управляет своими проектами и процессами внутри них; чужие проекты не видит (скоуп «только своё»).',
+    permissions: [
+      { title: 'Проекты — свои', description: 'Просмотр, изменение и удаление только своих проектов; создаёт проекты себе во владение.' },
+      { title: 'Процессы — в своих проектах', description: 'Создание, изменение и удаление процессов в своих проектах.' },
+      { title: 'Задачи, вехи, назначения — просмотр', description: 'Видит задачи, вехи и назначения своих проектов; изменять их не может (это vp).' },
+      { title: 'Ресурсы, сотрудники — нет доступа', description: 'Списки ресурсов и сотрудников недоступны.' },
+      { title: 'Листинги — скоуп «только своё»', description: 'Списки возвращают только данные с его owner_id.' },
+    ],
+  },
+  {
+    key: 'vp',
+    title: 'Владелец процесса',
+    description: 'Управляет табелем: задачи в своих процессах, свои ресурсы и сотрудники (скоуп «только своё»).',
+    permissions: [
+      { title: 'Процессы — просмотр своих', description: 'Видит только свои процессы и процессы своих проектов.' },
+      { title: 'Задачи, вехи, назначения — в своих процессах', description: 'Создание, изменение и удаление задач, вех и назначений в своих процессах.' },
+      { title: 'Ресурсы — свои', description: 'Просмотр, создание, изменение и удаление своих ресурсов табеля.' },
+      { title: 'Сотрудники — свои', description: 'Просмотр и управление своими подчинёнными (manager_id = пользователь).' },
+      { title: 'Статусы — просмотр', description: 'Видит справочник статусов для табеля.' },
+      { title: 'Листинги — скоуп «только своё»', description: 'Списки ресурсов и сотрудников возвращают только его данные.' },
+    ],
+  },
+  {
+    key: 'worker',
+    title: 'Работник',
+    description: 'Базовый доступ без прав на операции: листинги и управление недоступны (скоуп «ничего»).',
+    permissions: [
+      { title: 'Проекты, процессы, задачи — просмотр', description: 'Видит данные планирования в планировщике (только доступные по скоупу).' },
+      { title: 'Создание, изменение, удаление — нет', description: 'Не может создавать, изменять или удалять данные.' },
+      { title: 'Ресурсы, сотрудники, статусы, админ-разделы — недоступно', description: 'Нет доступа к табелю, ресурсам, сотрудникам и административным разделам.' },
+    ],
+  },
+]
 </script>
 
 <template>
   <section class="pm">
     <div class="pm-head">
       <h2 class="pm-title">Права доступа</h2>
-      <p class="pm-note">Матрица захардкожена в бэкенде (<code>internal/rbac</code>) и применяется на всех операциях. Здесь — справочное отображение.</p>
+      <p class="pm-note">
+        Матрица хранится в бэкенде (<code>internal/policies</code>) и применяется на всех операциях, включая
+        листинги (скоупы «все / только своё / ничего»). Здесь — справочное отображение.
+      </p>
     </div>
 
+    <h3 class="pm-section-title">Сводка по ролям</h3>
+    <div class="pm-roles">
+      <div v-for="role in ROLE_SUMMARIES" :key="role.key" class="pm-role-card">
+        <div class="pm-role-head">
+          <span class="pm-role-name">{{ role.title }}</span>
+          <span class="pm-role-key">{{ role.key }}</span>
+        </div>
+        <p class="pm-role-desc">{{ role.description }}</p>
+        <ul class="pm-role-list">
+          <li v-for="p in role.permissions" :key="p.title" class="pm-role-item">
+            <span class="pm-role-item-title">{{ p.title }}</span>
+            <span class="pm-role-item-desc">{{ p.description }}</span>
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <h3 class="pm-section-title">Матрица операций</h3>
     <div v-for="block in MATRIX" :key="block.entity" class="pm-block">
       <h3 class="pm-entity">{{ block.entity }}</h3>
       <div class="table">
@@ -132,6 +236,79 @@ const MATRIX: MatrixBlock[] = [
   border-radius: 4px;
   padding: 1px 5px;
   font-size: 12px;
+}
+.pm-section-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #1a3a6b;
+  margin: 0 0 14px;
+}
+.pm-roles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 16px;
+  margin-bottom: 32px;
+}
+.pm-role-card {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.08);
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.pm-role-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.pm-role-name {
+  font-size: 16px;
+  font-weight: 700;
+  color: #2c3e50;
+}
+.pm-role-key {
+  font-size: 11px;
+  font-weight: 600;
+  color: #7a8699;
+  background: #f1f4f9;
+  border-radius: 999px;
+  padding: 2px 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+.pm-role-desc {
+  margin: 0;
+  font-size: 13px;
+  color: #555;
+  line-height: 1.45;
+}
+.pm-role-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pm-role-item {
+  border-top: 1px solid #f0f0f0;
+  padding-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.pm-role-item-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1a3a6b;
+}
+.pm-role-item-desc {
+  font-size: 12.5px;
+  color: #666;
+  line-height: 1.4;
 }
 .pm-block {
   margin-bottom: 28px;
