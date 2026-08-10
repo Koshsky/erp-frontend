@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import AppHeader from '../components/common/AppHeader/AppHeader.vue'
-import { PrintDialog } from '../components/common'
 </script>
 
 <template>
@@ -11,7 +10,6 @@ import { PrintDialog } from '../components/common'
         <RouterView />
       </main>
     </div>
-    <PrintDialog />
   </div>
 </template>
 
