@@ -12,6 +12,9 @@ const USER_KEY = 'mvs_erp_user'
 const REFRESH_MARGIN_MS = 60 * 1000
 const REFRESH_INTERVAL_MS = 30 * 1000
 
+/** Размер страницы листингов (совпадает с дефолтом бэкенда). */
+const PAGE_SIZE = 50
+
 function apiConfig(): Configuration {
   return new Configuration({
     basePath: import.meta.env.VITE_API_URL,
@@ -263,6 +266,7 @@ export const useAuthStore = defineStore('auth', () => {
 // === App (проекты и ресурсы) ===
 export const useAppStore = defineStore('app', () => {
   const projects = ref<DtoProject[]>([])
+  const projectsTotal = ref(0)
   const projectsLoading = ref(false)
   const projectsError = ref<string | null>(null)
 
@@ -271,8 +275,10 @@ export const useAppStore = defineStore('app', () => {
     projectsError.value = null
     try {
       const api = new ProjectsApi(apiConfig())
-      const resp = await api.projectGet()
-      projects.value = resp.data?.data ?? []
+      const resp = await api.projectGet(PAGE_SIZE, 0)
+      const data = resp.data?.data
+      projects.value = data?.items ?? []
+      projectsTotal.value = data?.total ?? 0
     } catch (e: any) {
       projectsError.value = e.message || String(e)
     } finally {
@@ -281,6 +287,7 @@ export const useAppStore = defineStore('app', () => {
   }
 
   const resources = ref<DtoResourceResponse[]>([])
+  const resourcesTotal = ref(0)
   const resourcesLoading = ref(false)
   const resourcesError = ref<string | null>(null)
 
@@ -289,8 +296,10 @@ export const useAppStore = defineStore('app', () => {
     resourcesError.value = null
     try {
       const api = new TimesheetResourcesApi(apiConfig())
-      const resp = await api.timesheetResourcesGet()
-      resources.value = resp.data?.data ?? []
+      const resp = await api.timesheetResourcesGet(PAGE_SIZE, 0)
+      const data = resp.data?.data
+      resources.value = data?.items ?? []
+      resourcesTotal.value = data?.total ?? 0
     } catch (e: any) {
       resourcesError.value = e.message || String(e)
     } finally {
@@ -400,14 +409,16 @@ export const useAppStore = defineStore('app', () => {
     }
   }
 
-  const totalProjects = computed(() => projects.value.length)
-  const totalResources = computed(() => resources.value.length)
+  const totalProjects = computed(() => projectsTotal.value)
+  const totalResources = computed(() => resourcesTotal.value)
 
   return {
     projects,
+    projectsTotal,
     projectsLoading,
     projectsError,
     resources,
+    resourcesTotal,
     resourcesLoading,
     resourcesError,
     users,
@@ -436,6 +447,7 @@ export const useTimesheetStore = defineStore('timesheet', () => {
   const WINDOW_FORWARD_DAYS = 360
 
   const employees = ref<DtoEmployeeResponse[]>([])
+  const employeesTotal = ref(0)
   const states = ref<DtoStateResponse[]>([])
   const periodsByEmployee = ref<Record<number, DtoEmployeeStateResponse[]>>({})
   const windowStart = ref('')
@@ -515,13 +527,15 @@ export const useTimesheetStore = defineStore('timesheet', () => {
     error.value = null
     try {
       const api = new TimesheetEmployeesApi(apiConfig())
-      const resp = await api.timesheetEmployeesGet()
+      const resp = await api.timesheetEmployeesGet(PAGE_SIZE, 0)
+      const data = resp.data?.data
       // Сортировка: сначала должность (position, с запасом на resource_title), затем ФИО
-      employees.value = (resp.data?.data ?? []).sort(
+      employees.value = (data?.items ?? []).sort(
         (a, b) =>
           (a.position || a.resource_title || '').localeCompare(b.position || b.resource_title || '', 'ru') ||
           (a.name ?? '').localeCompare(b.name ?? '', 'ru'),
       )
+      employeesTotal.value = data?.total ?? 0
     } catch (e: any) {
       setError(e)
     } finally {
@@ -736,6 +750,7 @@ export const useTimesheetStore = defineStore('timesheet', () => {
 
   return {
     employees,
+    employeesTotal,
     states,
     periodsByEmployee,
     windowStart,
@@ -1126,8 +1141,9 @@ export const usePlanningStore = defineStore('planning', () => {
       assignmentId = found.assignment_id
     } else {
       try {
-        const resp = await new AssignmentsApi(apiConfig()).assignmentGet()
-        const list = resp.data?.data ?? []
+        const resp = await new AssignmentsApi(apiConfig()).assignmentGet(500, 0)
+        const data = resp.data?.data
+        const list = data?.items ?? []
         const a = list.find((x: any) => x.task_id === taskId && x.resource_id === resourceId)
         if (a?.id == null) {
           error.value = 'Назначение не найдено'
