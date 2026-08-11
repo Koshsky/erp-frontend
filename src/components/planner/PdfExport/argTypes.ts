@@ -33,6 +33,24 @@ export const pdfExportArgTypes: ArgTypes<PdfExportProps> = {
     control: 'number',
     table: { type: { summary: 'number' }, category: 'Data' },
   },
+  periodFrom: {
+    name: 'Период: начало',
+    description: 'Начало печатного периода — видимое окно шкалы со страницы (ISO YYYY-MM-DD)',
+    control: 'text',
+    table: { type: { summary: 'string' }, category: 'Data' },
+  },
+  periodTo: {
+    name: 'Период: конец',
+    description: 'Конец печатного периода — видимое окно шкалы со страницы (ISO YYYY-MM-DD)',
+    control: 'text',
+    table: { type: { summary: 'string' }, category: 'Data' },
+  },
+  cellWidthPx: {
+    name: 'Ширина ячейки, px',
+    description: 'Эффективная ширина ячейки на странице (с учётом зума)',
+    control: 'number',
+    table: { type: { summary: 'number' }, defaultValue: { summary: '32' }, category: 'Data' },
+  },
 }
 
 export default pdfExportArgTypes

@@ -57,6 +57,9 @@ const meta: Meta<typeof PdfExport> = {
     unit: 'day',
     pageTitle: 'Диаграмма задач',
     ownerId: 10,
+    periodFrom: '2026-07-01',
+    periodTo: '2026-09-30',
+    cellWidthPx: 32,
   },
 }
 

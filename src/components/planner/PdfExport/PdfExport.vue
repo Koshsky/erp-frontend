@@ -13,10 +13,13 @@ const props = withDefaults(defineProps<PdfExportProps>(), {
   unit: 'day',
   pageTitle: 'Диаграмма задач',
   ownerId: null,
+  periodFrom: '',
+  periodTo: '',
+  cellWidthPx: CELL_WIDTH,
 })
 
-/** Мин/макс даты по данным — дефолт диалога печати */
-const defaultRange = computed(() => {
+/** Мин/макс даты по данным — фолбэк периода, если видимое окно страницы ещё не пришло */
+const dataRange = computed(() => {
   let min = ''
   let max = ''
   const touch = (d?: string | null) => {
@@ -39,14 +42,41 @@ const defaultRange = computed(() => {
   return { from: min, to: max }
 })
 
+/** Период печати: видимое окно страницы; фолбэк — диапазон данных */
+function resolvePeriod(): { from: string; to: string } {
+  const { periodFrom, periodTo } = props
+  if (periodFrom && periodTo && periodFrom <= periodTo) {
+    return { from: periodFrom, to: periodTo }
+  }
+  return dataRange.value
+}
+
+/** Период пришёл с видимого окна страницы (а не фолбэк по данным) */
+const periodFromPage = computed(
+  () => Boolean(props.periodFrom && props.periodTo && props.periodFrom <= props.periodTo),
+)
+
+/** Читаемая строка периода для модалки (дд.мм.гггг — дд.мм.гггг) */
+const periodLabel = computed(() => {
+  const p = resolvePeriod()
+  return `${toDate(p.from).toLocaleDateString('ru')} — ${toDate(p.to).toLocaleDateString('ru')}`
+})
+
+/** Фолбэк-подсказка: период со страницы не определён, но процессы для печати есть */
+const periodFallbackHint = computed(
+  () => open.value && !previewLoading.value && !periodFromPage.value && visibleProcesses.value.length > 0,
+)
+
+/** Эффективная ширина ячейки со страницы (зажим в допустимый диапазон рендерера) */
+const cellWidthPx = computed(() =>
+  Math.max(8, Math.min(96, Number(props.cellWidthPx) || CELL_WIDTH)),
+)
+
 /**
- * Настройки печати. Даты и ширина ячейки сбрасываются при открытии, фильтры
- * процессов (onlyMine/hideCompleted/hiddenProjects) персистентны в сессии.
+ * Настройки печати: только фильтры процессов, персистентны в сессии.
+ * Период и ширина ячейки приходят со страницы (пропсы periodFrom/periodTo/cellWidthPx).
  */
 const settings = ref({
-  from: '',
-  to: '',
-  cellWidth: CELL_WIDTH,
   onlyMine: false,
   hideCompleted: false,
   hiddenProjects: [] as number[],
@@ -89,7 +119,6 @@ const previewEmpty = computed(
 
 const open = ref(false)
 const busy = ref(false)
-const error = ref<string | null>(null)
 const previewError = ref<string | null>(null)
 const previewLoading = ref(false)
 const pageCount = ref(0)
@@ -104,6 +133,12 @@ let previewHandle: PdfPreviewHandle | null = null
 let renderedParams = ''
 let genToken = 0
 let genTimer: ReturnType<typeof setTimeout> | null = null
+
+/** Ключ текущего рендера: фильтры + период/ширина со страницы */
+function renderKey(): string {
+  const p = resolvePeriod()
+  return JSON.stringify({ ...settings.value, from: p.from, to: p.to, cellWidthPx: cellWidthPx.value })
+}
 
 /**
  * Тёплая загрузка тяжёлых модулей предпросмотра (pdfRenderer + pdf.js/воркер,
@@ -120,16 +155,6 @@ function warmup(): Promise<unknown> {
     warmupPromise = p
   }
   return warmupPromise
-}
-
-/** Проверка настроек; возвращает сообщение об ошибке или null */
-function validate(): string | null {
-  const { from, to } = settings.value
-  if (!from || !to) return 'Укажите даты начала и конца'
-  if (toDate(from).getTime() > toDate(to).getTime()) return 'Дата начала позже даты конца'
-  const w = Number(settings.value.cellWidth)
-  if (!Number.isFinite(w) || w < 8 || w > 96) return 'Ширина ячейки должна быть от 8 до 96 px'
-  return null
 }
 
 /** Маппит процессы (DTO /planning/tasks) в модель рендерера */
@@ -192,18 +217,12 @@ async function runAll(force: boolean) {
   }
 }
 
-/** Один прогон: валидация → pdf-lib → рендер страниц предпросмотра */
+/** Один прогон: фильтры → pdf-lib → рендер страниц предпросмотра */
 async function generateOnce(force: boolean) {
-  const msg = validate()
-  if (msg) {
-    error.value = msg
-    return
-  }
-  const params = JSON.stringify(settings.value)
+  const params = renderKey()
   // Параметры не менялись — рендер не нужен. Ранний выход БЕЗ смены токена:
   // текущий рендер (если идёт) должен спокойно завершиться.
   if (!force && params === renderedParams && currentBytes.value) return
-  error.value = null
   // Все процессы отфильтрованы — предпросмотр пуст, печать недоступна
   if (visibleProcesses.value.length === 0) {
     previewError.value = null
@@ -219,12 +238,13 @@ async function generateOnce(force: boolean) {
     // вызовы застают их в кэше и не ждут загрузки.
     await warmup()
     const { renderGanttPdf } = await import('./pdfRenderer')
+    const period = resolvePeriod()
     const bytes = await renderGanttPdf(toModel(), {
-      from: settings.value.from,
-      to: settings.value.to,
+      from: period.from,
+      to: period.to,
       origin: props.origin,
       unit: props.unit,
-      cellWidthPx: Number(settings.value.cellWidth),
+      cellWidthPx: cellWidthPx.value,
       pageTitle: props.pageTitle,
     })
     if (token !== genToken) return
@@ -263,17 +283,22 @@ function scheduleGenerate() {
 
 watch(settings, scheduleGenerate, { deep: true })
 
+/**
+ * Период/ширина со страницы приходят с дебаунсом (эмит visible-range ~150 мс):
+ * если модалка открыта сразу после прокрутки, генерация на открытии могла уйти
+ * со старыми значениями — перегенерируем предпросмотр, когда пропсы «доехали».
+ */
+watch(
+  () => [props.periodFrom, props.periodTo, props.cellWidthPx] as const,
+  () => {
+    if (open.value) scheduleGenerate()
+  },
+)
+
 function openDialog() {
   if (busy.value) return
-  // Даты и ширина ячейки — заново; фильтры процессов сохраняются в сессии
-  settings.value = {
-    ...settings.value,
-    from: defaultRange.value.from,
-    to: defaultRange.value.to,
-    cellWidth: CELL_WIDTH,
-  }
+  // Фильтры процессов персистентны в сессии; период и ширина — со страницы.
   renderedParams = ''
-  error.value = null
   previewError.value = null
   pageCount.value = 0
   currentBytes.value = null
@@ -293,7 +318,6 @@ function closeDialog() {
   previewHandle?.destroy()
   previewHandle = null
   previewLoading.value = false
-  error.value = null
   previewError.value = null
 }
 
@@ -315,12 +339,7 @@ function download(bytes: Uint8Array, name: string) {
 /** Скачивает файл, соответствующий текущему предпросмотру (без повторной генерации) */
 async function onDownload() {
   if (busy.value || previewEmpty.value) return
-  const msg = validate()
-  if (msg) {
-    error.value = msg
-    return
-  }
-  const params = JSON.stringify(settings.value)
+  const params = renderKey()
   let bytes = currentBytes.value
   if (!bytes || params !== renderedParams) {
     busy.value = true
@@ -366,20 +385,6 @@ onBeforeUnmount(() => {
           <div class="pe-body">
             <div class="pe-settings">
               <label class="pe-field">
-                <span class="pe-label">Начало</span>
-                <input v-model="settings.from" type="date" class="pe-input" />
-              </label>
-              <label class="pe-field">
-                <span class="pe-label">Конец</span>
-                <input v-model="settings.to" type="date" class="pe-input" />
-              </label>
-              <label class="pe-field">
-                <span class="pe-label">Ширина ячейки, px</span>
-                <input v-model.number="settings.cellWidth" type="number" min="8" max="96" class="pe-input" />
-                <span class="pe-hint">8–96, больше ячейка — крупнее шкала</span>
-              </label>
-
-              <label class="pe-field">
                 <span class="pe-toggle">
                   <input v-model="settings.onlyMine" type="checkbox" class="pe-checkbox" />
                   <span class="pe-label">Только мои процессы</span>
@@ -410,7 +415,12 @@ onBeforeUnmount(() => {
                 </div>
               </div>
 
-              <p v-if="error" class="pe-error">{{ error }}</p>
+              <div class="pe-file">
+                <span class="pe-file-label">Период печати</span>
+                <span class="pe-file-name">{{ periodLabel }}</span>
+                <span class="pe-file-sub">Ширина ячейки: {{ cellWidthPx }} px</span>
+                <span v-if="!periodFromPage" class="pe-hint">Период определён по данным — уточните вид страницы</span>
+              </div>
 
               <div class="pe-file">
                 <span class="pe-file-label">Файл</span>
@@ -419,6 +429,9 @@ onBeforeUnmount(() => {
             </div>
 
             <div class="pe-preview-area">
+              <div v-if="periodFallbackHint" class="pe-period-hint">
+                Период со страницы не определён — используется диапазон данных. Измените вид страницы и откройте заново.
+              </div>
               <div class="pe-preview-head">
                 <span class="pe-pages-count">Страниц: {{ pageCount }}</span>
                 <span v-if="previewLoading" class="pe-updating">Обновляем…</span>
@@ -651,11 +664,6 @@ onBeforeUnmount(() => {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.pe-error {
-  margin: 0;
-  font-size: 13px;
-  color: #d93025;
-}
 .pe-file {
   margin-top: auto;
   display: flex;
@@ -675,6 +683,17 @@ onBeforeUnmount(() => {
   font-weight: 600;
   color: #333;
   word-break: break-all;
+}
+.pe-file-sub {
+  font-size: 12px;
+  color: #666;
+}
+.pe-period-hint {
+  padding: 8px 12px;
+  font-size: 12px;
+  color: #b45309;
+  background: #fef3c7;
+  border-bottom: 1px solid #fde68a;
 }
 
 /* === Предпросмотр === */

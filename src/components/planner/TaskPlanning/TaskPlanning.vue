@@ -47,6 +47,8 @@ const emit = defineEmits<{
   contextmenu: [payload: { clientX: number; clientY: number; date: string | null; rowIndex: number; processId?: number; taskId?: number; milestoneId?: number }]
   'header-ctxmenu': [payload: { clientX: number; clientY: number }]
   'milestone-edit': [payload: number]
+  /** Видимое окно шкалы (период «как на экране») — проброс из TimelineGrid */
+  'visible-range': [payload: { from: string; to: string; cellWidthPx: number }]
 }>()
 
 /** Маппим DTO (из /planning/tasks) во внутренние типы. Задачи сортируем по алфавиту. */
@@ -143,7 +145,7 @@ function onGridCtx(p: { clientX: number; clientY: number; date: string | null; r
 
 <template>
   <PlannerStates :loading="loading" :error="error" :has-data="displayProcesses.length > 0">
-    <TimelineGrid v-if="displayProcesses.length" id="task" :origin="origin" :unit="unit" :focus-date="focusDate" :focus-group-id="focusGroupId" @ctxmenu="onGridCtx" @header-ctxmenu="(p) => emit('header-ctxmenu', p)">
+    <TimelineGrid v-if="displayProcesses.length" id="task" :origin="origin" :unit="unit" :focus-date="focusDate" :focus-group-id="focusGroupId" @ctxmenu="onGridCtx" @header-ctxmenu="(p) => emit('header-ctxmenu', p)" @visible-range="(p) => emit('visible-range', p)">
       <template #default="{ t }">
         <CalendarHeader :t="t" />
         <ResourceHeader :t="t" :resources="displayResources" :usageFn="usageForDay" :availableFn="availableForDay" />

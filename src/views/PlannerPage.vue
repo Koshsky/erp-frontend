@@ -18,6 +18,7 @@ import { useRoleAccess } from '../composables/useRoleAccess'
 import { useFindPlanningItem } from '../composables/useFindPlanningItem'
 import { usePlanningStore, useAppStore } from '../store'
 import { addDaysISO, shiftSpanDates, clampDateToBounds } from '../components/planner/calendar'
+import { CELL_WIDTH } from '../components/planner/layout'
 
 const planning = usePlanningStore()
 const app = useAppStore()
@@ -27,6 +28,16 @@ const { taskPlanning, loading, error } = storeToRefs(planning)
 const { resources, calendar } = storeToRefs(app)
 
 const { unit, origin } = usePlanningOrigin()
+
+/** Текущее видимое окно шкалы (период «как на экране») — для печати в PDF */
+const viewRange = ref<{ from: string; to: string; cellWidthPx: number }>({
+  from: '',
+  to: '',
+  cellWidthPx: CELL_WIDTH,
+})
+function onVisibleRange(v: { from: string; to: string; cellWidthPx: number }) {
+  viewRange.value = v
+}
 
 // Меню ПКМ по шапке таблицы: переключение масштаба «День» / «Декада»
 const { open: openUnitMenu, close: closeUnitMenu, select: selectUnit, bind: unitMenuBind } = useUnitMenu(unit)
@@ -292,9 +303,18 @@ const processesByPriority = computed(() => {
 
 <template>
   <section class="pp">
-    <!-- Печать диаграммы в PDF: диапазон дат и ширину ячейки задаёт пользователь в диалоге -->
+    <!-- Печать диаграммы в PDF: период и ширина ячейки берутся с текущего вида страницы -->
     <div class="pp-toolbar">
-      <PdfExport :processes="processesByPriority" :origin="origin" :unit="unit" :owner-id="userId" page-title="Диаграмма задач" />
+      <PdfExport
+        :processes="processesByPriority"
+        :origin="origin"
+        :unit="unit"
+        :owner-id="userId"
+        :period-from="viewRange.from"
+        :period-to="viewRange.to"
+        :cell-width-px="viewRange.cellWidthPx"
+        page-title="Диаграмма задач"
+      />
     </div>
 
     <!-- Диаграмма Задач: данные загружает PlannerPage (view) через store,
@@ -315,6 +335,7 @@ const processesByPriority = computed(() => {
       @contextmenu="onContextMenu"
       @header-ctxmenu="onHeaderCtx"
       @milestone-edit="openMilestoneEdit"
+      @visible-range="onVisibleRange"
     />
 
     <ContextMenu v-bind="menuBind" @select="select" @close="closeMenu" />

@@ -471,8 +471,10 @@ export async function renderGanttPdf(groups: PdfGanttGroup[], opts: PdfGanttOpti
     for (let c = 0; c < pagesAcross; c++) {
       const page = doc.addPage([PAGE_W, PAGE_H])
       const ctx: DrawCtx = { page, font, bold, unit, origin: opts.origin, cellW, headerH, contentW }
-      const colFrom = c * cellsPerPage
-      const colTo = Math.min(colFrom + cellsPerPage, totalCells) - 1
+      // Абсолютные индексы ячеек: colFrom/colTo — от fromCell, чтобы шапка,
+      // сетка и бары (абсолютные индексы) лежали в одной системе координат.
+      const colFrom = fromCell + c * cellsPerPage
+      const colTo = Math.min(colFrom + cellsPerPage - 1, toCell)
       const winTop = r * availH
       const winBottom = Math.min(tableH, (r + 1) * availH)
 

@@ -45,4 +45,10 @@ export interface PdfExportProps {
   pageTitle?: string
   /** Id текущего пользователя — для фильтра «Только мои процессы» */
   ownerId?: number | null
+  /** Начало печатного периода — видимое окно шкалы со страницы (ISO YYYY-MM-DD) */
+  periodFrom?: string | null
+  /** Конец печатного периода — видимое окно шкалы со страницы (ISO YYYY-MM-DD) */
+  periodTo?: string | null
+  /** Эффективная ширина ячейки на странице (с учётом зума), px */
+  cellWidthPx?: number | null
 }
