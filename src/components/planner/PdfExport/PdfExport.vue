@@ -39,15 +39,53 @@ const defaultRange = computed(() => {
   return { from: min, to: max }
 })
 
-/** Настройки печати (реактивные, редактируются в модалке) */
-const settings = ref({ from: '', to: '', cellWidth: CELL_WIDTH, onlyMine: false })
-
-/** Процессы, попадающие в печать: при фильтре «Только мои» остаются процессы владельца */
-const visibleProcesses = computed(() => {
-  const list = props.processes ?? []
-  if (!settings.value.onlyMine || props.ownerId == null) return list
-  return list.filter((p) => p.owner_id === props.ownerId)
+/**
+ * Настройки печати. Даты и ширина ячейки сбрасываются при открытии, фильтры
+ * процессов (onlyMine/hideCompleted/hiddenProjects) персистентны в сессии.
+ */
+const settings = ref({
+  from: '',
+  to: '',
+  cellWidth: CELL_WIDTH,
+  onlyMine: false,
+  hideCompleted: false,
+  hiddenProjects: [] as number[],
 })
+
+/** Раскрытость списка проектов (UI-состояние) */
+const projectsOpen = ref(false)
+
+/** Уникальные проекты из переданных процессов (для фильтра «Скрыть проекты») */
+const projects = computed(() => {
+  const seen = new Map<number, string>()
+  for (const p of props.processes ?? []) {
+    if (p.project_id == null) continue
+    if (!seen.has(p.project_id)) seen.set(p.project_id, p.project_code || `Проект ${p.project_id}`)
+  }
+  return [...seen.entries()].map(([id, code]) => ({ id, code })).sort((a, b) => a.code.localeCompare(b.code, 'ru'))
+})
+
+/** Процессы, попадающие в печать: фильтры применяются по цепочке */
+const visibleProcesses = computed(() => {
+  let list = props.processes ?? []
+  if (settings.value.onlyMine && props.ownerId != null) {
+    list = list.filter((p) => p.owner_id === props.ownerId)
+  }
+  if (settings.value.hideCompleted) {
+    const today = fmtDate(new Date())
+    list = list.filter((p) => !p.end_date || p.end_date >= today)
+  }
+  if (settings.value.hiddenProjects.length) {
+    const hidden = new Set(settings.value.hiddenProjects)
+    list = list.filter((p) => p.project_id == null || !hidden.has(p.project_id))
+  }
+  return list
+})
+
+/** Отфильтровано всё — предпросмотр пуст, печать недоступна */
+const previewEmpty = computed(
+  () => !previewLoading.value && !previewError.value && visibleProcesses.value.length === 0,
+)
 
 const open = ref(false)
 const busy = ref(false)
@@ -166,6 +204,13 @@ async function generateOnce(force: boolean) {
   // текущий рендер (если идёт) должен спокойно завершиться.
   if (!force && params === renderedParams && currentBytes.value) return
   error.value = null
+  // Все процессы отфильтрованы — предпросмотр пуст, печать недоступна
+  if (visibleProcesses.value.length === 0) {
+    previewError.value = null
+    pageCount.value = 0
+    currentBytes.value = null
+    return
+  }
   previewLoading.value = true
   previewError.value = null
   const token = ++genToken
@@ -220,11 +265,12 @@ watch(settings, scheduleGenerate, { deep: true })
 
 function openDialog() {
   if (busy.value) return
+  // Даты и ширина ячейки — заново; фильтры процессов сохраняются в сессии
   settings.value = {
+    ...settings.value,
     from: defaultRange.value.from,
     to: defaultRange.value.to,
     cellWidth: CELL_WIDTH,
-    onlyMine: false,
   }
   renderedParams = ''
   error.value = null
@@ -268,7 +314,7 @@ function download(bytes: Uint8Array, name: string) {
 
 /** Скачивает файл, соответствующий текущему предпросмотру (без повторной генерации) */
 async function onDownload() {
-  if (busy.value) return
+  if (busy.value || previewEmpty.value) return
   const msg = validate()
   if (msg) {
     error.value = msg
@@ -341,6 +387,29 @@ onBeforeUnmount(() => {
                 <span class="pe-hint">Скрыть из печати процессы других владельцев</span>
               </label>
 
+              <label class="pe-field">
+                <span class="pe-toggle">
+                  <input v-model="settings.hideCompleted" type="checkbox" class="pe-checkbox" />
+                  <span class="pe-label">Скрыть завершённые</span>
+                </span>
+                <span class="pe-hint">Процессы с датой окончания в прошлом</span>
+              </label>
+
+              <div class="pe-field">
+                <button type="button" class="pe-filters-toggle" @click="projectsOpen = !projectsOpen">
+                  <span>Скрыть проекты</span>
+                  <span v-if="settings.hiddenProjects.length" class="pe-filters-count">{{ settings.hiddenProjects.length }}</span>
+                  <span class="pe-caret">{{ projectsOpen ? '▾' : '▸' }}</span>
+                </button>
+                <div v-if="projectsOpen" class="pe-filter-list">
+                  <p v-if="!projects.length" class="pe-hint">Нет проектов</p>
+                  <label v-for="pr in projects" :key="pr.id" class="pe-filter-item">
+                    <input v-model="settings.hiddenProjects" type="checkbox" :value="pr.id" class="pe-checkbox" />
+                    <span class="pe-filter-label">{{ pr.code }}</span>
+                  </label>
+                </div>
+              </div>
+
               <p v-if="error" class="pe-error">{{ error }}</p>
 
               <div class="pe-file">
@@ -358,13 +427,14 @@ onBeforeUnmount(() => {
                 <div ref="previewEl" class="pe-pages"></div>
                 <div v-if="previewLoading" class="pe-msg"><span class="pe-spinner" /> Готовим предпросмотр…</div>
                 <div v-else-if="previewError" class="pe-msg pe-msg-error">{{ previewError }}</div>
+                <div v-else-if="previewEmpty" class="pe-msg">Нет процессов для печати — измените фильтры</div>
               </div>
             </div>
           </div>
 
           <div class="pe-actions">
             <button type="button" class="pe-btn-cancel" @click="closeDialog">Отмена</button>
-            <button type="button" class="pe-btn-primary" :disabled="busy" @click="onDownload">
+            <button type="button" class="pe-btn-primary" :disabled="busy || previewEmpty" @click="onDownload">
               <span v-if="busy" class="pe-spinner" />
               Скачать PDF
             </button>
@@ -463,6 +533,8 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: 14px;
+  overflow-y: auto;
+  min-height: 0;
 }
 .pe-field {
   display: flex;
@@ -507,6 +579,77 @@ onBeforeUnmount(() => {
   accent-color: #1a73e8;
   cursor: pointer;
   flex-shrink: 0;
+}
+
+/* === Фильтры процессов === */
+.pe-filters-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  border: 1px solid #e3e6ea;
+  background: #f8f9fa;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: inherit;
+  color: #333;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s, border-color 0.15s;
+}
+.pe-filters-toggle:hover {
+  background: #eef2f7;
+  border-color: #cfd6de;
+}
+.pe-filters-count {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: #1a73e8;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.pe-caret {
+  margin-left: auto;
+  color: #888;
+  font-size: 11px;
+}
+.pe-filter-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border: 1px solid #e8e8e8;
+  border-radius: 8px;
+  padding: 6px;
+  max-height: 180px;
+  overflow-y: auto;
+  background: #fff;
+}
+.pe-filter-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.pe-filter-item:hover {
+  background: #f2f6fc;
+}
+.pe-filter-label {
+  font-size: 12px;
+  color: #333;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .pe-error {
   margin: 0;

@@ -25,6 +25,7 @@ export interface PdfExportMilestone {
 export interface PdfExportProcess {
   id?: number
   title?: string
+  project_id?: number
   project_code?: string
   start_date?: string
   end_date?: string
