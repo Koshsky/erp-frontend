@@ -29,13 +29,14 @@ const { resources, calendar } = storeToRefs(app)
 
 const { unit, origin } = usePlanningOrigin()
 
-/** Текущее видимое окно шкалы (период «как на экране») — для печати в PDF */
-const viewRange = ref<{ from: string; to: string; cellWidthPx: number }>({
+/** Текущее видимое окно шкалы (период «как на экране») + зум — для печати в PDF */
+const viewRange = ref<{ from: string; to: string; cellWidthPx: number; scale: number }>({
   from: '',
   to: '',
   cellWidthPx: CELL_WIDTH,
+  scale: 1,
 })
-function onVisibleRange(v: { from: string; to: string; cellWidthPx: number }) {
+function onVisibleRange(v: { from: string; to: string; cellWidthPx: number; scale: number }) {
   viewRange.value = v
 }
 
@@ -272,7 +273,9 @@ onMounted(async () => {
   // и при монтировании шкалы порядок групп уже финальный (иначе якорь навигации уезжает).
   if (!app.projects.length) await app.loadProjects()
   if (!resources.value.length) await app.loadResources()
-  if (!calendar.value.length) await app.loadCalendar()
+  // Календарь доступности обновляем при КАЖДОМ заходе на страницу: табель мог
+  // измениться, и ResourceHeader должен сразу показывать свежую доступность.
+  await app.loadCalendar()
   await planning.loadTaskPlanning()
 })
 
@@ -307,12 +310,14 @@ const processesByPriority = computed(() => {
     <div class="pp-toolbar">
       <PdfExport
         :processes="processesByPriority"
+        :resources="resources"
+        :calendar="calendar"
         :origin="origin"
         :unit="unit"
         :owner-id="userId"
         :period-from="viewRange.from"
         :period-to="viewRange.to"
-        :cell-width-px="viewRange.cellWidthPx"
+        :scale="viewRange.scale"
         page-title="Диаграмма задач"
       />
     </div>

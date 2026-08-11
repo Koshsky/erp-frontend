@@ -21,6 +21,26 @@ export interface PdfExportMilestone {
   date?: string
 }
 
+/** Ресурс для блока занятости (DTO /resources) — без импорта @/api */
+export interface PdfExportResource {
+  id?: number
+  code?: string
+  title?: string
+}
+
+/** Период доступности (DTO /timesheet/calendar) */
+export interface PdfExportResourcePeriod {
+  start_date?: string
+  end_date?: string
+  available?: number
+}
+
+/** Запись календаря доступности ресурса (DTO /timesheet/calendar) */
+export interface PdfExportResourceCalendar {
+  resource_id?: number
+  periods?: PdfExportResourcePeriod[]
+}
+
 /** Структурный тип процесса (DTO /planning/tasks) — без импорта @/api */
 export interface PdfExportProcess {
   id?: number
@@ -49,6 +69,10 @@ export interface PdfExportProps {
   periodFrom?: string | null
   /** Конец печатного периода — видимое окно шкалы со страницы (ISO YYYY-MM-DD) */
   periodTo?: string | null
-  /** Эффективная ширина ячейки на странице (с учётом зума), px */
-  cellWidthPx?: number | null
+  /** Масштаб печати: зум страницы (Ctrl+wheel) — множитель плотности контента */
+  scale?: number | null
+  /** Ресурсы для блока занятости (ResourceHeader) в печати */
+  resources?: PdfExportResource[] | null
+  /** Календарь доступности ресурсов (/timesheet/calendar) — для ResourceHeader */
+  calendar?: PdfExportResourceCalendar[] | null
 }

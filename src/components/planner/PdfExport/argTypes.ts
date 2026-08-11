@@ -45,11 +45,23 @@ export const pdfExportArgTypes: ArgTypes<PdfExportProps> = {
     control: 'text',
     table: { type: { summary: 'string' }, category: 'Data' },
   },
-  cellWidthPx: {
-    name: 'Ширина ячейки, px',
-    description: 'Эффективная ширина ячейки на странице (с учётом зума)',
-    control: 'number',
-    table: { type: { summary: 'number' }, defaultValue: { summary: '32' }, category: 'Data' },
+  scale: {
+    name: 'Масштаб печати',
+    description: 'Зум страницы (Ctrl+wheel): множитель плотности контента (шрифты, строки, бары)',
+    control: { type: 'range', min: 0.25, max: 4, step: 0.25 },
+    table: { type: { summary: 'number' }, defaultValue: { summary: '1' }, category: 'Data' },
+  },
+  resources: {
+    name: 'Ресурсы',
+    description: 'Ресурсы для блока занятости (ResourceHeader) в печати',
+    control: false,
+    table: { type: { summary: 'PdfExportResource[]' }, category: 'Data' },
+  },
+  calendar: {
+    name: 'Календарь доступности',
+    description: 'Периоды доступности ресурсов (/timesheet/calendar) — учитывают табель и даты нанят/уволен',
+    control: false,
+    table: { type: { summary: 'PdfExportResourceCalendar[]' }, category: 'Data' },
   },
 }
 

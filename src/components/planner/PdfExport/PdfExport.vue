@@ -4,7 +4,6 @@ import type { PdfGanttGroup } from './pdfRenderer'
 import { preloadPdfPreview, renderPdfPreview } from './previewPdf'
 import type { PdfPreviewHandle } from './previewPdf'
 import type { PdfExportProps } from './types'
-import { CELL_WIDTH } from '../layout'
 import { fmtDate, toDate } from '../calendar'
 
 const props = withDefaults(defineProps<PdfExportProps>(), {
@@ -15,7 +14,9 @@ const props = withDefaults(defineProps<PdfExportProps>(), {
   ownerId: null,
   periodFrom: '',
   periodTo: '',
-  cellWidthPx: CELL_WIDTH,
+  scale: 1,
+  resources: () => [],
+  calendar: () => [],
 })
 
 /** Мин/макс даты по данным — фолбэк периода, если видимое окно страницы ещё не пришло */
@@ -67,19 +68,15 @@ const periodFallbackHint = computed(
   () => open.value && !previewLoading.value && !periodFromPage.value && visibleProcesses.value.length > 0,
 )
 
-/** Эффективная ширина ячейки со страницы (зажим в допустимый диапазон рендерера) */
-const cellWidthPx = computed(() =>
-  Math.max(8, Math.min(96, Number(props.cellWidthPx) || CELL_WIDTH)),
-)
-
 /**
  * Настройки печати: только фильтры процессов, персистентны в сессии.
- * Период и ширина ячейки приходят со страницы (пропсы periodFrom/periodTo/cellWidthPx).
+ * Период приходит со страницы (пропсы periodFrom/periodTo).
  */
 const settings = ref({
   onlyMine: false,
-  hideCompleted: false,
   hiddenProjects: [] as number[],
+  showMilestones: true,
+  showResources: true,
 })
 
 /** Раскрытость списка проектов (UI-состояние) */
@@ -100,10 +97,6 @@ const visibleProcesses = computed(() => {
   let list = props.processes ?? []
   if (settings.value.onlyMine && props.ownerId != null) {
     list = list.filter((p) => p.owner_id === props.ownerId)
-  }
-  if (settings.value.hideCompleted) {
-    const today = fmtDate(new Date())
-    list = list.filter((p) => !p.end_date || p.end_date >= today)
   }
   if (settings.value.hiddenProjects.length) {
     const hidden = new Set(settings.value.hiddenProjects)
@@ -137,7 +130,7 @@ let genTimer: ReturnType<typeof setTimeout> | null = null
 /** Ключ текущего рендера: фильтры + период/ширина со страницы */
 function renderKey(): string {
   const p = resolvePeriod()
-  return JSON.stringify({ ...settings.value, from: p.from, to: p.to, cellWidthPx: cellWidthPx.value })
+  return JSON.stringify({ ...settings.value, from: p.from, to: p.to })
 }
 
 /**
@@ -171,6 +164,7 @@ function toModel(): PdfGanttGroup[] {
       start_date: t.start_date ?? '',
       end_date: t.end_date ?? '',
       resources: (t.resources ?? []).map((r) => ({
+        id: r.id,
         code: r.code,
         title: r.title,
         quantity: r.quantity,
@@ -244,8 +238,28 @@ async function generateOnce(force: boolean) {
       to: period.to,
       origin: props.origin,
       unit: props.unit,
-      cellWidthPx: cellWidthPx.value,
       pageTitle: props.pageTitle,
+      showMilestones: settings.value.showMilestones,
+      scale: Number(props.scale) || 1,
+      resources: settings.value.showResources
+        ? (props.resources ?? [])
+            .filter((r) => r.id != null)
+            .map((r) => {
+              const cal = (props.calendar ?? []).find((c) => c.resource_id === r.id)
+              return {
+                id: r.id as number,
+                code: r.code ?? '',
+                title: r.title,
+                periods: (cal?.periods ?? [])
+                  .filter((p) => p.start_date && p.end_date)
+                  .map((p) => ({
+                    start_date: p.start_date as string,
+                    end_date: p.end_date as string,
+                    available: p.available ?? 0,
+                  })),
+              }
+            })
+        : [],
     })
     if (token !== genToken) return
     currentBytes.value = bytes
@@ -289,7 +303,7 @@ watch(settings, scheduleGenerate, { deep: true })
  * со старыми значениями — перегенерируем предпросмотр, когда пропсы «доехали».
  */
 watch(
-  () => [props.periodFrom, props.periodTo, props.cellWidthPx] as const,
+  () => [props.periodFrom, props.periodTo] as const,
   () => {
     if (open.value) scheduleGenerate()
   },
@@ -394,10 +408,16 @@ onBeforeUnmount(() => {
 
               <label class="pe-field">
                 <span class="pe-toggle">
-                  <input v-model="settings.hideCompleted" type="checkbox" class="pe-checkbox" />
-                  <span class="pe-label">Скрыть завершённые</span>
+                  <input v-model="settings.showMilestones" type="checkbox" class="pe-checkbox" />
+                  <span class="pe-label">Показывать вехи</span>
                 </span>
-                <span class="pe-hint">Процессы с датой окончания в прошлом</span>
+              </label>
+
+              <label class="pe-field">
+                <span class="pe-toggle">
+                  <input v-model="settings.showResources" type="checkbox" class="pe-checkbox" />
+                  <span class="pe-label">Показывать занятость ресурсов</span>
+                </span>
               </label>
 
               <div class="pe-field">
@@ -418,7 +438,6 @@ onBeforeUnmount(() => {
               <div class="pe-file">
                 <span class="pe-file-label">Период печати</span>
                 <span class="pe-file-name">{{ periodLabel }}</span>
-                <span class="pe-file-sub">Ширина ячейки: {{ cellWidthPx }} px</span>
                 <span v-if="!periodFromPage" class="pe-hint">Период определён по данным — уточните вид страницы</span>
               </div>
 

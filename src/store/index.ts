@@ -513,8 +513,15 @@ export const useTimesheetStore = defineStore('timesheet', () => {
     for (const { id, list } of results) {
       if (id == null) continue
       const existing = periodsByEmployee.value[id] ?? []
+      // Свежий ответ за окно [start, end] авторитетен для периодов, пересекающих окно:
+      // старые пересекающиеся периоды (например, сброшенные через DELETE) удаляем,
+      // затем мёржим новые. Периоды вне окна сохраняются для инкрементальной дозагрузки.
+      const kept = existing.filter(
+        (p) =>
+          !(p.start_date != null && p.end_date != null && !(p.end_date < start || p.start_date > end)),
+      )
       const byId = new Map<number, DtoEmployeeStateResponse>()
-      for (const p of existing) if (p.id != null) byId.set(p.id, p)
+      for (const p of kept) if (p.id != null) byId.set(p.id, p)
       for (const p of list) if (p.id != null) byId.set(p.id, p)
       periodsByEmployee.value[id] = [...byId.values()].sort((a, b) =>
         (a.start_date ?? '').localeCompare(b.start_date ?? ''),

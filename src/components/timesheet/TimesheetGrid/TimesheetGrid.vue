@@ -140,6 +140,9 @@ function onPointerUp(e: PointerEvent) {
   document.body.style.userSelect = ''
   window.removeEventListener('pointermove', onPointerMove)
   window.removeEventListener('pointerup', onPointerUp)
+  // Драг мог оставить якорь браузерного выделения — снимаем, чтобы клик вне панели
+  // не «растянул» текст между кликами
+  window.getSelection()?.removeAllRanges()
   if (!s || Number.isNaN(s.endIdx)) return
   const lo = Math.min(s.startIdx, s.endIdx)
   const hi = Math.max(s.startIdx, s.endIdx)
@@ -192,6 +195,14 @@ function closePanel() {
   }
   panel.value = null
   selection.value = null
+  // Убираем браузерное выделение, оставшееся после драга/клика вне панели
+  window.getSelection()?.removeAllRanges()
+}
+
+/** Клик вне панели (оверлей): закрываем и запрещаем создание/расширение выделения текста */
+function onOverlayPointerDown(e: PointerEvent) {
+  e.preventDefault()
+  closePanel()
 }
 
 /**
@@ -290,7 +301,7 @@ const labelsH = computed(() => props.employees.length * ROW_H)
     <!-- Плавающая панель назначения состояния выделенному диапазону -->
     <Teleport to="body">
       <template v-if="panel">
-        <div class="ts-overlay" @pointerdown="closePanel" />
+        <div class="ts-overlay" @pointerdown="onOverlayPointerDown" />
         <div class="ts-panel" ref="panelEl" :style="{ left: panel.x + 'px', top: panel.y + 'px' }" role="dialog" :aria-label="'Назначить состояние'">
           <div class="ts-panel-head">
             <span class="ts-panel-title">{{ employeeName(panel.employeeId) }}</span>
@@ -335,6 +346,8 @@ const labelsH = computed(() => props.employees.length * ROW_H)
   z-index: 80;
   background: #fff;
   box-sizing: border-box;
+  user-select: none;
+  -webkit-user-select: none;
 }
 .ts-label {
   display: flex;
@@ -376,6 +389,8 @@ const labelsH = computed(() => props.employees.length * ROW_H)
   top: 0;
   bottom: 0;
   box-sizing: border-box;
+  user-select: none;
+  -webkit-user-select: none;
 }
 .ts-error {
   margin: 10px 0 0;
@@ -388,6 +403,8 @@ const labelsH = computed(() => props.employees.length * ROW_H)
   inset: 0;
   z-index: 1000;
   background: transparent;
+  user-select: none;
+  -webkit-user-select: none;
 }
 .ts-panel {
   position: fixed;

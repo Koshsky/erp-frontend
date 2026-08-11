@@ -160,7 +160,7 @@ watch(
   font-weight: 700;
   line-height: 1.6;
   color: #fff;
-  background: rgba(255, 255, 255, 0.25);
+  background: #d93025;
   border: 1px solid rgba(255, 255, 255, 0.55);
   border-radius: 10px;
   padding: 0 7px;

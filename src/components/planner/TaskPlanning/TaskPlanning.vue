@@ -48,7 +48,7 @@ const emit = defineEmits<{
   'header-ctxmenu': [payload: { clientX: number; clientY: number }]
   'milestone-edit': [payload: number]
   /** Видимое окно шкалы (период «как на экране») — проброс из TimelineGrid */
-  'visible-range': [payload: { from: string; to: string; cellWidthPx: number }]
+  'visible-range': [payload: { from: string; to: string; cellWidthPx: number; scale: number }]
 }>()
 
 /** Маппим DTO (из /planning/tasks) во внутренние типы. Задачи сортируем по алфавиту. */

@@ -24,9 +24,9 @@ const demoProcesses: PdfExportProcess[] = [
       { id: 103, title: 'Окончание работ', date: iso(2026, 8, 20) },
     ],
     tasks: [
-      { id: 1, title: 'Осмотр объекта', start_date: iso(2026, 7, 15), end_date: iso(2026, 7, 17), resources: [{ code: 'ПР', quantity: 1 }] },
-      { id: 2, title: 'Монтаж кабеленесущих систем', start_date: iso(2026, 7, 17), end_date: iso(2026, 7, 27), resources: [{ code: 'М', quantity: 4 }] },
-      { id: 3, title: 'Пуско-наладочные работы', start_date: iso(2026, 8, 5), end_date: iso(2026, 8, 15), resources: [{ code: 'И', quantity: 2 }] },
+      { id: 1, title: 'Осмотр объекта', start_date: iso(2026, 7, 15), end_date: iso(2026, 7, 17), resources: [{ id: 3, code: 'ПР', quantity: 1 }] },
+      { id: 2, title: 'Монтаж кабеленесущих систем', start_date: iso(2026, 7, 17), end_date: iso(2026, 7, 27), resources: [{ id: 2, code: 'М', quantity: 4 }] },
+      { id: 3, title: 'Пуско-наладочные работы', start_date: iso(2026, 8, 5), end_date: iso(2026, 8, 15), resources: [{ id: 1, code: 'И', quantity: 2 }] },
     ],
   },
   {
@@ -39,11 +39,17 @@ const demoProcesses: PdfExportProcess[] = [
     end_date: iso(2026, 9, 15),
     milestones: [{ id: 201, title: 'Приёмка', date: iso(2026, 9, 12) }],
     tasks: [
-      { id: 4, title: 'Предоставить карту сети', start_date: iso(2026, 8, 1), end_date: iso(2026, 8, 5), resources: [{ code: 'РСИ', quantity: 1 }] },
-      { id: 5, title: 'Тестирование MVS VEGA', start_date: iso(2026, 8, 20), end_date: iso(2026, 9, 10), resources: [{ code: 'И', quantity: 3 }] },
-      { id: 6, title: 'Проведение инструктажа', start_date: iso(2026, 9, 10), end_date: iso(2026, 9, 15), resources: [{ code: 'И', quantity: 1 }] },
+      { id: 4, title: 'Предоставить карту сети', start_date: iso(2026, 8, 1), end_date: iso(2026, 8, 5), resources: [{ id: 1, code: 'И', quantity: 1 }] },
+      { id: 5, title: 'Тестирование MVS VEGA', start_date: iso(2026, 8, 20), end_date: iso(2026, 9, 10), resources: [{ id: 1, code: 'И', quantity: 3 }] },
+      { id: 6, title: 'Проведение инструктажа', start_date: iso(2026, 9, 10), end_date: iso(2026, 9, 15), resources: [{ id: 1, code: 'И', quantity: 1 }] },
     ],
   },
+]
+
+const resources: { id: number; code: string; title: string; employees_count: number }[] = [
+  { id: 1, code: 'И', title: 'Инженер', employees_count: 3 },
+  { id: 2, code: 'М', title: 'Монтажник', employees_count: 4 },
+  { id: 3, code: 'ПР', title: 'Производитель работ', employees_count: 2 },
 ]
 
 const meta: Meta<typeof PdfExport> = {
@@ -53,13 +59,13 @@ const meta: Meta<typeof PdfExport> = {
   tags: ['autodocs'],
   args: {
     processes: demoProcesses,
+    resources,
     origin: '2026-07-01',
     unit: 'day',
     pageTitle: 'Диаграмма задач',
     ownerId: 10,
     periodFrom: '2026-07-01',
     periodTo: '2026-09-30',
-    cellWidthPx: 32,
   },
 }
 
@@ -107,8 +113,7 @@ export const RendererProducesPdf: Story = {
       to: iso(2026, 9, 30),
       origin: '2026-07-01',
       unit: 'day',
-      cellWidthPx: 32,
-      pageTitle: 'Диаграмма задач',
+        pageTitle: 'Диаграмма задач',
     })
 
     expect(bytes).toBeInstanceOf(Uint8Array)
@@ -132,8 +137,7 @@ export const RendererDecades: Story = {
       from: iso(2026, 7, 1),
       to: iso(2026, 12, 31),
       origin: '2026-07-01',
-      unit: 'decade',
-      cellWidthPx: 12,
+      unit: 'day',
       pageTitle: 'Диаграмма задач',
     })
     expect(bytes.byteLength).toBeGreaterThan(1000)
@@ -158,8 +162,7 @@ export const PreviewRendersCanvas: Story = {
       to: iso(2026, 9, 30),
       origin: '2026-07-01',
       unit: 'day',
-      cellWidthPx: 32,
-      pageTitle: 'Диаграмма задач',
+        pageTitle: 'Диаграмма задач',
     })
 
     const container = document.createElement('div')

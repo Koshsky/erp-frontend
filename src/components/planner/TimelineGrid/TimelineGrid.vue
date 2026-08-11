@@ -39,10 +39,10 @@ const emit = defineEmits<{
   'header-ctxmenu': [payload: { clientX: number; clientY: number }]
   /**
    * Текущее видимое окно шкалы (период «как на экране») + эффективная ширина
-   * ячейки с учётом зума. Дебаунс ~150 мс; испускается при прокрутке/зуме/смене
-   * масштаба и после монтирования. Потребитель — печать в PDF.
+   * ячейки с учётом зума + масштаб зума (Ctrl+wheel). Дебаунс ~150 мс; испускается
+   * при прокрутке/зуме/смене масштаба и после монтирования. Потребитель — печать в PDF.
    */
-  'visible-range': [payload: { from: string; to: string; cellWidthPx: number }]
+  'visible-range': [payload: { from: string; to: string; cellWidthPx: number; scale: number }]
 }>()
 
 const scrollEl = ref<HTMLElement | null>(null)
@@ -77,7 +77,7 @@ function emitVisibleRange() {
   const from = fmtDate(tl.cellStart(start))
   const to = fmtDate(tl.cellEnd(start + count - 1))
   const cellWidthPx = Math.round(tl.cellPx.value * tl.tableScale.value * 100) / 100
-  emit('visible-range', { from, to, cellWidthPx })
+  emit('visible-range', { from, to, cellWidthPx, scale: tl.tableScale.value })
 }
 
 let rangeTimer: ReturnType<typeof setTimeout> | null = null
