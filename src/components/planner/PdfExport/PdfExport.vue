@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { PdfGanttGroup } from './pdfRenderer'
-import { renderPdfPreview } from './previewPdf'
+import { preloadPdfPreview, renderPdfPreview } from './previewPdf'
 import type { PdfPreviewHandle } from './previewPdf'
 import type { PdfExportProps } from './types'
 import { CELL_WIDTH } from '../layout'
@@ -59,6 +59,23 @@ let renderedParams = ''
 let genToken = 0
 let genTimer: ReturnType<typeof setTimeout> | null = null
 
+/**
+ * Тёплая загрузка тяжёлых модулей предпросмотра (pdfRenderer + pdf.js/воркер,
+ * ~2.8 МБ): запускается по первому клику и грузит чанки ПАРАЛЛЕЛЬНО, чтобы
+ * первое открытие не ждало последовательную загрузку каждого чанка.
+ * Идемпотентно: повторные вызовы возвращают тот же промис.
+ */
+let warmupPromise: Promise<unknown> | null = null
+function warmup(): Promise<unknown> {
+  if (!warmupPromise) {
+    const p = Promise.all([import('./pdfRenderer'), preloadPdfPreview()])
+    // Не даём отклониться «незахваченной» ошибке до того, как её заберёт generate()
+    p.catch(() => {})
+    warmupPromise = p
+  }
+  return warmupPromise
+}
+
 /** Проверка настроек; возвращает сообщение об ошибке или null */
 function validate(): string | null {
   const { from, to } = settings.value
@@ -93,24 +110,61 @@ function toModel(): PdfGanttGroup[] {
 }
 
 /**
- * Генерирует PDF по текущим настройкам и обновляет предпросмотр.
- * force — рендерить даже если параметры не менялись. Устаревшие рендеры
- * отменяются токеном поколения.
+ * Генерация предпросмотра: один генератор в полёте (single-flight).
+ * Повторные вызовы generate() во время работы не начинают новый рендер,
+ * а ставят флаг «переделать» — после завершения текущего рендера он
+ * выполняется ещё раз с актуальными настройками. Это исключает гонки
+ * токенов (когда отложенный вызов инвалидировал свежий предпросмотр и
+ * оставлял застрявшую заглушку «Готовим предпросмотр…»).
  */
-async function generate(force = false) {
-  const token = ++genToken
+let runInProgress = false
+let runPending = false
+let runPromise: Promise<void> | null = null
+
+function generate(force = false): Promise<void> {
+  if (runInProgress) {
+    runPending = true
+    return runPromise ?? Promise.resolve()
+  }
+  const p = runAll(force)
+  runPromise = p
+  return p
+}
+
+async function runAll(force: boolean) {
+  runInProgress = true
+  try {
+    do {
+      runPending = false
+      await generateOnce(force)
+      force = false
+    } while (runPending && open.value)
+  } finally {
+    runInProgress = false
+    runPromise = null
+    previewLoading.value = false
+  }
+}
+
+/** Один прогон: валидация → pdf-lib → рендер страниц предпросмотра */
+async function generateOnce(force: boolean) {
   const msg = validate()
   if (msg) {
     error.value = msg
     return
   }
   const params = JSON.stringify(settings.value)
+  // Параметры не менялись — рендер не нужен. Ранний выход БЕЗ смены токена:
+  // текущий рендер (если идёт) должен спокойно завершиться.
   if (!force && params === renderedParams && currentBytes.value) return
   error.value = null
   previewLoading.value = true
   previewError.value = null
+  const token = ++genToken
   try {
-    // pdf-lib + fontkit подгружаются только при печати (иначе тянут чанк страницы)
+    // Модули грузятся параллельно (по первому клику — warmup); повторные
+    // вызовы застают их в кэше и не ждут загрузки.
+    await warmup()
     const { renderGanttPdf } = await import('./pdfRenderer')
     const bytes = await renderGanttPdf(toModel(), {
       from: settings.value.from,
@@ -142,8 +196,6 @@ async function generate(force = false) {
       pageCount.value = 0
       currentBytes.value = null
     }
-  } finally {
-    if (token === genToken) previewLoading.value = false
   }
 }
 
@@ -173,6 +225,7 @@ function openDialog() {
 function closeDialog() {
   if (busy.value) return
   open.value = false
+  runPending = false
   genToken++
   if (genTimer != null) {
     clearTimeout(genTimer)
