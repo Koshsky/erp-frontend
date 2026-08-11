@@ -14,6 +14,7 @@ const demoProcesses: PdfExportProcess[] = [
     id: 1,
     title: 'Инсталляция',
     project_code: 'MVS-001',
+    owner_id: 10,
     start_date: iso(2026, 7, 15),
     end_date: iso(2026, 8, 22),
     milestones: [
@@ -31,6 +32,7 @@ const demoProcesses: PdfExportProcess[] = [
     id: 2,
     title: 'Тестирование комплекса систем телемедицины',
     project_code: 'MVS-002',
+    owner_id: 20,
     start_date: iso(2026, 8, 1),
     end_date: iso(2026, 9, 15),
     milestones: [{ id: 201, title: 'Приёмка', date: iso(2026, 9, 12) }],
@@ -52,6 +54,7 @@ const meta: Meta<typeof PdfExport> = {
     origin: '2026-07-01',
     unit: 'day',
     pageTitle: 'Диаграмма задач',
+    ownerId: 10,
   },
 }
 

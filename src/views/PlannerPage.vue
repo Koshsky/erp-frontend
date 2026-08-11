@@ -294,7 +294,7 @@ const processesByPriority = computed(() => {
   <section class="pp">
     <!-- Печать диаграммы в PDF: диапазон дат и ширину ячейки задаёт пользователь в диалоге -->
     <div class="pp-toolbar">
-      <PdfExport :processes="processesByPriority" :origin="origin" :unit="unit" page-title="Диаграмма задач" />
+      <PdfExport :processes="processesByPriority" :origin="origin" :unit="unit" :owner-id="userId" page-title="Диаграмма задач" />
     </div>
 
     <!-- Диаграмма Задач: данные загружает PlannerPage (view) через store,

@@ -12,6 +12,7 @@ const props = withDefaults(defineProps<PdfExportProps>(), {
   origin: '',
   unit: 'day',
   pageTitle: 'Диаграмма задач',
+  ownerId: null,
 })
 
 /** Мин/макс даты по данным — дефолт диалога печати */
@@ -39,7 +40,14 @@ const defaultRange = computed(() => {
 })
 
 /** Настройки печати (реактивные, редактируются в модалке) */
-const settings = ref({ from: '', to: '', cellWidth: CELL_WIDTH })
+const settings = ref({ from: '', to: '', cellWidth: CELL_WIDTH, onlyMine: false })
+
+/** Процессы, попадающие в печать: при фильтре «Только мои» остаются процессы владельца */
+const visibleProcesses = computed(() => {
+  const list = props.processes ?? []
+  if (!settings.value.onlyMine || props.ownerId == null) return list
+  return list.filter((p) => p.owner_id === props.ownerId)
+})
 
 const open = ref(false)
 const busy = ref(false)
@@ -88,7 +96,7 @@ function validate(): string | null {
 
 /** Маппит процессы (DTO /planning/tasks) в модель рендерера */
 function toModel(): PdfGanttGroup[] {
-  return (props.processes ?? []).map((p) => ({
+  return visibleProcesses.value.map((p) => ({
     id: p.id,
     code: p.project_code,
     title: p.title ?? '',
@@ -212,7 +220,12 @@ watch(settings, scheduleGenerate, { deep: true })
 
 function openDialog() {
   if (busy.value) return
-  settings.value = { from: defaultRange.value.from, to: defaultRange.value.to, cellWidth: CELL_WIDTH }
+  settings.value = {
+    from: defaultRange.value.from,
+    to: defaultRange.value.to,
+    cellWidth: CELL_WIDTH,
+    onlyMine: false,
+  }
   renderedParams = ''
   error.value = null
   previewError.value = null
@@ -318,6 +331,14 @@ onBeforeUnmount(() => {
                 <span class="pe-label">Ширина ячейки, px</span>
                 <input v-model.number="settings.cellWidth" type="number" min="8" max="96" class="pe-input" />
                 <span class="pe-hint">8–96, больше ячейка — крупнее шкала</span>
+              </label>
+
+              <label class="pe-field">
+                <span class="pe-toggle">
+                  <input v-model="settings.onlyMine" type="checkbox" class="pe-checkbox" />
+                  <span class="pe-label">Только мои процессы</span>
+                </span>
+                <span class="pe-hint">Скрыть из печати процессы других владельцев</span>
               </label>
 
               <p v-if="error" class="pe-error">{{ error }}</p>
@@ -473,6 +494,19 @@ onBeforeUnmount(() => {
 .pe-hint {
   font-size: 11px;
   color: #999;
+}
+.pe-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+.pe-checkbox {
+  width: 16px;
+  height: 16px;
+  accent-color: #1a73e8;
+  cursor: pointer;
+  flex-shrink: 0;
 }
 .pe-error {
   margin: 0;

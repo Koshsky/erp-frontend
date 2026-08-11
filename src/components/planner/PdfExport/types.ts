@@ -28,6 +28,7 @@ export interface PdfExportProcess {
   project_code?: string
   start_date?: string
   end_date?: string
+  owner_id?: number | null
   tasks?: PdfExportTask[]
   milestones?: PdfExportMilestone[]
 }
@@ -41,4 +42,6 @@ export interface PdfExportProps {
   unit?: PlanningUnit
   /** Заголовок в колонтитуле PDF */
   pageTitle?: string
+  /** Id текущего пользователя — для фильтра «Только мои процессы» */
+  ownerId?: number | null
 }

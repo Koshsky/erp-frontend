@@ -27,6 +27,12 @@ export const pdfExportArgTypes: ArgTypes<PdfExportProps> = {
     control: 'text',
     table: { type: { summary: 'string' }, defaultValue: { summary: 'Диаграмма задач' }, category: 'Data' },
   },
+  ownerId: {
+    name: 'Id пользователя',
+    description: 'Id текущего пользователя — владелец процессов для фильтра «Только мои процессы»',
+    control: 'number',
+    table: { type: { summary: 'number' }, category: 'Data' },
+  },
 }
 
 export default pdfExportArgTypes
