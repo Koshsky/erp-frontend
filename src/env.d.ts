@@ -15,3 +15,9 @@ declare module '*.vue' {
   export default component
 }
 
+/** Воркер pdf.js импортируется на главном потоке (fake worker) ради полифилов */
+declare module 'pdfjs-dist/build/pdf.worker.min.mjs' {
+  const workerModule: unknown
+  export default workerModule
+}
+

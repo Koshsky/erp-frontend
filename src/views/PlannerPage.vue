@@ -3,6 +3,7 @@ import { ref, onMounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import TaskPlanning from '../components/planner/TaskPlanning/TaskPlanning.vue'
+import { PdfExport } from '../components/planner'
 import { ResourceManagerModal } from '../components/planner'
 import type { AssignedResource, AddResourcePayload } from '../components/planner/ResourceManagerModal'
 import { ContextMenu, ModalForm, ConfirmDialog } from '../components/common'
@@ -291,6 +292,11 @@ const processesByPriority = computed(() => {
 
 <template>
   <section class="pp">
+    <!-- Печать диаграммы в PDF: диапазон дат и ширину ячейки задаёт пользователь в диалоге -->
+    <div class="pp-toolbar">
+      <PdfExport :processes="processesByPriority" :origin="origin" :unit="unit" page-title="Диаграмма задач" />
+    </div>
+
     <!-- Диаграмма Задач: данные загружает PlannerPage (view) через store,
          TaskPlanning получает их через props -->
     <TaskPlanning
@@ -343,5 +349,10 @@ const processesByPriority = computed(() => {
 <style scoped>
 .pp {
   --planner-max-height: calc(100vh - 112px);
+}
+.pp-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 12px;
 }
 </style>
