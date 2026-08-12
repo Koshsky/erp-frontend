@@ -79,6 +79,8 @@ function apiConfig(): Configuration {
   })
 }
 
+export { apiConfig }
+
 function readStoredUser(): DtoUserInfo | null {
   try {
     const raw = localStorage.getItem(USER_KEY)

@@ -10,6 +10,9 @@ import { pendingCount } from './outbox'
       <span v-if="pendingCount > 0" class="offline-banner__count">
         {{ pendingCount }} ожид. синхронизации
       </span>
+      <span class="offline-banner__hint">
+        Нет данных в разделе? Откройте его онлайн хотя бы раз.
+      </span>
     </div>
   </transition>
 </template>
@@ -40,6 +43,11 @@ import { pendingCount } from './outbox'
   border-radius: 999px;
   font-weight: 600;
   white-space: nowrap;
+}
+
+.offline-banner__hint {
+  opacity: 0.85;
+  font-size: 12px;
 }
 
 .offline-fade-enter-active,

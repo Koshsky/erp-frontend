@@ -1,22 +1,30 @@
-import { watch } from 'vue'
-import { useAppStore, useAuthStore, usePlanningStore, useTimesheetStore } from '@/store'
+import { ref, watch } from 'vue'
+import { AssignmentsApi } from '@/api'
+import { apiConfig, useAppStore, useAuthStore, usePlanningStore, useTimesheetStore } from '@/store'
 import { isOffline } from './state'
 
 /**
- * Фоновая «прогревка» офлайн-кэша данных: после логина (и при возврате сети)
- * в моменты простоя последовательно запрашивает те же GET, что используют
- * страницы. Успешные ответы автоматически пишутся в IndexedDB (src/http.ts),
- * поэтому офлайн открываются данные даже тех страниц, где пользователь не был.
+ * Фоновая «прогревка» офлайн-кэша данных: после логина (и при возврате сети,
+ * и периодически, пока пользователь онлайн) последовательно запрашивает те же
+ * GET, что используют страницы. Успешные ответы автоматически пишутся в
+ * IndexedDB (src/http.ts), поэтому офлайн открываются данные даже тех страниц,
+ * где пользователь не был.
  *
  * Ограничения: не запускается, пока офлайн; запросы идут с паузами (мягко для
  * сервера); повторный запуск игнорируется, пока предыдущий не закончился.
  */
 
 const PAUSE_MS = 1500
-const IDLE_TIMEOUT_MS = 5000
+const IDLE_TIMEOUT_MS = 2000
+/** Периодическое обновление кэша, пока пользователь онлайн (данные не протухают) */
+const REWARM_INTERVAL_MS = 30 * 60 * 1000
 
 let running = false
 let scheduled = false
+let rewarmTimer: number | null = null
+
+/** Время последней успешной прогревки (для UI профиля) */
+export const lastWarmedAt = ref<number | null>(null)
 
 function runWhenIdle(fn: () => void): void {
   const w = window as Window & {
@@ -50,6 +58,8 @@ function buildSteps(): Array<() => Promise<unknown>> {
     () => planning.loadProjectPlanning(),
     () => planning.loadProcessPlanning(),
     () => planning.loadTaskPlanning(),
+    // Справочник назначений (fallback в removeResource)
+    () => new AssignmentsApi(apiConfig()).assignmentGet(500, undefined, 0),
   ]
   if (auth.user?.id != null) {
     steps.push(() => auth.fetchProfile(auth.user!.id as number))
@@ -88,6 +98,7 @@ export function warmNow(): Promise<void> {
   running = true
   return warmUp().finally(() => {
     running = false
+    lastWarmedAt.value = Date.now()
   })
 }
 
@@ -102,6 +113,18 @@ export function scheduleWarmup(): void {
     void warmNow()
   })
 }
+
+// Пока пользователь онлайн и авторизован — периодически обновляем кэш
+function ensureRewarmTimer(): void {
+  if (rewarmTimer != null) return
+  rewarmTimer = window.setInterval(() => {
+    if (!isOffline.value && useAuthStore().isAuthenticated) {
+      void warmNow()
+    }
+  }, REWARM_INTERVAL_MS)
+}
+
+if (typeof window !== 'undefined') ensureRewarmTimer()
 
 // Возврат сети → прогреваем то, что не успели (или подгружаем свежее)
 watch(isOffline, (offline) => {

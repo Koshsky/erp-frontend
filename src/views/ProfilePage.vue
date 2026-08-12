@@ -4,7 +4,7 @@ import { useAuthStore } from '../store'
 import { PasswordField, PasswordRequirements } from '../components/common'
 import { passwordRules, validatePassword } from '../composables/usePasswordValidation'
 import { idbCount } from '../offline/db'
-import { warmNow } from '../offline/warmup'
+import { lastWarmedAt, warmNow } from '../offline/warmup'
 import { applyUpdate, checkForUpdates, swControlled, updateAvailable } from '../offline/registration'
 
 const auth = useAuthStore()
@@ -43,6 +43,12 @@ const cachedAssets = ref(0)
 const cachedData = ref(0)
 const checkMsg = ref<string | null>(null)
 let refreshTimer: number | null = null
+
+const lastWarmedLabel = computed(() =>
+  lastWarmedAt.value != null
+    ? new Date(lastWarmedAt.value).toLocaleString('ru-RU')
+    : 'ещё не было',
+)
 
 async function refreshOfflineInfo() {
   try {
@@ -176,7 +182,14 @@ async function onChangePassword() {
           <span class="pf-label">Сохранённых данных</span>
           <span class="pf-value">{{ cachedData }} записей</span>
         </div>
+        <div class="pf-row">
+          <span class="pf-label">Последняя прогревка</span>
+          <span class="pf-value">{{ lastWarmedLabel }}</span>
+        </div>
         <div class="app-actions">
+          <p v-if="cachedData === 0" class="pf-msg warn">
+            Кэш данных пуст. Для офлайна зайдите онлайн и нажмите «Прогреть данные сейчас».
+          </p>
           <button type="button" class="pf-btn" @click="onWarmNow">Прогреть данные сейчас</button>
           <button
             v-if="!updateAvailable"
@@ -287,6 +300,10 @@ async function onChangePassword() {
 }
 .pf-msg.ok {
   color: #188038;
+}
+.pf-msg.warn {
+  color: #b26a00;
+  margin-bottom: 4px;
 }
 
 .pf-btn {
