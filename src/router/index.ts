@@ -98,7 +98,12 @@ router.beforeEach(async (to) => {
 
   // Уже авторизованных не пускаем на страницу входа
   if (to.name === 'login' && auth.isAuthenticated) {
-    return { name: 'dashboard' }
+    return { name: auth.user?.role === 'worker' ? 'profile' : 'dashboard' }
+  }
+
+  // worker видит только свой профиль: любые другие страницы — на profile
+  if (auth.user?.role === 'worker' && to.name !== 'profile') {
+    return { name: 'profile' }
   }
 
   // Табель и Сотрудники доступны только vp и admin

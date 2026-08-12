@@ -1,21 +1,26 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { computed, onMounted } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useAppStore } from '../store'
+import { useRoleAccess } from '../composables/useRoleAccess'
 
 const store = useAppStore()
 const { totalProjects, totalResources, projectsLoading, resourcesLoading } = storeToRefs(store)
+const { canViewProjects } = useRoleAccess()
 
 onMounted(() => {
-  store.loadProjects()
+  // Проекты видят только admin/dp/rp; vp/worker не получают их список (403 у бэкенда).
+  if (canViewProjects.value) store.loadProjects()
   store.loadResources()
 })
 
-const quickLinks = [
-  { label: 'Диаграмма Гантта', to: '/planner', desc: 'Планирование задач и ресурсов' },
-  { label: 'Проекты', to: '/projects', desc: 'Список проектов' },
+const quickLinks = computed(() => [
+  ...(canViewProjects.value
+    ? [{ label: 'Проекты', to: '/projects', desc: 'Список проектов' }]
+    : []),
   { label: 'Ресурсы', to: '/resources', desc: 'Загрузка ресурсов' },
-]
+  { label: 'Диаграмма Гантта', to: '/planner', desc: 'Планирование задач и ресурсов' },
+])
 </script>
 
 <template>
@@ -23,7 +28,7 @@ const quickLinks = [
     <h2 class="dp-title">Дашборд</h2>
 
     <div class="dp-stats">
-      <div class="stat">
+      <div v-if="canViewProjects" class="stat">
         <div class="stat-num">{{ projectsLoading ? '…' : totalProjects }}</div>
         <div class="stat-label">Проектов</div>
       </div>

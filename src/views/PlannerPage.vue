@@ -60,7 +60,7 @@ const focusGroupId = computed(() => {
 
 // vp владеет задачами/вехами/назначениями своих процессов; rp — view only
 // (список задач для него уже отфильтрован бэкендом), dp — read-only.
-const { canManageTasks, role, userId } = useRoleAccess()
+const { canManageTasks, canViewProjects, role, userId } = useRoleAccess()
 
 const { findTask, findMilestone } = useFindPlanningItem()
 
@@ -272,7 +272,8 @@ async function onRemoveResource(payload: { resource_id: number }) {
 onMounted(async () => {
   // Приоритеты проектов и ресурсы нужны до задач: processesByPriority сортируется по ним,
   // и при монтировании шкалы порядок групп уже финальный (иначе якорь навигации уезжает).
-  if (!app.projects.length) await app.loadProjects()
+  // Проекты получают только admin/dp/rp; у vp/worker их нет (403) — сортировка по id.
+  if (canViewProjects.value && !app.projects.length) await app.loadProjects()
   if (!resources.value.length) await app.loadResources()
   // Календарь доступности обновляем при КАЖДОМ заходе на страницу: табель мог
   // измениться, и ResourceHeader должен сразу показывать свежую доступность.

@@ -9,6 +9,11 @@ export function useRoleAccess() {
   const role = computed(() => auth.user?.role)
   const userId = computed(() => auth.user?.id)
 
+  /** Просмотр/листинг проектов: admin/dp — все, rp — свои; vp и worker проекты не видят */
+  const canViewProjects = computed(() => {
+    return role.value === 'admin' || role.value === 'dp' || role.value === 'rp'
+  })
+
   /** CRUD ресурсов табеля: admin и vp (vp — свои) */
   const canManageResources = computed(() => role.value === 'admin' || role.value === 'vp')
 
@@ -61,6 +66,7 @@ export function useRoleAccess() {
   return {
     role,
     userId,
+    canViewProjects,
     canManageResources,
     canManageProcesses,
     canManageTasks,

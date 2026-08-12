@@ -339,6 +339,14 @@ export const useAppStore = defineStore('app', () => {
   const projectsError = ref<string | null>(null)
 
   async function loadProjects() {
+    // Проекты видят только admin/dp/rp (по RBAC-матрице). Для остальных ролей
+    // листинг запрещён бэкендом (403) — не отправляем запрос вовсе.
+    const role = useAuthStore().user?.role
+    if (role && role !== 'admin' && role !== 'dp' && role !== 'rp') {
+      projects.value = []
+      projectsTotal.value = 0
+      return
+    }
     if (isOffline.value && projects.value.length) return
     projectsLoading.value = true
     projectsError.value = null

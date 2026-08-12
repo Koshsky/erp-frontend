@@ -63,6 +63,9 @@ function buildSteps(): Array<() => Promise<unknown>> {
   const role = auth.user?.role ?? ''
   const isStaff = role === 'vp' || role === 'admin'
 
+  // worker не читает данные (только профиль) — прогревать нечего
+  if (role === 'worker') return []
+
   const steps: Array<() => Promise<unknown>> = [
     () => app.loadProjects(),
     () => app.loadResources(),
