@@ -1,7 +1,9 @@
 <script setup lang="ts">
+import OfflineBanner from './offline/OfflineBanner.vue'
 </script>
 
 <template>
+  <OfflineBanner />
   <RouterView />
 </template>
 

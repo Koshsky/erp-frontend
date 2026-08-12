@@ -1,0 +1,19 @@
+{
+  "name": "Планирование ресурсов",
+  "short_name": "Планирование",
+  "description": "MVS ERP: планирование ресурсов, проектов и табель сотрудников",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f4f6f9",
+  "theme_color": "#1a73e8",
+  "lang": "ru",
+  "icons": [
+    {
+      "src": "/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

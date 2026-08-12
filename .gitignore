@@ -47,3 +47,6 @@ coverage/
 logs/
 # Локальные заметки по коду
 CODE_REVIEW.md
+
+# Локальный код-ревью (не хранится в репо)
+CODE_REVIEW.md

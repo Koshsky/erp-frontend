@@ -2,6 +2,8 @@ import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios'
 import { useAuthStore } from './store'
 import router from './router'
 import { apiErrorMessage } from './utils'
+import { cacheGet, cachePut } from './offline/cache'
+import { isOffline } from './offline/state'
 
 const TOKEN_KEY = 'mvs_erp_access_token'
 const REFRESH_KEY = 'mvs_erp_refresh_token'
@@ -11,6 +13,16 @@ const AUTH_PATHS = ['/auth/login', '/auth/refresh', '/auth/register']
 
 interface RetryableConfig extends InternalAxiosRequestConfig {
   _retried?: boolean
+}
+
+/** Сетевая ошибка (сервер недоступен): ответа нет, axios помечает кодом ERR_NETWORK */
+function isNetworkError(error: AxiosError): boolean {
+  return !error.response && (error.code === 'ERR_NETWORK' || error.message === 'Network Error')
+}
+
+/** Полный URL запроса — единый ключ для кэша (и запись, и чтение) */
+function cacheKey(config: InternalAxiosRequestConfig): string {
+  return axios.getUri(config)
 }
 
 /** Единственный «в полёте» refresh для всех параллельных 401 */
@@ -29,11 +41,48 @@ function redirectToLogin() {
  * сгенерированные API-клиенты (src/api/base.ts: globalAxios).
  */
 export function setupHttp() {
+  // Успешные GET пишем в офлайн-кэш (сеть доступна — данные свежие).
   axios.interceptors.response.use(
-    (response) => response,
+    (response) => {
+      const { config, status } = response
+      if (
+        status >= 200 &&
+        status < 300 &&
+        config.method === 'get' &&
+        config.url &&
+        !AUTH_PATHS.some((path) => config.url!.includes(path))
+      ) {
+        void cachePut(cacheKey(config), response.data)
+      }
+      return response
+    },
     async (error: AxiosError) => {
-      const { config, response } = error
-      if (!config || !response) {
+      const { config } = error
+      if (!config) {
+        return Promise.reject(error)
+      }
+
+      // Сервер недоступен: отдаём последний сохранённый ответ из кэша (тот же
+      // формат { data, error }), чтобы страница открывалась офлайн. Если кэша
+      // нет — ошибка уходит дальше как обычно.
+      if (isNetworkError(error)) {
+        const cached = await cacheGet<unknown>(cacheKey(config))
+        if (cached != null) {
+          isOffline.value = true
+          return {
+            data: cached,
+            status: 200,
+            statusText: 'OK',
+            headers: {},
+            config,
+            request: error.request,
+          }
+        }
+        return Promise.reject(error)
+      }
+
+      const { response } = error
+      if (!response) {
         return Promise.reject(error)
       }
 

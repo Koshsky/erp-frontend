@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import { AuthApi, ProjectsApi, ProcessesApi, TasksApi, TimesheetResourcesApi, TimesheetCalendarApi, TimesheetEmployeesApi, TimesheetStatesApi, PlanningApi, MilestonesApi, UsersApi, AssignmentsApi, Configuration } from '@/api'
 import type { DtoUserInfo, DtoProject, DtoResourceResponse, DtoResourceCalendar, DtoEmployeeResponse, DtoEmployeeStateResponse, DtoStateResponse, DtoCreateResourceRequest, DtoUpdateResourceRequest, JwtTokenPair } from '@/api'
 import { apiErrorMessage } from '@/utils'
+import { isOffline } from '@/offline/state'
 
 const TOKEN_KEY = 'mvs_erp_access_token'
 const REFRESH_KEY = 'mvs_erp_refresh_token'
@@ -197,6 +198,8 @@ export const useAuthStore = defineStore('auth', () => {
       logout()
       return false
     }
+    // Офлайн refresh не выполнить: не разлогиниваем, сессия живёт до возврата сети
+    if (isOffline.value) return true
     loading.value = true
     error.value = null
     try {

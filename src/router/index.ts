@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '../store'
+import { isOffline } from '../offline/state'
 import MainLayout from '../layouts/MainLayout.vue'
 import AuthLayout from '../layouts/AuthLayout.vue'
 
@@ -82,7 +83,11 @@ const router = createRouter({
 router.beforeEach(async (to) => {
   const auth = useAuthStore()
 
-  if (to.meta.requiresAuth && (!auth.isAuthenticated || auth.accessExpired)) {
+  if (
+    to.meta.requiresAuth &&
+    (!auth.isAuthenticated || auth.accessExpired) &&
+    !isOffline.value
+  ) {
     await auth.refreshSession()
   }
 
