@@ -18,7 +18,13 @@ const SHELL_CACHE = 'erp-shell'
 const ASSETS_CACHE = 'erp-assets'
 
 /** Список файлов, которые должны быть доступны офлайн сразу после установки */
-const SHELL_FILES = ['/index.html', '/manifest.webmanifest', '/icons/icon.svg']
+const SHELL_FILES = [
+  '/index.html',
+  '/manifest.webmanifest',
+  '/icons/icon.svg',
+  '/icons/icon-192.png',
+  '/icons/icon-512.png',
+]
 
 /** Ассеты, которые уже нельзя изменить (имя содержит хэш сборки) */
 function isHashedAsset(pathname) {
@@ -114,7 +120,13 @@ self.addEventListener('fetch', (event) => {
   }
 
   // Статические файлы PWA (manifest, иконки): cache-first
-  if (path === '/manifest.webmanifest' || path === '/icons/icon.svg' || path === '/favicon.ico') {
+  if (
+    path === '/manifest.webmanifest' ||
+    path === '/icons/icon.svg' ||
+    path === '/icons/icon-192.png' ||
+    path === '/icons/icon-512.png' ||
+    path === '/favicon.ico'
+  ) {
     event.respondWith(caches.match(req).then((cached) => cached || fetch(req)))
     return
   }
