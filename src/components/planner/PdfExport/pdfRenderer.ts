@@ -38,10 +38,6 @@ const FOOTER_H = 18
 
 /** Ширина колонки названий в pt (180px экрана) */
 const labelW = LABEL_WIDTH * PT
-/** Высота строки задачи в pt (26px) */
-const rowH = 26 * PT
-/** Высота бара в pt (24px) */
-const barH = 24 * PT
 /** Полоса вех в группе в pt (20px) */
 const msStripH = 20 * PT
 /** Мин. высота объединённого лейбла группы в pt (64px, как на экране) */
@@ -67,6 +63,12 @@ interface Palette {
   textMid: Color
   textDim: Color
   textFaint: Color
+  /** Название месяца в шапке (#444) */
+  textHeader: Color
+  /** Числа в шапке (#666) */
+  textHeaderNum: Color
+  /** Заголовок группы в merged-лейбле (#555) */
+  groupTitle: Color
   /** Код процесса в объединённом лейбле группы */
   codeText: Color
   bar: Color
@@ -115,6 +117,9 @@ const COLOR_PALETTE: Palette = {
   textMid: rgb(0.333, 0.333, 0.333),
   textDim: rgb(0.533, 0.533, 0.533),
   textFaint: rgb(0.6, 0.6, 0.6),
+  textHeader: rgb(68 / 255, 68 / 255, 68 / 255), // #444
+  textHeaderNum: rgb(102 / 255, 102 / 255, 102 / 255), // #666
+  groupTitle: rgb(85 / 255, 85 / 255, 85 / 255), // #555
   codeText: rgb(26 / 255, 115 / 255, 232 / 255), // #1a73e8
   bar: rgb(52 / 255, 168 / 255, 83 / 255), // #34a853
   barOpacity: 0.75,
@@ -157,6 +162,9 @@ const MONO_PALETTE: Palette = {
   textMid: BLACK,
   textDim: BLACK,
   textFaint: BLACK,
+  textHeader: BLACK,
+  textHeaderNum: BLACK,
+  groupTitle: BLACK,
   codeText: BLACK,
   bar: rgb(236 / 255, 236 / 255, 236 / 255), // #ececec
   barOpacity: 1,
@@ -204,6 +212,10 @@ export interface PdfGanttRow {
   title: string
   start_date: string
   end_date: string
+  /** Проект строки (для фильтра «Скрыть проекты» на уровне строк) */
+  project_id?: number
+  /** Владелец строки (для фильтра «Только мои» на уровне строк) */
+  owner_id?: number
   resources?: PdfGanttResource[]
 }
 
@@ -219,6 +231,10 @@ export interface PdfGanttGroup {
   title: string
   start_date?: string
   end_date?: string
+  /** Проект группы (для фильтра «Скрыть проекты» на уровне групп) */
+  project_id?: number
+  /** Владелец группы (для фильтра «Только мои» на уровне групп) */
+  owner_id?: number
   rows: PdfGanttRow[]
   milestones?: PdfGanttMilestone[]
 }
@@ -253,6 +269,8 @@ export interface PdfGanttOptions {
   pageTitle?: string
   /** Масштаб печати (зум страницы Ctrl+wheel): множитель плотности контента */
   scale?: number
+  /** Толщина строки в экранных px (default 26); бар = строка − 2px */
+  rowHeight?: number
   /** Рисовать ли полосу вех и флажки (по умолчанию true) */
   showMilestones?: boolean
   /** Рисовать ли линию «сегодня» (по умолчанию true) */
@@ -315,6 +333,51 @@ interface PdfLayout {
 
 /** pdf-y для top-y (координаты от верхнего края страницы с учётом поля) */
 const pdfY = (top: number): number => PAGE_H - MARGIN - top
+
+/** Путь скруглённого прямоугольника в SVG-координатах (y вниз; r — радиусы углов) */
+function roundedRectPath(
+  w: number,
+  h: number,
+  r: { tl: number; tr: number; br: number; bl: number },
+): string {
+  const rad = (v: number) => Math.max(0, Math.min(v, w / 2, h / 2))
+  const tl = rad(r.tl)
+  const tr = rad(r.tr)
+  const br = rad(r.br)
+  const bl = rad(r.bl)
+  return (
+    `M ${tl},0 L ${w - tr},0 Q ${w},0 ${w},${tr} ` +
+    `L ${w},${h - br} Q ${w},${h} ${w - br},${h} ` +
+    `L ${bl},${h} Q 0,${h} 0,${h - bl} ` +
+    `L 0,${tl} Q 0,0 ${tl},0 Z`
+  )
+}
+
+/** Скруглённый прямоугольник: top — координата от верха страницы (как drawRectangle) */
+function drawRoundedRect(
+  page: PDFPage,
+  opts: {
+    x: number
+    top: number
+    w: number
+    h: number
+    r: number | { tl: number; tr: number; br: number; bl: number }
+    color: Color
+    opacity?: number
+    borderColor?: Color
+    borderWidth?: number
+  },
+) {
+  const r = typeof opts.r === 'number' ? { tl: opts.r, tr: opts.r, br: opts.r, bl: opts.r } : opts.r
+  page.drawSvgPath(roundedRectPath(opts.w, opts.h, r), {
+    x: opts.x,
+    y: pdfY(opts.top),
+    color: opts.color,
+    opacity: opts.opacity,
+    borderColor: opts.borderColor,
+    borderWidth: opts.borderWidth,
+  })
+}
 
 /** pdf-y базовой линии текста, центрированного в полосе [bandTop, bandTop+bandH] */
 const textY = (bandTop: number, bandH: number, size: number): number =>
@@ -516,7 +579,7 @@ function drawHeader(ctx: DrawCtx, colFrom: number, colTo: number, cellWidthPx: n
       y: textY(0, layout.monthRowH, size),
       size,
       font: bold,
-      color: palette.textMain,
+      color: palette.textHeader,
     })
     i = j
   }
@@ -529,7 +592,7 @@ function drawHeader(ctx: DrawCtx, colFrom: number, colTo: number, cellWidthPx: n
       const size = 7.5 * z
       const tw = font.widthOfTextAtSize(label, size)
       if (tw <= cellW - 2) {
-        page.drawText(label, { x: x + (cellW - tw) / 2, y: textY(layout.monthRowH, layout.numRowH, size), size, font, color: palette.textMid })
+        page.drawText(label, { x: x + (cellW - tw) / 2, y: textY(layout.monthRowH, layout.numRowH, size), size, font, color: palette.textHeaderNum })
       }
     }
   }
@@ -622,7 +685,7 @@ function drawGroup(ctx: DrawCtx, gl: GroupLayout, colFrom: number, colTo: number
     }
     if (showLabelText) {
       const titleSize = 9 * z
-      page.drawText(truncate(bold, g.title, titleSize, maxW), { x: MARGIN + padX, y: pdfY(cursor + titleSize * 0.8), size: titleSize, font: bold, color: palette.textMain })
+      page.drawText(truncate(bold, g.title, titleSize, maxW), { x: MARGIN + padX, y: pdfY(cursor + titleSize * 0.8), size: titleSize, font: bold, color: palette.groupTitle })
       cursor += titleSize * 1.3
       if (g.start_date && g.end_date) {
         const dSize = 7.5 * z
@@ -655,11 +718,22 @@ function drawGroup(ctx: DrawCtx, gl: GroupLayout, colFrom: number, colTo: number
     const barBottomClip = Math.min(barBottomLocal, winBottom - winTop)
     if (barBottomClip - barTopClip <= 0) continue
     const barFull = barTopClip === barTopLocal && barBottomClip === barBottomLocal
-    page.drawRectangle({
+    // Скругление как на экране (5px), но без радиуса с обрезанной стороны
+    // на стыке страниц (иначе угол «выпирает» за край).
+    const topClipped = barTopClip > barTopLocal
+    const bottomClipped = barBottomClip < barBottomLocal
+    const barRad = Math.min(5 * PT * z, (bx1 - bx) / 2, (barBottomClip - barTopClip) / 2)
+    drawRoundedRect(page, {
       x: bx,
-      y: pdfY(barBottomClip),
-      width: bx1 - bx,
-      height: barBottomClip - barTopClip,
+      top: barTopClip,
+      w: bx1 - bx,
+      h: barBottomClip - barTopClip,
+      r: {
+        tl: topClipped ? 0 : barRad,
+        tr: topClipped ? 0 : barRad,
+        br: bottomClipped ? 0 : barRad,
+        bl: bottomClipped ? 0 : barRad,
+      },
       color: palette.bar,
       opacity: palette.barOpacity,
       borderColor: palette.barBorder,
@@ -679,10 +753,12 @@ function drawGroup(ctx: DrawCtx, gl: GroupLayout, colFrom: number, colTo: number
       cx += tw + 4.5
 
       const bh = 12 * z
+      // Пилюля, как на экране (radius 10px), ограниченная высотой
+      const badgeRad = Math.min(10 * PT * z, bh / 2)
       const drawBadge = (text: string, cs: number, bg: Color, opacity: number, border?: Color, borderWidth = 0) => {
         const w = bold.widthOfTextAtSize(text, cs) + 8
         const topBadge = barCenter - bh / 2
-        page.drawRectangle({ x: cx, y: pdfY(topBadge + bh), width: w, height: bh, color: bg, opacity, borderColor: border, borderWidth })
+        drawRoundedRect(page, { x: cx, top: topBadge, w, h: bh, r: badgeRad, color: bg, opacity, borderColor: border, borderWidth })
         page.drawText(text, { x: cx + 4, y: centerTextY(barCenter, cs), size: cs, font: bold, color: palette.badgeText })
         cx += w + 4.5
       }
@@ -722,7 +798,9 @@ function drawGroup(ctx: DrawCtx, gl: GroupLayout, colFrom: number, colTo: number
       const flagH = 12 * z
       const fx = cx - flagW / 2
       const flagTop = top - winTop + 1.5 * z
-      page.drawRectangle({ x: fx, y: pdfY(flagTop + flagH), width: flagW, height: flagH, color: palette.ms, borderColor: palette.msBorder, borderWidth: palette.msBorderWidth })
+      // Скругление 4px, как у .ms-marker на экране (ограничено размером флажка)
+      const flagRad = Math.min(4 * PT * z, flagW / 2, flagH / 2)
+      drawRoundedRect(page, { x: fx, top: flagTop, w: flagW, h: flagH, r: flagRad, color: palette.ms, opacity: 1, borderColor: palette.msBorder, borderWidth: palette.msBorderWidth })
       // Луч от полосы вех до низа группы (обрезается по низу среза)
       page.drawLine({
         start: { x: cx, y: pdfY(rayStart) },
@@ -802,9 +880,11 @@ export async function renderGanttPdf(groups: PdfGanttGroup[], opts: PdfGanttOpti
   const z = Math.max(0.25, Math.min(4, opts.scale ?? 1))
   /** Палитра стиля: цветной (по умолчанию) или чёрно-белый контурный */
   const palette = buildPalette(opts.style)
+  /** Толщина строки (экранные px); бар на 2px тоньше строки */
+  const rowHeightPx = opts.rowHeight ?? 26
   const layout: PdfLayout = {
-    rowH: rowH * z,
-    barH: barH * z,
+    rowH: rowHeightPx * PT * z,
+    barH: Math.max(rowHeightPx - 2, 4) * PT * z,
     msStripH: msStripH * z,
     minGroupH: minGroupH * z,
     monthRowH: monthRowH * z,

@@ -19,6 +19,7 @@ import { useFindPlanningItem } from '../composables/useFindPlanningItem'
 import { usePlanningStore, useAppStore } from '../store'
 import { addDaysISO, shiftSpanDates, clampDateToBounds } from '../components/planner/calendar'
 import { CELL_WIDTH } from '../components/planner/layout'
+import type { PdfGanttGroup } from '../components/planner/PdfExport/pdfRenderer'
 
 const planning = usePlanningStore()
 const app = useAppStore()
@@ -302,6 +303,27 @@ const processesByPriority = computed(() => {
     return pa - pb || (a.id ?? 0) - (b.id ?? 0)
   })
 })
+
+/** Печатная модель для PdfExport: процесс = группа, задачи = строки */
+const taskGroups = computed<PdfGanttGroup[]>(() =>
+  processesByPriority.value.map((p: any) => ({
+    id: p.id,
+    code: p.project_code,
+    title: p.title ?? '',
+    start_date: p.start_date ?? '',
+    end_date: p.end_date ?? '',
+    project_id: p.project_id,
+    owner_id: p.owner_id ?? undefined,
+    rows: (p.tasks ?? []).map((t: any) => ({
+      id: t.id,
+      title: t.title ?? '',
+      start_date: t.start_date ?? '',
+      end_date: t.end_date ?? '',
+      resources: (t.resources ?? []).map((r: any) => ({ id: r.id, code: r.code, title: r.title, quantity: r.quantity })),
+    })),
+    milestones: (p.milestones ?? []).map((m: any) => ({ id: m.id, title: m.title ?? '', date: m.date ?? '' })),
+  })),
+)
 </script>
 
 <template>
@@ -309,12 +331,14 @@ const processesByPriority = computed(() => {
     <!-- Печать диаграммы в PDF: период и ширина ячейки берутся с текущего вида страницы -->
     <div class="pp-toolbar">
       <PdfExport
-        :processes="processesByPriority"
+        :groups="taskGroups"
         :resources="resources"
         :calendar="calendar"
         :origin="origin"
         :unit="unit"
         :owner-id="userId"
+        :role="role"
+        scope="tasks"
         :period-from="viewRange.from"
         :period-to="viewRange.to"
         :scale="viewRange.scale"

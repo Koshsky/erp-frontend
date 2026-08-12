@@ -1,4 +1,5 @@
 import type { PlanningUnit } from '../calendar'
+import type { PdfGanttGroup } from './pdfRenderer'
 
 export interface PdfExportTaskResource {
   id?: number
@@ -55,8 +56,8 @@ export interface PdfExportProcess {
 }
 
 export interface PdfExportProps {
-  /** Процессы страницы задач в порядке отображения (как на экране) */
-  processes?: PdfExportProcess[] | null
+  /** Готовая модель печати: группы → строки (строится страницей-планировщиком) */
+  groups?: PdfGanttGroup[] | null
   /** Якорь шкалы: ячейка с индексом 0 (начальная позиция) */
   origin?: Date | string
   /** Единица ячейки: день или декада */
@@ -65,6 +66,12 @@ export interface PdfExportProps {
   pageTitle?: string
   /** Id текущего пользователя — для фильтра «Только мои процессы» */
   ownerId?: number | null
+  /** Роль текущего пользователя — определяет видимость фильтров (vp видит «Только мои») */
+  role?: string | null
+  /** Скоуп диаграммы: определяет набор опций и фильтров модалки печати */
+  scope?: 'tasks' | 'processes' | 'projects'
+  /** Толщина строки в экранных px (default 26; бар = строка − 2px) */
+  rowHeight?: number | null
   /** Начало печатного периода — видимое окно шкалы со страницы (ISO YYYY-MM-DD) */
   periodFrom?: string | null
   /** Конец печатного периода — видимое окно шкалы со страницы (ISO YYYY-MM-DD) */

@@ -1,17 +1,19 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import type { PdfGanttGroup } from './pdfRenderer'
 import { preloadPdfPreview, renderPdfPreview } from './previewPdf'
 import type { PdfPreviewHandle } from './previewPdf'
 import type { PdfExportProps } from './types'
 import { fmtDate, toDate } from '../calendar'
 
 const props = withDefaults(defineProps<PdfExportProps>(), {
-  processes: () => [],
+  groups: () => [],
   origin: '',
   unit: 'day',
   pageTitle: 'Диаграмма задач',
   ownerId: null,
+  role: null,
+  scope: 'tasks',
+  rowHeight: null,
   periodFrom: '',
   periodTo: '',
   scale: 1,
@@ -28,14 +30,14 @@ const dataRange = computed(() => {
     if (!min || d < min) min = d
     if (!max || d > max) max = d
   }
-  for (const p of props.processes ?? []) {
-    touch(p.start_date)
-    touch(p.end_date)
-    for (const t of p.tasks ?? []) {
-      touch(t.start_date)
-      touch(t.end_date)
+  for (const g of props.groups ?? []) {
+    touch(g.start_date)
+    touch(g.end_date)
+    for (const r of g.rows ?? []) {
+      touch(r.start_date)
+      touch(r.end_date)
     }
-    for (const m of p.milestones ?? []) touch(m.date)
+    for (const m of g.milestones ?? []) touch(m.date)
   }
   const now = fmtDate(new Date())
   if (!min) min = now
@@ -63,53 +65,112 @@ const periodLabel = computed(() => {
   return `${toDate(p.from).toLocaleDateString('ru')} — ${toDate(p.to).toLocaleDateString('ru')}`
 })
 
-/** Фолбэк-подсказка: период со страницы не определён, но процессы для печати есть */
+/** Фолбэк-подсказка: период со страницы не определён, но данные для печати есть */
 const periodFallbackHint = computed(
-  () => open.value && !previewLoading.value && !periodFromPage.value && visibleProcesses.value.length > 0,
+  () => open.value && !previewLoading.value && !periodFromPage.value && visibleGroups.value.length > 0,
 )
 
 /**
- * Настройки печати: только фильтры процессов, персистентны в сессии.
+ * Настройки печати: фильтры процессов и внешний вид; персистентны в сессии.
  * Период приходит со страницы (пропсы periodFrom/periodTo).
  */
 const settings = ref({
   onlyMine: false,
   hiddenProjects: [] as number[],
+  selectedNames: [] as string[],
   showMilestones: true,
   showTodayLine: true,
   showResources: true,
   style: 'color' as 'color' | 'mono',
+  // Толщина бара (px): строка автоматически = бар + 2px; старт от пропа rowHeight
+  barThickness: (props.rowHeight ?? 26) - 2,
 })
 
-/** Раскрытость списка проектов (UI-состояние) */
+/** Раскрытость списков фильтров (UI-состояние) */
 const projectsOpen = ref(false)
+const namesOpen = ref(false)
 
-/** Уникальные проекты из переданных процессов (для фильтра «Скрыть проекты») */
+/** Уникальные проекты из групп/строк (для фильтра «Скрыть проекты») */
 const projects = computed(() => {
   const seen = new Map<number, string>()
-  for (const p of props.processes ?? []) {
-    if (p.project_id == null) continue
-    if (!seen.has(p.project_id)) seen.set(p.project_id, p.project_code || `Проект ${p.project_id}`)
+  const add = (id?: number, code?: string) => {
+    if (id == null) return
+    if (!seen.has(id)) seen.set(id, code || `Проект ${id}`)
+  }
+  for (const g of props.groups ?? []) {
+    add(g.project_id, g.code)
+    for (const r of g.rows ?? []) add(r.project_id, r.title)
   }
   return [...seen.entries()].map(([id, code]) => ({ id, code })).sort((a, b) => a.code.localeCompare(b.code, 'ru'))
 })
 
-/** Процессы, попадающие в печать: фильтры применяются по цепочке */
-const visibleProcesses = computed(() => {
-  let list = props.processes ?? []
-  if (settings.value.onlyMine && props.ownerId != null) {
-    list = list.filter((p) => p.owner_id === props.ownerId)
+/** Подпись фильтра имён: одинаковый для задач и процессов */
+const nameFilterLabel = 'Процессы'
+
+/** Скоуп-зависимая конфигурация модалки печати */
+const showNameFilter = computed(() => props.scope !== 'projects')
+const showMilestonesOption = computed(() => props.scope === 'tasks')
+const showResourcesOption = computed(() => props.scope === 'tasks')
+/** Уровень фильтрации имён/проекта: задачи — группы, процессы/проекты — строки */
+const filterLevel = computed<'group' | 'row'>(() => (props.scope === 'tasks' ? 'group' : 'row'))
+
+/** Варианты фильтра имён: названия групп (задачи) или строк (процессы/проекты) */
+const nameOptions = computed(() => {
+  const names = new Set<string>()
+  if (filterLevel.value === 'row') {
+    for (const g of props.groups ?? []) for (const r of g.rows ?? []) if (r.title) names.add(r.title)
+  } else {
+    for (const g of props.groups ?? []) if (g.title) names.add(g.title)
   }
+  return [...names].sort((a, b) => a.localeCompare(b, 'ru'))
+})
+
+/**
+ * Группы, попадающие в печать: фильтры применяются по цепочке.
+ * Уровень фильтрации («группы» для задач, «строки» для процессов/проектов)
+ * выводится из скоупа.
+ */
+const visibleGroups = computed(() => {
+  let list = props.groups ?? []
+  const level = filterLevel.value
+  // «Только мои процессы» (виден только vp): по владельцу группы или строки
+  if (settings.value.onlyMine && props.ownerId != null) {
+    if (level === 'group') {
+      list = list.filter((g) => g.owner_id === props.ownerId)
+    } else {
+      list = list
+        .map((g) => ({ ...g, rows: (g.rows ?? []).filter((r) => r.owner_id === props.ownerId) }))
+        .filter((g) => (g.rows?.length ?? 0) > 0)
+    }
+  }
+  // «Скрыть проекты»: убираем группы проекта и строки проекта
   if (settings.value.hiddenProjects.length) {
     const hidden = new Set(settings.value.hiddenProjects)
-    list = list.filter((p) => p.project_id == null || !hidden.has(p.project_id))
+    list = list.filter((g) => g.project_id == null || !hidden.has(g.project_id))
+    if (level === 'row') {
+      list = list.map((g) => ({
+        ...g,
+        rows: (g.rows ?? []).filter((r) => r.project_id == null || !hidden.has(r.project_id)),
+      }))
+    }
+  }
+  // Фильтр по названиям (мультивыбор): группы или строки (кроме скоупа проектов)
+  if (showNameFilter.value && settings.value.selectedNames.length) {
+    const sel = new Set(settings.value.selectedNames)
+    if (level === 'group') {
+      list = list.filter((g) => sel.has(g.title))
+    } else {
+      list = list
+        .map((g) => ({ ...g, rows: (g.rows ?? []).filter((r) => sel.has(r.title)) }))
+        .filter((g) => (g.rows?.length ?? 0) > 0)
+    }
   }
   return list
 })
 
 /** Отфильтровано всё — предпросмотр пуст, печать недоступна */
 const previewEmpty = computed(
-  () => !previewLoading.value && !previewError.value && visibleProcesses.value.length === 0,
+  () => !previewLoading.value && !previewError.value && visibleGroups.value.length === 0,
 )
 
 const open = ref(false)
@@ -150,30 +211,6 @@ function warmup(): Promise<unknown> {
     warmupPromise = p
   }
   return warmupPromise
-}
-
-/** Маппит процессы (DTO /planning/tasks) в модель рендерера */
-function toModel(): PdfGanttGroup[] {
-  return visibleProcesses.value.map((p) => ({
-    id: p.id,
-    code: p.project_code,
-    title: p.title ?? '',
-    start_date: p.start_date ?? '',
-    end_date: p.end_date ?? '',
-    rows: (p.tasks ?? []).map((t) => ({
-      id: t.id,
-      title: t.title ?? '',
-      start_date: t.start_date ?? '',
-      end_date: t.end_date ?? '',
-      resources: (t.resources ?? []).map((r) => ({
-        id: r.id,
-        code: r.code,
-        title: r.title,
-        quantity: r.quantity,
-      })),
-    })),
-    milestones: (p.milestones ?? []).map((m) => ({ id: m.id, title: m.title ?? '', date: m.date ?? '' })),
-  }))
 }
 
 /**
@@ -219,8 +256,8 @@ async function generateOnce(force: boolean) {
   // Параметры не менялись — рендер не нужен. Ранний выход БЕЗ смены токена:
   // текущий рендер (если идёт) должен спокойно завершиться.
   if (!force && params === renderedParams && currentBytes.value) return
-  // Все процессы отфильтрованы — предпросмотр пуст, печать недоступна
-  if (visibleProcesses.value.length === 0) {
+  // Все данные отфильтрованы — предпросмотр пуст, печать недоступна
+  if (visibleGroups.value.length === 0) {
     previewError.value = null
     pageCount.value = 0
     currentBytes.value = null
@@ -235,17 +272,20 @@ async function generateOnce(force: boolean) {
     await warmup()
     const { renderGanttPdf } = await import('./pdfRenderer')
     const period = resolvePeriod()
-    const bytes = await renderGanttPdf(toModel(), {
+    const bytes = await renderGanttPdf(visibleGroups.value, {
       from: period.from,
       to: period.to,
       origin: props.origin,
       unit: props.unit,
       pageTitle: props.pageTitle,
-      showMilestones: settings.value.showMilestones,
+      // Вехи и занятость ресурсов — только для скоупа задач
+      showMilestones: showMilestonesOption.value ? settings.value.showMilestones : false,
       showTodayLine: settings.value.showTodayLine,
       style: settings.value.style,
       scale: Number(props.scale) || 1,
-      resources: settings.value.showResources
+      // Строка = бар + 2px: рендерер вычислит бар = rowHeight − 2 = barThickness
+      rowHeight: settings.value.barThickness + 2,
+      resources: showResourcesOption.value && settings.value.showResources
         ? (props.resources ?? [])
             .filter((r) => r.id != null)
             .map((r) => {
@@ -445,8 +485,6 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="pe">
-    <button type="button" class="pe-btn" :disabled="busy" @click="openDialog">Печать в PDF</button>
-
     <Teleport to="body">
       <div v-if="open" class="pe-overlay" @mousedown.self="closeDialog">
         <div class="pe-modal" role="dialog" aria-modal="true" aria-label="Печать диаграммы в PDF">
@@ -471,7 +509,15 @@ onBeforeUnmount(() => {
                 </div>
               </div>
 
-              <label class="pe-field">
+              <div class="pe-field">
+                <span class="pe-label">Толщина баров</span>
+                <div class="pe-range-row">
+                  <input v-model.number="settings.barThickness" type="range" min="16" max="64" step="4" class="pe-range" />
+                  <span class="pe-range-value">{{ settings.barThickness }}px</span>
+                </div>
+              </div>
+
+              <label v-if="role === 'vp'" class="pe-field">
                 <span class="pe-toggle">
                   <input v-model="settings.onlyMine" type="checkbox" class="pe-checkbox" />
                   <span class="pe-label">Только мои процессы</span>
@@ -479,7 +525,7 @@ onBeforeUnmount(() => {
                 <span class="pe-hint">Скрыть из печати процессы других владельцев</span>
               </label>
 
-              <label class="pe-field">
+              <label v-if="showMilestonesOption" class="pe-field">
                 <span class="pe-toggle">
                   <input v-model="settings.showMilestones" type="checkbox" class="pe-checkbox" />
                   <span class="pe-label">Показывать вехи</span>
@@ -494,12 +540,27 @@ onBeforeUnmount(() => {
                 <span class="pe-hint">Вертикальная линия текущей даты на диаграмме</span>
               </label>
 
-              <label class="pe-field">
+              <label v-if="showResourcesOption" class="pe-field">
                 <span class="pe-toggle">
                   <input v-model="settings.showResources" type="checkbox" class="pe-checkbox" />
                   <span class="pe-label">Показывать занятость ресурсов</span>
                 </span>
               </label>
+
+              <div v-if="showNameFilter" class="pe-field">
+                <button type="button" class="pe-filters-toggle" @click="namesOpen = !namesOpen">
+                  <span>{{ nameFilterLabel }}</span>
+                  <span v-if="settings.selectedNames.length" class="pe-filters-count">{{ settings.selectedNames.length }}</span>
+                  <span class="pe-caret">{{ namesOpen ? '▾' : '▸' }}</span>
+                </button>
+                <div v-if="namesOpen" class="pe-filter-list">
+                  <p v-if="!nameOptions.length" class="pe-hint">Нет данных</p>
+                  <label v-for="name in nameOptions" :key="name" class="pe-filter-item">
+                    <input v-model="settings.selectedNames" type="checkbox" :value="name" class="pe-checkbox" />
+                    <span class="pe-filter-label">{{ name }}</span>
+                  </label>
+                </div>
+              </div>
 
               <div class="pe-field">
                 <button type="button" class="pe-filters-toggle" @click="projectsOpen = !projectsOpen">
@@ -540,7 +601,7 @@ onBeforeUnmount(() => {
                 <div ref="previewEl" class="pe-pages"></div>
                 <div v-if="previewLoading" class="pe-msg"><span class="pe-spinner" /> Готовим предпросмотр…</div>
                 <div v-else-if="previewError" class="pe-msg pe-msg-error">{{ previewError }}</div>
-                <div v-else-if="previewEmpty" class="pe-msg">Нет процессов для печати — измените фильтры</div>
+                <div v-else-if="previewEmpty" class="pe-msg">Нет данных для печати — измените фильтры</div>
               </div>
             </div>
           </div>
@@ -695,6 +756,22 @@ onBeforeUnmount(() => {
   font-size: 13px;
   color: #333;
   cursor: pointer;
+}
+.pe-range-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.pe-range {
+  flex: 1;
+  accent-color: #1a73e8;
+}
+.pe-range-value {
+  font-size: 12px;
+  color: #555;
+  min-width: 40px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 .pe-toggle {
   display: flex;

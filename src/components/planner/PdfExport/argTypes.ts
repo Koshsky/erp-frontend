@@ -2,11 +2,11 @@ import type { ArgTypes } from '@storybook/vue3-vite'
 import type { PdfExportProps } from './types'
 
 export const pdfExportArgTypes: ArgTypes<PdfExportProps> = {
-  processes: {
-    name: 'Процессы',
-    description: 'Процессы страницы задач в порядке отображения (DTO /planning/tasks)',
+  groups: {
+    name: 'Группы печати',
+    description: 'Готовая модель печати: группы → строки (строится страницей-планировщиком)',
     control: false,
-    table: { type: { summary: 'PdfExportProcess[]' }, category: 'Data' },
+    table: { type: { summary: 'PdfGanttGroup[]' }, category: 'Data' },
   },
   origin: {
     name: 'Якорь шкалы',
@@ -31,6 +31,26 @@ export const pdfExportArgTypes: ArgTypes<PdfExportProps> = {
     name: 'Id пользователя',
     description: 'Id текущего пользователя — владелец процессов для фильтра «Только мои процессы»',
     control: 'number',
+    table: { type: { summary: 'number' }, category: 'Data' },
+  },
+  role: {
+    name: 'Роль',
+    description: 'Роль текущего пользователя: vp видит фильтр «Только мои процессы», admin/dp/rp — нет',
+    control: { type: 'select' },
+    options: ['admin', 'dp', 'rp', 'vp', 'worker'],
+    table: { type: { summary: 'string' }, category: 'Data' },
+  },
+  scope: {
+    name: 'Скоуп диаграммы',
+    description: 'Определяет набор опций и фильтров модалки печати: задачи, процессы или проекты',
+    control: { type: 'select' },
+    options: ['tasks', 'processes', 'projects'],
+    table: { type: { summary: "'tasks' | 'processes' | 'projects'" }, defaultValue: { summary: 'tasks' }, category: 'Data' },
+  },
+  rowHeight: {
+    name: 'Толщина строки, px',
+    description: 'Высота строки в экранных px (default 26; бар = строка − 2px)',
+    control: { type: 'number', min: 12, max: 60, step: 2 },
     table: { type: { summary: 'number' }, category: 'Data' },
   },
   periodFrom: {

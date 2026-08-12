@@ -4,16 +4,16 @@ import PdfExport from './PdfExport.vue'
 import { renderGanttPdf } from './pdfRenderer'
 import { renderPdfPreview } from './previewPdf'
 import type { PdfGanttGroup } from './pdfRenderer'
-import type { PdfExportProcess } from './types'
 
 const iso = (y: number, m: number, d: number) =>
   `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
 
-const demoProcesses: PdfExportProcess[] = [
+/** Модель печати страницы задач: процесс = группа, задачи = строки */
+const demoGroups: PdfGanttGroup[] = [
   {
     id: 1,
+    code: 'MVS-001',
     title: 'Инсталляция',
-    project_code: 'MVS-001',
     project_id: 1,
     owner_id: 10,
     start_date: iso(2026, 7, 15),
@@ -23,7 +23,7 @@ const demoProcesses: PdfExportProcess[] = [
       { id: 102, title: 'Поставка материалов', date: iso(2026, 7, 27) },
       { id: 103, title: 'Окончание работ', date: iso(2026, 8, 20) },
     ],
-    tasks: [
+    rows: [
       { id: 1, title: 'Осмотр объекта', start_date: iso(2026, 7, 15), end_date: iso(2026, 7, 17), resources: [{ id: 3, code: 'ПР', quantity: 1 }] },
       { id: 2, title: 'Монтаж кабеленесущих систем', start_date: iso(2026, 7, 17), end_date: iso(2026, 7, 27), resources: [{ id: 2, code: 'М', quantity: 4 }] },
       { id: 3, title: 'Пуско-наладочные работы', start_date: iso(2026, 8, 5), end_date: iso(2026, 8, 15), resources: [{ id: 1, code: 'И', quantity: 2 }] },
@@ -31,14 +31,14 @@ const demoProcesses: PdfExportProcess[] = [
   },
   {
     id: 2,
+    code: 'MVS-002',
     title: 'Тестирование комплекса систем телемедицины',
-    project_code: 'MVS-002',
     project_id: 2,
     owner_id: 20,
     start_date: iso(2026, 8, 1),
     end_date: iso(2026, 9, 15),
     milestones: [{ id: 201, title: 'Приёмка', date: iso(2026, 9, 12) }],
-    tasks: [
+    rows: [
       { id: 4, title: 'Предоставить карту сети', start_date: iso(2026, 8, 1), end_date: iso(2026, 8, 5), resources: [{ id: 1, code: 'И', quantity: 1 }] },
       { id: 5, title: 'Тестирование MVS VEGA', start_date: iso(2026, 8, 20), end_date: iso(2026, 9, 10), resources: [{ id: 1, code: 'И', quantity: 3 }] },
       { id: 6, title: 'Проведение инструктажа', start_date: iso(2026, 9, 10), end_date: iso(2026, 9, 15), resources: [{ id: 1, code: 'И', quantity: 1 }] },
@@ -58,12 +58,14 @@ const meta: Meta<typeof PdfExport> = {
   parameters: { layout: 'padded' },
   tags: ['autodocs'],
   args: {
-    processes: demoProcesses,
+    groups: demoGroups,
     resources,
     origin: '2026-07-01',
     unit: 'day',
     pageTitle: 'Диаграмма задач',
     ownerId: 10,
+    role: 'vp',
+    scope: 'tasks',
     periodFrom: '2026-07-01',
     periodTo: '2026-09-30',
   },
@@ -74,6 +76,62 @@ type Story = StoryObj<typeof meta>
 
 export const Default: Story = {}
 
+/** Роль admin: фильтр «Только мои процессы» скрыт */
+export const AdminRole: Story = {
+  args: { role: 'admin' },
+}
+
+/** Модель страницы процессов: проект = группа, процессы = строки */
+export const ProcessGroups: Story = {
+  args: {
+    groups: [
+      {
+        id: 1,
+        code: 'MVS-001',
+        title: '',
+        project_id: 1,
+        start_date: iso(2026, 7, 1),
+        end_date: iso(2026, 9, 30),
+        rows: [
+          { id: 1, title: 'Инсталляция', start_date: iso(2026, 7, 15), end_date: iso(2026, 8, 22), project_id: 1, owner_id: 10 },
+          { id: 2, title: 'Производство', start_date: iso(2026, 7, 1), end_date: iso(2026, 9, 30), project_id: 1, owner_id: 20 },
+        ],
+      },
+      {
+        id: 2,
+        code: 'MVS-002',
+        title: '',
+        project_id: 2,
+        start_date: iso(2026, 8, 1),
+        end_date: iso(2026, 9, 30),
+        rows: [
+          { id: 3, title: 'Тестирование', start_date: iso(2026, 8, 1), end_date: iso(2026, 9, 15), project_id: 2, owner_id: 10 },
+        ],
+      },
+    ],
+    scope: 'processes',
+    pageTitle: 'Диаграмма процессов',
+  },
+}
+
+/** Модель страницы проектов: одна группа, строки = проекты */
+export const ProjectGroups: Story = {
+  args: {
+    groups: [
+      {
+        id: 'projects',
+        title: 'Проекты',
+        rows: [
+          { id: 1, title: 'MVS-001', start_date: iso(2026, 7, 1), end_date: iso(2026, 9, 30), project_id: 1 },
+          { id: 2, title: 'MVS-002', start_date: iso(2026, 8, 1), end_date: iso(2026, 9, 30), project_id: 2 },
+        ],
+      },
+    ],
+    scope: 'projects',
+    pageTitle: 'Диаграмма проектов',
+  },
+}
+
 export const Decades: Story = {
   args: {
     origin: '2026-07-01',
@@ -83,16 +141,16 @@ export const Decades: Story = {
 
 /** Открывает диалог печати с живым предпросмотром (для документации) */
 export const OpenDialog: Story = {
-  play: async ({ canvasElement }) => {
-    canvasElement.querySelector('button')?.click()
+  play: async () => {
+    window.dispatchEvent(new CustomEvent('app:print-request'))
     await new Promise((r) => setTimeout(r, 1500))
   },
 }
 
 /** Открывает диалог в чёрно-белом контурном стиле (предпросмотр ЧБ-варианта) */
 export const OpenDialogMono: Story = {
-  play: async ({ canvasElement }) => {
-    canvasElement.querySelector('button')?.click()
+  play: async () => {
+    window.dispatchEvent(new CustomEvent('app:print-request'))
     await new Promise((r) => setTimeout(r, 800))
     document.querySelector<HTMLInputElement>('input[value="mono"]')?.click()
     await new Promise((r) => setTimeout(r, 2000))
@@ -103,22 +161,7 @@ export const OpenDialogMono: Story = {
 export const RendererProducesPdf: Story = {
   tags: ['vitest'],
   play: async () => {
-    const groups: PdfGanttGroup[] = demoProcesses.map((p) => ({
-      id: p.id,
-      code: p.project_code,
-      title: p.title ?? '',
-      start_date: p.start_date,
-      end_date: p.end_date,
-      rows: (p.tasks ?? []).map((t) => ({
-        id: t.id,
-        title: t.title ?? '',
-        start_date: t.start_date ?? '',
-        end_date: t.end_date ?? '',
-      })),
-      milestones: (p.milestones ?? []).map((m) => ({ id: m.id, title: m.title ?? '', date: m.date ?? '' })),
-    }))
-
-    const bytes = await renderGanttPdf(groups, {
+    const bytes = await renderGanttPdf(demoGroups, {
       from: iso(2026, 7, 1),
       to: iso(2026, 9, 30),
       origin: '2026-07-01',
@@ -137,23 +180,7 @@ export const RendererProducesPdf: Story = {
 export const RendererMono: Story = {
   tags: ['vitest'],
   play: async () => {
-    const groups: PdfGanttGroup[] = demoProcesses.map((p) => ({
-      id: p.id,
-      code: p.project_code,
-      title: p.title ?? '',
-      start_date: p.start_date,
-      end_date: p.end_date,
-      rows: (p.tasks ?? []).map((t) => ({
-        id: t.id,
-        title: t.title ?? '',
-        start_date: t.start_date ?? '',
-        end_date: t.end_date ?? '',
-        resources: (t.resources ?? []).map((r) => ({ id: r.id, code: r.code, title: r.title, quantity: r.quantity })),
-      })),
-      milestones: (p.milestones ?? []).map((m) => ({ id: m.id, title: m.title ?? '', date: m.date ?? '' })),
-    }))
-
-    const bytes = await renderGanttPdf(groups, {
+    const bytes = await renderGanttPdf(demoGroups, {
       from: iso(2026, 7, 1),
       to: iso(2026, 9, 30),
       origin: '2026-07-01',
@@ -175,13 +202,7 @@ export const RendererMono: Story = {
 export const RendererDecades: Story = {
   tags: ['vitest'],
   play: async () => {
-    const groups: PdfGanttGroup[] = demoProcesses.map((p) => ({
-      id: p.id,
-      code: p.project_code,
-      title: p.title ?? '',
-      rows: (p.tasks ?? []).map((t) => ({ title: t.title ?? '', start_date: t.start_date ?? '', end_date: t.end_date ?? '' })),
-    }))
-    const bytes = await renderGanttPdf(groups, {
+    const bytes = await renderGanttPdf(demoGroups, {
       from: iso(2026, 7, 1),
       to: iso(2026, 12, 31),
       origin: '2026-07-01',
@@ -197,15 +218,7 @@ export const RendererDecades: Story = {
 export const PreviewRendersCanvas: Story = {
   tags: ['vitest'],
   play: async () => {
-    const groups: PdfGanttGroup[] = demoProcesses.map((p) => ({
-      id: p.id,
-      code: p.project_code,
-      title: p.title ?? '',
-      start_date: p.start_date,
-      end_date: p.end_date,
-      rows: (p.tasks ?? []).map((t) => ({ title: t.title ?? '', start_date: t.start_date ?? '', end_date: t.end_date ?? '' })),
-    }))
-    const bytes = await renderGanttPdf(groups, {
+    const bytes = await renderGanttPdf(demoGroups, {
       from: iso(2026, 7, 1),
       to: iso(2026, 9, 30),
       origin: '2026-07-01',
