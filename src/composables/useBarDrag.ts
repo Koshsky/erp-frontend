@@ -75,10 +75,12 @@ export function useBarDrag(options: UseBarDragOptions): BarDrag {
     let s = startSpan.startCell
     let end = startSpan.endCell
     if (mode === 'move') {
-      const width = startSpan.endCell - startSpan.startCell
+      // Оба края ведёт дельта мыши; границы зажимает общий клэмп ниже.
+      // У родительской границы передний край «замирает», а противоположная
+      // сторона ужимается (бар как будто уходит за границу, но не уходит);
+      // при обратном движении длина наращивается до исходной.
       s = Math.round(startSpan.startCell + delta)
-      s = clamp(s, bMin, Math.max(bMin, bMax - width))
-      end = Math.min(s + width, bMax)
+      end = Math.round(startSpan.endCell + delta)
     } else if (mode === 'resizeStart') {
       s = clamp(Math.round(startSpan.startCell + delta), bMin, Math.max(bMin, end - 1))
     } else {
