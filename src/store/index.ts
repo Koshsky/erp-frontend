@@ -4,6 +4,7 @@ import { AuthApi, ProjectsApi, ProcessesApi, TasksApi, TimesheetResourcesApi, Ti
 import type { DtoUserInfo, DtoProject, DtoResourceResponse, DtoResourceCalendar, DtoEmployeeResponse, DtoEmployeeStateResponse, DtoStateResponse, DtoCreateResourceRequest, DtoUpdateResourceRequest, JwtTokenPair } from '@/api'
 import { apiErrorMessage } from '@/utils'
 import { isOffline } from '@/offline/state'
+import { scheduleWarmup } from '@/offline/warmup'
 
 const TOKEN_KEY = 'mvs_erp_access_token'
 const REFRESH_KEY = 'mvs_erp_refresh_token'
@@ -88,6 +89,8 @@ export const useAuthStore = defineStore('auth', () => {
     }
     isAuthenticated.value = Boolean(token)
     scheduleProactiveRefresh()
+    // Фоновая прогревка офлайн-кэша данными под роль пользователя
+    scheduleWarmup()
   }
 
   async function login(username: string, password: string) {
@@ -249,7 +252,10 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   // После перезагрузки страницы с сохранёнными токенами продолжаем проактивный refresh
-  if (isAuthenticated.value) scheduleProactiveRefresh()
+  if (isAuthenticated.value) {
+    scheduleProactiveRefresh()
+    scheduleWarmup()
+  }
 
   return {
     user,

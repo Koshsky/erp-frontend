@@ -3,8 +3,10 @@
  *
  * Стратегии:
  *  - навигация (HTML-документы): network-first → fallback на закэшированный /index.html;
- *  - хэшированные ассеты /assets/*: cache-first (имена содержат хэш сборки, поэтому
- *    контент иммутабелен, старый кэш чистится при активации по ссылкам нового index.html);
+ *  - хэшированные ассеты /assets/*: cache-first. Полный список ассетов сборки
+ *    приходит из /precache-manifest.json (генерируется vite-плагином на build):
+ *    при установке кэшируются ВСЕ чанки (включая lazy-чанки неоткрытых страниц),
+ *    при активации по этому же списку вычищаются устаревшие;
  *  - статические файлы (/manifest.webmanifest, иконки): cache-first;
  *  - /api/* и всё остальное: не перехватываем (фолбэк на IndexedDB делает axios в src/http.ts).
  *
@@ -31,41 +33,68 @@ function isHashedAsset(pathname) {
   return pathname.startsWith('/assets/')
 }
 
+/** Размер пачки параллельных загрузок при precache (мягко для сети) */
+const PRECACHE_BATCH = 8
+
+/** Кэширует все ассеты сборки из /precache-manifest.json (устойчиво к сбоям) */
+async function precacheAssets() {
+  let list = []
+  try {
+    const res = await fetch('/precache-manifest.json')
+    if (!res.ok) return
+    const parsed = await res.json()
+    if (Array.isArray(parsed)) list = parsed
+  } catch {
+    return // манифест недоступен (офлайн/ошибка) — precache откладываем
+  }
+  const cache = await caches.open(ASSETS_CACHE)
+  const urls = list.filter(
+    (url) => typeof url === 'string' && url.startsWith('/assets/'),
+  )
+  for (let i = 0; i < urls.length; i += PRECACHE_BATCH) {
+    await Promise.all(
+      urls.slice(i, i + PRECACHE_BATCH).map((url) => cache.add(url).catch(() => {})),
+    )
+  }
+}
+
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches
-      .open(SHELL_CACHE)
-      .then((cache) => Promise.all(SHELL_FILES.map((file) => cache.add(file).catch(() => {}))))
-      .then(() => self.skipWaiting()),
+    (async () => {
+      const shell = await caches.open(SHELL_CACHE)
+      await Promise.all(SHELL_FILES.map((file) => shell.add(file).catch(() => {})))
+      await precacheAssets()
+      await self.skipWaiting()
+    })(),
   )
 })
 
 /**
- * Удаляет из ASSETS_CACHE записи, на которые нет ссылок в текущем /index.html.
- * Не даёт кэшу бесконечно расти между релизами (старые хэши вычищаются).
+ * Удаляет из ASSETS_CACHE записи, которых нет в текущем /precache-manifest.json.
+ * Манифест — единственный источник истины: он содержит и entry-, и lazy-чанки,
+ * поэтому между релизами вычищаются только по-настоящему устаревшие хэши.
  */
 async function pruneAssets() {
+  let list = []
   try {
-    const indexRes = await fetch('/index.html')
-    if (!indexRes.ok) return
-    const html = await indexRes.text()
-    const refs = new Set()
-    const re = /(?:href|src)="(\/assets\/[^"]+)"/g
-    let m
-    while ((m = re.exec(html))) refs.add(m[1])
-    const cache = await caches.open(ASSETS_CACHE)
-    const keys = await cache.keys()
-    await Promise.all(
-      keys
-        .filter((req) => {
-          const p = new URL(req.url).pathname
-          return isHashedAsset(p) && !refs.has(p)
-        })
-        .map((req) => cache.delete(req)),
-    )
+    const res = await fetch('/precache-manifest.json')
+    if (!res.ok) return
+    const parsed = await res.json()
+    if (Array.isArray(parsed)) list = parsed
   } catch {
-    // офлайн во время активации — старые ассеты оставляем до следующего раза
+    return // офлайн во время активации — чистим при следующем релизе
   }
+  const keep = new Set(list)
+  const cache = await caches.open(ASSETS_CACHE)
+  const keys = await cache.keys()
+  await Promise.all(
+    keys
+      .filter((req) => {
+        const p = new URL(req.url).pathname
+        return isHashedAsset(p) && !keep.has(p)
+      })
+      .map((req) => cache.delete(req)),
+  )
 }
 
 self.addEventListener('activate', (event) => {
