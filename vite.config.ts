@@ -4,12 +4,25 @@ import checker from 'vite-plugin-checker'
 import { fileURLToPath, URL } from 'node:url'
 import { readdirSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { execSync } from 'node:child_process'
+
+/** Короткий git-хэш + время сборки — уникальная версия каждого релиза */
+function buildVersion(root: string): string {
+  let hash = 'dev'
+  try {
+    hash = execSync('git rev-parse --short HEAD', { cwd: root }).toString().trim() || 'dev'
+  } catch {
+    // вне git-репозитория — остаёмся на 'dev'
+  }
+  return `${hash}-${Date.now().toString(36)}`
+}
 
 /**
- * Пишет dist/precache-manifest.json со списком всех ассетов сборки.
- * Service Worker при установке догружает этот список и кэширует ВСЕ чанки
- * (включая lazy-чанки неоткрытых страниц), а при активации чистит по нему
- * устаревшие ассеты. Это «прогрев» офлайн-оболочки без внешних плагинов.
+ * Пишет dist/precache-manifest.json: { version, assets }. version — уникальная
+ * метка сборки (видна в UI профиля и в SW), assets — список всех ассетов.
+ * Service Worker при установке догружает список и кэширует ВСЕ чанки (включая
+ * lazy-чанки неоткрытых страниц), а при активации чистит по нему устаревшие.
+ * Это «прогрев» офлайн-оболочки без внешних плагинов.
  */
 function precacheManifest(): Plugin {
   let root = process.cwd()
@@ -33,7 +46,8 @@ function precacheManifest(): Plugin {
         // каталога ассетов нет (пустая сборка) — оставляем пустой список
       }
       const dest = resolve(root, outDir, 'precache-manifest.json')
-      writeFileSync(dest, `${JSON.stringify(assets, null, 2)}\n`)
+      const payload = { version: buildVersion(root), assets }
+      writeFileSync(dest, `${JSON.stringify(payload, null, 2)}\n`)
     },
   }
 }

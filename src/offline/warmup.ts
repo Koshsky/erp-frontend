@@ -65,16 +65,30 @@ function buildSteps(): Array<() => Promise<unknown>> {
 }
 
 async function warmUp(): Promise<void> {
-  for (const step of buildSteps()) {
+  const steps = buildSteps()
+  let done = 0
+  for (const step of steps) {
     if (isOffline.value) return
     try {
       await step()
     } catch {
       // отдельный запрос упал — не валим всю прогревку
     }
+    done++
     if (isOffline.value) return
     await pause()
   }
+  console.log(`[warmup] прогрето запросов: ${done}`)
+}
+
+/** Прогревка сразу (без ожидания простоя) — кнопка «Прогреть данные» в профиле */
+export function warmNow(): Promise<void> {
+  if (running) return Promise.resolve()
+  if (isOffline.value) return Promise.resolve()
+  running = true
+  return warmUp().finally(() => {
+    running = false
+  })
 }
 
 /** Планирует прогревку при простое. Идемпотентна (один запуск за раз). */
@@ -85,11 +99,7 @@ export function scheduleWarmup(): void {
   scheduled = true
   runWhenIdle(() => {
     scheduled = false
-    if (running) return
-    running = true
-    warmUp().finally(() => {
-      running = false
-    })
+    void warmNow()
   })
 }
 

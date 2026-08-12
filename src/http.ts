@@ -64,7 +64,7 @@ export function setupHttp() {
 
       // Сервер недоступен: отдаём последний сохранённый ответ из кэша (тот же
       // формат { data, error }), чтобы страница открывалась офлайн. Если кэша
-      // нет — ошибка уходит дальше как обычно.
+      // нет — ошибка уходит дальше как обычно, но с понятным текстом для GET.
       if (isNetworkError(error)) {
         const cached = await cacheGet<unknown>(cacheKey(config))
         if (cached != null) {
@@ -77,6 +77,10 @@ export function setupHttp() {
             config,
             request: error.request,
           }
+        }
+        if ((config.method ?? 'get').toLowerCase() === 'get') {
+          ;(error as AxiosError & { message: string }).message =
+            'Нет сохранённых данных: откройте эту страницу онлайн хотя бы раз'
         }
         return Promise.reject(error)
       }

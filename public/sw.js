@@ -36,14 +36,23 @@ function isHashedAsset(pathname) {
 /** Размер пачки параллельных загрузок при precache (мягко для сети) */
 const PRECACHE_BATCH = 8
 
+/** Ключ в SHELL_CACHE, куда пишется версия активного SW (читается из UI) */
+const VERSION_KEY = '/__sw_version__'
+
 /** Кэширует все ассеты сборки из /precache-manifest.json (устойчиво к сбоям) */
 async function precacheAssets() {
   let list = []
+  let version = ''
   try {
     const res = await fetch('/precache-manifest.json')
     if (!res.ok) return
     const parsed = await res.json()
-    if (Array.isArray(parsed)) list = parsed
+    if (Array.isArray(parsed)) {
+      list = parsed
+    } else {
+      list = parsed?.assets ?? []
+      version = parsed?.version ?? ''
+    }
   } catch {
     return // манифест недоступен (офлайн/ошибка) — precache откладываем
   }
@@ -55,6 +64,14 @@ async function precacheAssets() {
     await Promise.all(
       urls.slice(i, i + PRECACHE_BATCH).map((url) => cache.add(url).catch(() => {})),
     )
+  }
+  if (version) {
+    const shell = await caches.open(SHELL_CACHE)
+    await shell.put(
+      VERSION_KEY,
+      new Response(version, { headers: { 'Content-Type': 'text/plain' } }),
+    )
+    console.log('[SW] версия:', version)
   }
 }
 
@@ -81,6 +98,7 @@ async function pruneAssets() {
     if (!res.ok) return
     const parsed = await res.json()
     if (Array.isArray(parsed)) list = parsed
+    else list = parsed?.assets ?? []
   } catch {
     return // офлайн во время активации — чистим при следующем релизе
   }

@@ -1,8 +1,11 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useAuthStore } from '../store'
 import { PasswordField, PasswordRequirements } from '../components/common'
 import { passwordRules, validatePassword } from '../composables/usePasswordValidation'
+import { idbCount } from '../offline/db'
+import { warmNow } from '../offline/warmup'
+import { applyUpdate, checkForUpdates, swControlled, updateAvailable } from '../offline/registration'
 
 const auth = useAuthStore()
 
@@ -33,10 +36,64 @@ const profile = computed<ProfileField[]>(() => {
   ]
 })
 
-// Подтягиваем свежие данные профиля по id пользователя
+// === Приложение / офлайн: версии, состояние кэша, ручная прогревка ===
+const appVersion = ref('—')
+const swVersion = ref('—')
+const cachedAssets = ref(0)
+const cachedData = ref(0)
+const checkMsg = ref<string | null>(null)
+let refreshTimer: number | null = null
+
+async function refreshOfflineInfo() {
+  try {
+    const res = await fetch('/precache-manifest.json')
+    if (res.ok) {
+      const data = (await res.json()) as { version?: string }
+      appVersion.value = data.version ?? '—'
+    }
+  } catch {
+    // офлайн — версия сборки не критична
+  }
+  try {
+    const c = await caches.open('erp-shell')
+    const resp = await c.match('/__sw_version__')
+    swVersion.value = resp ? await resp.text() : '—'
+  } catch {
+    swVersion.value = '—'
+  }
+  try {
+    const c = await caches.open('erp-assets')
+    cachedAssets.value = (await c.keys()).length
+  } catch {
+    cachedAssets.value = 0
+  }
+  cachedData.value = await idbCount('cache').catch(() => 0)
+}
+
+async function onWarmNow() {
+  checkMsg.value = null
+  await warmNow()
+  await refreshOfflineInfo()
+  checkMsg.value = 'Данные прогреты (если сеть доступна)'
+}
+
+async function onCheckUpdates() {
+  checkMsg.value = null
+  const ok = await checkForUpdates()
+  if (ok && !updateAvailable.value) {
+    checkMsg.value = 'Обновлений не найдено'
+  }
+}
+
 onMounted(() => {
   const id = auth.user?.id
   if (id != null) auth.fetchProfile(id)
+  void refreshOfflineInfo()
+  refreshTimer = window.setInterval(refreshOfflineInfo, 5000)
+})
+
+onBeforeUnmount(() => {
+  if (refreshTimer != null) window.clearInterval(refreshTimer)
 })
 
 async function onChangePassword() {
@@ -95,6 +152,45 @@ async function onChangePassword() {
             {{ auth.loading ? 'Сохранение…' : 'Сменить пароль' }}
           </button>
         </form>
+      </div>
+
+      <div class="pf-card">
+        <h3 class="pf-title sm app-title">Приложение и офлайн</h3>
+        <div class="pf-row">
+          <span class="pf-label">Версия приложения</span>
+          <span class="pf-value">{{ appVersion }}</span>
+        </div>
+        <div class="pf-row">
+          <span class="pf-label">Версия Service Worker</span>
+          <span class="pf-value">{{ swVersion }}</span>
+        </div>
+        <div class="pf-row">
+          <span class="pf-label">Управление SW</span>
+          <span class="pf-value">{{ swControlled ? 'активен' : 'нет' }}</span>
+        </div>
+        <div class="pf-row">
+          <span class="pf-label">Кэш ассетов</span>
+          <span class="pf-value">{{ cachedAssets }} чанков</span>
+        </div>
+        <div class="pf-row">
+          <span class="pf-label">Сохранённых данных</span>
+          <span class="pf-value">{{ cachedData }} записей</span>
+        </div>
+        <div class="app-actions">
+          <button type="button" class="pf-btn" @click="onWarmNow">Прогреть данные сейчас</button>
+          <button
+            v-if="!updateAvailable"
+            type="button"
+            class="pf-btn ghost"
+            @click="onCheckUpdates"
+          >
+            Проверить обновление
+          </button>
+          <button v-else type="button" class="pf-btn accent" @click="applyUpdate">
+            Перезагрузить с обновлением
+          </button>
+          <p v-if="checkMsg" class="pf-msg app-msg">{{ checkMsg }}</p>
+        </div>
       </div>
     </div>
   </section>
@@ -212,5 +308,34 @@ async function onChangePassword() {
 .pf-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+.pf-btn.ghost {
+  background: #f2f2f2;
+  color: #444;
+}
+.pf-btn.ghost:hover:not(:disabled) {
+  background: #e6e6e6;
+}
+.pf-btn.accent {
+  background: #188038;
+}
+.pf-btn.accent:hover:not(:disabled) {
+  background: #146b30;
+}
+
+.app-title {
+  padding: 20px 20px 0;
+}
+
+.app-actions {
+  padding: 8px 20px 20px;
+}
+
+.app-actions .pf-btn + .pf-btn {
+  margin-top: 0;
+}
+
+.app-msg {
+  margin-top: 10px;
 }
 </style>
