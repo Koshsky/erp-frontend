@@ -79,7 +79,7 @@ const settings = ref({
   hiddenProjects: [] as number[],
   selectedNames: [] as string[],
   showMilestones: true,
-  showTodayLine: true,
+  showTodayLine: false,
   showResources: true,
   style: 'color' as 'color' | 'mono',
   // Толщина бара (px): строка автоматически = бар + 2px; старт от пропа rowHeight
@@ -107,8 +107,9 @@ const projects = computed(() => {
 /** Подпись фильтра имён: одинаковый для задач и процессов */
 const nameFilterLabel = 'Процессы'
 
-/** Скоуп-зависимая конфигурация модалки печати */
-const showNameFilter = computed(() => props.scope !== 'projects')
+/** Скоуп-зависимая конфигурация модалки печати.
+ *  Фильтр «Процессы» скрыт на проектах и у vp (ему достаточно «Только мои процессы»). */
+const showNameFilter = computed(() => props.scope !== 'projects' && props.role !== 'vp')
 const showMilestonesOption = computed(() => props.scope === 'tasks')
 const showResourcesOption = computed(() => props.scope === 'tasks')
 /** Уровень фильтрации имён/проекта: задачи — группы, процессы/проекты — строки */
