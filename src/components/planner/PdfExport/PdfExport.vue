@@ -373,18 +373,73 @@ async function onDownload() {
   closeDialog()
 }
 
+/** Печатает PDF через браузерный диалог: скрытый iframe с blob-URL + contentWindow.print() */
+function printBytes(bytes: Uint8Array) {
+  const copy = new Uint8Array(bytes.byteLength)
+  copy.set(bytes)
+  const blob = new Blob([copy.buffer], { type: 'application/pdf' })
+  const url = URL.createObjectURL(blob)
+  const iframe = document.createElement('iframe')
+  iframe.setAttribute('aria-hidden', 'true')
+  iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden'
+  iframe.src = url
+  document.body.appendChild(iframe)
+  const cleanup = () => {
+    URL.revokeObjectURL(url)
+    iframe.remove()
+    window.removeEventListener('afterprint', cleanup)
+  }
+  window.addEventListener('afterprint', cleanup)
+  iframe.addEventListener('load', () => {
+    // Даём встроенному просмотрщику PDF время открыть документ, затем вызываем печать
+    setTimeout(() => {
+      try {
+        iframe.contentWindow?.print()
+      } catch {
+        cleanup()
+      }
+    }, 150)
+  })
+}
+
+/** Подготовка к печати: генерирует PDF и отправляет его в браузерный диалог печати */
+async function onPrint() {
+  if (busy.value || previewEmpty.value) return
+  const params = renderKey()
+  let bytes = currentBytes.value
+  if (!bytes || params !== renderedParams) {
+    busy.value = true
+    try {
+      await generate(true)
+      bytes = currentBytes.value
+    } finally {
+      busy.value = false
+    }
+  }
+  if (!bytes) return
+  printBytes(bytes)
+  closeDialog()
+}
+
 function onKeydown(e: KeyboardEvent) {
   if (e.key === 'Escape' && open.value) closeDialog()
 }
 
+/** Глобальный Ctrl/Cmd+P/S (перехвачен в MainLayout) — открыть модалку подготовки к печати */
+function onPrintRequest() {
+  if (!open.value) openDialog()
+}
+
 onMounted(() => {
   document.addEventListener('keydown', onKeydown)
+  window.addEventListener('app:print-request', onPrintRequest)
 })
 
 onBeforeUnmount(() => {
   if (genTimer != null) clearTimeout(genTimer)
   previewHandle?.destroy()
   document.removeEventListener('keydown', onKeydown)
+  window.removeEventListener('app:print-request', onPrintRequest)
 })
 </script>
 
@@ -492,9 +547,12 @@ onBeforeUnmount(() => {
 
           <div class="pe-actions">
             <button type="button" class="pe-btn-cancel" @click="closeDialog">Отмена</button>
-            <button type="button" class="pe-btn-primary" :disabled="busy || previewEmpty" @click="onDownload">
-              <span v-if="busy" class="pe-spinner" />
+            <button type="button" class="pe-btn-download" :disabled="busy || previewEmpty" @click="onDownload">
               Скачать PDF
+            </button>
+            <button type="button" class="pe-btn-primary" :disabled="busy || previewEmpty" @click="onPrint">
+              <span v-if="busy" class="pe-spinner" />
+              Печать
             </button>
           </div>
         </div>
@@ -853,6 +911,28 @@ onBeforeUnmount(() => {
 .pe-btn-primary {
   background: #1a73e8;
   color: #fff;
+}
+.pe-btn-download {
+  border: none;
+  border-radius: 8px;
+  padding: 9px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #e8f0fe;
+  color: #1a73e8;
+}
+.pe-btn-download:hover:not(:disabled) {
+  background: #d2e3fc;
+}
+.pe-btn-download:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 .pe-btn-primary:hover:not(:disabled) {
   background: #1765cc;
