@@ -35,44 +35,69 @@ function isHashedAsset(pathname) {
 
 /** Размер пачки параллельных загрузок при precache (мягко для сети) */
 const PRECACHE_BATCH = 8
+/** Сколько попыток на ассет (транзиентные обрывы сети) */
+const PRECACHE_RETRIES = 3
+/** Пауза между попытками */
+const RETRY_DELAY_MS = 500
 
 /** Ключ в SHELL_CACHE, куда пишется версия активного SW (читается из UI) */
 const VERSION_KEY = '/__sw_version__'
 
-/** Кэширует все ассеты сборки из /precache-manifest.json (устойчиво к сбоям) */
-async function precacheAssets() {
-  let list = []
-  let version = ''
+/** Читает { assets, version } из /precache-manifest.json или null при недоступности */
+async function fetchManifest() {
   try {
     const res = await fetch('/precache-manifest.json')
-    if (!res.ok) return
+    if (!res.ok) return null
     const parsed = await res.json()
-    if (Array.isArray(parsed)) {
-      list = parsed
-    } else {
-      list = parsed?.assets ?? []
-      version = parsed?.version ?? ''
-    }
+    if (Array.isArray(parsed)) return { assets: parsed, version: '' }
+    return { assets: parsed?.assets ?? [], version: parsed?.version ?? '' }
   } catch {
-    return // манифест недоступен (офлайн/ошибка) — precache откладываем
+    return null
   }
+}
+
+/** Догружает один ассет с ретраями. Возвращает true при успехе. */
+async function addAsset(cache, url) {
+  for (let attempt = 0; attempt < PRECACHE_RETRIES; attempt++) {
+    try {
+      await cache.add(url)
+      return true
+    } catch (e) {
+      if (attempt === PRECACHE_RETRIES - 1) return false
+      await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS))
+    }
+  }
+  return false
+}
+
+/**
+ * Кэширует все ассеты сборки из /precache-manifest.json (с ретраями).
+ * Возвращает true, если precache полон (все ассеты манифеста в кэше),
+ * false — если манифест недоступен или часть ассетов не догрузилась.
+ */
+async function precacheAssets() {
+  const manifest = await fetchManifest()
+  if (!manifest) return false
   const cache = await caches.open(ASSETS_CACHE)
-  const urls = list.filter(
+  const urls = manifest.assets.filter(
     (url) => typeof url === 'string' && url.startsWith('/assets/'),
   )
   for (let i = 0; i < urls.length; i += PRECACHE_BATCH) {
     await Promise.all(
-      urls.slice(i, i + PRECACHE_BATCH).map((url) => cache.add(url).catch(() => {})),
+      urls.slice(i, i + PRECACHE_BATCH).map((url) => addAsset(cache, url)),
     )
   }
-  if (version) {
+  if (manifest.version) {
     const shell = await caches.open(SHELL_CACHE)
     await shell.put(
       VERSION_KEY,
-      new Response(version, { headers: { 'Content-Type': 'text/plain' } }),
+      new Response(manifest.version, { headers: { 'Content-Type': 'text/plain' } }),
     )
-    console.log('[SW] версия:', version)
+    console.log('[SW] версия:', manifest.version)
   }
+  const keys = await cache.keys()
+  const cached = keys.filter((r) => isHashedAsset(new URL(r.url).pathname)).length
+  return cached >= urls.length
 }
 
 self.addEventListener('install', (event) => {
@@ -121,7 +146,11 @@ self.addEventListener('activate', (event) => {
       const keep = new Set([SHELL_CACHE, ASSETS_CACHE])
       const keys = await caches.keys()
       await Promise.all(keys.filter((k) => !keep.has(k)).map((k) => caches.delete(k)))
-      await pruneAssets()
+      // Повторный precache: закрывает случай, когда при install манифест или
+      // часть ассетов не догрузились. Устаревшие хэши чистим только когда
+      // новый precache подтверждён полным — иначе оставляем их как fallback.
+      const complete = await precacheAssets()
+      if (complete) await pruneAssets()
       await self.clients.claim()
     })(),
   )
@@ -148,19 +177,24 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
-  // Хэшированные ассеты сборки: cache-first
+  // Хэшированные ассеты сборки: cache-first. ignoreVary/ignoreSearch — чтобы
+  // совпадение не зависело от заголовков запроса (Vary) и query-параметров.
+  // При промахе и недоступной сети отдаём 503 вместо проброса NetworkError в
+  // respondWith (иначе «error loading dynamically imported module»).
   if (isHashedAsset(path)) {
     event.respondWith(
-      caches.match(req).then(
+      caches.match(req, { ignoreVary: true, ignoreSearch: true }).then(
         (cached) =>
           cached ||
-          fetch(req).then((res) => {
-            if (res.ok) {
-              const copy = res.clone()
-              caches.open(ASSETS_CACHE).then((c) => c.put(req, copy)).catch(() => {})
-            }
-            return res
-          }),
+          fetch(req)
+            .then((res) => {
+              if (res.ok) {
+                const copy = res.clone()
+                caches.open(ASSETS_CACHE).then((c) => c.put(req, copy)).catch(() => {})
+              }
+              return res
+            })
+            .catch(() => new Response('', { status: 503, statusText: 'Offline' })),
       ),
     )
     return
@@ -174,7 +208,13 @@ self.addEventListener('fetch', (event) => {
     path === '/icons/icon-512.png' ||
     path === '/favicon.ico'
   ) {
-    event.respondWith(caches.match(req).then((cached) => cached || fetch(req)))
+    event.respondWith(
+      caches.match(req).then(
+        (cached) =>
+          cached ||
+          fetch(req).catch(() => new Response('', { status: 503, statusText: 'Offline' })),
+      ),
+    )
     return
   }
 
