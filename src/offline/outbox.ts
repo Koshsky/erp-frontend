@@ -1,6 +1,7 @@
 import { ref } from 'vue'
 import axios, { type AxiosError, type Method } from 'axios'
 import { idbAll, idbCount, idbDel, idbPut } from './db'
+import { applyToCache } from './cacheApply'
 
 /**
  * Очередь мутаций (outbox-паттерн): запросы создания/изменения/удаления,
@@ -58,12 +59,27 @@ function uid(): string {
     : `m-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
 }
 
+/** axios сериализует config.data (transformRequest) — приводим к объекту */
+function normalizeBody(body: unknown): unknown {
+  if (typeof body === 'string') {
+    try {
+      return JSON.parse(body)
+    } catch {
+      return body
+    }
+  }
+  return body
+}
+
 export async function enqueueMutation(
   entry: Omit<OutboxEntry, 'id' | 'ts' | 'failed'>,
 ): Promise<void> {
-  const rec: OutboxEntry = { ...entry, id: uid(), ts: Date.now() }
+  const rec: OutboxEntry = { ...entry, body: normalizeBody(entry.body), id: uid(), ts: Date.now() }
   await idbPut(OUTBOX_STORE, rec.id, rec)
   await refreshPendingCount()
+  // Write-through: применяем дельту к «нагретым» данным (кэш GET-ответов),
+  // чтобы после перезагрузки страницы офлайн изменения не пропадали.
+  await applyToCache(rec)
 }
 
 /** Подменяет временные id на реальные (после успешных созданий в очереди) */

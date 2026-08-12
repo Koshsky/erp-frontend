@@ -904,9 +904,19 @@ export const useTimesheetStore = defineStore('timesheet', () => {
                 !(p.end_date < startDate || p.start_date > endDate)
               ),
           )
+          // Поля статуса нужны для цвета и аббревиатуры ячейки офлайн
+          const st = states.value.find((s) => s.id === stateId)
           periodsByEmployee.value[employeeId] = [
             ...kept,
-            { id: nextTempId(), state_id: stateId, start_date: startDate, end_date: endDate },
+            {
+              id: nextTempId(),
+              state_id: stateId,
+              start_date: startDate,
+              end_date: endDate,
+              state_code: st?.code,
+              state_name: st?.name,
+              is_available: st?.is_available,
+            },
           ].sort((a, b) => (a.start_date ?? '').localeCompare(b.start_date ?? ''))
         },
         onError: (m) => {

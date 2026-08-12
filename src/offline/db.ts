@@ -80,6 +80,11 @@ export async function idbAll<T>(store: string): Promise<T[]> {
   return (result ?? []) as T[]
 }
 
+export async function idbKeys(store: string): Promise<string[]> {
+  const result = await txAll(store, 'readonly', (s) => s.getAllKeys())
+  return (result ?? []) as string[]
+}
+
 export async function idbCount(store: string): Promise<number> {
   const result = await txAll(store, 'readonly', (s) => s.count())
   return typeof result === 'number' ? result : 0
