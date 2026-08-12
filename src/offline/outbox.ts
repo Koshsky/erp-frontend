@@ -14,6 +14,8 @@ import { idbAll, idbCount, idbDel, idbPut } from './db'
 
 const OUTBOX_STORE = 'outbox'
 const TOKEN_KEY = 'mvs_erp_access_token'
+/** Таймаут probe доступности сервера */
+const REACH_PROBE_TIMEOUT_MS = 4000
 
 export type MutationEntity =
   | 'resource'
@@ -87,6 +89,27 @@ function errorMessage(e: unknown): string {
 
 export { errorMessage }
 
+/**
+ * Проверка реальной доступности сервера. navigator.onLine врёт (на «мёртвом»
+ * WiFi он true), поэтому перед отправкой очереди убеждаемся, что сервер
+ * отвечает. Любой HTTP-статус (<500) = достижим; сеть недоступна только при
+ * сетевой ошибке/таймауте.
+ */
+async function isServerReachable(): Promise<boolean> {
+  try {
+    const ctrl = new AbortController()
+    const timer = window.setTimeout(() => ctrl.abort(), REACH_PROBE_TIMEOUT_MS)
+    try {
+      const res = await fetch('/precache-manifest.json', { cache: 'no-store', signal: ctrl.signal })
+      return res.status < 500
+    } finally {
+      window.clearTimeout(timer)
+    }
+  } catch {
+    return false
+  }
+}
+
 export interface FlushResult {
   ok: number
   failed: number
@@ -107,6 +130,12 @@ export async function flushOutbox(): Promise<FlushResult> {
   flushing = true
   const result: FlushResult = { ok: 0, failed: 0, interrupted: false, entities: new Set() }
   try {
+    // Сервер недоступен (мёртвый WiFi, интернета нет) — очередь не трогаем:
+    // тихий пропуск, без reconcile и без потери/порчи записей.
+    if (!(await isServerReachable())) {
+      return { ok: 0, failed: 0, interrupted: false, entities: new Set() }
+    }
+
     const entries = (await idbAll<OutboxEntry>(OUTBOX_STORE)).sort((a, b) => a.ts - b.ts)
     const idMap = new Map<number, number>()
 
@@ -137,10 +166,13 @@ export async function flushOutbox(): Promise<FlushResult> {
         await idbDel(OUTBOX_STORE, entry.id)
         result.ok++
       } catch (e) {
-        if (isNetworkError(e)) {
+        // Нет HTTP-ответа (ERR_NETWORK, таймаут, abort) — сеть снова оборвалась:
+        // останавливаемся, запись НЕ помечаем failed и НЕ удаляем.
+        if (!(e as AxiosError).response) {
           result.interrupted = true
-          break // сеть снова недоступна — остаток ждёт следующего раза
+          break
         }
+        // Сервер реально ответил (400/409/502...) — это настоящая ошибка.
         await idbPut(OUTBOX_STORE, entry.id, {
           ...entry,
           failed: { message: errorMessage(e), at: Date.now() },

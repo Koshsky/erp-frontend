@@ -96,6 +96,9 @@ async function runSync(): Promise<void> {
   }
 }
 
+/** Интервал поллинга очереди для «тихого» возврата сети (без события online) */
+const SYNC_POLL_MS = 15000
+
 /** Инициализация: реконсил при старте с очередью + триггер на возврат сети */
 export function initOfflineSync(): void {
   void refreshPendingCount()
@@ -107,4 +110,10 @@ export function initOfflineSync(): void {
       if (pendingCount.value > 0) void runSync()
     })
   }
+  // Интернет может вернуться без события online (интерфейс всё время «up»).
+  // runSync сам проверит доступность сервера (probe в flushOutbox), так что
+  // поллинг безопасен и дешёв — работает только пока есть очередь.
+  window.setInterval(() => {
+    if (pendingCount.value > 0 && !isOffline.value) void runSync()
+  }, SYNC_POLL_MS)
 }
