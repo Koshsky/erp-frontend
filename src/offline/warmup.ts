@@ -23,8 +23,20 @@ let running = false
 let scheduled = false
 let rewarmTimer: number | null = null
 
-/** Время последней успешной прогревки (для UI профиля) */
-export const lastWarmedAt = ref<number | null>(null)
+const LAST_WARMED_KEY = 'mvs_erp_last_warmed_at'
+
+function readLastWarmed(): number | null {
+  try {
+    const raw = localStorage.getItem(LAST_WARMED_KEY)
+    const n = raw ? Number(raw) : NaN
+    return Number.isFinite(n) && n > 0 ? n : null
+  } catch {
+    return null
+  }
+}
+
+/** Время последнего запуска прогревки (для UI профиля; переживает перезагрузки) */
+export const lastWarmedAt = ref<number | null>(readLastWarmed())
 
 function runWhenIdle(fn: () => void): void {
   const w = window as Window & {
@@ -91,15 +103,27 @@ async function warmUp(): Promise<void> {
   console.log(`[warmup] прогрето запросов: ${done}`)
 }
 
-/** Прогревка сразу (без ожидания простоя) — кнопка «Прогреть данные» в профиле */
-export function warmNow(): Promise<void> {
-  if (running) return Promise.resolve()
-  if (isOffline.value) return Promise.resolve()
+/**
+ * Прогревка сразу (без ожидания простоя) — кнопка «Прогреть данные» в профиле.
+ * Возвращает true, если прогревка действительно запущена; false — если она
+ * пропущена (офлайн или уже идёт другая).
+ */
+export function warmNow(): Promise<boolean> {
+  if (running || isOffline.value) return Promise.resolve(false)
   running = true
-  return warmUp().finally(() => {
-    running = false
-    lastWarmedAt.value = Date.now()
-  })
+  return warmUp()
+    .then(() => {
+      lastWarmedAt.value = Date.now()
+      try {
+        localStorage.setItem(LAST_WARMED_KEY, String(lastWarmedAt.value))
+      } catch {
+        // метка не критична — при следующем прогоне обновится
+      }
+      return true
+    })
+    .finally(() => {
+      running = false
+    })
 }
 
 /** Планирует прогревку при простое. Идемпотентна (один запуск за раз). */

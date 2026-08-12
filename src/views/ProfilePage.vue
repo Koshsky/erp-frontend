@@ -5,6 +5,7 @@ import { PasswordField, PasswordRequirements } from '../components/common'
 import { passwordRules, validatePassword } from '../composables/usePasswordValidation'
 import { idbCount } from '../offline/db'
 import { lastWarmedAt, warmNow } from '../offline/warmup'
+import { isOffline } from '../offline/state'
 import { applyUpdate, checkForUpdates, swControlled, updateAvailable } from '../offline/registration'
 
 const auth = useAuthStore()
@@ -78,9 +79,15 @@ async function refreshOfflineInfo() {
 
 async function onWarmNow() {
   checkMsg.value = null
-  await warmNow()
+  const ran = await warmNow()
   await refreshOfflineInfo()
-  checkMsg.value = 'Данные прогреты (если сеть доступна)'
+  if (ran) {
+    checkMsg.value = 'Данные прогреты'
+  } else if (isOffline.value) {
+    checkMsg.value = 'Прогревка недоступна: нет сети'
+  } else {
+    checkMsg.value = 'Прогревка уже идёт'
+  }
 }
 
 async function onCheckUpdates() {
