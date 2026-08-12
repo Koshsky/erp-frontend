@@ -38,6 +38,9 @@ function readLastWarmed(): number | null {
 /** Время последнего запуска прогревки (для UI профиля; переживает перезагрузки) */
 export const lastWarmedAt = ref<number | null>(readLastWarmed())
 
+/** Прогресс прогревки 0..100, null — прогревка не идёт (для индикатора в UI) */
+export const warmupProgress = ref<number | null>(null)
+
 function runWhenIdle(fn: () => void): void {
   const w = window as Window & {
     requestIdleCallback?: (cb: () => void, opts: { timeout: number }) => number
@@ -91,16 +94,19 @@ function buildSteps(): Array<() => Promise<unknown>> {
 
 async function warmUp(): Promise<void> {
   const steps = buildSteps()
+  const total = steps.length
   let done = 0
+  warmupProgress.value = total > 0 ? 0 : null
   for (const step of steps) {
-    if (isOffline.value) return
+    if (isOffline.value) break
     try {
       await step()
     } catch {
       // отдельный запрос упал — не валим всю прогревку
     }
     done++
-    if (isOffline.value) return
+    warmupProgress.value = total > 0 ? Math.round((done / total) * 100) : null
+    if (isOffline.value) break
     await pause()
   }
   console.log(`[warmup] прогрето запросов: ${done}`)
@@ -126,6 +132,7 @@ export function warmNow(): Promise<boolean> {
     })
     .finally(() => {
       running = false
+      warmupProgress.value = null
     })
 }
 

@@ -4,7 +4,7 @@ import { useAuthStore } from '../store'
 import { PasswordField, PasswordRequirements } from '../components/common'
 import { passwordRules, validatePassword } from '../composables/usePasswordValidation'
 import { idbCount } from '../offline/db'
-import { lastWarmedAt, warmNow } from '../offline/warmup'
+import { lastWarmedAt, warmNow, warmupProgress } from '../offline/warmup'
 import { isOffline } from '../offline/state'
 import { applyUpdate, checkForUpdates, swControlled, updateAvailable } from '../offline/registration'
 
@@ -196,11 +196,17 @@ async function onChangePassword() {
             <span class="pf-label">Последняя прогревка</span>
             <span class="pf-value">{{ lastWarmedLabel }}</span>
           </div>
-          <div class="app-actions">
-            <p v-if="cachedData === 0" class="pf-msg warn">
-              Кэш данных пуст. Для офлайна зайдите онлайн и нажмите «Прогреть данные сейчас».
-            </p>
-            <button type="button" class="pf-btn" @click="onWarmNow">Прогреть данные сейчас</button>
+        <div class="app-actions">
+          <p v-if="cachedData === 0" class="pf-msg warn">
+            Кэш данных пуст. Для офлайна зайдите онлайн и нажмите «Прогреть данные сейчас».
+          </p>
+          <div v-if="warmupProgress != null" class="warm-progress" role="progressbar" :aria-valuenow="warmupProgress">
+            <div class="warm-bar">
+              <div class="warm-fill" :style="{ width: warmupProgress + '%' }" />
+            </div>
+            <span class="warm-label">Прогрев данных: {{ warmupProgress }}%</span>
+          </div>
+          <button type="button" class="pf-btn" @click="onWarmNow">Прогреть данные сейчас</button>
             <button
               v-if="!updateAvailable"
               type="button"
@@ -371,5 +377,31 @@ async function onChangePassword() {
 
 .app-msg {
   margin-top: 10px;
+}
+
+.warm-progress {
+  margin: 4px 0 2px;
+}
+
+.warm-bar {
+  height: 8px;
+  border-radius: 999px;
+  background: #e9edf2;
+  overflow: hidden;
+}
+
+.warm-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: #1a73e8;
+  transition: width 0.3s ease;
+}
+
+.warm-label {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+  color: #555;
+  text-align: right;
 }
 </style>
