@@ -1,11 +1,14 @@
 /**
  * Минимальная promise-обёртка над IndexedDB (без внешних зависимостей).
- * Одна БД `erp-offline` со стораджем `cache` для кэширования ответов API.
+ * Одна БД `erp-offline` со стораджами:
+ *  - `cache`  — кэш ответов API (GET);
+ *  - `outbox` — очередь мутаций для офлайн-записи (создание/изменение/удаление).
  */
 
 const DB_NAME = 'erp-offline'
-const DB_VERSION = 1
+const DB_VERSION = 2
 const CACHE_STORE = 'cache'
+const OUTBOX_STORE = 'outbox'
 
 let dbPromise: Promise<IDBDatabase> | null = null
 
@@ -20,6 +23,9 @@ function openDb(): Promise<IDBDatabase> {
       const db = req.result
       if (!db.objectStoreNames.contains(CACHE_STORE)) {
         db.createObjectStore(CACHE_STORE)
+      }
+      if (!db.objectStoreNames.contains(OUTBOX_STORE)) {
+        db.createObjectStore(OUTBOX_STORE)
       }
     }
     req.onsuccess = () => resolve(req.result)
@@ -56,15 +62,25 @@ function txAll(
   })
 }
 
-export async function idbPut(key: string, value: unknown): Promise<void> {
-  await txAll(CACHE_STORE, 'readwrite', (s) => s.put(value, key))
+export async function idbPut(store: string, key: string, value: unknown): Promise<void> {
+  await txAll(store, 'readwrite', (s) => s.put(value, key))
 }
 
-export async function idbGet<T>(key: string): Promise<T | undefined> {
-  const result = await txAll(CACHE_STORE, 'readonly', (s) => s.get(key))
+export async function idbGet<T>(store: string, key: string): Promise<T | undefined> {
+  const result = await txAll(store, 'readonly', (s) => s.get(key))
   return result as T | undefined
 }
 
-export async function idbDel(key: string): Promise<void> {
-  await txAll(CACHE_STORE, 'readwrite', (s) => s.delete(key))
+export async function idbDel(store: string, key: string): Promise<void> {
+  await txAll(store, 'readwrite', (s) => s.delete(key))
+}
+
+export async function idbAll<T>(store: string): Promise<T[]> {
+  const result = await txAll(store, 'readonly', (s) => s.getAll())
+  return (result ?? []) as T[]
+}
+
+export async function idbCount(store: string): Promise<number> {
+  const result = await txAll(store, 'readonly', (s) => s.count())
+  return typeof result === 'number' ? result : 0
 }

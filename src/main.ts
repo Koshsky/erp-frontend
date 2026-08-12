@@ -3,8 +3,10 @@ import { createPinia } from 'pinia'
 import App from './App.vue'
 import router from './router'
 import { setupHttp } from './http'
+import { initOfflineSync } from './offline/sync'
 
 setupHttp()
+initOfflineSync()
 
 // Офлайн-доступ: регистрируем Service Worker только в проде (в dev ассеты не
 // хэшируются, кэшировать их нельзя — сломало бы HMR). SW требует HTTPS или

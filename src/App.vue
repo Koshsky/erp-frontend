@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import OfflineBanner from './offline/OfflineBanner.vue'
+import SyncToast from './offline/SyncToast.vue'
 </script>
 
 <template>
   <OfflineBanner />
+  <SyncToast />
   <RouterView />
 </template>
 

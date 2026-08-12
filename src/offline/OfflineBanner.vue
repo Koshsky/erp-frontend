@@ -1,11 +1,15 @@
 <script setup lang="ts">
 import { isOffline } from './state'
+import { pendingCount } from './outbox'
 </script>
 
 <template>
   <transition name="offline-fade">
     <div v-if="isOffline" class="offline-banner" role="status">
-      Офлайн-режим: показаны сохранённые данные, изменения не сохраняются
+      <span>Офлайн-режим: показаны сохранённые данные, изменения копятся в очереди</span>
+      <span v-if="pendingCount > 0" class="offline-banner__count">
+        {{ pendingCount }} ожид. синхронизации
+      </span>
     </div>
   </transition>
 </template>
@@ -23,6 +27,19 @@ import { isOffline } from './state'
   font-size: 14px;
   text-align: center;
   box-shadow: 0 2px 6px rgb(0 0 0 / 0.2);
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.offline-banner__count {
+  background: rgb(0 0 0 / 0.25);
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 .offline-fade-enter-active,
