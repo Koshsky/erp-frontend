@@ -76,7 +76,9 @@ const settings = ref({
   onlyMine: false,
   hiddenProjects: [] as number[],
   showMilestones: true,
+  showTodayLine: true,
   showResources: true,
+  style: 'color' as 'color' | 'mono',
 })
 
 /** Раскрытость списка проектов (UI-состояние) */
@@ -240,6 +242,8 @@ async function generateOnce(force: boolean) {
       unit: props.unit,
       pageTitle: props.pageTitle,
       showMilestones: settings.value.showMilestones,
+      showTodayLine: settings.value.showTodayLine,
+      style: settings.value.style,
       scale: Number(props.scale) || 1,
       resources: settings.value.showResources
         ? (props.resources ?? [])
@@ -398,6 +402,20 @@ onBeforeUnmount(() => {
 
           <div class="pe-body">
             <div class="pe-settings">
+              <div class="pe-field">
+                <span class="pe-label">Стиль диаграммы</span>
+                <div class="pe-style-row">
+                  <label class="pe-style-opt">
+                    <input v-model="settings.style" type="radio" name="pe-style" value="color" class="pe-checkbox" />
+                    Цветной
+                  </label>
+                  <label class="pe-style-opt">
+                    <input v-model="settings.style" type="radio" name="pe-style" value="mono" class="pe-checkbox" />
+                    Чёрно-белый (контурный)
+                  </label>
+                </div>
+              </div>
+
               <label class="pe-field">
                 <span class="pe-toggle">
                   <input v-model="settings.onlyMine" type="checkbox" class="pe-checkbox" />
@@ -411,6 +429,14 @@ onBeforeUnmount(() => {
                   <input v-model="settings.showMilestones" type="checkbox" class="pe-checkbox" />
                   <span class="pe-label">Показывать вехи</span>
                 </span>
+              </label>
+
+              <label class="pe-field">
+                <span class="pe-toggle">
+                  <input v-model="settings.showTodayLine" type="checkbox" class="pe-checkbox" />
+                  <span class="pe-label">Показывать линию «сегодня»</span>
+                </span>
+                <span class="pe-hint">Вертикальная линия текущей даты на диаграмме</span>
               </label>
 
               <label class="pe-field">
@@ -505,7 +531,7 @@ onBeforeUnmount(() => {
 .pe-overlay {
   position: fixed;
   inset: 0;
-  z-index: 20000;
+  z-index: 40000;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -598,6 +624,19 @@ onBeforeUnmount(() => {
 .pe-hint {
   font-size: 11px;
   color: #999;
+}
+.pe-style-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.pe-style-opt {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #333;
+  cursor: pointer;
 }
 .pe-toggle {
   display: flex;

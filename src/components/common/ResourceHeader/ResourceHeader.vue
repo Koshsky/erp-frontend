@@ -61,7 +61,7 @@ const labelsH = computed(() => resourceCells.value.length * rowH.value)
 
 <template>
   <!-- Слой кодов ресурсов: отдельный sticky-элемент боковой панели (z 80), вне
-       stacking context ресурсного блока — выше линии текущей даты (60) -->
+       stacking context ресурсного блока — выше линии текущей даты (25) -->
   <div
     class="rs-labels"
     :style="{
@@ -102,7 +102,7 @@ const labelsH = computed(() => resourceCells.value.length * rowH.value)
 
 <style scoped>
 /* Слой кодов ресурсов — боковая панель: липнет к левому и верхнему краю (под шапкой
- * календаря), лежит выше линии текущей даты (60). Высота и отрицательный margin
+ * календаря), лежит выше линии текущей даты (25). Высота и отрицательный margin
  * задаются инлайном, чтобы не сдвигать блок ячеек. */
 .rs-labels {
   position: sticky;
@@ -130,7 +130,7 @@ const labelsH = computed(() => resourceCells.value.length * rowH.value)
   letter-spacing: 0.5px;
 }
 /* Блок ячеек загрузки «4/5»: липнет сразу под календарным заголовком.
- * z 20 — выше контента (бары 2, вехи 3), но ниже линии текущей даты (60). */
+ * z 20 — выше контента (бары 2, вехи 3), но ниже линии текущей даты (25). */
 .rs-block {
   position: sticky;
   z-index: 20;

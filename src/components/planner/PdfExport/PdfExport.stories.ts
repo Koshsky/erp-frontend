@@ -89,6 +89,16 @@ export const OpenDialog: Story = {
   },
 }
 
+/** Открывает диалог в чёрно-белом контурном стиле (предпросмотр ЧБ-варианта) */
+export const OpenDialogMono: Story = {
+  play: async ({ canvasElement }) => {
+    canvasElement.querySelector('button')?.click()
+    await new Promise((r) => setTimeout(r, 800))
+    document.querySelector<HTMLInputElement>('input[value="mono"]')?.click()
+    await new Promise((r) => setTimeout(r, 2000))
+  },
+}
+
 /** Тест рендерера: валидный PDF, непустой, с кириллическими шрифтами */
 export const RendererProducesPdf: Story = {
   tags: ['vitest'],
@@ -113,13 +123,51 @@ export const RendererProducesPdf: Story = {
       to: iso(2026, 9, 30),
       origin: '2026-07-01',
       unit: 'day',
-        pageTitle: 'Диаграмма задач',
+      pageTitle: 'Диаграмма задач',
     })
 
     expect(bytes).toBeInstanceOf(Uint8Array)
     expect(bytes.byteLength).toBeGreaterThan(1000)
     const text = new TextDecoder().decode(bytes.slice(0, 64))
     expect(text.startsWith('%PDF-')).toBe(true)
+  },
+}
+
+/** Тест рендерера: чёрно-белый контурный стиль тоже даёт валидный PDF */
+export const RendererMono: Story = {
+  tags: ['vitest'],
+  play: async () => {
+    const groups: PdfGanttGroup[] = demoProcesses.map((p) => ({
+      id: p.id,
+      code: p.project_code,
+      title: p.title ?? '',
+      start_date: p.start_date,
+      end_date: p.end_date,
+      rows: (p.tasks ?? []).map((t) => ({
+        id: t.id,
+        title: t.title ?? '',
+        start_date: t.start_date ?? '',
+        end_date: t.end_date ?? '',
+        resources: (t.resources ?? []).map((r) => ({ id: r.id, code: r.code, title: r.title, quantity: r.quantity })),
+      })),
+      milestones: (p.milestones ?? []).map((m) => ({ id: m.id, title: m.title ?? '', date: m.date ?? '' })),
+    }))
+
+    const bytes = await renderGanttPdf(groups, {
+      from: iso(2026, 7, 1),
+      to: iso(2026, 9, 30),
+      origin: '2026-07-01',
+      unit: 'day',
+      pageTitle: 'Диаграмма задач',
+      style: 'mono',
+      resources: [
+        { id: 1, code: 'И', periods: [{ start_date: iso(2026, 7, 1), end_date: iso(2026, 9, 30), available: 3 }] },
+      ],
+    })
+
+    expect(bytes).toBeInstanceOf(Uint8Array)
+    expect(bytes.byteLength).toBeGreaterThan(1000)
+    expect(new TextDecoder().decode(bytes.slice(0, 5))).toBe('%PDF-')
   },
 }
 
@@ -162,7 +210,7 @@ export const PreviewRendersCanvas: Story = {
       to: iso(2026, 9, 30),
       origin: '2026-07-01',
       unit: 'day',
-        pageTitle: 'Диаграмма задач',
+      pageTitle: 'Диаграмма задач',
     })
 
     const container = document.createElement('div')

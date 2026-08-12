@@ -146,7 +146,7 @@ function fmt(d: string | Date | number | null | undefined): string {
   left: 0;
   width: 180px;
   background: #fff;
-  /* Боковая панель — выше линии текущей даты (60) */
+  /* Боковая панель — выше линии текущей даты (25) */
   z-index: 70;
   display: flex;
   flex-direction: column;
@@ -167,7 +167,7 @@ function fmt(d: string | Date | number | null | undefined): string {
   width: 180px;
   height: 100%;
   background: #fff;
-  /* Боковая панель — выше линии текущей даты (60) */
+  /* Боковая панель — выше линии текущей даты (25) */
   z-index: 65;
   display: flex;
   flex-direction: column;

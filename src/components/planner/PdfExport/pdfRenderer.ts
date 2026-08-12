@@ -53,29 +53,143 @@ const wdRowH = 18 * PT
 /** Высота строки ресурса в блоке занятости в pt (18px) */
 const rsRowH = 18 * PT
 
-const BAR_COLOR = rgb(52 / 255, 168 / 255, 83 / 255) // #34a853
-const MS_COLOR = rgb(251 / 255, 188 / 255, 4 / 255) // #fbbc04
-const CODE_COLOR = rgb(26 / 255, 115 / 255, 232 / 255) // #1a73e8
-const RES_BADGE = rgb(217 / 255, 48 / 255, 37 / 255) // #d93025
-const HEADER_BG = rgb(248 / 255, 249 / 255, 250 / 255) // #f8f9fa
-const GRID_LINE = rgb(228 / 255, 230 / 255, 232 / 255) // #e4e6e8
-const HEADER_LINE = rgb(230 / 255, 230 / 255, 230 / 255) // #e6e6e6
-const GROUP_LINE = rgb(224 / 255, 224 / 255, 224 / 255) // #e0e0e0
-const LABEL_LINE = rgb(240 / 255, 240 / 255, 240 / 255) // #f0f0f0
-const TEXT_MAIN = rgb(0.2, 0.2, 0.2)
-const TEXT_MID = rgb(0.333, 0.333, 0.333)
-const TEXT_DIM = rgb(0.533, 0.533, 0.533)
-const TEXT_FAINT = rgb(0.6, 0.6, 0.6)
-/** Линия «сегодня» — как в планировщике (граница «вчера/сегодня») */
-const TODAY_COLOR = rgb(229 / 255, 57 / 255, 53 / 255) // #e53935
+type Color = ReturnType<typeof rgb>
+
+/** Палитра отрисовки: цветной (как на экране) или чёрно-белый контурный */
+interface Palette {
+  headerBg: Color
+  headerLine: Color
+  groupLine: Color
+  gridLine: Color
+  labelLine: Color
+  labelBg: Color
+  textMain: Color
+  textMid: Color
+  textDim: Color
+  textFaint: Color
+  /** Код процесса в объединённом лейбле группы */
+  codeText: Color
+  bar: Color
+  barOpacity: number
+  barText: Color
+  barBorder?: Color
+  barBorderWidth: number
+  badgeText: Color
+  badgeBorder?: Color
+  badgeBorderWidth: number
+  codeBadgeBg: Color
+  codeBadgeOpacity: number
+  resBadgeBg: Color
+  resBadgeOpacity: number
+  ms: Color
+  /** Цвет луча вехи (в ч/б — чёрный, чтобы луч был виден над барами) */
+  msRay: Color
+  msOpacity: number
+  msBorder?: Color
+  msBorderWidth: number
+  today: Color
+  todayOpacity: number
+  groupTint: Color
+  groupTintOpacity: number
+  usageUnder: Color
+  usageFull: Color
+  usageOver: Color
+  usageWeekend: Color
+  usageUnknown: Color
+  /** Текст на «идеальной» ячейке занятости */
+  usageFullText: Color
+}
+
+const BLACK = rgb(0, 0, 0)
 const WHITE = rgb(1, 1, 1)
 
-// Цвета ячеек занятости (UsageCell): недобор/идеально/перебор/выходной/нет данных
-const USAGE_UNDER = rgb(170 / 255, 207 / 255, 207 / 255) // #aacfcf
-const USAGE_FULL = rgb(103 / 255, 155 / 255, 155 / 255) // #679b9b
-const USAGE_OVER = rgb(255 / 255, 182 / 255, 182 / 255) // #ffb6b6
-const USAGE_WEEKEND = rgb(240 / 255, 240 / 255, 240 / 255) // #f0f0f0
-const USAGE_UNKNOWN = WHITE
+/** Цветной стиль — текущая раскраска планировщика */
+const COLOR_PALETTE: Palette = {
+  headerBg: rgb(248 / 255, 249 / 255, 250 / 255), // #f8f9fa
+  headerLine: rgb(230 / 255, 230 / 255, 230 / 255), // #e6e6e6
+  groupLine: rgb(224 / 255, 224 / 255, 224 / 255), // #e0e0e0
+  gridLine: rgb(228 / 255, 230 / 255, 232 / 255), // #e4e6e8
+  labelLine: rgb(240 / 255, 240 / 255, 240 / 255), // #f0f0f0
+  labelBg: WHITE,
+  textMain: rgb(0.2, 0.2, 0.2),
+  textMid: rgb(0.333, 0.333, 0.333),
+  textDim: rgb(0.533, 0.533, 0.533),
+  textFaint: rgb(0.6, 0.6, 0.6),
+  codeText: rgb(26 / 255, 115 / 255, 232 / 255), // #1a73e8
+  bar: rgb(52 / 255, 168 / 255, 83 / 255), // #34a853
+  barOpacity: 0.75,
+  barText: WHITE,
+  barBorder: undefined,
+  barBorderWidth: 0,
+  badgeText: WHITE,
+  badgeBorder: undefined,
+  badgeBorderWidth: 0,
+  codeBadgeBg: BLACK,
+  codeBadgeOpacity: 0.22,
+  resBadgeBg: rgb(217 / 255, 48 / 255, 37 / 255), // #d93025
+  resBadgeOpacity: 1,
+  ms: rgb(251 / 255, 188 / 255, 4 / 255), // #fbbc04
+  msRay: rgb(251 / 255, 188 / 255, 4 / 255), // #fbbc04
+  msOpacity: 0.55,
+  msBorder: undefined,
+  msBorderWidth: 0,
+  today: rgb(229 / 255, 57 / 255, 53 / 255), // #e53935
+  todayOpacity: 0.9,
+  groupTint: BLACK,
+  groupTintOpacity: 0.04,
+  usageUnder: rgb(170 / 255, 207 / 255, 207 / 255), // #aacfcf
+  usageFull: rgb(103 / 255, 155 / 255, 155 / 255), // #679b9b
+  usageOver: rgb(255 / 255, 182 / 255, 182 / 255), // #ffb6b6
+  usageWeekend: rgb(240 / 255, 240 / 255, 240 / 255), // #f0f0f0
+  usageUnknown: WHITE,
+  usageFullText: WHITE,
+}
+
+/** Чёрно-белый контурный стиль: все тексты чёрные, блоки — светло-серые с контуром */
+const MONO_PALETTE: Palette = {
+  headerBg: WHITE,
+  headerLine: rgb(200 / 255, 200 / 255, 200 / 255), // #c8c8c8
+  groupLine: rgb(144 / 255, 144 / 255, 144 / 255), // #909090
+  gridLine: rgb(224 / 255, 224 / 255, 224 / 255), // #e0e0e0
+  labelLine: rgb(216 / 255, 216 / 255, 216 / 255), // #d8d8d8
+  labelBg: WHITE,
+  textMain: BLACK,
+  textMid: BLACK,
+  textDim: BLACK,
+  textFaint: BLACK,
+  codeText: BLACK,
+  bar: rgb(236 / 255, 236 / 255, 236 / 255), // #ececec
+  barOpacity: 1,
+  barText: BLACK,
+  barBorder: BLACK,
+  barBorderWidth: 0.6,
+  badgeText: BLACK,
+  badgeBorder: BLACK,
+  badgeBorderWidth: 0.6,
+  codeBadgeBg: rgb(224 / 255, 224 / 255, 224 / 255), // #e0e0e0
+  codeBadgeOpacity: 1,
+  resBadgeBg: WHITE,
+  resBadgeOpacity: 1,
+  ms: rgb(240 / 255, 240 / 255, 240 / 255), // #f0f0f0
+  msRay: BLACK,
+  msOpacity: 0.5,
+  msBorder: BLACK,
+  msBorderWidth: 0.6,
+  today: BLACK,
+  todayOpacity: 1,
+  groupTint: BLACK,
+  groupTintOpacity: 0.02,
+  usageUnder: rgb(242 / 255, 242 / 255, 242 / 255), // #f2f2f2
+  usageFull: rgb(214 / 255, 214 / 255, 214 / 255), // #d6d6d6
+  usageOver: rgb(184 / 255, 184 / 255, 184 / 255), // #b8b8b8
+  usageWeekend: rgb(250 / 255, 250 / 255, 250 / 255), // #fafafa
+  usageUnknown: WHITE,
+  usageFullText: BLACK,
+}
+
+function buildPalette(style?: 'color' | 'mono'): Palette {
+  return style === 'mono' ? MONO_PALETTE : COLOR_PALETTE
+}
 
 export interface PdfGanttResource {
   /** id ресурса (resource_id из DTO) — для сопоставления в блоке занятости */
@@ -141,6 +255,10 @@ export interface PdfGanttOptions {
   scale?: number
   /** Рисовать ли полосу вех и флажки (по умолчанию true) */
   showMilestones?: boolean
+  /** Рисовать ли линию «сегодня» (по умолчанию true) */
+  showTodayLine?: boolean
+  /** Стиль отрисовки: цветной (как на экране) или чёрно-белый контурный */
+  style?: 'color' | 'mono'
   /** Ресурсы для блока занятости под календарным заголовком */
   resources?: PdfGanttResourceInfo[]
 }
@@ -179,6 +297,8 @@ interface DrawCtx {
   z: number
   /** Размеры контента, масштабированные на z */
   layout: PdfLayout
+  /** Палитра текущего стиля (цветной / чёрно-белый) */
+  palette: Palette
 }
 
 /** Размеры контента диаграммы (pt), уже умноженные на масштаб z */
@@ -279,12 +399,12 @@ function drawResourceHeader(
   colFrom: number,
   colTo: number,
 ) {
-  const { page, font, bold, unit, cellW, headerH, groups, layout, z } = ctx
+  const { page, font, bold, unit, cellW, headerH, groups, layout, z, palette } = ctx
   const yTop = headerH
   const height = resources.length * layout.rsRowH
 
   // Колонка названий: белая подложка + коды ресурсов
-  page.drawRectangle({ x: MARGIN, y: pdfY(yTop + height), width: labelW, height, color: WHITE })
+  page.drawRectangle({ x: MARGIN, y: pdfY(yTop + height), width: labelW, height, color: palette.labelBg })
   for (let ri = 0; ri < resources.length; ri++) {
     const r = resources[ri]
     const top = yTop + ri * layout.rsRowH
@@ -293,14 +413,14 @@ function drawResourceHeader(
       y: textY(top, layout.rsRowH, 9 * z),
       size: 9 * z,
       font: bold,
-      color: TEXT_MAIN,
+      color: palette.textMain,
     })
   }
   page.drawLine({
     start: { x: MARGIN + labelW, y: pdfY(yTop) },
     end: { x: MARGIN + labelW, y: pdfY(yTop + height) },
     thickness: 0.75,
-    color: LABEL_LINE,
+    color: palette.labelLine,
   })
 
   // Ячейки загрузки по видимым индексам
@@ -329,7 +449,7 @@ function drawResourceHeader(
       // день без периода — состояние «нет данных»
       const avail = hasUnknown ? null : minAvail
       const over = avail != null && peak > avail
-      const bg = weekend ? USAGE_WEEKEND : avail == null ? USAGE_UNKNOWN : over ? USAGE_OVER : peak === avail ? USAGE_FULL : USAGE_UNDER
+      const bg = weekend ? palette.usageWeekend : avail == null ? palette.usageUnknown : over ? palette.usageOver : peak === avail ? palette.usageFull : palette.usageUnder
       page.drawRectangle({ x, y: pdfY(top + layout.rsRowH), width: cellW, height: layout.rsRowH, color: bg })
       // Числа занятости: шрифт адаптивный — стартует от масштаба (6.75×z) и ширины
       // ячейки, при нехватке места уменьшается, чтобы «used/cap» помещалось
@@ -339,7 +459,7 @@ function drawResourceHeader(
       while (size >= 1.5 && font.widthOfTextAtSize(label, size) > cellW - 1) size -= 0.25
       if (size >= 1.5) {
         const tw = font.widthOfTextAtSize(label, size)
-        const textColor = weekend ? TEXT_FAINT : avail == null ? TEXT_FAINT : peak === avail ? WHITE : TEXT_MID
+        const textColor = weekend ? palette.textFaint : avail == null ? palette.textFaint : peak === avail ? palette.usageFullText : palette.textMid
         page.drawText(label, {
           x: x + (cellW - tw) / 2,
           y: textY(top, layout.rsRowH, size),
@@ -354,26 +474,26 @@ function drawResourceHeader(
       start: { x: MARGIN + labelW, y: pdfY(top + layout.rsRowH) },
       end: { x: MARGIN + labelW + (colTo - colFrom + 1) * cellW, y: pdfY(top + layout.rsRowH) },
       thickness: 0.4,
-      color: GRID_LINE,
+      color: palette.gridLine,
     })
   }
 }
 
 /** Рисует календарную шапку: месяц/числа/дни недели + границы ячеек */
 function drawHeader(ctx: DrawCtx, colFrom: number, colTo: number, cellWidthPx: number) {
-  const { page, font, bold, unit, cellW, headerH, contentW, layout, z } = ctx
+  const { page, font, bold, unit, cellW, headerH, contentW, layout, z, palette } = ctx
   const bands: { top: number; h: number }[] = [{ top: 0, h: layout.monthRowH }]
   const showNumRow = cellWidthPx >= (unit === 'day' ? CELL_PX_NUM_DAY : CELL_PX_NUM_DECADE)
   const showWdRow = unit === 'day' && cellWidthPx >= CELL_PX_WD_DAY
   if (showNumRow) bands.push({ top: layout.monthRowH, h: layout.numRowH })
   if (showWdRow) bands.push({ top: layout.monthRowH + layout.numRowH, h: layout.wdRowH })
 
-  page.drawRectangle({ x: MARGIN, y: pdfY(headerH), width: contentW, height: headerH, color: HEADER_BG })
+  page.drawRectangle({ x: MARGIN, y: pdfY(headerH), width: contentW, height: headerH, color: palette.headerBg })
 
   // Вертикальные границы ячеек в шапке
   for (let k = colFrom; k <= colTo + 1; k++) {
     const x = MARGIN + labelW + (k - colFrom) * cellW
-    page.drawLine({ start: { x, y: pdfY(0) }, end: { x, y: pdfY(headerH) }, thickness: 0.5, color: HEADER_LINE })
+    page.drawLine({ start: { x, y: pdfY(0) }, end: { x, y: pdfY(headerH) }, thickness: 0.5, color: palette.headerLine })
   }
 
   // Полосы месяцев: метка центрируется по видимой части месяца; при узких ячейках
@@ -396,7 +516,7 @@ function drawHeader(ctx: DrawCtx, colFrom: number, colTo: number, cellWidthPx: n
       y: textY(0, layout.monthRowH, size),
       size,
       font: bold,
-      color: TEXT_MAIN,
+      color: palette.textMain,
     })
     i = j
   }
@@ -409,7 +529,7 @@ function drawHeader(ctx: DrawCtx, colFrom: number, colTo: number, cellWidthPx: n
       const size = 7.5 * z
       const tw = font.widthOfTextAtSize(label, size)
       if (tw <= cellW - 2) {
-        page.drawText(label, { x: x + (cellW - tw) / 2, y: textY(layout.monthRowH, layout.numRowH, size), size, font, color: TEXT_MID })
+        page.drawText(label, { x: x + (cellW - tw) / 2, y: textY(layout.monthRowH, layout.numRowH, size), size, font, color: palette.textMid })
       }
     }
   }
@@ -425,33 +545,33 @@ function drawHeader(ctx: DrawCtx, colFrom: number, colTo: number, cellWidthPx: n
           y: textY(layout.monthRowH + layout.numRowH, layout.wdRowH, size),
           size,
           font,
-          color: TEXT_FAINT,
+          color: palette.textFaint,
         })
       }
     }
   }
 
   // Нижняя граница шапки
-  page.drawLine({ start: { x: MARGIN, y: pdfY(headerH) }, end: { x: MARGIN + contentW, y: pdfY(headerH) }, thickness: 0.75, color: GROUP_LINE })
+  page.drawLine({ start: { x: MARGIN, y: pdfY(headerH) }, end: { x: MARGIN + contentW, y: pdfY(headerH) }, thickness: 0.75, color: palette.groupLine })
 }
 
 /** Вертикальные линии сетки для видимого окна (от шапки до низа таблицы) */
 function drawGrid(ctx: DrawCtx, colFrom: number, colTo: number, winTop: number, winBottom: number) {
-  const { page, cellW, headerH } = ctx
+  const { page, cellW, headerH, palette } = ctx
   for (let k = colFrom; k <= colTo + 1; k++) {
     const x = MARGIN + labelW + (k - colFrom) * cellW
     page.drawLine({
       start: { x, y: pdfY(headerH) },
       end: { x, y: pdfY(winBottom - winTop) },
       thickness: 0.4,
-      color: GRID_LINE,
+      color: palette.gridLine,
     })
   }
 }
 
 /** Рисует группу (полоса вех, объединённый лейбл, бары задач), обрезая по видимому окну */
 function drawGroup(ctx: DrawCtx, gl: GroupLayout, colFrom: number, colTo: number, winTop: number, winBottom: number) {
-  const { page, font, bold, unit, cellW, stripH, groupsStart, layout, z } = ctx
+  const { page, font, bold, unit, cellW, stripH, groupsStart, layout, z, palette } = ctx
   const g = gl.group
   const strip = gl.stripH
   const top = gl.top
@@ -476,8 +596,8 @@ function drawGroup(ctx: DrawCtx, gl: GroupLayout, colFrom: number, colTo: number
         y: pdfY(visibleBottom - winTop),
         width: ox1 - ox,
         height: visibleBottom - visibleTop,
-        color: rgb(0, 0, 0),
-        opacity: 0.04,
+        color: palette.groupTint,
+        opacity: palette.groupTintOpacity,
       })
     }
   }
@@ -491,53 +611,27 @@ function drawGroup(ctx: DrawCtx, gl: GroupLayout, colFrom: number, colTo: number
   const lvBottom = Math.min(labelBottom, winBottom)
   const showLabelText = labelTop >= clipTop
   if (lvTop < lvBottom) {
-    page.drawRectangle({ x: MARGIN, y: pdfY(lvBottom - winTop), width: labelW, height: lvBottom - lvTop, color: WHITE })
+    page.drawRectangle({ x: MARGIN, y: pdfY(lvBottom - winTop), width: labelW, height: lvBottom - lvTop, color: palette.labelBg })
     const padX = 9
     const maxW = labelW - padX * 2
     let cursor = lvTop - winTop + 3
     if (showLabelText && g.code) {
       const size = 12 * z
-      page.drawText(truncate(bold, g.code, size, maxW), { x: MARGIN + padX, y: pdfY(cursor + size * 0.8), size, font: bold, color: CODE_COLOR })
+      page.drawText(truncate(bold, g.code, size, maxW), { x: MARGIN + padX, y: pdfY(cursor + size * 0.8), size, font: bold, color: palette.codeText })
       cursor += size * 1.3
     }
     if (showLabelText) {
       const titleSize = 9 * z
-      page.drawText(truncate(bold, g.title, titleSize, maxW), { x: MARGIN + padX, y: pdfY(cursor + titleSize * 0.8), size: titleSize, font: bold, color: TEXT_MAIN })
+      page.drawText(truncate(bold, g.title, titleSize, maxW), { x: MARGIN + padX, y: pdfY(cursor + titleSize * 0.8), size: titleSize, font: bold, color: palette.textMain })
       cursor += titleSize * 1.3
       if (g.start_date && g.end_date) {
         const dSize = 7.5 * z
         const range = `${toDate(g.start_date).toLocaleDateString('ru')} — ${toDate(g.end_date).toLocaleDateString('ru')}`
-        page.drawText(truncate(font, range, dSize, maxW), { x: MARGIN + padX, y: pdfY(cursor + dSize * 0.8), size: dSize, font, color: TEXT_DIM })
+        page.drawText(truncate(font, range, dSize, maxW), { x: MARGIN + padX, y: pdfY(cursor + dSize * 0.8), size: dSize, font, color: palette.textDim })
       }
     }
     // Границы лейбла
-    page.drawLine({ start: { x: MARGIN + labelW, y: pdfY(lvBottom - winTop) }, end: { x: MARGIN + labelW, y: pdfY(lvTop - winTop) }, thickness: 0.75, color: LABEL_LINE })
-  }
-
-  // Вехи: флажок в полосе + луч вниз по группе. Рисуем, только если полоса целиком
-  // в видимом срезе (иначе флажок попадает под шапку/в поле страницы).
-  if (strip > 0 && top >= clipTop && top + strip <= winBottom) {
-    const rayStart = (top - winTop) + strip
-    const rayEnd = Math.min(bottom - winTop, winBottom - winTop)
-    for (const ms of g.milestones ?? []) {
-      if (!ms.date) continue
-      const idx = cellIndexForDate(ctx.origin, unit, ms.date)
-      if (idx < colFrom || idx > colTo) continue
-      const cx = MARGIN + labelW + (idx - colFrom) * cellW + cellW / 2
-      const flagW = Math.max(cellW * 0.5, 3 * z)
-      const flagH = 12 * z
-      const fx = cx - flagW / 2
-      const flagTop = top - winTop + 1.5 * z
-      page.drawRectangle({ x: fx, y: pdfY(flagTop + flagH), width: flagW, height: flagH, color: MS_COLOR })
-      // Луч от полосы вех до низа группы (обрезается по низу среза)
-      page.drawLine({
-        start: { x: cx, y: pdfY(rayStart) },
-        end: { x: cx, y: pdfY(rayEnd) },
-        thickness: 1.5 * z,
-        color: MS_COLOR,
-        opacity: 0.55,
-      })
-    }
+    page.drawLine({ start: { x: MARGIN + labelW, y: pdfY(lvBottom - winTop) }, end: { x: MARGIN + labelW, y: pdfY(lvTop - winTop) }, thickness: 0.75, color: palette.labelLine })
   }
 
   // Бары задач
@@ -566,11 +660,13 @@ function drawGroup(ctx: DrawCtx, gl: GroupLayout, colFrom: number, colTo: number
       y: pdfY(barBottomClip),
       width: bx1 - bx,
       height: barBottomClip - barTopClip,
-      color: BAR_COLOR,
-      opacity: 0.75,
+      color: palette.bar,
+      opacity: palette.barOpacity,
+      borderColor: palette.barBorder,
+      borderWidth: palette.barBorderWidth,
     })
 
-    // Текст на баре: название + бейдж кода + красные бейджи ресурсов (только если бар не обрезан)
+    // Текст на баре: название + бейдж кода + бейджи ресурсов (только если бар не обрезан)
     const pad = 6
     const barCenter = (barTopClip + barBottomClip) / 2
     if (barFull && bx1 - bx >= pad * 2 + 10) {
@@ -579,35 +675,62 @@ function drawGroup(ctx: DrawCtx, gl: GroupLayout, colFrom: number, colTo: number
       const avail = bx1 - bx - pad * 2
       const title = truncate(bold, row.title, size, avail)
       const tw = bold.widthOfTextAtSize(title, size)
-      page.drawText(title, { x: cx, y: centerTextY(barCenter, size), size, font: bold, color: WHITE })
+      page.drawText(title, { x: cx, y: centerTextY(barCenter, size), size, font: bold, color: palette.barText })
       cx += tw + 4.5
 
       const bh = 12 * z
-      const drawBadge = (text: string, cs: number, bg: ReturnType<typeof rgb>, opacity: number) => {
+      const drawBadge = (text: string, cs: number, bg: Color, opacity: number, border?: Color, borderWidth = 0) => {
         const w = bold.widthOfTextAtSize(text, cs) + 8
         const topBadge = barCenter - bh / 2
-        page.drawRectangle({ x: cx, y: pdfY(topBadge + bh), width: w, height: bh, color: bg, opacity })
-        page.drawText(text, { x: cx + 4, y: centerTextY(barCenter, cs), size: cs, font: bold, color: WHITE })
+        page.drawRectangle({ x: cx, y: pdfY(topBadge + bh), width: w, height: bh, color: bg, opacity, borderColor: border, borderWidth })
+        page.drawText(text, { x: cx + 4, y: centerTextY(barCenter, cs), size: cs, font: bold, color: palette.badgeText })
         cx += w + 4.5
       }
 
-      // Бейдж кода проекта (тёмный), если есть место
+      // Бейдж кода проекта, если есть место
       if (g.code && cx + 12 < bx1 - pad) {
         const cs = 7.5 * z
         const codeText = truncate(bold, g.code, cs, bx1 - pad - cx - 8)
         if (bold.widthOfTextAtSize(codeText, cs) + 12 <= bx1 - pad - cx) {
-          drawBadge(codeText, cs, rgb(0, 0, 0), 0.22)
+          drawBadge(codeText, cs, palette.codeBadgeBg, palette.codeBadgeOpacity, palette.badgeBorder, palette.badgeBorderWidth)
         }
       }
-      // Красные бейджи ресурсов, пока есть место
+      // Бейджи ресурсов, пока есть место
       for (const r of row.resources ?? []) {
         if (cx + 14 >= bx1 - pad) break
         const cs = 7.5 * z
         const label = `${r.code || r.title || '?'}×${r.quantity ?? 1}`
         const text = truncate(bold, label, cs, bx1 - pad - cx - 8)
         if (bold.widthOfTextAtSize(text, cs) + 12 > bx1 - pad - cx) break
-        drawBadge(text, cs, RES_BADGE, 1)
+        drawBadge(text, cs, palette.resBadgeBg, palette.resBadgeOpacity, palette.badgeBorder, palette.badgeBorderWidth)
       }
+    }
+  }
+
+  // Вехи: флажок в полосе + луч вниз по группе. Рисуем ПОСЛЕ баров, чтобы луч был
+  // поверх них. Полоса должна целиком влезать в видимый срез (иначе флажок
+  // попадает под шапку/в поле страницы).
+  if (strip > 0 && top >= clipTop && top + strip <= winBottom) {
+    const rayStart = (top - winTop) + strip
+    const rayEnd = Math.min(bottom - winTop, winBottom - winTop)
+    for (const ms of g.milestones ?? []) {
+      if (!ms.date) continue
+      const idx = cellIndexForDate(ctx.origin, unit, ms.date)
+      if (idx < colFrom || idx > colTo) continue
+      const cx = MARGIN + labelW + (idx - colFrom) * cellW + cellW / 2
+      const flagW = Math.max(cellW * 0.5, 3 * z)
+      const flagH = 12 * z
+      const fx = cx - flagW / 2
+      const flagTop = top - winTop + 1.5 * z
+      page.drawRectangle({ x: fx, y: pdfY(flagTop + flagH), width: flagW, height: flagH, color: palette.ms, borderColor: palette.msBorder, borderWidth: palette.msBorderWidth })
+      // Луч от полосы вех до низа группы (обрезается по низу среза)
+      page.drawLine({
+        start: { x: cx, y: pdfY(rayStart) },
+        end: { x: cx, y: pdfY(rayEnd) },
+        thickness: 1.5 * z,
+        color: palette.msRay,
+        opacity: palette.msOpacity,
+      })
     }
   }
 }
@@ -643,22 +766,22 @@ function drawToday(ctx: DrawCtx, colFrom: number, colTo: number, winTop: number,
     start: { x, y: pdfY(ctx.headerH) },
     end: { x, y: pdfY(winBottom - winTop) },
     thickness: 1.5,
-    color: TODAY_COLOR,
-    opacity: 0.9,
+    color: ctx.palette.today,
+    opacity: ctx.palette.todayOpacity,
   })
 }
 
-function drawFooter(page: PDFPage, font: PDFFont, bold: PDFFont, pageNo: number, pageCount: number, opts: PdfGanttOptions) {
+function drawFooter(page: PDFPage, font: PDFFont, bold: PDFFont, pageNo: number, pageCount: number, opts: PdfGanttOptions, palette: Palette) {
   const y = MARGIN + FOOTER_H
-  page.drawLine({ start: { x: MARGIN, y }, end: { x: PAGE_W - MARGIN, y }, thickness: 0.5, color: GRID_LINE })
+  page.drawLine({ start: { x: MARGIN, y }, end: { x: PAGE_W - MARGIN, y }, thickness: 0.5, color: palette.gridLine })
   const size = 7.5
   const title = opts.pageTitle ?? ''
   const range = `${toDate(opts.from).toLocaleDateString('ru')} — ${toDate(opts.to).toLocaleDateString('ru')}`
-  page.drawText(title, { x: MARGIN, y: y - size * 1.1, size, font: bold, color: TEXT_DIM })
-  page.drawText(range, { x: MARGIN + bold.widthOfTextAtSize(title, size) + 12, y: y - size * 1.1, size, font, color: TEXT_FAINT })
+  page.drawText(title, { x: MARGIN, y: y - size * 1.1, size, font: bold, color: palette.textDim })
+  page.drawText(range, { x: MARGIN + bold.widthOfTextAtSize(title, size) + 12, y: y - size * 1.1, size, font, color: palette.textFaint })
   const pg = `Страница ${pageNo} из ${pageCount}`
   const pw = font.widthOfTextAtSize(pg, size)
-  page.drawText(pg, { x: PAGE_W - MARGIN - pw, y: y - size * 1.1, size, font, color: TEXT_DIM })
+  page.drawText(pg, { x: PAGE_W - MARGIN - pw, y: y - size * 1.1, size, font, color: palette.textDim })
 }
 
 /**
@@ -677,6 +800,8 @@ export async function renderGanttPdf(groups: PdfGanttGroup[], opts: PdfGanttOpti
   const unit = opts.unit
   /** Масштаб печати: зум страницы (Ctrl+wheel) — множитель плотности контента */
   const z = Math.max(0.25, Math.min(4, opts.scale ?? 1))
+  /** Палитра стиля: цветной (по умолчанию) или чёрно-белый контурный */
+  const palette = buildPalette(opts.style)
   const layout: PdfLayout = {
     rowH: rowH * z,
     barH: barH * z,
@@ -785,6 +910,7 @@ export async function renderGanttPdf(groups: PdfGanttGroup[], opts: PdfGanttOpti
         groupsStart,
         z,
         layout,
+        palette,
       }
       // Абсолютные индексы ячеек: весь диапазон — на одной странице по ширине.
       const colFrom = fromCell
@@ -800,7 +926,6 @@ export async function renderGanttPdf(groups: PdfGanttGroup[], opts: PdfGanttOpti
       drawHeader(ctx, colFrom, colTo, cellWidthPx)
       drawGrid(ctx, colFrom, colTo, winTop, winBottom)
       if (resources.length) drawResourceHeader(ctx, resources, colFrom, colTo)
-      drawToday(ctx, colFrom, colTo, winTop, winBottom)
       for (const gl of layouts) drawGroup(ctx, gl, colFrom, colTo, winTop, winBottom)
 
       // Разделители групп на всю ширину таблицы (только в видимом срезе ниже шапки)
@@ -811,11 +936,15 @@ export async function renderGanttPdf(groups: PdfGanttGroup[], opts: PdfGanttOpti
           start: { x: MARGIN + labelW, y: pdfY(y - winTop) },
           end: { x: MARGIN + contentW, y: pdfY(y - winTop) },
           thickness: 0.75,
-          color: GROUP_LINE,
+          color: palette.groupLine,
         })
       }
 
-      drawFooter(page, font, bold, r * pagesAcross + c + 1, pagesDown * pagesAcross, opts)
+      // Линия «сегодня» рисуется последней — поверх баров и лучей вех (как на экране);
+      // колонку названий она не пересекает (стартует от x >= labelW)
+      if (opts.showTodayLine !== false) drawToday(ctx, colFrom, colTo, winTop, winBottom)
+
+      drawFooter(page, font, bold, r * pagesAcross + c + 1, pagesDown * pagesAcross, opts, palette)
     }
   }
 
