@@ -135,74 +135,78 @@ async function onChangePassword() {
     <h2 class="pf-title">Профиль</h2>
 
     <div class="pf-columns">
-      <div class="pf-card">
-        <div v-for="field in profile" :key="field.label" class="pf-row">
-          <span class="pf-label">{{ field.label }}</span>
-          <span class="pf-value">{{ field.value }}</span>
-        </div>
-      </div>
-
-      <div class="pf-card pw-form">
-        <h3 class="pf-title sm">Смена пароля</h3>
-        <form @submit.prevent="onChangePassword">
-          <div class="pw-fields">
-            <PasswordField v-model="oldPassword" label="Старый пароль" autocomplete="current-password" placeholder="••••••••" />
-            <PasswordField v-model="newPassword" label="Новый пароль" autocomplete="new-password" placeholder="Придумайте новый пароль" />
-            <PasswordField v-model="confirmPassword" label="Подтверждение пароля" autocomplete="new-password" placeholder="Повторите пароль" />
-            <PasswordRequirements :model-value="newPassword" :rules="passwordChecks" />
+      <div class="pf-col">
+        <div class="pf-card">
+          <div v-for="field in profile" :key="field.label" class="pf-row">
+            <span class="pf-label">{{ field.label }}</span>
+            <span class="pf-value">{{ field.value }}</span>
           </div>
+        </div>
 
-          <p v-if="changeMsg" class="pf-msg" :class="{ ok: changeOk }">{{ changeMsg }}</p>
+        <div class="pf-card pw-form">
+          <h3 class="pf-title sm">Смена пароля</h3>
+          <form @submit.prevent="onChangePassword">
+            <div class="pw-fields">
+              <PasswordField v-model="oldPassword" label="Старый пароль" autocomplete="current-password" placeholder="••••••••" />
+              <PasswordField v-model="newPassword" label="Новый пароль" autocomplete="new-password" placeholder="Придумайте новый пароль" />
+              <PasswordField v-model="confirmPassword" label="Подтверждение пароля" autocomplete="new-password" placeholder="Повторите пароль" />
+              <PasswordRequirements :model-value="newPassword" :rules="passwordChecks" />
+            </div>
 
-          <button type="submit" class="pf-btn" :disabled="auth.loading">
-            {{ auth.loading ? 'Сохранение…' : 'Сменить пароль' }}
-          </button>
-        </form>
+            <p v-if="changeMsg" class="pf-msg" :class="{ ok: changeOk }">{{ changeMsg }}</p>
+
+            <button type="submit" class="pf-btn" :disabled="auth.loading">
+              {{ auth.loading ? 'Сохранение…' : 'Сменить пароль' }}
+            </button>
+          </form>
+        </div>
       </div>
 
-      <div class="pf-card">
-        <h3 class="pf-title sm app-title">Приложение и офлайн</h3>
-        <div class="pf-row">
-          <span class="pf-label">Версия приложения</span>
-          <span class="pf-value">{{ appVersion }}</span>
-        </div>
-        <div class="pf-row">
-          <span class="pf-label">Версия Service Worker</span>
-          <span class="pf-value">{{ swVersion }}</span>
-        </div>
-        <div class="pf-row">
-          <span class="pf-label">Управление SW</span>
-          <span class="pf-value">{{ swControlled ? 'активен' : 'нет' }}</span>
-        </div>
-        <div class="pf-row">
-          <span class="pf-label">Кэш ассетов</span>
-          <span class="pf-value">{{ cachedAssets }} чанков</span>
-        </div>
-        <div class="pf-row">
-          <span class="pf-label">Сохранённых данных</span>
-          <span class="pf-value">{{ cachedData }} записей</span>
-        </div>
-        <div class="pf-row">
-          <span class="pf-label">Последняя прогревка</span>
-          <span class="pf-value">{{ lastWarmedLabel }}</span>
-        </div>
-        <div class="app-actions">
-          <p v-if="cachedData === 0" class="pf-msg warn">
-            Кэш данных пуст. Для офлайна зайдите онлайн и нажмите «Прогреть данные сейчас».
-          </p>
-          <button type="button" class="pf-btn" @click="onWarmNow">Прогреть данные сейчас</button>
-          <button
-            v-if="!updateAvailable"
-            type="button"
-            class="pf-btn ghost"
-            @click="onCheckUpdates"
-          >
-            Проверить обновление
-          </button>
-          <button v-else type="button" class="pf-btn accent" @click="applyUpdate">
-            Перезагрузить с обновлением
-          </button>
-          <p v-if="checkMsg" class="pf-msg app-msg">{{ checkMsg }}</p>
+      <div class="pf-col">
+        <div class="pf-card">
+          <h3 class="pf-title sm app-title">Приложение и офлайн</h3>
+          <div class="pf-row">
+            <span class="pf-label">Версия приложения</span>
+            <span class="pf-value">{{ appVersion }}</span>
+          </div>
+          <div class="pf-row">
+            <span class="pf-label">Версия Service Worker</span>
+            <span class="pf-value">{{ swVersion }}</span>
+          </div>
+          <div class="pf-row">
+            <span class="pf-label">Управление SW</span>
+            <span class="pf-value">{{ swControlled ? 'активен' : 'нет' }}</span>
+          </div>
+          <div class="pf-row">
+            <span class="pf-label">Кэш ассетов</span>
+            <span class="pf-value">{{ cachedAssets }} чанков</span>
+          </div>
+          <div class="pf-row">
+            <span class="pf-label">Сохранённых данных</span>
+            <span class="pf-value">{{ cachedData }} записей</span>
+          </div>
+          <div class="pf-row">
+            <span class="pf-label">Последняя прогревка</span>
+            <span class="pf-value">{{ lastWarmedLabel }}</span>
+          </div>
+          <div class="app-actions">
+            <p v-if="cachedData === 0" class="pf-msg warn">
+              Кэш данных пуст. Для офлайна зайдите онлайн и нажмите «Прогреть данные сейчас».
+            </p>
+            <button type="button" class="pf-btn" @click="onWarmNow">Прогреть данные сейчас</button>
+            <button
+              v-if="!updateAvailable"
+              type="button"
+              class="pf-btn ghost"
+              @click="onCheckUpdates"
+            >
+              Проверить обновление
+            </button>
+            <button v-else type="button" class="pf-btn accent" @click="applyUpdate">
+              Перезагрузить с обновлением
+            </button>
+            <p v-if="checkMsg" class="pf-msg app-msg">{{ checkMsg }}</p>
+          </div>
         </div>
       </div>
     </div>
@@ -224,6 +228,13 @@ async function onChangePassword() {
   align-items: start;
 }
 
+.pf-col {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  min-width: 0;
+}
+
 @media (max-width: 860px) {
   .pf-columns {
     grid-template-columns: 1fr;
@@ -231,7 +242,6 @@ async function onChangePassword() {
 }
 
 .pf-card {
-  max-width: 520px;
   background: #fff;
   border-radius: 12px;
   box-shadow: 0 1px 6px rgba(0, 0, 0, 0.08);
