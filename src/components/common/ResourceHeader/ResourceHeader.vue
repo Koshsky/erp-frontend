@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import TooltipCell from '../TooltipCell/TooltipCell.vue'
+import { InfoTooltip } from '../Tooltips'
 import UsageCell from '../UsageCell/UsageCell.vue'
 import type { TimelineCtx } from '@/composables/timeline-context'
 import { LABEL_WIDTH, headerHeight } from '@/components/planner/layout'
@@ -77,8 +78,11 @@ const labelsH = computed(() => resourceCells.value.length * rowH.value)
       class="rs-label"
       :class="{ 'rs-label--compact': !showText }"
     >
-      <TooltipCell v-if="showText" :text="`${rc.res.title} (всего: ${rc.res.employeesCount})`">
+      <TooltipCell v-if="showText" :multiline="true">
         <span class="rs-code">{{ rc.res.code }}</span>
+        <template #popup>
+          <InfoTooltip :title="rc.res.title" :lines="[`Всего: ${rc.res.employeesCount}`]" />
+        </template>
       </TooltipCell>
     </div>
   </div>
@@ -119,6 +123,8 @@ const labelsH = computed(() => resourceCells.value.length * rowH.value)
   box-sizing: border-box;
   font-size: 11px;
   cursor: default;
+  user-select: none;
+  -webkit-user-select: none;
   border-bottom: 1px solid #e8e8e8;
 }
 .rs-label--compact {

@@ -5,10 +5,14 @@ import router from './router'
 import { setupHttp } from './http'
 import { initOfflineSync } from './offline/sync'
 import { initServiceWorker } from './offline/registration'
+import { startConnectivityMonitor } from './offline/state'
 
 setupHttp()
-initOfflineSync()
+await initOfflineSync()
 initServiceWorker()
+startConnectivityMonitor()
+
+console.log(`[build] ${__APP_VERSION__}`)
 
 const app = createApp(App)
 

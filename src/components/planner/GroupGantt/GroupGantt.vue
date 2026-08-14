@@ -4,6 +4,8 @@ import type { GroupGanttProps } from './types'
 import { cellRangeForSpan, toDate } from '../calendar'
 import { LABEL_WIDTH } from '../layout'
 import { useRowReorder } from '../../../composables/useRowReorder'
+import { TooltipCell } from '../../common/TooltipCell'
+import { InfoTooltip } from '../../common/Tooltips'
 
 const props = withDefaults(defineProps<GroupGanttProps>(), {
   reorderable: false,
@@ -85,13 +87,17 @@ function fmt(d: string | Date | number | null | undefined): string {
     <template v-for="(item, index) in items" :key="'gi' + item.id">
       <div class="gg-row" :style="{ height: rowHeight + 'px' }" :data-row-index="index">
         <div v-if="!mergedLabel" class="gg-label" :class="{ 'with-handle': reorderable }">
-          <span
+          <TooltipCell
             v-if="reorderable"
             class="row-handle"
             :class="{ 'is-grabbing': rowDragCursor && draggingFrom === index }"
-            :title="'Перетащить для смены приоритета'"
+            :multiline="true"
             @pointerdown.stop="startRowDrag($event, index)"
-          >⠿</span>
+          >⠿
+            <template #popup>
+              <InfoTooltip :lines="['Перетащить для смены приоритета']" />
+            </template>
+          </TooltipCell>
           <slot name="row" :item="item" :index="index">
             <span class="item-title">{{ item.title }}</span>
             <div class="item-dates">{{ fmt(item.start_date) }} — {{ fmt(item.end_date) }}</div>
@@ -157,6 +163,9 @@ function fmt(d: string | Date | number | null | undefined): string {
   box-sizing: border-box;
   border-right: 1px solid #f0f0f0;
   border-bottom: 1px solid #e0e0e0;
+  cursor: default;
+  user-select: none;
+  -webkit-user-select: none;
 }
 .gg-row {
   position: relative;
@@ -181,6 +190,9 @@ function fmt(d: string | Date | number | null | undefined): string {
   border-bottom: 1px solid #e8e8e8;
   box-sizing: border-box;
   overflow: hidden;
+  cursor: default;
+  user-select: none;
+  -webkit-user-select: none;
 }
 .gg-label.with-handle {
   padding-left: 24px;

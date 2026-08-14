@@ -1,6 +1,14 @@
 import { ref, watch } from 'vue'
 import { useAppStore, useAuthStore, usePlanningStore, useTimesheetStore } from '@/store'
-import { flushOutbox, pendingCount, refreshPendingCount, type MutationEntity } from './outbox'
+import {
+  flushOutbox,
+  pendingCount,
+  refreshPendingCount,
+  replayOutboxToCache,
+  resetFailedRetries,
+  type FailedSyncItem,
+  type MutationEntity,
+} from './outbox'
 import { isOffline } from './state'
 
 /**
@@ -14,6 +22,8 @@ export interface SyncNoticeData {
   ok: number
   failed: number
   interrupted: boolean
+  /** Неотправленные записи с причинами (для тоста) */
+  failedEntries: FailedSyncItem[]
 }
 
 /** Результат последней синхронизации (показывается тостом) */
@@ -45,8 +55,10 @@ function reloadersFor(entity: MutationEntity): Reloader[] {
   switch (entity) {
     case 'resource':
       return [reload('resources', () => app.loadResources()), reload('calendar', () => app.loadCalendar())]
-    case 'employee':
+    case 'user':
       return isStaff ? [reload('employees', () => ts.loadEmployees())] : []
+    case 'member':
+      return isStaff ? [reload('resources', () => app.loadResources())] : []
     case 'state':
       return isStaff ? [reload('states', () => ts.loadStates())] : []
     case 'period':
@@ -89,18 +101,35 @@ async function runSync(): Promise<void> {
     const res = await flushOutbox()
     if (res.ok > 0 || res.failed > 0 || res.interrupted) {
       await reconcile(res.entities)
-      syncNotice.value = { ok: res.ok, failed: res.failed, interrupted: res.interrupted }
+      syncNotice.value = {
+        ok: res.ok,
+        failed: res.failed,
+        interrupted: res.interrupted,
+        failedEntries: res.failedEntries,
+      }
     }
   } finally {
     reconciling = false
   }
 }
 
+/** Кнопка «Повторить»: снимаем карантин и пробуем отправить снова */
+export async function retryFailed(): Promise<void> {
+  await resetFailedRetries()
+  await runSync()
+}
+
+/** Кнопка «Пропустить»: удаляем отвергнутые записи (см. outbox) */
+export { discardFailed } from './outbox'
+
 /** Интервал поллинга очереди для «тихого» возврата сети (без события online) */
 const SYNC_POLL_MS = 15000
 
 /** Инициализация: реконсил при старте с очередью + триггер на возврат сети */
-export function initOfflineSync(): void {
+export async function initOfflineSync(): Promise<void> {
+  // Write-through в кэш ДО первой загрузки данных (main.ts ждёт эту функцию):
+  // офлайн-перезагрузка показывает несинхронизированные изменения очереди.
+  await replayOutboxToCache()
   void refreshPendingCount()
   watch(isOffline, (offline) => {
     if (!offline) void runSync()

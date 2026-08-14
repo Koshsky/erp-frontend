@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import LabeledBar from '../../../Bar/Bar.vue'
-import { GanttTooltip } from '@/components/common'
+import { BarTooltip } from '@/components/common'
 import type { ProjectBarProps } from './types'
 
 const props = withDefaults(defineProps<ProjectBarProps>(), {
@@ -32,8 +32,9 @@ const emit = defineEmits<{
     @click="() => emit('click')"
   >
     <template #tooltip="{ dateRange }">
-      <GanttTooltip
+      <BarTooltip
         :title="projectCode"
+        :accent="'#1a73e8'"
         :rows="[
           priority != null ? `Приоритет: ${priority}` : '',
           ownerName ? `Владелец: ${ownerName}` : '',

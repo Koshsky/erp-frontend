@@ -10,6 +10,7 @@ import type { ContextMenuItem } from '../components/common/ContextMenu'
 import type { ModalField } from '../components/common/ModalForm'
 import { useConfirm } from '../composables/useConfirm'
 import { useContextMenu } from '../composables/useContextMenu'
+import { compareByName } from '../utils'
 import { useEditModal } from '../composables/useEditModal'
 import { usePlanningOrigin } from '../composables/usePlanningOrigin'
 import { useUnitMenu } from '../composables/useUnitMenu'
@@ -92,7 +93,10 @@ const menuItems = computed<ContextMenuItem[]>(() => {
 })
 
 const ownerOptions = computed(() =>
-  app.users.map((u) => ({ value: u.id ?? 0, label: u.name ?? '' })),
+  app.users
+    .filter((u) => u.role !== 'worker')
+    .sort(compareByName)
+    .map((u) => ({ value: u.id ?? 0, label: u.name ?? '' })),
 )
 
 // Модалка редактирования проекта (код, владелец)

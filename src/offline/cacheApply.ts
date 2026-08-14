@@ -1,5 +1,6 @@
 import { idbGet, idbKeys, idbPut } from './db'
 import type { OutboxEntry } from './outbox'
+import { applyRangeSplit } from './periodSplit'
 
 /**
  * Write-through офлайн-дельт в «нагретые» данные (кэш GET-ответов в IndexedDB).
@@ -9,9 +10,9 @@ import type { OutboxEntry } from './outbox'
  * актуальный кэш (серверный снимок + все офлайн-изменения), а не устаревший.
  *
  * Покрывает все сущности: списки (проекты/процессы/задачи/вехи/назначения/
- * ресурсы/сотрудники), массивы (статусы, периоды табеля) и агрегаты планировщика
- * (/planning/projects|processes|tasks). Записи, которых нет в кэше, не создаём —
- * no-op (нечего обновлять).
+ * ресурсы/пользователи), участников ресурсов, массивы (статусы, периоды
+ * табеля) и агрегаты планировщика (/planning/projects|processes|tasks).
+ * Записи, которых нет в кэше, не создаём — no-op (нечего обновлять).
  */
 
 const CACHE_STORE = 'cache'
@@ -118,11 +119,12 @@ const makeResource = (b: any, tempId?: number) => ({
 const makeEmployee = (b: any, tempId?: number) => ({
   id: tempId ?? -1,
   name: b?.name,
+  role: b?.role ?? 'worker',
   position: b?.position,
-  resource_id: b?.resource_id,
   manager_id: b?.manager_id,
   hire_date: b?.hire_date,
   termination_date: b?.termination_date,
+  username: b?.username,
 })
 const makeProject = (b: any, tempId?: number) => ({
   id: tempId ?? -1,
@@ -245,6 +247,11 @@ async function applyPlanningTasks(
 ): Promise<void> {
   const body = entry.body as Record<string, any> | undefined
   const method = (entry.method || '').toUpperCase()
+  // Код/название ресурса для бейджа задачи при офлайн-назначении (из кэша справочника)
+  const resourceFields =
+    kind === 'assignment' && method === 'POST'
+      ? await getResourceFields(body?.resource_id as number | undefined)
+      : {}
   await forEachCacheKey((p) => p === '/api/v1/planning/tasks', (cachedBody) => {
     const data = cachedBody.data as any
     const processes = data?.processes as any[] | undefined
@@ -328,6 +335,8 @@ async function applyPlanningTasks(
               id: body?.resource_id,
               assignment_id: entry.tempId ?? -1,
               quantity: body?.quantity,
+              code: resourceFields.code as string | undefined,
+              title: resourceFields.title as string | undefined,
             })
           }
           return
@@ -378,8 +387,10 @@ function parseEmployeeDays(entry: OutboxEntry): {
   stateId?: number
 } {
   try {
-    const u = new URL(entry.url)
-    const m = u.pathname.match(/\/employees\/(\d+)\/days/)
+    // В проде URL запроса относительный (basePath /api/v1) — без base
+    // new URL() бросает, и дельты табеля молча не применялись.
+    const u = new URL(entry.url, 'https://mvs.local')
+    const m = u.pathname.match(/\/users\/(\d+)\/days/)
     const stateRaw = u.searchParams.get('state_id')
     const stateN = stateRaw ? Number(stateRaw) : NaN
     return {
@@ -412,13 +423,32 @@ async function getStateFields(stateId: number | undefined): Promise<Record<strin
   return {}
 }
 
-/** Периоды табеля /employees/{id}/days (окна кэшируются по диапазонам) */
+/** Код/название ресурса из кэша справочника /api/v1/resources (для бейджа задачи) */
+async function getResourceFields(resourceId: number | undefined): Promise<Record<string, unknown>> {
+  if (resourceId == null) return {}
+  const keys = await idbKeys(CACHE_STORE)
+  for (const key of keys) {
+    if (pathnameOf(key) !== '/api/v1/resources') continue
+    const cached = await idbGet<{ data: { data?: any[] } }>(CACHE_STORE, key)
+    const arr = cached?.data?.data
+    if (Array.isArray(arr)) {
+      const r = arr.find((x) => x.id === resourceId)
+      if (r) {
+        return { code: r.code, title: r.title }
+      }
+    }
+    break
+  }
+  return {}
+}
+
+/** Периоды табеля /users/{id}/days (окна кэшируются по диапазонам) */
 async function applyPeriod(entry: OutboxEntry): Promise<void> {
   const { employeeId, start, end, stateId } = parseEmployeeDays(entry)
   if (employeeId == null) return
   const body = entry.body as Record<string, any> | undefined
   const method = (entry.method || '').toUpperCase()
-  const prefix = `/api/v1/employees/${employeeId}/days`
+  const prefix = `/api/v1/users/${employeeId}/days`
   const enrichment =
     method === 'PUT' ? await getStateFields(body?.state_id as number | undefined) : {}
   await forEachCacheKey((p) => p === prefix, (cachedBody) => {
@@ -428,27 +458,75 @@ async function applyPeriod(entry: OutboxEntry): Promise<void> {
       const s = body?.start_date as string | undefined
       const e = body?.end_date as string | undefined
       if (!s || !e) return
-      const kept = data.filter(
-        (p) => !(p.start_date != null && p.end_date != null && !(p.end_date < s || p.start_date > e)),
-      )
-      kept.push({
+      // Разбиение как на бэкенде: вычитаем [s,e], хвосты сохраняем.
+      cachedBody.data = applyRangeSplit(data, 'put', s, e, undefined, {
         id: -entry.ts,
         state_id: body?.state_id,
-        start_date: s,
-        end_date: e,
-        ...enrichment,
+        state_code: enrichment.state_code as string | undefined,
+        state_name: enrichment.state_name as string | undefined,
+        is_available: enrichment.is_available as boolean | undefined,
       })
-      cachedBody.data = kept
     } else if (method === 'DELETE') {
       if (!start || !end) return
-      cachedBody.data = data.filter((p) => {
-        const overlaps =
-          p.start_date != null && p.end_date != null && !(p.end_date < start || p.start_date > end)
-        if (!overlaps) return true
-        return stateId != null && p.state_id != null && p.state_id !== stateId
-      })
+      cachedBody.data = applyRangeSplit(data, 'delete', start, end, stateId)
     }
   })
+}
+
+/** Поля пользователя из кэша справочника /api/v1/users (для офлайн-добавления в ресурс) */
+async function getUserFields(userId: number | undefined): Promise<Record<string, unknown>> {
+  if (userId == null) return {}
+  const keys = await idbKeys(CACHE_STORE)
+  for (const key of keys) {
+    if (pathnameOf(key) !== '/api/v1/users') continue
+    const cached = await idbGet<{ data: { data?: { items?: any[] } } }>(CACHE_STORE, key)
+    const u = cached?.data?.data?.items?.find((x) => x.id === userId)
+    if (u) {
+      return {
+        name: u.name,
+        role: u.role,
+        position: u.position,
+        manager_id: u.manager_id,
+        hire_date: u.hire_date,
+        termination_date: u.termination_date,
+      }
+    }
+    break
+  }
+  return {}
+}
+
+/** Массив участников ресурса /api/v1/resources/{id}/members */
+async function applyMembers(entry: OutboxEntry): Promise<void> {
+  const body = entry.body as Record<string, any> | undefined
+  const method = (entry.method || '').toUpperCase()
+  const path = pathnameOf(entry.url).replace(/\/+$/, '')
+  const m = path.match(/\/api\/v1\/resources\/(\d+)\/members(?:\/(\d+))?$/)
+  if (!m) return
+  const resourceId = Number(m[1])
+  const userId = m[2] ? Number(m[2]) : undefined
+  const fields = method === 'POST' ? await getUserFields(body?.user_id as number | undefined) : {}
+  await forEachCacheKey((p) => p === `/api/v1/resources/${resourceId}/members`, (cachedBody) => {
+    const data = cachedBody.data as any[] | undefined
+    if (!Array.isArray(data)) return
+    if (method === 'POST') {
+      const item = { id: body?.user_id ?? entry.tempId ?? -1, ...fields }
+      if (!data.some((x) => x.id === item.id)) data.push(item)
+    } else if (method === 'DELETE' && userId != null) {
+      const i = data.findIndex((x) => x.id === userId)
+      if (i >= 0) data.splice(i, 1)
+    }
+  })
+  // Счётчик участников в справочнике ресурсов
+  if (method === 'POST' || method === 'DELETE') {
+    await forEachCacheKey((p) => p === '/api/v1/resources', (cachedBody) => {
+      const data = cachedBody.data as { items?: any[] } | undefined
+      const res = data?.items?.find((r) => r.id === resourceId)
+      if (!res) return
+      if (method === 'POST') res.employees_count = (res.employees_count ?? 0) + 1
+      else res.employees_count = Math.max(0, (res.employees_count ?? 0) - 1)
+    })
+  }
 }
 
 /**
@@ -457,12 +535,16 @@ async function applyPeriod(entry: OutboxEntry): Promise<void> {
  */
 export async function applyToCache(entry: OutboxEntry): Promise<void> {
   try {
+    console.log(`[offline] applyToCache: ${(entry.method || '').toUpperCase()} ${entry.url}`)
     switch (entry.entity) {
       case 'resource':
         await listApplier('/api/v1/resources', makeResource)(entry)
         break
-      case 'employee':
-        await listApplier('/api/v1/employees', makeEmployee)(entry)
+      case 'user':
+        await listApplier('/api/v1/users', makeEmployee)(entry)
+        break
+      case 'member':
+        await applyMembers(entry)
         break
       case 'state':
         await applyState(entry)

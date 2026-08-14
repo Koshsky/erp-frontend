@@ -13,9 +13,9 @@ export default meta
 type Story = StoryObj<typeof meta>
 
 const employees = [
-  { id: 1, resource_id: 1, resource_title: 'Инженер', name: 'Иванов Иван Иванович', manager_id: 5 },
-  { id: 2, resource_id: 1, resource_title: 'Инженер', name: 'Петров Пётр Петрович', manager_id: 5 },
-  { id: 3, resource_id: 2, resource_title: 'Монтажник', name: 'Фёдоров Фёдор Фёдорович', manager_id: 5 },
+  { id: 1, position: 'Инженер', name: 'Иванов Иван Иванович', manager_id: 5 },
+  { id: 2, position: 'Инженер', name: 'Петров Пётр Петрович', manager_id: 5 },
+  { id: 3, position: 'Монтажник', name: 'Фёдоров Фёдор Фёдорович', manager_id: 5 },
 ]
 
 const states = [

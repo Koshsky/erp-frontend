@@ -76,22 +76,19 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-.tt-trigger {
-  display: inline;
-  cursor: default;
-}
 .tt-popup {
   position: fixed;
-  background: #2c2c2c;
-  color: #fff;
+  background: #fff;
+  color: #333;
   font-size: 12px;
-  line-height: 1.4;
-  padding: 6px 14px;
-  border-radius: 6px;
+  line-height: 1.45;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid #e0e0e0;
   white-space: nowrap;
   pointer-events: none;
   z-index: 9999;
-  box-shadow: 0 3px 12px rgba(0,0,0,.3);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
 }
 .tt-popup--multiline {
   white-space: normal;

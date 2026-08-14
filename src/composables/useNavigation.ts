@@ -41,6 +41,8 @@ export const NAV_CATEGORIES: NavCategory[] = [
     label: 'Админ',
     roles: ['admin'],
     items: [
+      { label: 'Пользователи', to: '/users', name: 'users' },
+      { label: 'Структура компании', to: '/structure', name: 'structure' },
       { label: 'Статусы', to: '/statuses', name: 'statuses' },
       { label: 'Права', to: '/permissions', name: 'permissions' },
     ],

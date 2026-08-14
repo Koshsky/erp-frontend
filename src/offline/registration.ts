@@ -1,59 +1,52 @@
 import { ref } from 'vue'
+import { registerSW } from 'virtual:pwa-register'
 
 /**
- * Регистрация Service Worker + «активные» проверки обновлений.
- * Продакшн-только: в dev ассеты не хэшируются, кэшировать их нельзя.
+ * Регистрация Service Worker (vite-plugin-pwa, registerType: 'autoUpdate').
+ * Workbox генерирует sw.js на каждой сборке с precache-списком и ревизией,
+ * поэтому браузер всегда видит новый скрипт и переустанавливает SW, а все
+ * чанки (включая lazy-чанки неоткрытых страниц) попадают в кэш сразу.
+ * При обновлении SW активируется сам (skipWaiting) и страница перезагружается.
  *
- * Обновление фронтенда: sw.js перегенерируется на каждой сборке, браузер видит
- * новый скрипт и ставит новый SW (у нас — сразу, через skipWaiting). Чтобы не
- * ждать перезагрузки вкладки, проверяем обновления при возврате вкладки,
- * фокусе окна и раз в час.
+ * Продакшн-только: в dev ассеты не хэшируются, кэшировать их нельзя.
  */
-
-const CHECK_INTERVAL_MS = 60 * 60 * 1000
 
 export const swRegistration = ref<ServiceWorkerRegistration | null>(null)
 /** Страница обслуживается активным SW (только после первого обновления) */
 export const swControlled = ref(false)
-/** Обнаружен новый SW — нужен перезапуск страницы для нового бандла */
-export const updateAvailable = ref(false)
+/** Офлайн-оболочка готова (первая установка SW завершена) */
+export const offlineReady = ref(false)
 
 export function initServiceWorker(): void {
   if (!('serviceWorker' in navigator) || !import.meta.env.PROD) return
 
-  window.addEventListener('load', () => {
-    void (async () => {
-      try {
-        const reg = await navigator.serviceWorker.register('/sw.js')
-        swRegistration.value = reg
-        swControlled.value = navigator.serviceWorker.controller != null
-        navigator.serviceWorker.addEventListener('controllerchange', () => {
-          swControlled.value = navigator.serviceWorker.controller != null
-        })
-
-        const check = () => {
-          void reg.update().catch(() => {})
-        }
-        document.addEventListener('visibilitychange', () => {
-          if (document.visibilityState === 'visible') check()
-        })
-        window.addEventListener('focus', check)
-        window.setInterval(check, CHECK_INTERVAL_MS)
-
-        reg.addEventListener('updatefound', () => {
-          const nw = reg.installing ?? reg.waiting
-          if (!nw) return
-          nw.addEventListener('statechange', () => {
-            if (nw.state === 'installed' && navigator.serviceWorker.controller) {
-              updateAvailable.value = true
-            }
-          })
-        })
-      } catch (e) {
-        console.error('Ошибка регистрации Service Worker', e)
-      }
-    })()
+  registerSW({
+    immediate: true,
+    onOfflineReady: () => {
+      offlineReady.value = true
+    },
+    onRegistered: (reg) => {
+      swRegistration.value = reg ?? null
+    },
   })
+
+  swControlled.value = navigator.serviceWorker.controller != null
+  const onControlled = () => {
+    swControlled.value = navigator.serviceWorker.controller != null
+    if (swControlled.value) void cleanupLegacyCaches()
+  }
+  navigator.serviceWorker.addEventListener('controllerchange', onControlled)
+  onControlled()
+
+  // Обход 24-часового троттлинга проверок: reg.update() форсирует проверку
+  // при каждом старте, поэтому после деплоя браузер на ближайшей онлайн-загрузке
+  // сразу видит новый sw.js и переустанавливает SW (autoUpdate + reload).
+  window.setTimeout(() => {
+    void navigator.serviceWorker
+      .getRegistration()
+      .then((reg) => reg?.update().catch(() => {}))
+      .catch(() => {})
+  }, 3000)
 }
 
 /** Форсирует проверку обновлений (кнопка «Проверить обновление») */
@@ -68,10 +61,21 @@ export async function checkForUpdates(): Promise<boolean> {
   return true
 }
 
-/** Перезагрузка со свежим SW/бандлом (наш SW делает skipWaiting при установке) */
-export function applyUpdate(): void {
-  const reg = swRegistration.value
-  const nw = reg?.waiting ?? reg?.installing
-  if (nw) nw.postMessage({ type: 'SKIP_WAITING' })
-  window.setTimeout(() => window.location.reload(), 300)
+/**
+ * Одноразовая чистка кэшей старого нативного SW (erp-shell/erp-assets).
+ * Удаляем их только когда новый Workbox-SW уже сделал свой precache, иначе
+ * офлайн во время перехода мог бы остаться без ассетов.
+ */
+async function cleanupLegacyCaches(): Promise<void> {
+  try {
+    const names = await caches.keys()
+    if (!names.some((n) => n.startsWith('workbox-precache'))) return
+    await Promise.all(
+      names
+        .filter((n) => n === 'erp-shell' || n === 'erp-assets')
+        .map((n) => caches.delete(n)),
+    )
+  } catch {
+    // кэши недоступны (не в PWA-контексте) — пропускаем
+  }
 }

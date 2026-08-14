@@ -3,6 +3,7 @@ import { useAuthStore } from './store'
 import router from './router'
 import { apiErrorMessage } from './utils'
 import { cacheGet, cachePut } from './offline/cache'
+import { replayOutboxToCache } from './offline/outbox'
 import { isOffline } from './offline/state'
 
 const TOKEN_KEY = 'mvs_erp_access_token'
@@ -13,11 +14,6 @@ const AUTH_PATHS = ['/auth/login', '/auth/refresh', '/auth/register']
 
 interface RetryableConfig extends InternalAxiosRequestConfig {
   _retried?: boolean
-}
-
-/** Сетевая ошибка (сервер недоступен): ответа нет, axios помечает кодом ERR_NETWORK */
-function isNetworkError(error: AxiosError): boolean {
-  return !error.response && (error.code === 'ERR_NETWORK' || error.message === 'Network Error')
 }
 
 /** Полный URL запроса — единый ключ для кэша (и запись, и чтение) */
@@ -43,7 +39,7 @@ function redirectToLogin() {
 export function setupHttp() {
   // Успешные GET пишем в офлайн-кэш (сеть доступна — данные свежие).
   axios.interceptors.response.use(
-    (response) => {
+    async (response) => {
       const { config, status } = response
       if (
         status >= 200 &&
@@ -52,7 +48,11 @@ export function setupHttp() {
         config.url &&
         !AUTH_PATHS.some((path) => config.url!.includes(path))
       ) {
-        void cachePut(cacheKey(config), response.data)
+        await cachePut(cacheKey(config), response.data)
+        // Инвариант «кэш = сервер + очередь»: после свежей записи снова накладываем
+        // несинхронизированные мутации — warmup/reconcile не должны стирать их
+        // серверной правдой (иначе офлайн-правки пропадают после перезагрузки).
+        await replayOutboxToCache()
       }
       return response
     },
@@ -62,25 +62,30 @@ export function setupHttp() {
         return Promise.reject(error)
       }
 
-      // Сервер недоступен: отдаём последний сохранённый ответ из кэша (тот же
-      // формат { data, error }), чтобы страница открывалась офлайн. Если кэша
-      // нет — ошибка уходит дальше как обычно, но с понятным текстом для GET.
-      if (isNetworkError(error)) {
-        const cached = await cacheGet<unknown>(cacheKey(config))
-        if (cached != null) {
-          isOffline.value = true
-          return {
-            data: cached,
-            status: 200,
-            statusText: 'OK',
-            headers: {},
-            config,
-            request: error.request,
-          }
-        }
+      // Сервер недоступен (сеть, таймаут, abort — любой GET без HTTP-ответа):
+      // отдаём последний сохранённый ответ из кэша (тот же формат { data, error }).
+      // Read-time overlay: перед чтением накладываем несинхронизированные мутации
+      // на нагретый кэш, чтобы странице ВСЕГДА уходил «серверный снимок + очередь»
+      // (даже если write-through при постановке в очередь не успел).
+      if (!error.response) {
         if ((config.method ?? 'get').toLowerCase() === 'get') {
+          await replayOutboxToCache()
+          const cached = await cacheGet<unknown>(cacheKey(config))
+          if (cached != null) {
+            isOffline.value = true
+            console.log(`[offline] served cache: ${cacheKey(config)}`)
+            return {
+              data: cached,
+              status: 200,
+              statusText: 'OK',
+              headers: {},
+              config,
+              request: error.request,
+            }
+          }
           ;(error as AxiosError & { message: string }).message =
             'Нет сохранённых данных: откройте эту страницу онлайн хотя бы раз'
+          console.log(`[offline] cache miss: ${cacheKey(config)}`)
         }
         return Promise.reject(error)
       }

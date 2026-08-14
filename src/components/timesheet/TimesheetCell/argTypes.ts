@@ -6,7 +6,7 @@ export const timesheetCellArgTypes: ArgTypes<TimesheetCellProps> = {
     name: 'Состояние',
     description: 'Период состояния, покрывающий день (null — рабочий день)',
     control: 'object',
-    table: { type: { summary: 'DtoEmployeeStateResponse | null' }, category: 'Data' },
+    table: { type: { summary: 'DtoUserStateResponse | null' }, category: 'Data' },
   },
   isWeekend: {
     name: 'Выходной',

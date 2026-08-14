@@ -6,7 +6,7 @@ import { passwordRules, validatePassword } from '../composables/usePasswordValid
 import { idbCount } from '../offline/db'
 import { lastWarmedAt, warmNow, warmupProgress } from '../offline/warmup'
 import { isOffline } from '../offline/state'
-import { applyUpdate, checkForUpdates, swControlled, updateAvailable } from '../offline/registration'
+import { checkForUpdates, swControlled } from '../offline/registration'
 
 const auth = useAuthStore()
 
@@ -39,7 +39,8 @@ const profile = computed<ProfileField[]>(() => {
 
 // === Приложение / офлайн: версии, состояние кэша, ручная прогревка ===
 const appVersion = ref('—')
-const swVersion = ref('—')
+/** Версия запущенного бандла (инжектится на build; в dev — 'dev-...') */
+const appBuildVersion = __APP_VERSION__
 const cachedAssets = ref(0)
 const cachedData = ref(0)
 const checkMsg = ref<string | null>(null)
@@ -62,15 +63,14 @@ async function refreshOfflineInfo() {
     // офлайн — версия сборки не критична
   }
   try {
-    const c = await caches.open('erp-shell')
-    const resp = await c.match('/__sw_version__')
-    swVersion.value = resp ? await resp.text() : '—'
-  } catch {
-    swVersion.value = '—'
-  }
-  try {
-    const c = await caches.open('erp-assets')
-    cachedAssets.value = (await c.keys()).length
+    const cacheNames = await caches.keys()
+    let count = 0
+    for (const name of cacheNames) {
+      const c = await caches.open(name)
+      const keys = await c.keys()
+      count += keys.filter((r) => r.url.includes('/assets/')).length
+    }
+    cachedAssets.value = count
   } catch {
     cachedAssets.value = 0
   }
@@ -93,8 +93,10 @@ async function onWarmNow() {
 async function onCheckUpdates() {
   checkMsg.value = null
   const ok = await checkForUpdates()
-  if (ok && !updateAvailable.value) {
+  if (ok) {
     checkMsg.value = 'Обновлений не найдено'
+  } else {
+    checkMsg.value = 'Проверка недоступна'
   }
 }
 
@@ -177,8 +179,8 @@ async function onChangePassword() {
             <span class="pf-value">{{ appVersion }}</span>
           </div>
           <div class="pf-row">
-            <span class="pf-label">Версия Service Worker</span>
-            <span class="pf-value">{{ swVersion }}</span>
+            <span class="pf-label">Версия сборки (запущенная)</span>
+            <span class="pf-value">{{ appBuildVersion }}</span>
           </div>
           <div class="pf-row">
             <span class="pf-label">Управление SW</span>
@@ -207,16 +209,8 @@ async function onChangePassword() {
             <span class="warm-label">Прогрев данных: {{ warmupProgress }}%</span>
           </div>
           <button type="button" class="pf-btn" @click="onWarmNow">Прогреть данные сейчас</button>
-            <button
-              v-if="!updateAvailable"
-              type="button"
-              class="pf-btn ghost"
-              @click="onCheckUpdates"
-            >
+            <button type="button" class="pf-btn ghost" @click="onCheckUpdates">
               Проверить обновление
-            </button>
-            <button v-else type="button" class="pf-btn accent" @click="applyUpdate">
-              Перезагрузить с обновлением
             </button>
             <p v-if="checkMsg" class="pf-msg app-msg">{{ checkMsg }}</p>
           </div>

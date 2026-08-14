@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import CalendarHeader from '../CalendarHeader/CalendarHeader.vue'
 import TimelineGrid from '../TimelineGrid/TimelineGrid.vue'
 import { PlannerStates } from '@/components/common'
 import ResourceHeader from '@/components/common/ResourceHeader/ResourceHeader.vue'
 import TaskGantt from './components/TaskGantt/TaskGantt.vue'
+import { provideDragPreview } from '@/composables/useDragPreview'
+import type { DragPreviewState } from '@/composables/useDragPreview'
 import type { DtoDetailedProcess, DtoResource, DtoResourceResponse, DtoResourceCalendar, DtoAvailabilityPeriod } from '@/api'
 import type { Resource } from '@/components/common/ResourceHeader/types'
 import type { Process } from './types'
@@ -50,6 +52,10 @@ const emit = defineEmits<{
   /** Видимое окно шкалы (период «как на экране») — проброс из TimelineGrid */
   'visible-range': [payload: { from: string; to: string; cellWidthPx: number; scale: number }]
 }>()
+
+/** Активный драг задачи — для live-предпросмотра загрузки ресурсов (пишется из TaskBar) */
+const dragPreview = ref<DragPreviewState>({ active: false, taskId: null, startDate: null, endDate: null })
+provideDragPreview(dragPreview)
 
 /** Маппим DTO (из /planning/tasks) во внутренние типы. Задачи сортируем по алфавиту. */
 const displayProcesses = computed<Process[]>(() =>
@@ -130,6 +136,33 @@ function usageForDay(resourceId: number, day: Date): number {
   return used
 }
 
+/** Найти задачу по id во всех процессах (для live-предпросмотра загрузки) */
+function findTaskRow(taskId: number) {
+  for (const proc of displayProcesses.value) {
+    const t = (proc.tasks || []).find((x) => x.id === taskId)
+    if (t) return t
+  }
+  return null
+}
+
+/** usageForDay + дельта перетаскиваемой задачи: на новый диапазон добавляем её
+ *  количество, на покинутый старый — вычитаем. Цвета ячеек обновляются в реальном
+ *  времени, пока кнопка мыши не отпущена. */
+function usageForDayPreview(resourceId: number, day: Date): number {
+  let used = usageForDay(resourceId, day)
+  const p = dragPreview.value
+  if (!p.active || p.taskId == null || p.startDate == null || p.endDate == null) return used
+  const t = findTaskRow(p.taskId)
+  if (!t) return used
+  const a = (t.resources || []).find((r) => r.resource_id === resourceId)
+  if (!a || a.quantity === 0) return used
+  const dayT = day.getTime()
+  const inNew = dayT >= toDate(p.startDate).getTime() && dayT <= toDate(p.endDate).getTime()
+  const inOld = dayT >= toDate(t.start_date).getTime() && dayT <= toDate(t.end_date).getTime()
+  if (inNew === inOld) return used
+  return inNew ? used + a.quantity : used - a.quantity
+}
+
 /** ПКМ по пустому месту внутри группы процесса — создание задачи/вехи в этом процессе */
 function onGridCtx(p: { clientX: number; clientY: number; date: string | null; rowIndex?: number; groupId?: string }) {
   const processId = p.groupId ? Number(p.groupId) : undefined
@@ -148,7 +181,7 @@ function onGridCtx(p: { clientX: number; clientY: number; date: string | null; r
     <TimelineGrid v-if="displayProcesses.length" id="task" :origin="origin" :unit="unit" :focus-date="focusDate" :focus-group-id="focusGroupId" @ctxmenu="onGridCtx" @header-ctxmenu="(p) => emit('header-ctxmenu', p)" @visible-range="(p) => emit('visible-range', p)">
       <template #default="{ t }">
         <CalendarHeader :t="t" />
-        <ResourceHeader :t="t" :resources="displayResources" :usageFn="usageForDay" :availableFn="availableForDay" />
+        <ResourceHeader :t="t" :resources="displayResources" :usageFn="usageForDayPreview" :availableFn="availableForDay" />
 
         <TaskGantt
           v-for="proc in displayProcesses"

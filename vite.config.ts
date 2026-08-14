@@ -1,5 +1,6 @@
 import { defineConfig, loadEnv, type Plugin } from 'vite'
 import vue from '@vitejs/plugin-vue'
+import { VitePWA } from 'vite-plugin-pwa'
 import checker from 'vite-plugin-checker'
 import { fileURLToPath, URL } from 'node:url'
 import { readdirSync, writeFileSync } from 'node:fs'
@@ -18,17 +19,16 @@ function buildVersion(root: string): string {
 }
 
 /**
- * Пишет dist/precache-manifest.json: { version, assets }. version — уникальная
- * метка сборки (видна в UI профиля и в SW), assets — список всех ассетов.
- * Service Worker при установке догружает список и кэширует ВСЕ чанки (включая
- * lazy-чанки неоткрытых страниц), а при активации чистит по нему устаревшие.
- * Это «прогрев» офлайн-оболочки без внешних плагинов.
+ * Пишет dist/precache-manifest.json: { version, assets }. Файл используется
+ * только приложением: версия сборки в UI профиля и проверка доступности
+ * сервера (outbox). Precache Service Worker теперь строит Workbox
+ * (vite-plugin-pwa) со списком чанков и ревизией прямо в sw.js.
  */
-function precacheManifest(): Plugin {
+function versionManifest(version: string): Plugin {
   let root = process.cwd()
   let outDir = 'dist'
   return {
-    name: 'precache-manifest',
+    name: 'version-manifest',
     apply: 'build',
     configResolved(config) {
       root = config.root
@@ -46,7 +46,7 @@ function precacheManifest(): Plugin {
         // каталога ассетов нет (пустая сборка) — оставляем пустой список
       }
       const dest = resolve(root, outDir, 'precache-manifest.json')
-      const payload = { version: buildVersion(root), assets }
+      const payload = { version, assets }
       writeFileSync(dest, `${JSON.stringify(payload, null, 2)}\n`)
     },
   }
@@ -59,14 +59,33 @@ export default defineConfig(({ mode }) => {
   // Адрес бэкенда для dev-прокси (по умолчанию http://localhost:8080)
   const apiTarget = env.VITE_API_PROXY_TARGET || 'http://localhost:8080'
 
+  // Версия сборки вычисляется ОДИН раз: она должна быть идентична и в бандле
+  // (__APP_VERSION__), и в precache-manifest.json, иначе сравнение версий в
+  // профиле всегда показывало бы «разные» сборки.
+  const appVersion = buildVersion(process.cwd())
+
   return {
+  define: {
+    __APP_VERSION__: JSON.stringify(appVersion),
+  },
   plugins: [
     vue(),
     checker({
       vueTsc: true,
       typescript: true,
     }),
-    precacheManifest(),
+    versionManifest(appVersion),
+    VitePWA({
+      registerType: 'autoUpdate',
+      includeAssets: ['icons/*.svg', 'icons/*.png', 'manifest.webmanifest'],
+      manifest: false,
+      workbox: {
+        globPatterns: ['assets/**/*.{js,css,ttf,woff2,svg,png}', 'index.html'],
+        navigateFallback: '/index.html',
+        cleanupOutdatedCaches: true,
+        maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
+      },
+    }),
   ],
   resolve: {
     alias: {
@@ -84,4 +103,3 @@ export default defineConfig(({ mode }) => {
   },
   }
 })
-
