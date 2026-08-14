@@ -49,6 +49,10 @@ export interface AuthRefreshPost200Response {
     'data'?: DtoRefreshResponse;
     'error'?: object;
 }
+export interface AutoCreateConfigGet200Response {
+    'data'?: DtoAutoCreateConfig;
+    'error'?: object;
+}
 export interface DtoAddMemberRequest {
     'user_id'?: number;
 }
@@ -75,6 +79,10 @@ export interface DtoAuthResponse {
     'refresh_token'?: string;
     'token_type'?: string;
     'user'?: DtoUserInfo;
+}
+export interface DtoAutoCreateConfig {
+    'enabled'?: boolean;
+    'processes'?: Array<DtoProcessTemplate>;
 }
 export interface DtoAvailabilityPeriod {
     'available'?: number;
@@ -216,6 +224,11 @@ export interface DtoProcessResponse {
     'start_date'?: string;
     'title'?: string;
 }
+export interface DtoProcessTemplate {
+    'owner_id'?: number;
+    'tasks'?: Array<DtoTaskTemplate>;
+    'title'?: string;
+}
 export interface DtoProject {
     'end_date'?: string;
     'id'?: number;
@@ -256,6 +269,10 @@ export interface DtoResource {
     'id'?: number;
     'quantity'?: number;
     'title'?: string;
+}
+export interface DtoResourceBinding {
+    'quantity'?: number;
+    'resource_id'?: number;
 }
 export interface DtoResourceCalendar {
     'code'?: string;
@@ -299,6 +316,10 @@ export interface DtoTaskResponse {
     'owner_id'?: number;
     'process_id'?: number;
     'start_date'?: string;
+    'title'?: string;
+}
+export interface DtoTaskTemplate {
+    'resources'?: Array<DtoResourceBinding>;
     'title'?: string;
 }
 export interface DtoUpdateAssignmentRequest {
@@ -366,10 +387,6 @@ export interface DtoUserResponse {
     'id'?: number;
     'manager_id'?: number;
     'name'?: string;
-    /**
-     * PasswordHash выводится только админу (GET /users?include_hash=true).
-     */
-    'password_hash'?: string;
     'position'?: string;
     'role'?: string;
     'termination_date'?: string;
@@ -1194,6 +1211,175 @@ export class AuthApi extends BaseAPI {
      */
     public authRegisterPost(request: DtoRegisterRequest, options?: RawAxiosRequestConfig) {
         return AuthApiFp(this.configuration).authRegisterPost(request, options).then((request) => request(this.axios, this.basePath));
+    }
+}
+
+
+
+/**
+ * AutoCreateApi - axios parameter creator
+ */
+export const AutoCreateApiAxiosParamCreator = function (configuration?: Configuration) {
+    return {
+        /**
+         * Returns the project auto-create configuration (admin)
+         * @summary Get auto-create config
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        autoCreateConfigGet: async (options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            const localVarPath = `/auto-create/config`;
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'GET', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication ApiKeyAuth required
+            await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
+
+            localVarHeaderParameter['Accept'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * Replaces the project auto-create configuration (admin)
+         * @summary Update auto-create config
+         * @param {DtoAutoCreateConfig} config Auto-create config
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        autoCreateConfigPut: async (config: DtoAutoCreateConfig, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'config' is not null or undefined
+            assertParamExists('autoCreateConfigPut', 'config', config)
+            const localVarPath = `/auto-create/config`;
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'PUT', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication ApiKeyAuth required
+            await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
+
+            localVarHeaderParameter['Content-Type'] = 'application/json';
+            localVarHeaderParameter['Accept'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+            localVarRequestOptions.data = serializeDataIfNeeded(config, localVarRequestOptions, configuration)
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+    }
+};
+
+/**
+ * AutoCreateApi - functional programming interface
+ */
+export const AutoCreateApiFp = function(configuration?: Configuration) {
+    const localVarAxiosParamCreator = AutoCreateApiAxiosParamCreator(configuration)
+    return {
+        /**
+         * Returns the project auto-create configuration (admin)
+         * @summary Get auto-create config
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async autoCreateConfigGet(options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<AutoCreateConfigGet200Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.autoCreateConfigGet(options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['AutoCreateApi.autoCreateConfigGet']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
+         * Replaces the project auto-create configuration (admin)
+         * @summary Update auto-create config
+         * @param {DtoAutoCreateConfig} config Auto-create config
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async autoCreateConfigPut(config: DtoAutoCreateConfig, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<AutoCreateConfigGet200Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.autoCreateConfigPut(config, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['AutoCreateApi.autoCreateConfigPut']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+    }
+};
+
+/**
+ * AutoCreateApi - factory interface
+ */
+export const AutoCreateApiFactory = function (configuration?: Configuration, basePath?: string, axios?: AxiosInstance) {
+    const localVarFp = AutoCreateApiFp(configuration)
+    return {
+        /**
+         * Returns the project auto-create configuration (admin)
+         * @summary Get auto-create config
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        autoCreateConfigGet(options?: RawAxiosRequestConfig): AxiosPromise<AutoCreateConfigGet200Response> {
+            return localVarFp.autoCreateConfigGet(options).then((request) => request(axios, basePath));
+        },
+        /**
+         * Replaces the project auto-create configuration (admin)
+         * @summary Update auto-create config
+         * @param {DtoAutoCreateConfig} config Auto-create config
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        autoCreateConfigPut(config: DtoAutoCreateConfig, options?: RawAxiosRequestConfig): AxiosPromise<AutoCreateConfigGet200Response> {
+            return localVarFp.autoCreateConfigPut(config, options).then((request) => request(axios, basePath));
+        },
+    };
+};
+
+/**
+ * AutoCreateApi - object-oriented interface
+ */
+export class AutoCreateApi extends BaseAPI {
+    /**
+     * Returns the project auto-create configuration (admin)
+     * @summary Get auto-create config
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    public autoCreateConfigGet(options?: RawAxiosRequestConfig) {
+        return AutoCreateApiFp(this.configuration).autoCreateConfigGet(options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * Replaces the project auto-create configuration (admin)
+     * @summary Update auto-create config
+     * @param {DtoAutoCreateConfig} config Auto-create config
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    public autoCreateConfigPut(config: DtoAutoCreateConfig, options?: RawAxiosRequestConfig) {
+        return AutoCreateApiFp(this.configuration).autoCreateConfigPut(config, options).then((request) => request(this.axios, this.basePath));
     }
 }
 

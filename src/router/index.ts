@@ -74,6 +74,11 @@ const router = createRouter({
           component: () => import('../views/CompanyStructure.vue'),
         },
         {
+          path: 'auto-create',
+          name: 'auto-create',
+          component: () => import('../views/AutoCreatePage.vue'),
+        },
+        {
           path: 'permissions',
           name: 'permissions',
           component: () => import('../views/PermissionsPage.vue'),
@@ -124,9 +129,9 @@ router.beforeEach(async (to) => {
     return { name: 'dashboard' }
   }
 
-  // Статусы, Права, Пользователи, Структура — только admin
+  // Статусы, Права, Пользователи, Структура, Автосоздание — только admin
   if (
-    (to.name === 'statuses' || to.name === 'permissions' || to.name === 'users' || to.name === 'structure') &&
+    (to.name === 'statuses' || to.name === 'permissions' || to.name === 'users' || to.name === 'structure' || to.name === 'auto-create') &&
     auth.user?.role !== 'admin'
   ) {
     return { name: 'dashboard' }

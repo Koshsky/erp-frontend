@@ -1,8 +1,8 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import axios, { type AxiosError, type Method } from 'axios'
-import { AuthApi, ProjectsApi, ProcessesApi, TasksApi, TimesheetResourcesApi, TimesheetCalendarApi, TimesheetStatesApi, PlanningApi, MilestonesApi, UsersApi, AssignmentsApi, Configuration } from '@/api'
-import type { DtoUserInfo, DtoProject, DtoResourceResponse, DtoResourceCalendar, DtoResourceMemberResponse, DtoUserResponse, DtoUserStateResponse, DtoStateResponse, DtoCreateResourceRequest, DtoUpdateResourceRequest, DtoCreateUserRequest, DtoUpdateUserRequest, DtoSetDaysRequest, DtoAdminUserResponse, DtoCreateUserResult, DtoResetPasswordResponse, JwtTokenPair } from '@/api'
+import { AuthApi, ProjectsApi, ProcessesApi, TasksApi, TimesheetResourcesApi, TimesheetCalendarApi, TimesheetStatesApi, PlanningApi, MilestonesApi, UsersApi, AssignmentsApi, AutoCreateApi, Configuration } from '@/api'
+import type { DtoUserInfo, DtoProject, DtoResourceResponse, DtoResourceCalendar, DtoResourceMemberResponse, DtoUserResponse, DtoUserStateResponse, DtoStateResponse, DtoCreateResourceRequest, DtoUpdateResourceRequest, DtoCreateUserRequest, DtoUpdateUserRequest, DtoSetDaysRequest, DtoAdminUserResponse, DtoCreateUserResult, DtoResetPasswordResponse, DtoAutoCreateConfig, JwtTokenPair } from '@/api'
 import { apiErrorMessage } from '@/utils'
 import { isOffline } from '@/offline/state'
 import { scheduleWarmup } from '@/offline/warmup'
@@ -651,6 +651,39 @@ export const useAppStore = defineStore('app', () => {
     }
   }
 
+  // === Админ: автосоздание проектов ===
+  const autoCreateConfig = ref<DtoAutoCreateConfig | null>(null)
+  const autoCreateLoading = ref(false)
+  const autoCreateError = ref<string | null>(null)
+
+  /** Загрузить конфигурацию автосоздания */
+  async function loadAutoCreateConfig() {
+    autoCreateLoading.value = true
+    autoCreateError.value = null
+    try {
+      const api = new AutoCreateApi(apiConfig())
+      const resp = await api.autoCreateConfigGet()
+      autoCreateConfig.value = resp.data?.data ?? null
+    } catch (e: any) {
+      autoCreateError.value = apiErrorMessage(e)
+    } finally {
+      autoCreateLoading.value = false
+    }
+  }
+
+  /** Сохранить конфигурацию автосоздания (целая замена) */
+  async function saveAutoCreateConfig(cfg: DtoAutoCreateConfig): Promise<boolean> {
+    try {
+      const api = new AutoCreateApi(apiConfig())
+      await api.autoCreateConfigPut(cfg)
+      autoCreateConfig.value = cfg
+      return true
+    } catch (e: any) {
+      autoCreateError.value = apiErrorMessage(e)
+      return false
+    }
+  }
+
   const totalProjects = computed(() => projectsTotal.value)
   const totalResources = computed(() => resourcesTotal.value)
 
@@ -683,6 +716,11 @@ export const useAppStore = defineStore('app', () => {
     resetPassword,
     updateUser,
     updateManager,
+    autoCreateConfig,
+    autoCreateLoading,
+    autoCreateError,
+    loadAutoCreateConfig,
+    saveAutoCreateConfig,
     createResource,
     updateResource,
     deleteResource,
