@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { storeToRefs } from 'pinia'
-import { ModalForm } from '../components/common'
+import { ModalForm, CopyField } from '../components/common'
 import type { ModalField } from '../components/common/ModalForm'
 import { useAppStore } from '../store'
 import { compareByName } from '../utils'
@@ -161,7 +161,7 @@ onMounted(() => {
     <div v-if="passwordModal" class="pw-overlay" @click.self="passwordModal = null">
       <div class="pw-card">
         <div class="pw-caption">{{ passwordModal.caption }}</div>
-        <div class="pw-value mono" @click="(e) => (e.target as HTMLInputElement).select()">{{ passwordModal.password }}</div>
+        <CopyField :value="passwordModal.password" />
         <p class="pw-note">Пароль показывается один раз. Скопируйте его и передайте пользователю.</p>
         <button type="button" class="pw-close" @click="passwordModal = null">Закрыть</button>
       </div>
@@ -290,17 +290,6 @@ onMounted(() => {
   font-size: 16px;
   font-weight: 700;
   color: #2c3e50;
-}
-.pw-value {
-  background: #f6f8fa;
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
-  padding: 12px;
-  font-size: 14px;
-  color: #1a3a6b;
-  user-select: all;
-  cursor: text;
-  overflow-wrap: anywhere;
 }
 .pw-note {
   font-size: 12px;
