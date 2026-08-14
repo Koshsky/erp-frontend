@@ -13,6 +13,8 @@ export interface BarTooltipProps {
 export interface UsageTooltipProps {
   used: number
   available: number | null
+  /** Отсутствующие сотрудники ресурса (для секции «Отсутствуют:») */
+  absentees?: { user_name?: string; state_name?: string; start_date?: string; end_date?: string }[]
 }
 
 /** Простая подсказка/состояние: заголовок + строки + опциональный цветной маркер */

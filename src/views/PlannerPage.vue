@@ -37,8 +37,24 @@ const viewRange = ref<{ from: string; to: string; cellWidthPx: number; scale: nu
   cellWidthPx: CELL_WIDTH,
   scale: 1,
 })
+
+/** Отсутствия членов ресурсов (для тултипа UsageCell) */
+const { absenceByResource } = storeToRefs(app)
+
+let absenceTimer: ReturnType<typeof setTimeout> | null = null
+
+/** Загрузить отсутствия по всем ресурсам за видимое окно (с дебаунсом при скролле/зуме) */
+function loadAbsenceForRange(from: string, to: string) {
+  if (!from || !to) return
+  for (const r of resources.value) {
+    if (r.id != null) void app.loadResourceAbsence(r.id, from, to)
+  }
+}
+
 function onVisibleRange(v: { from: string; to: string; cellWidthPx: number; scale: number }) {
   viewRange.value = v
+  if (absenceTimer) clearTimeout(absenceTimer)
+  absenceTimer = setTimeout(() => loadAbsenceForRange(v.from, v.to), 300)
 }
 
 // Меню ПКМ по шапке таблицы: переключение масштаба «День» / «Декада»
@@ -353,6 +369,7 @@ const taskGroups = computed<PdfGanttGroup[]>(() =>
       :processes="processesByPriority"
       :resources="resources"
       :calendar="calendar"
+      :absence-by-resource="absenceByResource"
       :loading="loading"
       :error="error"
       :origin="origin"

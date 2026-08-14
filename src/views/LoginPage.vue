@@ -16,7 +16,9 @@ const username = ref('')
 const password = ref('')
 
 // Поля для регистрации
-const regName = ref('')
+const regLastName = ref('')
+const regFirstName = ref('')
+const regMiddleName = ref('')
 const regUsername = ref('')
 const regPassword = ref('')
 const regPasswordConfirm = ref('')
@@ -54,7 +56,13 @@ async function onSubmit() {
     const ok = await auth.login(username.value, password.value)
     if (ok) goToRedirect()
   } else if (mode.value === 'register') {
-    if (!regName.value || !regUsername.value || !regPassword.value || !regPasswordConfirm.value) {
+    if (
+      !regLastName.value ||
+      !regFirstName.value ||
+      !regUsername.value ||
+      !regPassword.value ||
+      !regPasswordConfirm.value
+    ) {
       localError.value = 'Заполните все поля'
       return
     }
@@ -66,7 +74,13 @@ async function onSubmit() {
       localError.value = 'Пароли не совпадают'
       return
     }
-    const ok = await auth.register(regUsername.value, regPassword.value, regName.value)
+    const ok = await auth.register(
+      regUsername.value,
+      regPassword.value,
+      regLastName.value,
+      regFirstName.value,
+      regMiddleName.value,
+    )
     if (ok) goToRedirect()
   }
 }
@@ -126,8 +140,16 @@ function goToRedirect() {
         <!-- РЕГИСТРАЦИЯ -->
         <template v-else-if="mode === 'register'">
           <label class="lp-field">
+            <span>Фамилия</span>
+            <input v-model="regLastName" type="text" autocomplete="family-name" placeholder="Иванов" />
+          </label>
+          <label class="lp-field">
             <span>Имя</span>
-            <input v-model="regName" type="text" autocomplete="name" placeholder="Иван Иванов" />
+            <input v-model="regFirstName" type="text" autocomplete="given-name" placeholder="Иван" />
+          </label>
+          <label class="lp-field">
+            <span>Отчество</span>
+            <input v-model="regMiddleName" type="text" autocomplete="additional-name" placeholder="Иванович (необязательно)" />
           </label>
           <label class="lp-field">
             <span>Логин</span>

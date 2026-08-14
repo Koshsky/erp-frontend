@@ -91,7 +91,9 @@ onBeforeUnmount(() => {
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
 }
 .tt-popup--multiline {
+  /* Растягиваем подложку под весь контент (строки nowrap не должны вылезать за край) */
+  width: max-content;
+  max-width: none;
   white-space: normal;
-  max-width: 300px;
 }
 </style>

@@ -80,7 +80,9 @@ type ModalMode =
   | {
       type: 'edit'
       id: number
-      name: string
+      lastName: string
+      firstName: string
+      middleName?: string
       position?: string
       managerId?: number | null
       hireDate?: string
@@ -100,11 +102,24 @@ const { open: openModal, close: closeModal, submit: submitModal, bind: modalBind
   (state) => {
     const fields: ModalField[] = [
       {
-        key: 'name',
-        label: 'ФИО',
+        key: 'lastName',
+        label: 'Фамилия',
         type: 'text',
-        value: state.type === 'edit' ? state.name : '',
+        value: state.type === 'edit' ? state.lastName : '',
         required: true,
+      },
+      {
+        key: 'firstName',
+        label: 'Имя',
+        type: 'text',
+        value: state.type === 'edit' ? state.firstName : '',
+        required: true,
+      },
+      {
+        key: 'middleName',
+        label: 'Отчество',
+        type: 'text',
+        value: state.type === 'edit' ? (state.middleName ?? '') : '',
       },
       {
         key: 'position',
@@ -131,8 +146,10 @@ const { open: openModal, close: closeModal, submit: submitModal, bind: modalBind
     return fields
   },
   async (state, values) => {
-    const payload: { name: string; role?: string; position?: string; manager_id?: number; hire_date?: string; termination_date?: string } = {
-      name: String(values.name ?? '').trim(),
+    const payload: { last_name: string; first_name: string; middle_name?: string; role?: string; position?: string; manager_id?: number; hire_date?: string; termination_date?: string } = {
+      last_name: String(values.lastName ?? '').trim(),
+      first_name: String(values.firstName ?? '').trim(),
+      middle_name: String(values.middleName ?? '').trim() || undefined,
     }
     if (values.position != null) {
       payload.position = String(values.position).trim()
@@ -170,7 +187,9 @@ function openEdit(id: number) {
     openModal({
       type: 'edit',
       id,
-      name: emp.name ?? '',
+      lastName: emp.last_name ?? '',
+      firstName: emp.first_name ?? '',
+      middleName: emp.middle_name ?? '',
       position: emp.position ?? '',
       managerId: emp.manager_id ?? null,
       hireDate: emp.hire_date,

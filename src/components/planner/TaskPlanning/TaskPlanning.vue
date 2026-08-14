@@ -7,7 +7,7 @@ import ResourceHeader from '@/components/common/ResourceHeader/ResourceHeader.vu
 import TaskGantt from './components/TaskGantt/TaskGantt.vue'
 import { provideDragPreview } from '@/composables/useDragPreview'
 import type { DragPreviewState } from '@/composables/useDragPreview'
-import type { DtoDetailedProcess, DtoResource, DtoResourceResponse, DtoResourceCalendar, DtoAvailabilityPeriod } from '@/api'
+import type { DtoDetailedProcess, DtoResource, DtoResourceResponse, DtoResourceCalendar, DtoResourceAbsenceResponse, DtoAvailabilityPeriod } from '@/api'
 import type { Resource } from '@/components/common/ResourceHeader/types'
 import type { Process } from './types'
 import type { PlanningUnit } from '../calendar'
@@ -18,6 +18,8 @@ const props = withDefaults(defineProps<{
   resources?: DtoResourceResponse[] | null
   /** Доступность ресурсов (periods из /timesheet/calendar), окно «сегодня ± 1 год» */
   calendar?: DtoResourceCalendar[] | null
+  /** Отсутствия членов ресурсов (для тултипа UsageCell) по id ресурса */
+  absenceByResource?: Record<number, DtoResourceAbsenceResponse[]> | null
   loading?: boolean
   error?: string | null
   /** Якорь шкалы: ячейка с индексом 0 (начальная позиция) */
@@ -34,6 +36,7 @@ const props = withDefaults(defineProps<{
   processes: null,
   resources: null,
   calendar: null,
+  absenceByResource: null,
   loading: false,
   error: null,
   origin: '',
@@ -181,7 +184,7 @@ function onGridCtx(p: { clientX: number; clientY: number; date: string | null; r
     <TimelineGrid v-if="displayProcesses.length" id="task" :origin="origin" :unit="unit" :focus-date="focusDate" :focus-group-id="focusGroupId" @ctxmenu="onGridCtx" @header-ctxmenu="(p) => emit('header-ctxmenu', p)" @visible-range="(p) => emit('visible-range', p)">
       <template #default="{ t }">
         <CalendarHeader :t="t" />
-        <ResourceHeader :t="t" :resources="displayResources" :usageFn="usageForDayPreview" :availableFn="availableForDay" />
+        <ResourceHeader :t="t" :resources="displayResources" :usageFn="usageForDayPreview" :availableFn="availableForDay" :absence-by-resource="absenceByResource" />
 
         <TaskGantt
           v-for="proc in displayProcesses"

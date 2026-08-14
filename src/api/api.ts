@@ -57,9 +57,12 @@ export interface DtoAddMemberRequest {
     'user_id'?: number;
 }
 export interface DtoAdminUserResponse {
+    'first_name'?: string;
     'hire_date'?: string;
     'id'?: number;
+    'last_name'?: string;
     'manager_id'?: number;
+    'middle_name'?: string;
     'name'?: string;
     'password_hash'?: string;
     'position'?: string;
@@ -144,9 +147,11 @@ export interface DtoCreateTaskRequest {
     'title'?: string;
 }
 export interface DtoCreateUserRequest {
+    'first_name'?: string;
     'hire_date'?: string;
+    'last_name'?: string;
     'manager_id'?: number;
-    'name'?: string;
+    'middle_name'?: string;
     'password_hash'?: string;
     'position'?: string;
     'role'?: string;
@@ -256,7 +261,9 @@ export interface DtoRefreshTokenRequest {
     'refresh_token'?: string;
 }
 export interface DtoRegisterRequest {
-    'name'?: string;
+    'first_name'?: string;
+    'last_name'?: string;
+    'middle_name'?: string;
     'password'?: string;
     'username'?: string;
 }
@@ -269,6 +276,15 @@ export interface DtoResource {
     'id'?: number;
     'quantity'?: number;
     'title'?: string;
+}
+export interface DtoResourceAbsenceResponse {
+    'end_date'?: string;
+    'start_date'?: string;
+    'state_code'?: string;
+    'state_id'?: number;
+    'state_name'?: string;
+    'user_id'?: number;
+    'user_name'?: string;
 }
 export interface DtoResourceBinding {
     'quantity'?: number;
@@ -368,24 +384,35 @@ export interface DtoUpdateTaskRequest {
     'title'?: string;
 }
 export interface DtoUpdateUserRequest {
+    'first_name'?: string;
     'hire_date'?: string;
+    'last_name'?: string;
     'manager_id'?: number;
-    'name'?: string;
+    'middle_name'?: string;
     'position'?: string;
     'role'?: string;
     'termination_date'?: string;
     'username'?: string;
 }
 export interface DtoUserInfo {
+    'first_name'?: string;
     'id'?: number;
+    'last_name'?: string;
+    'middle_name'?: string;
     'name'?: string;
     'role'?: string;
     'username'?: string;
 }
 export interface DtoUserResponse {
+    'first_name'?: string;
     'hire_date'?: string;
     'id'?: number;
+    'last_name'?: string;
     'manager_id'?: number;
+    'middle_name'?: string;
+    /**
+     * Полное ФИО «Фамилия Имя Отчество» (готовое, для отображения).
+     */
     'name'?: string;
     'position'?: string;
     'role'?: string;
@@ -478,6 +505,10 @@ export interface ResourcesGet200ResponseAllOfData {
     'limit'?: number;
     'offset'?: number;
     'total'?: number;
+}
+export interface ResourcesIdAbsenceGet200Response {
+    'data'?: Array<DtoResourceAbsenceResponse>;
+    'error'?: object;
 }
 export interface ResourcesIdMembersGet200Response {
     'data'?: Array<DtoResourceMemberResponse>;
@@ -3437,6 +3468,57 @@ export const TimesheetResourcesApiAxiosParamCreator = function (configuration?: 
             };
         },
         /**
+         * List absence ranges (is_available=false states) of the resource members
+         * @summary List resource absences
+         * @param {number} id Resource ID
+         * @param {string} startDate Start date (YYYY-MM-DD)
+         * @param {string} endDate End date (YYYY-MM-DD)
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        resourcesIdAbsenceGet: async (id: number, startDate: string, endDate: string, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'id' is not null or undefined
+            assertParamExists('resourcesIdAbsenceGet', 'id', id)
+            // verify required parameter 'startDate' is not null or undefined
+            assertParamExists('resourcesIdAbsenceGet', 'startDate', startDate)
+            // verify required parameter 'endDate' is not null or undefined
+            assertParamExists('resourcesIdAbsenceGet', 'endDate', endDate)
+            const localVarPath = `/resources/{id}/absence`
+                .replace('{id}', encodeURIComponent(String(id)));
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'GET', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication ApiKeyAuth required
+            await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
+
+            if (startDate !== undefined) {
+                localVarQueryParameter['start_date'] = startDate;
+            }
+
+            if (endDate !== undefined) {
+                localVarQueryParameter['end_date'] = endDate;
+            }
+
+            localVarHeaderParameter['Accept'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
          * Delete resource by id
          * @summary Delete resource
          * @param {number} id Resource ID
@@ -3735,6 +3817,21 @@ export const TimesheetResourcesApiFp = function(configuration?: Configuration) {
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
+         * List absence ranges (is_available=false states) of the resource members
+         * @summary List resource absences
+         * @param {number} id Resource ID
+         * @param {string} startDate Start date (YYYY-MM-DD)
+         * @param {string} endDate End date (YYYY-MM-DD)
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async resourcesIdAbsenceGet(id: number, startDate: string, endDate: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<ResourcesIdAbsenceGet200Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.resourcesIdAbsenceGet(id, startDate, endDate, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['TimesheetResourcesApi.resourcesIdAbsenceGet']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
          * Delete resource by id
          * @summary Delete resource
          * @param {number} id Resource ID
@@ -3850,6 +3947,18 @@ export const TimesheetResourcesApiFactory = function (configuration?: Configurat
             return localVarFp.resourcesGet(limit, ownerId, offset, options).then((request) => request(axios, basePath));
         },
         /**
+         * List absence ranges (is_available=false states) of the resource members
+         * @summary List resource absences
+         * @param {number} id Resource ID
+         * @param {string} startDate Start date (YYYY-MM-DD)
+         * @param {string} endDate End date (YYYY-MM-DD)
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        resourcesIdAbsenceGet(id: number, startDate: string, endDate: string, options?: RawAxiosRequestConfig): AxiosPromise<ResourcesIdAbsenceGet200Response> {
+            return localVarFp.resourcesIdAbsenceGet(id, startDate, endDate, options).then((request) => request(axios, basePath));
+        },
+        /**
          * Delete resource by id
          * @summary Delete resource
          * @param {number} id Resource ID
@@ -3940,6 +4049,19 @@ export class TimesheetResourcesApi extends BaseAPI {
      */
     public resourcesGet(limit?: number, ownerId?: number, offset?: number, options?: RawAxiosRequestConfig) {
         return TimesheetResourcesApiFp(this.configuration).resourcesGet(limit, ownerId, offset, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * List absence ranges (is_available=false states) of the resource members
+     * @summary List resource absences
+     * @param {number} id Resource ID
+     * @param {string} startDate Start date (YYYY-MM-DD)
+     * @param {string} endDate End date (YYYY-MM-DD)
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    public resourcesIdAbsenceGet(id: number, startDate: string, endDate: string, options?: RawAxiosRequestConfig) {
+        return TimesheetResourcesApiFp(this.configuration).resourcesIdAbsenceGet(id, startDate, endDate, options).then((request) => request(this.axios, this.basePath));
     }
 
     /**

@@ -2,8 +2,8 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import axios, { type AxiosError, type Method } from 'axios'
 import { AuthApi, ProjectsApi, ProcessesApi, TasksApi, TimesheetResourcesApi, TimesheetCalendarApi, TimesheetStatesApi, PlanningApi, MilestonesApi, UsersApi, AssignmentsApi, AutoCreateApi, Configuration } from '@/api'
-import type { DtoUserInfo, DtoProject, DtoResourceResponse, DtoResourceCalendar, DtoResourceMemberResponse, DtoUserResponse, DtoUserStateResponse, DtoStateResponse, DtoCreateResourceRequest, DtoUpdateResourceRequest, DtoCreateUserRequest, DtoUpdateUserRequest, DtoSetDaysRequest, DtoAdminUserResponse, DtoCreateUserResult, DtoResetPasswordResponse, DtoAutoCreateConfig, JwtTokenPair } from '@/api'
-import { apiErrorMessage } from '@/utils'
+import type { DtoUserInfo, DtoProject, DtoResourceResponse, DtoResourceCalendar, DtoResourceMemberResponse, DtoResourceAbsenceResponse, DtoUserResponse, DtoUserStateResponse, DtoStateResponse, DtoCreateResourceRequest, DtoUpdateResourceRequest, DtoCreateUserRequest, DtoUpdateUserRequest, DtoSetDaysRequest, DtoAdminUserResponse, DtoCreateUserResult, DtoResetPasswordResponse, DtoAutoCreateConfig, JwtTokenPair } from '@/api'
+import { apiErrorMessage, fullName } from '@/utils'
 import { isOffline } from '@/offline/state'
 import { scheduleWarmup } from '@/offline/warmup'
 import { enqueueMutation, isNetworkError, clearOutbox, type MutationEntity } from '@/offline/outbox'
@@ -169,12 +169,24 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  async function register(username: string, password: string, name: string) {
+  async function register(
+    username: string,
+    password: string,
+    lastName: string,
+    firstName: string,
+    middleName: string,
+  ) {
     loading.value = true
     error.value = null
     try {
       const api = new AuthApi(apiConfig())
-      const resp = await api.authRegisterPost({ username: username.trim(), password, name: name.trim() })
+      const resp = await api.authRegisterPost({
+        username: username.trim(),
+        password,
+        last_name: lastName.trim(),
+        first_name: firstName.trim(),
+        middle_name: middleName.trim() || undefined,
+      })
       const body = resp.data
       const errBody = body?.error as { code?: unknown; message?: string } | undefined
       if (errBody && errBody.code != null) throw new Error(apiErrorMessage(errBody))
@@ -561,6 +573,20 @@ export const useAppStore = defineStore('app', () => {
     }
   }
 
+  // === Отсутствия членов ресурсов (/resources/{id}/absence) для тултипа UsageCell ===
+  const absenceByResource = ref<Record<number, DtoResourceAbsenceResponse[]>>({})
+
+  /** Загружает отсутствия (недоступные состояния) членов ресурса за окно */
+  async function loadResourceAbsence(resourceId: number, from: string, to: string) {
+    try {
+      const api = new TimesheetResourcesApi(apiConfig())
+      const resp = await api.resourcesIdAbsenceGet(resourceId, from, to)
+      absenceByResource.value = { ...absenceByResource.value, [resourceId]: resp.data?.data ?? [] }
+    } catch {
+      // Пропускаем: тултип просто не покажет отсутствующих на этом ресурсе.
+    }
+  }
+
   const users = ref<DtoUserInfo[]>([])
   const usersLoading = ref(false)
   const usersError = ref<string | null>(null)
@@ -707,6 +733,8 @@ export const useAppStore = defineStore('app', () => {
     loadProjects,
     loadResources,
     loadCalendar,
+    absenceByResource,
+    loadResourceAbsence,
     loadUsers,
     adminUsers,
     adminUsersLoading,
@@ -875,7 +903,9 @@ export const useTimesheetStore = defineStore('timesheet', () => {
 
   /** Поля запроса создания/изменения сотрудника (пользователь с ролью worker) */
   interface EmployeePayload {
-    name: string
+    last_name: string
+    first_name: string
+    middle_name?: string
     role?: string
     position?: string
     manager_id?: number
@@ -900,7 +930,12 @@ export const useTimesheetStore = defineStore('timesheet', () => {
           await fetchEmployees()
         },
         optimistic: () => {
-          employees.value.push({ id: tempId, ...payload, role: 'worker' } as unknown as DtoUserResponse)
+          employees.value.push({
+            id: tempId,
+            ...payload,
+            role: 'worker',
+            name: fullName(payload),
+          } as unknown as DtoUserResponse)
         },
         onError: (m) => {
           error.value = m

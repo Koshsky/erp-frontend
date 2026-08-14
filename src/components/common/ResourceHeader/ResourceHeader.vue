@@ -5,6 +5,7 @@ import { InfoTooltip } from '../Tooltips'
 import UsageCell from '../UsageCell/UsageCell.vue'
 import type { TimelineCtx } from '@/composables/timeline-context'
 import { LABEL_WIDTH, headerHeight } from '@/components/planner/layout'
+import type { DtoResourceAbsenceResponse } from '@/api'
 import type { Resource } from './types'
 
 const props = defineProps<{
@@ -12,12 +13,28 @@ const props = defineProps<{
   resources: Resource[]
   usageFn: (resourceId: number, day: Date) => number
   availableFn: (resourceId: number, day: Date) => number | null
+  /** Отсутствия членов ресурсов по id (для тултипа UsageCell) */
+  absenceByResource?: Record<number, DtoResourceAbsenceResponse[]> | null
 }>()
 
 interface CellUsage {
   used: number
   available: number | null
   isWeekend: boolean
+  absentees: DtoResourceAbsenceResponse[]
+}
+
+/** Отсутствия ресурса, пересекающие хоть один день диапазона ячейки */
+function cellAbsentees(resourceId: number, start: Date, end: Date): DtoResourceAbsenceResponse[] {
+  const list = props.absenceByResource?.[resourceId]
+  if (!list?.length) return []
+  const startT = start.getTime()
+  const endT = end.getTime()
+  return list.filter((a) => {
+    const s = a.start_date ? new Date(`${a.start_date}T00:00:00`).getTime() : -Infinity
+    const e = a.end_date ? new Date(`${a.end_date}T00:00:00`).getTime() : Infinity
+    return s <= endT && e >= startT
+  })
 }
 
 function cellUsage(resourceId: number, idx: number): CellUsage {
@@ -27,6 +44,7 @@ function cellUsage(resourceId: number, idx: number): CellUsage {
   let weekend = true
   const start = props.t.cellStart(idx)
   const end = props.t.cellEnd(idx)
+  const absentees = cellAbsentees(resourceId, start, end)
   const cur = new Date(start)
   while (cur <= end) {
     const wd = cur.getDay() === 0 || cur.getDay() === 6
@@ -40,7 +58,7 @@ function cellUsage(resourceId: number, idx: number): CellUsage {
     }
     cur.setDate(cur.getDate() + 1)
   }
-  return { used: peak, available: hasUnknown ? null : minAvail, isWeekend: weekend }
+  return { used: peak, available: hasUnknown ? null : minAvail, isWeekend: weekend, absentees }
 }
 
 /** Занятость по ресурсам и видимым ячейкам (пик дневной загрузки внутри ячейки) */
@@ -97,7 +115,7 @@ const labelsH = computed(() => resourceCells.value.length * rowH.value)
           class="rs-cell"
           :style="{ left: t.cellLeft(t.visibleIndices[k]) + 'px', width: t.cellPx + 'px' }"
         >
-          <UsageCell :used="u.used" :available="u.available" :isWeekend="u.isWeekend" :show-text="showText" />
+          <UsageCell :used="u.used" :available="u.available" :isWeekend="u.isWeekend" :show-text="showText" :absentees="u.absentees" />
         </div>
       </div>
     </template>

@@ -4,6 +4,7 @@ import { usageState } from './usageState'
 import type { UsageState } from './usageState'
 import { UsageTooltip } from '../Tooltips'
 import TooltipCell from '../TooltipCell/TooltipCell.vue'
+import type { DtoResourceAbsenceResponse } from '@/api'
 
 const props = withDefaults(
   defineProps<{
@@ -12,10 +13,13 @@ const props = withDefaults(
     isWeekend: boolean
     /** Показывать ли подпись used/available (прячется в узких ячейках) */
     showText?: boolean
+    /** Отсутствующие сотрудники ресурса на днях ячейки (для тултипа) */
+    absentees?: DtoResourceAbsenceResponse[]
   }>(),
   {
     available: null,
     showText: true,
+    absentees: () => [],
   },
 )
 
@@ -32,7 +36,7 @@ const displayText = computed(() =>
   <TooltipCell class="uc" :multiline="true">
     <div class="uc-inner" :class="[state, { 'uc--compact': !showText }]"><span v-if="showText">{{ displayText }}</span></div>
     <template #popup>
-      <UsageTooltip :used="used" :available="available" />
+      <UsageTooltip :used="used" :available="available" :absentees="absentees" />
     </template>
   </TooltipCell>
 </template>

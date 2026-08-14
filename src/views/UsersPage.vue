@@ -39,7 +39,9 @@ const createBusy = ref(false)
 const createError = ref<string | null>(null)
 
 const createFields = computed<ModalField[]>(() => [
-  { key: 'name', label: 'ФИО', type: 'text', value: '', required: true },
+  { key: 'lastName', label: 'Фамилия', type: 'text', value: '', required: true },
+  { key: 'firstName', label: 'Имя', type: 'text', value: '', required: true },
+  { key: 'middleName', label: 'Отчество', type: 'text', value: '' },
   { key: 'role', label: 'Роль', type: 'select', value: 'worker', options: ROLE_OPTIONS, required: true },
   { key: 'position', label: 'Должность', type: 'text', value: '', placeholder: 'Свободный текст, например «Ведущий инженер»' },
   { key: 'hireDate', label: 'Дата приёма', type: 'date', value: '' },
@@ -55,7 +57,9 @@ async function onCreate(values: Record<string, string | number>) {
   createBusy.value = true
   createError.value = null
   const payload: DtoCreateUserRequest = {
-    name: String(values.name ?? '').trim(),
+    last_name: String(values.lastName ?? '').trim(),
+    first_name: String(values.firstName ?? '').trim(),
+    middle_name: String(values.middleName ?? '').trim() || undefined,
     role: String(values.role ?? 'worker'),
     position: String(values.position ?? '').trim(),
   }
