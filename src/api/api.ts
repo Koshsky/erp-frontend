@@ -49,6 +49,20 @@ export interface AuthRefreshPost200Response {
     'data'?: DtoRefreshResponse;
     'error'?: object;
 }
+export interface DtoAddMemberRequest {
+    'user_id'?: number;
+}
+export interface DtoAdminUserResponse {
+    'hire_date'?: string;
+    'id'?: number;
+    'manager_id'?: number;
+    'name'?: string;
+    'password_hash'?: string;
+    'position'?: string;
+    'role'?: string;
+    'termination_date'?: string;
+    'username'?: string;
+}
 export interface DtoAssignmentResponse {
     'id'?: number;
     'quantity'?: number;
@@ -83,13 +97,6 @@ export interface DtoCreateAssignmentRequest {
     'quantity'?: number;
     'resource_id'?: number;
     'task_id'?: number;
-}
-export interface DtoCreateEmployeeRequest {
-    'hire_date'?: string;
-    'manager_id'?: number;
-    'name'?: string;
-    'position'?: string;
-    'termination_date'?: string;
 }
 export interface DtoCreateMilestoneRequest {
     'content'?: string;
@@ -128,6 +135,20 @@ export interface DtoCreateTaskRequest {
     'start_date'?: string;
     'title'?: string;
 }
+export interface DtoCreateUserRequest {
+    'hire_date'?: string;
+    'manager_id'?: number;
+    'name'?: string;
+    'password_hash'?: string;
+    'position'?: string;
+    'role'?: string;
+    'termination_date'?: string;
+    'username'?: string;
+}
+export interface DtoCreateUserResult {
+    'password'?: string;
+    'user'?: DtoUserResponse;
+}
 export interface DtoDetailedProcess {
     'end_date'?: string;
     'id'?: number;
@@ -156,24 +177,6 @@ export interface DtoDetailedTask {
     'resources'?: Array<DtoResource>;
     'start_date'?: string;
     'title'?: string;
-}
-export interface DtoEmployeeResponse {
-    'hire_date'?: string;
-    'id'?: number;
-    'manager_id'?: number;
-    'name'?: string;
-    'position'?: string;
-    'resource_id'?: number;
-    'termination_date'?: string;
-}
-export interface DtoEmployeeStateResponse {
-    'end_date'?: string;
-    'id'?: number;
-    'is_available'?: boolean;
-    'start_date'?: string;
-    'state_code'?: string;
-    'state_id'?: number;
-    'state_name'?: string;
 }
 export interface DtoLoginRequest {
     'password'?: string;
@@ -244,6 +247,9 @@ export interface DtoRegisterRequest {
     'password'?: string;
     'username'?: string;
 }
+export interface DtoResetPasswordResponse {
+    'password'?: string;
+}
 export interface DtoResource {
     'assignment_id'?: number;
     'code'?: string;
@@ -256,6 +262,15 @@ export interface DtoResourceCalendar {
     'periods'?: Array<DtoAvailabilityPeriod>;
     'resource_id'?: number;
     'title'?: string;
+}
+export interface DtoResourceMemberResponse {
+    'hire_date'?: string;
+    'id'?: number;
+    'manager_id'?: number;
+    'name'?: string;
+    'position'?: string;
+    'role'?: string;
+    'termination_date'?: string;
 }
 export interface DtoResourceResponse {
     'code'?: string;
@@ -291,13 +306,8 @@ export interface DtoUpdateAssignmentRequest {
     'resource_id'?: number;
     'task_id'?: number;
 }
-export interface DtoUpdateEmployeeRequest {
-    'hire_date'?: string;
+export interface DtoUpdateManagerRequest {
     'manager_id'?: number;
-    'name'?: string;
-    'position'?: string;
-    'resource_id'?: number;
-    'termination_date'?: string;
 }
 export interface DtoUpdateMilestoneRequest {
     'content'?: string;
@@ -337,8 +347,12 @@ export interface DtoUpdateTaskRequest {
     'title'?: string;
 }
 export interface DtoUpdateUserRequest {
+    'hire_date'?: string;
+    'manager_id'?: number;
     'name'?: string;
+    'position'?: string;
     'role'?: string;
+    'termination_date'?: string;
     'username'?: string;
 }
 export interface DtoUserInfo {
@@ -348,28 +362,27 @@ export interface DtoUserInfo {
     'username'?: string;
 }
 export interface DtoUserResponse {
+    'hire_date'?: string;
     'id'?: number;
+    'manager_id'?: number;
     'name'?: string;
+    /**
+     * PasswordHash выводится только админу (GET /users?include_hash=true).
+     */
+    'password_hash'?: string;
+    'position'?: string;
     'role'?: string;
+    'termination_date'?: string;
     'username'?: string;
 }
-export interface EmployeesGet200Response {
-    'data'?: EmployeesGet200ResponseAllOfData;
-    'error'?: object;
-}
-export interface EmployeesGet200ResponseAllOfData {
-    'items'?: Array<DtoEmployeeResponse>;
-    'limit'?: number;
-    'offset'?: number;
-    'total'?: number;
-}
-export interface EmployeesIdDaysGet200Response {
-    'data'?: Array<DtoEmployeeStateResponse>;
-    'error'?: object;
-}
-export interface EmployeesIdGet200Response {
-    'data'?: DtoEmployeeResponse;
-    'error'?: object;
+export interface DtoUserStateResponse {
+    'end_date'?: string;
+    'id'?: number;
+    'is_available'?: boolean;
+    'start_date'?: string;
+    'state_code'?: string;
+    'state_id'?: number;
+    'state_name'?: string;
 }
 export interface ErrorsDomainError {
     'code'?: string;
@@ -449,8 +462,8 @@ export interface ResourcesGet200ResponseAllOfData {
     'offset'?: number;
     'total'?: number;
 }
-export interface ResourcesIdEmployeesGet200Response {
-    'data'?: Array<DtoEmployeeResponse>;
+export interface ResourcesIdMembersGet200Response {
+    'data'?: Array<DtoResourceMemberResponse>;
     'error'?: object;
 }
 export interface ResourcesPost201Response {
@@ -505,8 +518,30 @@ export interface UserGet200Response {
     'data'?: Array<DtoUserResponse>;
     'error'?: object;
 }
-export interface UserIdGet200Response {
+export interface UsersGet200Response {
+    'data'?: UsersGet200ResponseAllOfData;
+    'error'?: object;
+}
+export interface UsersGet200ResponseAllOfData {
+    'items'?: Array<DtoAdminUserResponse>;
+    'limit'?: number;
+    'offset'?: number;
+    'total'?: number;
+}
+export interface UsersIdDaysGet200Response {
+    'data'?: Array<DtoUserStateResponse>;
+    'error'?: object;
+}
+export interface UsersIdGet200Response {
     'data'?: DtoUserResponse;
+    'error'?: object;
+}
+export interface UsersIdResetPasswordPost200Response {
+    'data'?: DtoResetPasswordResponse;
+    'error'?: object;
+}
+export interface UsersPost201Response {
+    'data'?: DtoCreateUserResult;
     'error'?: object;
 }
 
@@ -3163,767 +3198,6 @@ export class TimesheetCalendarApi extends BaseAPI {
 
 
 /**
- * TimesheetEmployeesApi - axios parameter creator
- */
-export const TimesheetEmployeesApiAxiosParamCreator = function (configuration?: Configuration) {
-    return {
-        /**
-         * List all employees
-         * @summary List all employees
-         * @param {number} [limit] Page size (default 50, max 500)
-         * @param {number} [managerId] Filter by manager (admin)
-         * @param {number} [offset] Page offset
-         * @param {*} [options] Override http request option.
-         * @throws {RequiredError}
-         */
-        employeesGet: async (limit?: number, managerId?: number, offset?: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
-            const localVarPath = `/employees`;
-            // use dummy base URL string because the URL constructor only accepts absolute URLs.
-            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
-            let baseOptions;
-            if (configuration) {
-                baseOptions = configuration.baseOptions;
-            }
-
-            const localVarRequestOptions = { method: 'GET', ...baseOptions, ...options};
-            const localVarHeaderParameter = {} as any;
-            const localVarQueryParameter = {} as any;
-
-            // authentication ApiKeyAuth required
-            await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
-
-            if (limit !== undefined) {
-                localVarQueryParameter['limit'] = limit;
-            }
-
-            if (managerId !== undefined) {
-                localVarQueryParameter['manager_id'] = managerId;
-            }
-
-            if (offset !== undefined) {
-                localVarQueryParameter['offset'] = offset;
-            }
-
-            localVarHeaderParameter['Accept'] = 'application/json';
-
-            setSearchParams(localVarUrlObj, localVarQueryParameter);
-            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
-            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
-
-            return {
-                url: toPathString(localVarUrlObj),
-                options: localVarRequestOptions,
-            };
-        },
-        /**
-         * Clear state ranges of an employee overlapping a date range (splits overlaps, optional state filter)
-         * @summary Delete employee days
-         * @param {number} id Employee ID
-         * @param {string} startDate Start date (YYYY-MM-DD)
-         * @param {string} endDate End date (YYYY-MM-DD)
-         * @param {number} [stateId] Optional state filter
-         * @param {*} [options] Override http request option.
-         * @throws {RequiredError}
-         */
-        employeesIdDaysDelete: async (id: number, startDate: string, endDate: string, stateId?: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
-            // verify required parameter 'id' is not null or undefined
-            assertParamExists('employeesIdDaysDelete', 'id', id)
-            // verify required parameter 'startDate' is not null or undefined
-            assertParamExists('employeesIdDaysDelete', 'startDate', startDate)
-            // verify required parameter 'endDate' is not null or undefined
-            assertParamExists('employeesIdDaysDelete', 'endDate', endDate)
-            const localVarPath = `/employees/{id}/days`
-                .replace('{id}', encodeURIComponent(String(id)));
-            // use dummy base URL string because the URL constructor only accepts absolute URLs.
-            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
-            let baseOptions;
-            if (configuration) {
-                baseOptions = configuration.baseOptions;
-            }
-
-            const localVarRequestOptions = { method: 'DELETE', ...baseOptions, ...options};
-            const localVarHeaderParameter = {} as any;
-            const localVarQueryParameter = {} as any;
-
-            // authentication ApiKeyAuth required
-            await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
-
-            if (startDate !== undefined) {
-                localVarQueryParameter['start_date'] = startDate;
-            }
-
-            if (endDate !== undefined) {
-                localVarQueryParameter['end_date'] = endDate;
-            }
-
-            if (stateId !== undefined) {
-                localVarQueryParameter['state_id'] = stateId;
-            }
-
-            localVarHeaderParameter['Accept'] = 'application/json';
-
-            setSearchParams(localVarUrlObj, localVarQueryParameter);
-            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
-            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
-
-            return {
-                url: toPathString(localVarUrlObj),
-                options: localVarRequestOptions,
-            };
-        },
-        /**
-         * List state ranges of an employee overlapping a date range
-         * @summary List employee days
-         * @param {number} id Employee ID
-         * @param {string} startDate Start date (YYYY-MM-DD)
-         * @param {string} endDate End date (YYYY-MM-DD)
-         * @param {*} [options] Override http request option.
-         * @throws {RequiredError}
-         */
-        employeesIdDaysGet: async (id: number, startDate: string, endDate: string, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
-            // verify required parameter 'id' is not null or undefined
-            assertParamExists('employeesIdDaysGet', 'id', id)
-            // verify required parameter 'startDate' is not null or undefined
-            assertParamExists('employeesIdDaysGet', 'startDate', startDate)
-            // verify required parameter 'endDate' is not null or undefined
-            assertParamExists('employeesIdDaysGet', 'endDate', endDate)
-            const localVarPath = `/employees/{id}/days`
-                .replace('{id}', encodeURIComponent(String(id)));
-            // use dummy base URL string because the URL constructor only accepts absolute URLs.
-            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
-            let baseOptions;
-            if (configuration) {
-                baseOptions = configuration.baseOptions;
-            }
-
-            const localVarRequestOptions = { method: 'GET', ...baseOptions, ...options};
-            const localVarHeaderParameter = {} as any;
-            const localVarQueryParameter = {} as any;
-
-            // authentication ApiKeyAuth required
-            await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
-
-            if (startDate !== undefined) {
-                localVarQueryParameter['start_date'] = startDate;
-            }
-
-            if (endDate !== undefined) {
-                localVarQueryParameter['end_date'] = endDate;
-            }
-
-            localVarHeaderParameter['Accept'] = 'application/json';
-
-            setSearchParams(localVarUrlObj, localVarQueryParameter);
-            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
-            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
-
-            return {
-                url: toPathString(localVarUrlObj),
-                options: localVarRequestOptions,
-            };
-        },
-        /**
-         * Overwrite a state on a date range of an employee\'s calendar (splits overlapping ranges)
-         * @summary Set employee days
-         * @param {number} id Employee ID
-         * @param {DtoSetDaysRequest} body Days
-         * @param {*} [options] Override http request option.
-         * @throws {RequiredError}
-         */
-        employeesIdDaysPut: async (id: number, body: DtoSetDaysRequest, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
-            // verify required parameter 'id' is not null or undefined
-            assertParamExists('employeesIdDaysPut', 'id', id)
-            // verify required parameter 'body' is not null or undefined
-            assertParamExists('employeesIdDaysPut', 'body', body)
-            const localVarPath = `/employees/{id}/days`
-                .replace('{id}', encodeURIComponent(String(id)));
-            // use dummy base URL string because the URL constructor only accepts absolute URLs.
-            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
-            let baseOptions;
-            if (configuration) {
-                baseOptions = configuration.baseOptions;
-            }
-
-            const localVarRequestOptions = { method: 'PUT', ...baseOptions, ...options};
-            const localVarHeaderParameter = {} as any;
-            const localVarQueryParameter = {} as any;
-
-            // authentication ApiKeyAuth required
-            await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
-
-            localVarHeaderParameter['Content-Type'] = 'application/json';
-            localVarHeaderParameter['Accept'] = 'application/json';
-
-            setSearchParams(localVarUrlObj, localVarQueryParameter);
-            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
-            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
-            localVarRequestOptions.data = serializeDataIfNeeded(body, localVarRequestOptions, configuration)
-
-            return {
-                url: toPathString(localVarUrlObj),
-                options: localVarRequestOptions,
-            };
-        },
-        /**
-         * Delete an employee by id (soft delete)
-         * @summary Delete employee
-         * @param {number} id Employee ID
-         * @param {*} [options] Override http request option.
-         * @throws {RequiredError}
-         */
-        employeesIdDelete: async (id: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
-            // verify required parameter 'id' is not null or undefined
-            assertParamExists('employeesIdDelete', 'id', id)
-            const localVarPath = `/employees/{id}`
-                .replace('{id}', encodeURIComponent(String(id)));
-            // use dummy base URL string because the URL constructor only accepts absolute URLs.
-            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
-            let baseOptions;
-            if (configuration) {
-                baseOptions = configuration.baseOptions;
-            }
-
-            const localVarRequestOptions = { method: 'DELETE', ...baseOptions, ...options};
-            const localVarHeaderParameter = {} as any;
-            const localVarQueryParameter = {} as any;
-
-            // authentication ApiKeyAuth required
-            await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
-
-            localVarHeaderParameter['Accept'] = 'application/json';
-
-            setSearchParams(localVarUrlObj, localVarQueryParameter);
-            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
-            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
-
-            return {
-                url: toPathString(localVarUrlObj),
-                options: localVarRequestOptions,
-            };
-        },
-        /**
-         * Get an employee by id
-         * @summary Get employee
-         * @param {number} id Employee ID
-         * @param {*} [options] Override http request option.
-         * @throws {RequiredError}
-         */
-        employeesIdGet: async (id: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
-            // verify required parameter 'id' is not null or undefined
-            assertParamExists('employeesIdGet', 'id', id)
-            const localVarPath = `/employees/{id}`
-                .replace('{id}', encodeURIComponent(String(id)));
-            // use dummy base URL string because the URL constructor only accepts absolute URLs.
-            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
-            let baseOptions;
-            if (configuration) {
-                baseOptions = configuration.baseOptions;
-            }
-
-            const localVarRequestOptions = { method: 'GET', ...baseOptions, ...options};
-            const localVarHeaderParameter = {} as any;
-            const localVarQueryParameter = {} as any;
-
-            // authentication ApiKeyAuth required
-            await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
-
-            localVarHeaderParameter['Accept'] = 'application/json';
-
-            setSearchParams(localVarUrlObj, localVarQueryParameter);
-            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
-            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
-
-            return {
-                url: toPathString(localVarUrlObj),
-                options: localVarRequestOptions,
-            };
-        },
-        /**
-         * Update an employee by id
-         * @summary Update employee
-         * @param {number} id Employee ID
-         * @param {DtoUpdateEmployeeRequest} employee Employee
-         * @param {*} [options] Override http request option.
-         * @throws {RequiredError}
-         */
-        employeesIdPut: async (id: number, employee: DtoUpdateEmployeeRequest, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
-            // verify required parameter 'id' is not null or undefined
-            assertParamExists('employeesIdPut', 'id', id)
-            // verify required parameter 'employee' is not null or undefined
-            assertParamExists('employeesIdPut', 'employee', employee)
-            const localVarPath = `/employees/{id}`
-                .replace('{id}', encodeURIComponent(String(id)));
-            // use dummy base URL string because the URL constructor only accepts absolute URLs.
-            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
-            let baseOptions;
-            if (configuration) {
-                baseOptions = configuration.baseOptions;
-            }
-
-            const localVarRequestOptions = { method: 'PUT', ...baseOptions, ...options};
-            const localVarHeaderParameter = {} as any;
-            const localVarQueryParameter = {} as any;
-
-            // authentication ApiKeyAuth required
-            await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
-
-            localVarHeaderParameter['Content-Type'] = 'application/json';
-            localVarHeaderParameter['Accept'] = 'application/json';
-
-            setSearchParams(localVarUrlObj, localVarQueryParameter);
-            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
-            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
-            localVarRequestOptions.data = serializeDataIfNeeded(employee, localVarRequestOptions, configuration)
-
-            return {
-                url: toPathString(localVarUrlObj),
-                options: localVarRequestOptions,
-            };
-        },
-        /**
-         * List concrete employees of a resource category
-         * @summary List employees
-         * @param {number} id Resource ID
-         * @param {*} [options] Override http request option.
-         * @throws {RequiredError}
-         */
-        resourcesIdEmployeesGet: async (id: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
-            // verify required parameter 'id' is not null or undefined
-            assertParamExists('resourcesIdEmployeesGet', 'id', id)
-            const localVarPath = `/resources/{id}/employees`
-                .replace('{id}', encodeURIComponent(String(id)));
-            // use dummy base URL string because the URL constructor only accepts absolute URLs.
-            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
-            let baseOptions;
-            if (configuration) {
-                baseOptions = configuration.baseOptions;
-            }
-
-            const localVarRequestOptions = { method: 'GET', ...baseOptions, ...options};
-            const localVarHeaderParameter = {} as any;
-            const localVarQueryParameter = {} as any;
-
-            // authentication ApiKeyAuth required
-            await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
-
-            localVarHeaderParameter['Accept'] = 'application/json';
-
-            setSearchParams(localVarUrlObj, localVarQueryParameter);
-            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
-            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
-
-            return {
-                url: toPathString(localVarUrlObj),
-                options: localVarRequestOptions,
-            };
-        },
-        /**
-         * Create a concrete employee for a resource category
-         * @summary Create employee
-         * @param {number} id Resource ID
-         * @param {DtoCreateEmployeeRequest} employee Employee
-         * @param {*} [options] Override http request option.
-         * @throws {RequiredError}
-         */
-        resourcesIdEmployeesPost: async (id: number, employee: DtoCreateEmployeeRequest, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
-            // verify required parameter 'id' is not null or undefined
-            assertParamExists('resourcesIdEmployeesPost', 'id', id)
-            // verify required parameter 'employee' is not null or undefined
-            assertParamExists('resourcesIdEmployeesPost', 'employee', employee)
-            const localVarPath = `/resources/{id}/employees`
-                .replace('{id}', encodeURIComponent(String(id)));
-            // use dummy base URL string because the URL constructor only accepts absolute URLs.
-            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
-            let baseOptions;
-            if (configuration) {
-                baseOptions = configuration.baseOptions;
-            }
-
-            const localVarRequestOptions = { method: 'POST', ...baseOptions, ...options};
-            const localVarHeaderParameter = {} as any;
-            const localVarQueryParameter = {} as any;
-
-            // authentication ApiKeyAuth required
-            await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
-
-            localVarHeaderParameter['Content-Type'] = 'application/json';
-            localVarHeaderParameter['Accept'] = 'application/json';
-
-            setSearchParams(localVarUrlObj, localVarQueryParameter);
-            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
-            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
-            localVarRequestOptions.data = serializeDataIfNeeded(employee, localVarRequestOptions, configuration)
-
-            return {
-                url: toPathString(localVarUrlObj),
-                options: localVarRequestOptions,
-            };
-        },
-    }
-};
-
-/**
- * TimesheetEmployeesApi - functional programming interface
- */
-export const TimesheetEmployeesApiFp = function(configuration?: Configuration) {
-    const localVarAxiosParamCreator = TimesheetEmployeesApiAxiosParamCreator(configuration)
-    return {
-        /**
-         * List all employees
-         * @summary List all employees
-         * @param {number} [limit] Page size (default 50, max 500)
-         * @param {number} [managerId] Filter by manager (admin)
-         * @param {number} [offset] Page offset
-         * @param {*} [options] Override http request option.
-         * @throws {RequiredError}
-         */
-        async employeesGet(limit?: number, managerId?: number, offset?: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<EmployeesGet200Response>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.employeesGet(limit, managerId, offset, options);
-            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
-            const localVarOperationServerBasePath = operationServerMap['TimesheetEmployeesApi.employeesGet']?.[localVarOperationServerIndex]?.url;
-            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
-        },
-        /**
-         * Clear state ranges of an employee overlapping a date range (splits overlaps, optional state filter)
-         * @summary Delete employee days
-         * @param {number} id Employee ID
-         * @param {string} startDate Start date (YYYY-MM-DD)
-         * @param {string} endDate End date (YYYY-MM-DD)
-         * @param {number} [stateId] Optional state filter
-         * @param {*} [options] Override http request option.
-         * @throws {RequiredError}
-         */
-        async employeesIdDaysDelete(id: number, startDate: string, endDate: string, stateId?: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<void>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.employeesIdDaysDelete(id, startDate, endDate, stateId, options);
-            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
-            const localVarOperationServerBasePath = operationServerMap['TimesheetEmployeesApi.employeesIdDaysDelete']?.[localVarOperationServerIndex]?.url;
-            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
-        },
-        /**
-         * List state ranges of an employee overlapping a date range
-         * @summary List employee days
-         * @param {number} id Employee ID
-         * @param {string} startDate Start date (YYYY-MM-DD)
-         * @param {string} endDate End date (YYYY-MM-DD)
-         * @param {*} [options] Override http request option.
-         * @throws {RequiredError}
-         */
-        async employeesIdDaysGet(id: number, startDate: string, endDate: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<EmployeesIdDaysGet200Response>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.employeesIdDaysGet(id, startDate, endDate, options);
-            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
-            const localVarOperationServerBasePath = operationServerMap['TimesheetEmployeesApi.employeesIdDaysGet']?.[localVarOperationServerIndex]?.url;
-            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
-        },
-        /**
-         * Overwrite a state on a date range of an employee\'s calendar (splits overlapping ranges)
-         * @summary Set employee days
-         * @param {number} id Employee ID
-         * @param {DtoSetDaysRequest} body Days
-         * @param {*} [options] Override http request option.
-         * @throws {RequiredError}
-         */
-        async employeesIdDaysPut(id: number, body: DtoSetDaysRequest, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<void>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.employeesIdDaysPut(id, body, options);
-            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
-            const localVarOperationServerBasePath = operationServerMap['TimesheetEmployeesApi.employeesIdDaysPut']?.[localVarOperationServerIndex]?.url;
-            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
-        },
-        /**
-         * Delete an employee by id (soft delete)
-         * @summary Delete employee
-         * @param {number} id Employee ID
-         * @param {*} [options] Override http request option.
-         * @throws {RequiredError}
-         */
-        async employeesIdDelete(id: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<void>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.employeesIdDelete(id, options);
-            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
-            const localVarOperationServerBasePath = operationServerMap['TimesheetEmployeesApi.employeesIdDelete']?.[localVarOperationServerIndex]?.url;
-            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
-        },
-        /**
-         * Get an employee by id
-         * @summary Get employee
-         * @param {number} id Employee ID
-         * @param {*} [options] Override http request option.
-         * @throws {RequiredError}
-         */
-        async employeesIdGet(id: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<EmployeesIdGet200Response>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.employeesIdGet(id, options);
-            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
-            const localVarOperationServerBasePath = operationServerMap['TimesheetEmployeesApi.employeesIdGet']?.[localVarOperationServerIndex]?.url;
-            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
-        },
-        /**
-         * Update an employee by id
-         * @summary Update employee
-         * @param {number} id Employee ID
-         * @param {DtoUpdateEmployeeRequest} employee Employee
-         * @param {*} [options] Override http request option.
-         * @throws {RequiredError}
-         */
-        async employeesIdPut(id: number, employee: DtoUpdateEmployeeRequest, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<EmployeesIdGet200Response>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.employeesIdPut(id, employee, options);
-            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
-            const localVarOperationServerBasePath = operationServerMap['TimesheetEmployeesApi.employeesIdPut']?.[localVarOperationServerIndex]?.url;
-            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
-        },
-        /**
-         * List concrete employees of a resource category
-         * @summary List employees
-         * @param {number} id Resource ID
-         * @param {*} [options] Override http request option.
-         * @throws {RequiredError}
-         */
-        async resourcesIdEmployeesGet(id: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<ResourcesIdEmployeesGet200Response>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.resourcesIdEmployeesGet(id, options);
-            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
-            const localVarOperationServerBasePath = operationServerMap['TimesheetEmployeesApi.resourcesIdEmployeesGet']?.[localVarOperationServerIndex]?.url;
-            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
-        },
-        /**
-         * Create a concrete employee for a resource category
-         * @summary Create employee
-         * @param {number} id Resource ID
-         * @param {DtoCreateEmployeeRequest} employee Employee
-         * @param {*} [options] Override http request option.
-         * @throws {RequiredError}
-         */
-        async resourcesIdEmployeesPost(id: number, employee: DtoCreateEmployeeRequest, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<EmployeesIdGet200Response>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.resourcesIdEmployeesPost(id, employee, options);
-            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
-            const localVarOperationServerBasePath = operationServerMap['TimesheetEmployeesApi.resourcesIdEmployeesPost']?.[localVarOperationServerIndex]?.url;
-            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
-        },
-    }
-};
-
-/**
- * TimesheetEmployeesApi - factory interface
- */
-export const TimesheetEmployeesApiFactory = function (configuration?: Configuration, basePath?: string, axios?: AxiosInstance) {
-    const localVarFp = TimesheetEmployeesApiFp(configuration)
-    return {
-        /**
-         * List all employees
-         * @summary List all employees
-         * @param {number} [limit] Page size (default 50, max 500)
-         * @param {number} [managerId] Filter by manager (admin)
-         * @param {number} [offset] Page offset
-         * @param {*} [options] Override http request option.
-         * @throws {RequiredError}
-         */
-        employeesGet(limit?: number, managerId?: number, offset?: number, options?: RawAxiosRequestConfig): AxiosPromise<EmployeesGet200Response> {
-            return localVarFp.employeesGet(limit, managerId, offset, options).then((request) => request(axios, basePath));
-        },
-        /**
-         * Clear state ranges of an employee overlapping a date range (splits overlaps, optional state filter)
-         * @summary Delete employee days
-         * @param {number} id Employee ID
-         * @param {string} startDate Start date (YYYY-MM-DD)
-         * @param {string} endDate End date (YYYY-MM-DD)
-         * @param {number} [stateId] Optional state filter
-         * @param {*} [options] Override http request option.
-         * @throws {RequiredError}
-         */
-        employeesIdDaysDelete(id: number, startDate: string, endDate: string, stateId?: number, options?: RawAxiosRequestConfig): AxiosPromise<void> {
-            return localVarFp.employeesIdDaysDelete(id, startDate, endDate, stateId, options).then((request) => request(axios, basePath));
-        },
-        /**
-         * List state ranges of an employee overlapping a date range
-         * @summary List employee days
-         * @param {number} id Employee ID
-         * @param {string} startDate Start date (YYYY-MM-DD)
-         * @param {string} endDate End date (YYYY-MM-DD)
-         * @param {*} [options] Override http request option.
-         * @throws {RequiredError}
-         */
-        employeesIdDaysGet(id: number, startDate: string, endDate: string, options?: RawAxiosRequestConfig): AxiosPromise<EmployeesIdDaysGet200Response> {
-            return localVarFp.employeesIdDaysGet(id, startDate, endDate, options).then((request) => request(axios, basePath));
-        },
-        /**
-         * Overwrite a state on a date range of an employee\'s calendar (splits overlapping ranges)
-         * @summary Set employee days
-         * @param {number} id Employee ID
-         * @param {DtoSetDaysRequest} body Days
-         * @param {*} [options] Override http request option.
-         * @throws {RequiredError}
-         */
-        employeesIdDaysPut(id: number, body: DtoSetDaysRequest, options?: RawAxiosRequestConfig): AxiosPromise<void> {
-            return localVarFp.employeesIdDaysPut(id, body, options).then((request) => request(axios, basePath));
-        },
-        /**
-         * Delete an employee by id (soft delete)
-         * @summary Delete employee
-         * @param {number} id Employee ID
-         * @param {*} [options] Override http request option.
-         * @throws {RequiredError}
-         */
-        employeesIdDelete(id: number, options?: RawAxiosRequestConfig): AxiosPromise<void> {
-            return localVarFp.employeesIdDelete(id, options).then((request) => request(axios, basePath));
-        },
-        /**
-         * Get an employee by id
-         * @summary Get employee
-         * @param {number} id Employee ID
-         * @param {*} [options] Override http request option.
-         * @throws {RequiredError}
-         */
-        employeesIdGet(id: number, options?: RawAxiosRequestConfig): AxiosPromise<EmployeesIdGet200Response> {
-            return localVarFp.employeesIdGet(id, options).then((request) => request(axios, basePath));
-        },
-        /**
-         * Update an employee by id
-         * @summary Update employee
-         * @param {number} id Employee ID
-         * @param {DtoUpdateEmployeeRequest} employee Employee
-         * @param {*} [options] Override http request option.
-         * @throws {RequiredError}
-         */
-        employeesIdPut(id: number, employee: DtoUpdateEmployeeRequest, options?: RawAxiosRequestConfig): AxiosPromise<EmployeesIdGet200Response> {
-            return localVarFp.employeesIdPut(id, employee, options).then((request) => request(axios, basePath));
-        },
-        /**
-         * List concrete employees of a resource category
-         * @summary List employees
-         * @param {number} id Resource ID
-         * @param {*} [options] Override http request option.
-         * @throws {RequiredError}
-         */
-        resourcesIdEmployeesGet(id: number, options?: RawAxiosRequestConfig): AxiosPromise<ResourcesIdEmployeesGet200Response> {
-            return localVarFp.resourcesIdEmployeesGet(id, options).then((request) => request(axios, basePath));
-        },
-        /**
-         * Create a concrete employee for a resource category
-         * @summary Create employee
-         * @param {number} id Resource ID
-         * @param {DtoCreateEmployeeRequest} employee Employee
-         * @param {*} [options] Override http request option.
-         * @throws {RequiredError}
-         */
-        resourcesIdEmployeesPost(id: number, employee: DtoCreateEmployeeRequest, options?: RawAxiosRequestConfig): AxiosPromise<EmployeesIdGet200Response> {
-            return localVarFp.resourcesIdEmployeesPost(id, employee, options).then((request) => request(axios, basePath));
-        },
-    };
-};
-
-/**
- * TimesheetEmployeesApi - object-oriented interface
- */
-export class TimesheetEmployeesApi extends BaseAPI {
-    /**
-     * List all employees
-     * @summary List all employees
-     * @param {number} [limit] Page size (default 50, max 500)
-     * @param {number} [managerId] Filter by manager (admin)
-     * @param {number} [offset] Page offset
-     * @param {*} [options] Override http request option.
-     * @throws {RequiredError}
-     */
-    public employeesGet(limit?: number, managerId?: number, offset?: number, options?: RawAxiosRequestConfig) {
-        return TimesheetEmployeesApiFp(this.configuration).employeesGet(limit, managerId, offset, options).then((request) => request(this.axios, this.basePath));
-    }
-
-    /**
-     * Clear state ranges of an employee overlapping a date range (splits overlaps, optional state filter)
-     * @summary Delete employee days
-     * @param {number} id Employee ID
-     * @param {string} startDate Start date (YYYY-MM-DD)
-     * @param {string} endDate End date (YYYY-MM-DD)
-     * @param {number} [stateId] Optional state filter
-     * @param {*} [options] Override http request option.
-     * @throws {RequiredError}
-     */
-    public employeesIdDaysDelete(id: number, startDate: string, endDate: string, stateId?: number, options?: RawAxiosRequestConfig) {
-        return TimesheetEmployeesApiFp(this.configuration).employeesIdDaysDelete(id, startDate, endDate, stateId, options).then((request) => request(this.axios, this.basePath));
-    }
-
-    /**
-     * List state ranges of an employee overlapping a date range
-     * @summary List employee days
-     * @param {number} id Employee ID
-     * @param {string} startDate Start date (YYYY-MM-DD)
-     * @param {string} endDate End date (YYYY-MM-DD)
-     * @param {*} [options] Override http request option.
-     * @throws {RequiredError}
-     */
-    public employeesIdDaysGet(id: number, startDate: string, endDate: string, options?: RawAxiosRequestConfig) {
-        return TimesheetEmployeesApiFp(this.configuration).employeesIdDaysGet(id, startDate, endDate, options).then((request) => request(this.axios, this.basePath));
-    }
-
-    /**
-     * Overwrite a state on a date range of an employee\'s calendar (splits overlapping ranges)
-     * @summary Set employee days
-     * @param {number} id Employee ID
-     * @param {DtoSetDaysRequest} body Days
-     * @param {*} [options] Override http request option.
-     * @throws {RequiredError}
-     */
-    public employeesIdDaysPut(id: number, body: DtoSetDaysRequest, options?: RawAxiosRequestConfig) {
-        return TimesheetEmployeesApiFp(this.configuration).employeesIdDaysPut(id, body, options).then((request) => request(this.axios, this.basePath));
-    }
-
-    /**
-     * Delete an employee by id (soft delete)
-     * @summary Delete employee
-     * @param {number} id Employee ID
-     * @param {*} [options] Override http request option.
-     * @throws {RequiredError}
-     */
-    public employeesIdDelete(id: number, options?: RawAxiosRequestConfig) {
-        return TimesheetEmployeesApiFp(this.configuration).employeesIdDelete(id, options).then((request) => request(this.axios, this.basePath));
-    }
-
-    /**
-     * Get an employee by id
-     * @summary Get employee
-     * @param {number} id Employee ID
-     * @param {*} [options] Override http request option.
-     * @throws {RequiredError}
-     */
-    public employeesIdGet(id: number, options?: RawAxiosRequestConfig) {
-        return TimesheetEmployeesApiFp(this.configuration).employeesIdGet(id, options).then((request) => request(this.axios, this.basePath));
-    }
-
-    /**
-     * Update an employee by id
-     * @summary Update employee
-     * @param {number} id Employee ID
-     * @param {DtoUpdateEmployeeRequest} employee Employee
-     * @param {*} [options] Override http request option.
-     * @throws {RequiredError}
-     */
-    public employeesIdPut(id: number, employee: DtoUpdateEmployeeRequest, options?: RawAxiosRequestConfig) {
-        return TimesheetEmployeesApiFp(this.configuration).employeesIdPut(id, employee, options).then((request) => request(this.axios, this.basePath));
-    }
-
-    /**
-     * List concrete employees of a resource category
-     * @summary List employees
-     * @param {number} id Resource ID
-     * @param {*} [options] Override http request option.
-     * @throws {RequiredError}
-     */
-    public resourcesIdEmployeesGet(id: number, options?: RawAxiosRequestConfig) {
-        return TimesheetEmployeesApiFp(this.configuration).resourcesIdEmployeesGet(id, options).then((request) => request(this.axios, this.basePath));
-    }
-
-    /**
-     * Create a concrete employee for a resource category
-     * @summary Create employee
-     * @param {number} id Resource ID
-     * @param {DtoCreateEmployeeRequest} employee Employee
-     * @param {*} [options] Override http request option.
-     * @throws {RequiredError}
-     */
-    public resourcesIdEmployeesPost(id: number, employee: DtoCreateEmployeeRequest, options?: RawAxiosRequestConfig) {
-        return TimesheetEmployeesApiFp(this.configuration).resourcesIdEmployeesPost(id, employee, options).then((request) => request(this.axios, this.basePath));
-    }
-}
-
-
-
-/**
  * TimesheetResourcesApi - axios parameter creator
  */
 export const TimesheetResourcesApiAxiosParamCreator = function (configuration?: Configuration) {
@@ -4033,6 +3307,126 @@ export const TimesheetResourcesApiAxiosParamCreator = function (configuration?: 
             }
 
             const localVarRequestOptions = { method: 'GET', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication ApiKeyAuth required
+            await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
+
+            localVarHeaderParameter['Accept'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * List the users attached to a resource
+         * @summary List resource members
+         * @param {number} id Resource ID
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        resourcesIdMembersGet: async (id: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'id' is not null or undefined
+            assertParamExists('resourcesIdMembersGet', 'id', id)
+            const localVarPath = `/resources/{id}/members`
+                .replace('{id}', encodeURIComponent(String(id)));
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'GET', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication ApiKeyAuth required
+            await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
+
+            localVarHeaderParameter['Accept'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * Attach a user to a resource (vp — only own subordinates)
+         * @summary Add resource member
+         * @param {number} id Resource ID
+         * @param {DtoAddMemberRequest} body Member
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        resourcesIdMembersPost: async (id: number, body: DtoAddMemberRequest, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'id' is not null or undefined
+            assertParamExists('resourcesIdMembersPost', 'id', id)
+            // verify required parameter 'body' is not null or undefined
+            assertParamExists('resourcesIdMembersPost', 'body', body)
+            const localVarPath = `/resources/{id}/members`
+                .replace('{id}', encodeURIComponent(String(id)));
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'POST', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication ApiKeyAuth required
+            await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
+
+            localVarHeaderParameter['Content-Type'] = 'application/json';
+            localVarHeaderParameter['Accept'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+            localVarRequestOptions.data = serializeDataIfNeeded(body, localVarRequestOptions, configuration)
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * Detach a user from a resource
+         * @summary Remove resource member
+         * @param {number} id Resource ID
+         * @param {number} userId User ID
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        resourcesIdMembersUserIdDelete: async (id: number, userId: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'id' is not null or undefined
+            assertParamExists('resourcesIdMembersUserIdDelete', 'id', id)
+            // verify required parameter 'userId' is not null or undefined
+            assertParamExists('resourcesIdMembersUserIdDelete', 'userId', userId)
+            const localVarPath = `/resources/{id}/members/{userId}`
+                .replace('{id}', encodeURIComponent(String(id)))
+                .replace('{userId}', encodeURIComponent(String(userId)));
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'DELETE', ...baseOptions, ...options};
             const localVarHeaderParameter = {} as any;
             const localVarQueryParameter = {} as any;
 
@@ -4181,6 +3575,47 @@ export const TimesheetResourcesApiFp = function(configuration?: Configuration) {
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
+         * List the users attached to a resource
+         * @summary List resource members
+         * @param {number} id Resource ID
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async resourcesIdMembersGet(id: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<ResourcesIdMembersGet200Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.resourcesIdMembersGet(id, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['TimesheetResourcesApi.resourcesIdMembersGet']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
+         * Attach a user to a resource (vp — only own subordinates)
+         * @summary Add resource member
+         * @param {number} id Resource ID
+         * @param {DtoAddMemberRequest} body Member
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async resourcesIdMembersPost(id: number, body: DtoAddMemberRequest, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<void>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.resourcesIdMembersPost(id, body, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['TimesheetResourcesApi.resourcesIdMembersPost']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
+         * Detach a user from a resource
+         * @summary Remove resource member
+         * @param {number} id Resource ID
+         * @param {number} userId User ID
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async resourcesIdMembersUserIdDelete(id: number, userId: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<void>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.resourcesIdMembersUserIdDelete(id, userId, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['TimesheetResourcesApi.resourcesIdMembersUserIdDelete']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
          * Update resource by id
          * @summary Update resource
          * @param {number} id Resource ID
@@ -4249,6 +3684,38 @@ export const TimesheetResourcesApiFactory = function (configuration?: Configurat
             return localVarFp.resourcesIdGet(id, options).then((request) => request(axios, basePath));
         },
         /**
+         * List the users attached to a resource
+         * @summary List resource members
+         * @param {number} id Resource ID
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        resourcesIdMembersGet(id: number, options?: RawAxiosRequestConfig): AxiosPromise<ResourcesIdMembersGet200Response> {
+            return localVarFp.resourcesIdMembersGet(id, options).then((request) => request(axios, basePath));
+        },
+        /**
+         * Attach a user to a resource (vp — only own subordinates)
+         * @summary Add resource member
+         * @param {number} id Resource ID
+         * @param {DtoAddMemberRequest} body Member
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        resourcesIdMembersPost(id: number, body: DtoAddMemberRequest, options?: RawAxiosRequestConfig): AxiosPromise<void> {
+            return localVarFp.resourcesIdMembersPost(id, body, options).then((request) => request(axios, basePath));
+        },
+        /**
+         * Detach a user from a resource
+         * @summary Remove resource member
+         * @param {number} id Resource ID
+         * @param {number} userId User ID
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        resourcesIdMembersUserIdDelete(id: number, userId: number, options?: RawAxiosRequestConfig): AxiosPromise<void> {
+            return localVarFp.resourcesIdMembersUserIdDelete(id, userId, options).then((request) => request(axios, basePath));
+        },
+        /**
          * Update resource by id
          * @summary Update resource
          * @param {number} id Resource ID
@@ -4309,6 +3776,41 @@ export class TimesheetResourcesApi extends BaseAPI {
      */
     public resourcesIdGet(id: number, options?: RawAxiosRequestConfig) {
         return TimesheetResourcesApiFp(this.configuration).resourcesIdGet(id, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * List the users attached to a resource
+     * @summary List resource members
+     * @param {number} id Resource ID
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    public resourcesIdMembersGet(id: number, options?: RawAxiosRequestConfig) {
+        return TimesheetResourcesApiFp(this.configuration).resourcesIdMembersGet(id, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * Attach a user to a resource (vp — only own subordinates)
+     * @summary Add resource member
+     * @param {number} id Resource ID
+     * @param {DtoAddMemberRequest} body Member
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    public resourcesIdMembersPost(id: number, body: DtoAddMemberRequest, options?: RawAxiosRequestConfig) {
+        return TimesheetResourcesApiFp(this.configuration).resourcesIdMembersPost(id, body, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * Detach a user from a resource
+     * @summary Remove resource member
+     * @param {number} id Resource ID
+     * @param {number} userId User ID
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    public resourcesIdMembersUserIdDelete(id: number, userId: number, options?: RawAxiosRequestConfig) {
+        return TimesheetResourcesApiFp(this.configuration).resourcesIdMembersUserIdDelete(id, userId, options).then((request) => request(this.axios, this.basePath));
     }
 
     /**
@@ -4804,16 +4306,223 @@ export const UsersApiAxiosParamCreator = function (configuration?: Configuration
             };
         },
         /**
-         * Delete a user by ID
+         * Returns a paged list of users; admin sees all, vp sees own subordinates + self.
+         * @summary List users
+         * @param {number} [limit] Page size (default 50, max 500)
+         * @param {string} [role] Filter by role (e.g. worker)
+         * @param {number} [managerId] Filter by manager (admin)
+         * @param {boolean} [includeHash] Включить password_hash (только admin)
+         * @param {number} [offset] Page offset
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        usersGet: async (limit?: number, role?: string, managerId?: number, includeHash?: boolean, offset?: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            const localVarPath = `/users`;
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'GET', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication ApiKeyAuth required
+            await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
+
+            if (limit !== undefined) {
+                localVarQueryParameter['limit'] = limit;
+            }
+
+            if (role !== undefined) {
+                localVarQueryParameter['role'] = role;
+            }
+
+            if (managerId !== undefined) {
+                localVarQueryParameter['manager_id'] = managerId;
+            }
+
+            if (includeHash !== undefined) {
+                localVarQueryParameter['include_hash'] = includeHash;
+            }
+
+            if (offset !== undefined) {
+                localVarQueryParameter['offset'] = offset;
+            }
+
+            localVarHeaderParameter['Accept'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * Clear state ranges of a worker overlapping a date range (splits overlaps, optional state filter)
+         * @summary Delete worker days
+         * @param {number} id User ID
+         * @param {string} startDate Start date (YYYY-MM-DD)
+         * @param {string} endDate End date (YYYY-MM-DD)
+         * @param {number} [stateId] Optional state filter
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        usersIdDaysDelete: async (id: number, startDate: string, endDate: string, stateId?: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'id' is not null or undefined
+            assertParamExists('usersIdDaysDelete', 'id', id)
+            // verify required parameter 'startDate' is not null or undefined
+            assertParamExists('usersIdDaysDelete', 'startDate', startDate)
+            // verify required parameter 'endDate' is not null or undefined
+            assertParamExists('usersIdDaysDelete', 'endDate', endDate)
+            const localVarPath = `/users/{id}/days`
+                .replace('{id}', encodeURIComponent(String(id)));
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'DELETE', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication ApiKeyAuth required
+            await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
+
+            if (startDate !== undefined) {
+                localVarQueryParameter['start_date'] = startDate;
+            }
+
+            if (endDate !== undefined) {
+                localVarQueryParameter['end_date'] = endDate;
+            }
+
+            if (stateId !== undefined) {
+                localVarQueryParameter['state_id'] = stateId;
+            }
+
+            localVarHeaderParameter['Accept'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * List state ranges of a worker overlapping a date range
+         * @summary List worker days
+         * @param {number} id User ID
+         * @param {string} startDate Start date (YYYY-MM-DD)
+         * @param {string} endDate End date (YYYY-MM-DD)
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        usersIdDaysGet: async (id: number, startDate: string, endDate: string, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'id' is not null or undefined
+            assertParamExists('usersIdDaysGet', 'id', id)
+            // verify required parameter 'startDate' is not null or undefined
+            assertParamExists('usersIdDaysGet', 'startDate', startDate)
+            // verify required parameter 'endDate' is not null or undefined
+            assertParamExists('usersIdDaysGet', 'endDate', endDate)
+            const localVarPath = `/users/{id}/days`
+                .replace('{id}', encodeURIComponent(String(id)));
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'GET', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication ApiKeyAuth required
+            await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
+
+            if (startDate !== undefined) {
+                localVarQueryParameter['start_date'] = startDate;
+            }
+
+            if (endDate !== undefined) {
+                localVarQueryParameter['end_date'] = endDate;
+            }
+
+            localVarHeaderParameter['Accept'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * Overwrite a state on a date range of a worker\'s calendar (splits overlapping ranges)
+         * @summary Set worker days
+         * @param {number} id User ID
+         * @param {DtoSetDaysRequest} body Days
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        usersIdDaysPut: async (id: number, body: DtoSetDaysRequest, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'id' is not null or undefined
+            assertParamExists('usersIdDaysPut', 'id', id)
+            // verify required parameter 'body' is not null or undefined
+            assertParamExists('usersIdDaysPut', 'body', body)
+            const localVarPath = `/users/{id}/days`
+                .replace('{id}', encodeURIComponent(String(id)));
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'PUT', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication ApiKeyAuth required
+            await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
+
+            localVarHeaderParameter['Content-Type'] = 'application/json';
+            localVarHeaderParameter['Accept'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+            localVarRequestOptions.data = serializeDataIfNeeded(body, localVarRequestOptions, configuration)
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * Delete a user by ID (soft delete)
          * @summary Delete a user
          * @param {number} id User ID
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        userIdDelete: async (id: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+        usersIdDelete: async (id: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
             // verify required parameter 'id' is not null or undefined
-            assertParamExists('userIdDelete', 'id', id)
-            const localVarPath = `/user/{id}`
+            assertParamExists('usersIdDelete', 'id', id)
+            const localVarPath = `/users/{id}`
                 .replace('{id}', encodeURIComponent(String(id)));
             // use dummy base URL string because the URL constructor only accepts absolute URLs.
             const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
@@ -4847,10 +4556,10 @@ export const UsersApiAxiosParamCreator = function (configuration?: Configuration
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        userIdGet: async (id: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+        usersIdGet: async (id: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
             // verify required parameter 'id' is not null or undefined
-            assertParamExists('userIdGet', 'id', id)
-            const localVarPath = `/user/{id}`
+            assertParamExists('usersIdGet', 'id', id)
+            const localVarPath = `/users/{id}`
                 .replace('{id}', encodeURIComponent(String(id)));
             // use dummy base URL string because the URL constructor only accepts absolute URLs.
             const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
@@ -4878,19 +4587,19 @@ export const UsersApiAxiosParamCreator = function (configuration?: Configuration
             };
         },
         /**
-         * Update a user by ID
-         * @summary Update a user
+         * Explicitly set (or clear, manager_id=null) the manager of a user
+         * @summary Update user manager
          * @param {number} id User ID
-         * @param {DtoUpdateUserRequest} body User data
+         * @param {DtoUpdateManagerRequest} body Manager
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        userIdPut: async (id: number, body: DtoUpdateUserRequest, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+        usersIdManagerPut: async (id: number, body: DtoUpdateManagerRequest, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
             // verify required parameter 'id' is not null or undefined
-            assertParamExists('userIdPut', 'id', id)
+            assertParamExists('usersIdManagerPut', 'id', id)
             // verify required parameter 'body' is not null or undefined
-            assertParamExists('userIdPut', 'body', body)
-            const localVarPath = `/user/{id}`
+            assertParamExists('usersIdManagerPut', 'body', body)
+            const localVarPath = `/users/{id}/manager`
                 .replace('{id}', encodeURIComponent(String(id)));
             // use dummy base URL string because the URL constructor only accepts absolute URLs.
             const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
@@ -4913,6 +4622,123 @@ export const UsersApiAxiosParamCreator = function (configuration?: Configuration
             let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
             localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
             localVarRequestOptions.data = serializeDataIfNeeded(body, localVarRequestOptions, configuration)
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * Update a user by ID
+         * @summary Update a user
+         * @param {number} id User ID
+         * @param {DtoUpdateUserRequest} body User data
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        usersIdPut: async (id: number, body: DtoUpdateUserRequest, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'id' is not null or undefined
+            assertParamExists('usersIdPut', 'id', id)
+            // verify required parameter 'body' is not null or undefined
+            assertParamExists('usersIdPut', 'body', body)
+            const localVarPath = `/users/{id}`
+                .replace('{id}', encodeURIComponent(String(id)));
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'PUT', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication ApiKeyAuth required
+            await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
+
+            localVarHeaderParameter['Content-Type'] = 'application/json';
+            localVarHeaderParameter['Accept'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+            localVarRequestOptions.data = serializeDataIfNeeded(body, localVarRequestOptions, configuration)
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * Generate a new random password for a user and return it once
+         * @summary Reset user password
+         * @param {number} id User ID
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        usersIdResetPasswordPost: async (id: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'id' is not null or undefined
+            assertParamExists('usersIdResetPasswordPost', 'id', id)
+            const localVarPath = `/users/{id}/reset-password`
+                .replace('{id}', encodeURIComponent(String(id)));
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'POST', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication ApiKeyAuth required
+            await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
+
+            localVarHeaderParameter['Accept'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * Create a user (auto-generated username/password; password returned once)
+         * @summary Create user
+         * @param {DtoCreateUserRequest} user User
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        usersPost: async (user: DtoCreateUserRequest, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'user' is not null or undefined
+            assertParamExists('usersPost', 'user', user)
+            const localVarPath = `/users`;
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'POST', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication ApiKeyAuth required
+            await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
+
+            localVarHeaderParameter['Content-Type'] = 'application/json';
+            localVarHeaderParameter['Accept'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+            localVarRequestOptions.data = serializeDataIfNeeded(user, localVarRequestOptions, configuration)
 
             return {
                 url: toPathString(localVarUrlObj),
@@ -4954,16 +4780,78 @@ export const UsersApiFp = function(configuration?: Configuration) {
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
-         * Delete a user by ID
+         * Returns a paged list of users; admin sees all, vp sees own subordinates + self.
+         * @summary List users
+         * @param {number} [limit] Page size (default 50, max 500)
+         * @param {string} [role] Filter by role (e.g. worker)
+         * @param {number} [managerId] Filter by manager (admin)
+         * @param {boolean} [includeHash] Включить password_hash (только admin)
+         * @param {number} [offset] Page offset
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async usersGet(limit?: number, role?: string, managerId?: number, includeHash?: boolean, offset?: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<UsersGet200Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.usersGet(limit, role, managerId, includeHash, offset, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['UsersApi.usersGet']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
+         * Clear state ranges of a worker overlapping a date range (splits overlaps, optional state filter)
+         * @summary Delete worker days
+         * @param {number} id User ID
+         * @param {string} startDate Start date (YYYY-MM-DD)
+         * @param {string} endDate End date (YYYY-MM-DD)
+         * @param {number} [stateId] Optional state filter
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async usersIdDaysDelete(id: number, startDate: string, endDate: string, stateId?: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<void>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.usersIdDaysDelete(id, startDate, endDate, stateId, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['UsersApi.usersIdDaysDelete']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
+         * List state ranges of a worker overlapping a date range
+         * @summary List worker days
+         * @param {number} id User ID
+         * @param {string} startDate Start date (YYYY-MM-DD)
+         * @param {string} endDate End date (YYYY-MM-DD)
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async usersIdDaysGet(id: number, startDate: string, endDate: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<UsersIdDaysGet200Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.usersIdDaysGet(id, startDate, endDate, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['UsersApi.usersIdDaysGet']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
+         * Overwrite a state on a date range of a worker\'s calendar (splits overlapping ranges)
+         * @summary Set worker days
+         * @param {number} id User ID
+         * @param {DtoSetDaysRequest} body Days
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async usersIdDaysPut(id: number, body: DtoSetDaysRequest, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<void>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.usersIdDaysPut(id, body, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['UsersApi.usersIdDaysPut']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
+         * Delete a user by ID (soft delete)
          * @summary Delete a user
          * @param {number} id User ID
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async userIdDelete(id: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<void>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.userIdDelete(id, options);
+        async usersIdDelete(id: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<void>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.usersIdDelete(id, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
-            const localVarOperationServerBasePath = operationServerMap['UsersApi.userIdDelete']?.[localVarOperationServerIndex]?.url;
+            const localVarOperationServerBasePath = operationServerMap['UsersApi.usersIdDelete']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
@@ -4973,10 +4861,24 @@ export const UsersApiFp = function(configuration?: Configuration) {
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async userIdGet(id: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<UserIdGet200Response>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.userIdGet(id, options);
+        async usersIdGet(id: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<UsersIdGet200Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.usersIdGet(id, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
-            const localVarOperationServerBasePath = operationServerMap['UsersApi.userIdGet']?.[localVarOperationServerIndex]?.url;
+            const localVarOperationServerBasePath = operationServerMap['UsersApi.usersIdGet']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
+         * Explicitly set (or clear, manager_id=null) the manager of a user
+         * @summary Update user manager
+         * @param {number} id User ID
+         * @param {DtoUpdateManagerRequest} body Manager
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async usersIdManagerPut(id: number, body: DtoUpdateManagerRequest, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<UsersIdGet200Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.usersIdManagerPut(id, body, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['UsersApi.usersIdManagerPut']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
@@ -4987,10 +4889,36 @@ export const UsersApiFp = function(configuration?: Configuration) {
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async userIdPut(id: number, body: DtoUpdateUserRequest, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<UserIdGet200Response>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.userIdPut(id, body, options);
+        async usersIdPut(id: number, body: DtoUpdateUserRequest, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<UsersIdGet200Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.usersIdPut(id, body, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
-            const localVarOperationServerBasePath = operationServerMap['UsersApi.userIdPut']?.[localVarOperationServerIndex]?.url;
+            const localVarOperationServerBasePath = operationServerMap['UsersApi.usersIdPut']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
+         * Generate a new random password for a user and return it once
+         * @summary Reset user password
+         * @param {number} id User ID
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async usersIdResetPasswordPost(id: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<UsersIdResetPasswordPost200Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.usersIdResetPasswordPost(id, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['UsersApi.usersIdResetPasswordPost']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
+         * Create a user (auto-generated username/password; password returned once)
+         * @summary Create user
+         * @param {DtoCreateUserRequest} user User
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async usersPost(user: DtoCreateUserRequest, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<UsersPost201Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.usersPost(user, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['UsersApi.usersPost']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
     }
@@ -5022,14 +4950,64 @@ export const UsersApiFactory = function (configuration?: Configuration, basePath
             return localVarFp.userGet(options).then((request) => request(axios, basePath));
         },
         /**
-         * Delete a user by ID
+         * Returns a paged list of users; admin sees all, vp sees own subordinates + self.
+         * @summary List users
+         * @param {number} [limit] Page size (default 50, max 500)
+         * @param {string} [role] Filter by role (e.g. worker)
+         * @param {number} [managerId] Filter by manager (admin)
+         * @param {boolean} [includeHash] Включить password_hash (только admin)
+         * @param {number} [offset] Page offset
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        usersGet(limit?: number, role?: string, managerId?: number, includeHash?: boolean, offset?: number, options?: RawAxiosRequestConfig): AxiosPromise<UsersGet200Response> {
+            return localVarFp.usersGet(limit, role, managerId, includeHash, offset, options).then((request) => request(axios, basePath));
+        },
+        /**
+         * Clear state ranges of a worker overlapping a date range (splits overlaps, optional state filter)
+         * @summary Delete worker days
+         * @param {number} id User ID
+         * @param {string} startDate Start date (YYYY-MM-DD)
+         * @param {string} endDate End date (YYYY-MM-DD)
+         * @param {number} [stateId] Optional state filter
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        usersIdDaysDelete(id: number, startDate: string, endDate: string, stateId?: number, options?: RawAxiosRequestConfig): AxiosPromise<void> {
+            return localVarFp.usersIdDaysDelete(id, startDate, endDate, stateId, options).then((request) => request(axios, basePath));
+        },
+        /**
+         * List state ranges of a worker overlapping a date range
+         * @summary List worker days
+         * @param {number} id User ID
+         * @param {string} startDate Start date (YYYY-MM-DD)
+         * @param {string} endDate End date (YYYY-MM-DD)
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        usersIdDaysGet(id: number, startDate: string, endDate: string, options?: RawAxiosRequestConfig): AxiosPromise<UsersIdDaysGet200Response> {
+            return localVarFp.usersIdDaysGet(id, startDate, endDate, options).then((request) => request(axios, basePath));
+        },
+        /**
+         * Overwrite a state on a date range of a worker\'s calendar (splits overlapping ranges)
+         * @summary Set worker days
+         * @param {number} id User ID
+         * @param {DtoSetDaysRequest} body Days
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        usersIdDaysPut(id: number, body: DtoSetDaysRequest, options?: RawAxiosRequestConfig): AxiosPromise<void> {
+            return localVarFp.usersIdDaysPut(id, body, options).then((request) => request(axios, basePath));
+        },
+        /**
+         * Delete a user by ID (soft delete)
          * @summary Delete a user
          * @param {number} id User ID
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        userIdDelete(id: number, options?: RawAxiosRequestConfig): AxiosPromise<void> {
-            return localVarFp.userIdDelete(id, options).then((request) => request(axios, basePath));
+        usersIdDelete(id: number, options?: RawAxiosRequestConfig): AxiosPromise<void> {
+            return localVarFp.usersIdDelete(id, options).then((request) => request(axios, basePath));
         },
         /**
          * Returns information about a specific user
@@ -5038,8 +5016,19 @@ export const UsersApiFactory = function (configuration?: Configuration, basePath
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        userIdGet(id: number, options?: RawAxiosRequestConfig): AxiosPromise<UserIdGet200Response> {
-            return localVarFp.userIdGet(id, options).then((request) => request(axios, basePath));
+        usersIdGet(id: number, options?: RawAxiosRequestConfig): AxiosPromise<UsersIdGet200Response> {
+            return localVarFp.usersIdGet(id, options).then((request) => request(axios, basePath));
+        },
+        /**
+         * Explicitly set (or clear, manager_id=null) the manager of a user
+         * @summary Update user manager
+         * @param {number} id User ID
+         * @param {DtoUpdateManagerRequest} body Manager
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        usersIdManagerPut(id: number, body: DtoUpdateManagerRequest, options?: RawAxiosRequestConfig): AxiosPromise<UsersIdGet200Response> {
+            return localVarFp.usersIdManagerPut(id, body, options).then((request) => request(axios, basePath));
         },
         /**
          * Update a user by ID
@@ -5049,8 +5038,28 @@ export const UsersApiFactory = function (configuration?: Configuration, basePath
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        userIdPut(id: number, body: DtoUpdateUserRequest, options?: RawAxiosRequestConfig): AxiosPromise<UserIdGet200Response> {
-            return localVarFp.userIdPut(id, body, options).then((request) => request(axios, basePath));
+        usersIdPut(id: number, body: DtoUpdateUserRequest, options?: RawAxiosRequestConfig): AxiosPromise<UsersIdGet200Response> {
+            return localVarFp.usersIdPut(id, body, options).then((request) => request(axios, basePath));
+        },
+        /**
+         * Generate a new random password for a user and return it once
+         * @summary Reset user password
+         * @param {number} id User ID
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        usersIdResetPasswordPost(id: number, options?: RawAxiosRequestConfig): AxiosPromise<UsersIdResetPasswordPost200Response> {
+            return localVarFp.usersIdResetPasswordPost(id, options).then((request) => request(axios, basePath));
+        },
+        /**
+         * Create a user (auto-generated username/password; password returned once)
+         * @summary Create user
+         * @param {DtoCreateUserRequest} user User
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        usersPost(user: DtoCreateUserRequest, options?: RawAxiosRequestConfig): AxiosPromise<UsersPost201Response> {
+            return localVarFp.usersPost(user, options).then((request) => request(axios, basePath));
         },
     };
 };
@@ -5081,14 +5090,68 @@ export class UsersApi extends BaseAPI {
     }
 
     /**
-     * Delete a user by ID
+     * Returns a paged list of users; admin sees all, vp sees own subordinates + self.
+     * @summary List users
+     * @param {number} [limit] Page size (default 50, max 500)
+     * @param {string} [role] Filter by role (e.g. worker)
+     * @param {number} [managerId] Filter by manager (admin)
+     * @param {boolean} [includeHash] Включить password_hash (только admin)
+     * @param {number} [offset] Page offset
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    public usersGet(limit?: number, role?: string, managerId?: number, includeHash?: boolean, offset?: number, options?: RawAxiosRequestConfig) {
+        return UsersApiFp(this.configuration).usersGet(limit, role, managerId, includeHash, offset, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * Clear state ranges of a worker overlapping a date range (splits overlaps, optional state filter)
+     * @summary Delete worker days
+     * @param {number} id User ID
+     * @param {string} startDate Start date (YYYY-MM-DD)
+     * @param {string} endDate End date (YYYY-MM-DD)
+     * @param {number} [stateId] Optional state filter
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    public usersIdDaysDelete(id: number, startDate: string, endDate: string, stateId?: number, options?: RawAxiosRequestConfig) {
+        return UsersApiFp(this.configuration).usersIdDaysDelete(id, startDate, endDate, stateId, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * List state ranges of a worker overlapping a date range
+     * @summary List worker days
+     * @param {number} id User ID
+     * @param {string} startDate Start date (YYYY-MM-DD)
+     * @param {string} endDate End date (YYYY-MM-DD)
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    public usersIdDaysGet(id: number, startDate: string, endDate: string, options?: RawAxiosRequestConfig) {
+        return UsersApiFp(this.configuration).usersIdDaysGet(id, startDate, endDate, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * Overwrite a state on a date range of a worker\'s calendar (splits overlapping ranges)
+     * @summary Set worker days
+     * @param {number} id User ID
+     * @param {DtoSetDaysRequest} body Days
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    public usersIdDaysPut(id: number, body: DtoSetDaysRequest, options?: RawAxiosRequestConfig) {
+        return UsersApiFp(this.configuration).usersIdDaysPut(id, body, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * Delete a user by ID (soft delete)
      * @summary Delete a user
      * @param {number} id User ID
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      */
-    public userIdDelete(id: number, options?: RawAxiosRequestConfig) {
-        return UsersApiFp(this.configuration).userIdDelete(id, options).then((request) => request(this.axios, this.basePath));
+    public usersIdDelete(id: number, options?: RawAxiosRequestConfig) {
+        return UsersApiFp(this.configuration).usersIdDelete(id, options).then((request) => request(this.axios, this.basePath));
     }
 
     /**
@@ -5098,8 +5161,20 @@ export class UsersApi extends BaseAPI {
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      */
-    public userIdGet(id: number, options?: RawAxiosRequestConfig) {
-        return UsersApiFp(this.configuration).userIdGet(id, options).then((request) => request(this.axios, this.basePath));
+    public usersIdGet(id: number, options?: RawAxiosRequestConfig) {
+        return UsersApiFp(this.configuration).usersIdGet(id, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * Explicitly set (or clear, manager_id=null) the manager of a user
+     * @summary Update user manager
+     * @param {number} id User ID
+     * @param {DtoUpdateManagerRequest} body Manager
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    public usersIdManagerPut(id: number, body: DtoUpdateManagerRequest, options?: RawAxiosRequestConfig) {
+        return UsersApiFp(this.configuration).usersIdManagerPut(id, body, options).then((request) => request(this.axios, this.basePath));
     }
 
     /**
@@ -5110,8 +5185,30 @@ export class UsersApi extends BaseAPI {
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      */
-    public userIdPut(id: number, body: DtoUpdateUserRequest, options?: RawAxiosRequestConfig) {
-        return UsersApiFp(this.configuration).userIdPut(id, body, options).then((request) => request(this.axios, this.basePath));
+    public usersIdPut(id: number, body: DtoUpdateUserRequest, options?: RawAxiosRequestConfig) {
+        return UsersApiFp(this.configuration).usersIdPut(id, body, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * Generate a new random password for a user and return it once
+     * @summary Reset user password
+     * @param {number} id User ID
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    public usersIdResetPasswordPost(id: number, options?: RawAxiosRequestConfig) {
+        return UsersApiFp(this.configuration).usersIdResetPasswordPost(id, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * Create a user (auto-generated username/password; password returned once)
+     * @summary Create user
+     * @param {DtoCreateUserRequest} user User
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    public usersPost(user: DtoCreateUserRequest, options?: RawAxiosRequestConfig) {
+        return UsersApiFp(this.configuration).usersPost(user, options).then((request) => request(this.axios, this.basePath));
     }
 }
 

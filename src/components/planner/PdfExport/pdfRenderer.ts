@@ -93,13 +93,13 @@ interface Palette {
   todayOpacity: number
   groupTint: Color
   groupTintOpacity: number
-  usageUnder: Color
-  usageFull: Color
-  usageOver: Color
+  usageNormal: Color
+  usageWarn: Color
+  usageCritical: Color
   usageWeekend: Color
   usageUnknown: Color
-  /** Текст на «идеальной» ячейке занятости */
-  usageFullText: Color
+  /** Текст внутри цветных ячеек занятости */
+  usageText: Color
 }
 
 const BLACK = rgb(0, 0, 0)
@@ -142,12 +142,12 @@ const COLOR_PALETTE: Palette = {
   todayOpacity: 0.9,
   groupTint: BLACK,
   groupTintOpacity: 0.04,
-  usageUnder: rgb(170 / 255, 207 / 255, 207 / 255), // #aacfcf
-  usageFull: rgb(103 / 255, 155 / 255, 155 / 255), // #679b9b
-  usageOver: rgb(255 / 255, 182 / 255, 182 / 255), // #ffb6b6
+  usageNormal: rgb(170 / 255, 207 / 255, 207 / 255), // #aacfcf
+  usageWarn: rgb(230 / 255, 212 / 255, 136 / 255), // #e6d488
+  usageCritical: rgb(224 / 255, 154 / 255, 154 / 255), // #e09a9a
   usageWeekend: rgb(240 / 255, 240 / 255, 240 / 255), // #f0f0f0
   usageUnknown: WHITE,
-  usageFullText: WHITE,
+  usageText: rgb(0.2, 0.2, 0.2), // #333
 }
 
 /** Чёрно-белый контурный стиль: все тексты чёрные, блоки — светло-серые с контуром */
@@ -187,12 +187,12 @@ const MONO_PALETTE: Palette = {
   todayOpacity: 1,
   groupTint: BLACK,
   groupTintOpacity: 0.02,
-  usageUnder: rgb(242 / 255, 242 / 255, 242 / 255), // #f2f2f2
-  usageFull: rgb(214 / 255, 214 / 255, 214 / 255), // #d6d6d6
-  usageOver: rgb(184 / 255, 184 / 255, 184 / 255), // #b8b8b8
+  usageNormal: rgb(242 / 255, 242 / 255, 242 / 255), // #f2f2f2
+  usageWarn: rgb(214 / 255, 214 / 255, 214 / 255), // #d6d6d6
+  usageCritical: rgb(184 / 255, 184 / 255, 184 / 255), // #b8b8b8
   usageWeekend: rgb(250 / 255, 250 / 255, 250 / 255), // #fafafa
   usageUnknown: WHITE,
-  usageFullText: BLACK,
+  usageText: BLACK,
 }
 
 function buildPalette(style?: 'color' | 'mono'): Palette {
@@ -454,7 +454,7 @@ function availableForDay(r: PdfGanttResourceInfo, day: Date): number | null {
 /**
  * Блок занятости ресурсов (как ResourceHeader): строка на ресурс под календарным
  * заголовком, в колонке названий — код, по ячейкам — пик загрузки за дни ячейки
- * с цветом по состоянию (недобор/идеально/перебор/выходной/нет данных).
+ * с цветом по состоянию (норма/перегруз/критично/выходной/нет данных).
  */
 function drawResourceHeader(
   ctx: DrawCtx,
@@ -511,8 +511,26 @@ function drawResourceHeader(
       // Доступность ячейки как в планировщике: минимум по дням; если хоть один
       // день без периода — состояние «нет данных»
       const avail = hasUnknown ? null : minAvail
-      const over = avail != null && peak > avail
-      const bg = weekend ? palette.usageWeekend : avail == null ? palette.usageUnknown : over ? palette.usageOver : peak === avail ? palette.usageFull : palette.usageUnder
+      // Состояние по проценту загрузки, как в UsageCell: ≤100% норма, до 160%
+      // перегруз, >160% критично (0 доступных с занятостью — критично)
+      let state: 'normal' | 'warn' | 'critical' | 'weekend' | 'unknown'
+      if (weekend) state = 'weekend'
+      else if (avail == null) state = 'unknown'
+      else if (avail === 0) state = peak > 0 ? 'critical' : 'normal'
+      else {
+        const pct = (peak / avail) * 100
+        state = pct <= 100 ? 'normal' : pct <= 160 ? 'warn' : 'critical'
+      }
+      const bg =
+        state === 'weekend'
+          ? palette.usageWeekend
+          : state === 'unknown'
+            ? palette.usageUnknown
+            : state === 'warn'
+              ? palette.usageWarn
+              : state === 'critical'
+                ? palette.usageCritical
+                : palette.usageNormal
       page.drawRectangle({ x, y: pdfY(top + layout.rsRowH), width: cellW, height: layout.rsRowH, color: bg })
       // Числа занятости: шрифт адаптивный — стартует от масштаба (6.75×z) и ширины
       // ячейки, при нехватке места уменьшается, чтобы «used/cap» помещалось
@@ -522,7 +540,8 @@ function drawResourceHeader(
       while (size >= 1.5 && font.widthOfTextAtSize(label, size) > cellW - 1) size -= 0.25
       if (size >= 1.5) {
         const tw = font.widthOfTextAtSize(label, size)
-        const textColor = weekend ? palette.textFaint : avail == null ? palette.textFaint : peak === avail ? palette.usageFullText : palette.textMid
+        const textColor =
+          state === 'weekend' || state === 'unknown' ? palette.textFaint : palette.usageText
         page.drawText(label, {
           x: x + (cellW - tw) / 2,
           y: textY(top, layout.rsRowH, size),

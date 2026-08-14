@@ -1,8 +1,8 @@
 import type { TimelineCtx } from '@/composables/timeline-context'
-import type { DtoEmployeeResponse, DtoEmployeeStateResponse, DtoStateResponse } from '@/api'
+import type { DtoUserResponse, DtoUserStateResponse, DtoStateResponse } from '@/api'
 
-/** Сотрудник, обогащённый названием категории ресурса (resource_title) на фронте. */
-export type EmployeeWithTitle = DtoEmployeeResponse & { resource_title?: string }
+/** Сотрудник табеля — пользователь с ролью worker */
+export type EmployeeWithTitle = DtoUserResponse
 
 export interface AssignPayload {
   employeeId: number
@@ -22,7 +22,7 @@ export interface TimesheetGridProps {
   employees: EmployeeWithTitle[]
   states: DtoStateResponse[]
   /** Состояние, покрывающее день сотрудника (undefined — рабочий день) */
-  stateForDay: (employeeId: number, iso: string) => DtoEmployeeStateResponse | undefined
+  stateForDay: (employeeId: number, iso: string) => DtoUserStateResponse | undefined
   /** Ошибка загрузки/сохранения */
   error?: string | null
   /** Идёт сохранение (блокирует панель назначения) */

@@ -12,6 +12,7 @@ import { useContextMenu } from '../composables/useContextMenu'
 import { useEditModal } from '../composables/useEditModal'
 import { usePlanningOrigin } from '../composables/usePlanningOrigin'
 import { useUnitMenu } from '../composables/useUnitMenu'
+import { compareByName } from '../utils'
 import { useRoleAccess } from '../composables/useRoleAccess'
 import { useFindPlanningItem } from '../composables/useFindPlanningItem'
 import { usePlanningStore, useAppStore } from '../store'
@@ -112,7 +113,10 @@ const menuItems = computed<ContextMenuItem[]>(() => {
 })
 
 const ownerOptions = computed(() =>
-  app.users.map((u) => ({ value: u.id ?? 0, label: u.name ?? '' })),
+  app.users
+    .filter((u) => u.role !== 'worker')
+    .sort(compareByName)
+    .map((u) => ({ value: u.id ?? 0, label: u.name ?? '' })),
 )
 
 // Модалка редактирования процесса (название, владелец)

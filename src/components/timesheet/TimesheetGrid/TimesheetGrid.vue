@@ -4,6 +4,7 @@ import { fmtDate } from '../../planner/calendar'
 import { LABEL_WIDTH } from '../../planner/layout'
 import { stateBackground } from '../stateColors'
 import TimesheetCell from '../TimesheetCell/TimesheetCell.vue'
+import { TooltipCell, InfoTooltip } from '@/components/common'
 import type { ClearPayload, TimesheetGridProps } from './types'
 
 const props = withDefaults(defineProps<TimesheetGridProps>(), {
@@ -258,16 +259,22 @@ const labelsH = computed(() => props.employees.length * ROW_H)
       class="ts-labels"
       :style="{ width: LABEL_WIDTH + 'px', marginBottom: '-' + labelsH + 'px' }"
     >
-      <div
+      <TooltipCell
         v-for="emp in employees"
         :key="'tsl' + emp.id"
         class="ts-label"
         :style="{ height: ROW_H + 'px' }"
-        :title="emp.position || emp.resource_title ? `${emp.name} — ${emp.position || emp.resource_title}` : emp.name"
+        :multiline="true"
       >
         <span class="ts-label-name">{{ emp.name }}</span>
-        <span class="ts-label-pos">{{ emp.position || emp.resource_title }}</span>
-      </div>
+        <span class="ts-label-pos">{{ emp.position }}</span>
+        <template #popup>
+          <InfoTooltip
+            :title="emp.name"
+            :lines="[emp.position].filter((x): x is string => Boolean(x))"
+          />
+        </template>
+      </TooltipCell>
     </div>
 
     <!-- Сетка ячеек: ряд на сотрудника, ячейки по видимым дням -->
@@ -305,7 +312,12 @@ const labelsH = computed(() => props.employees.length * ROW_H)
         <div class="ts-panel" ref="panelEl" :style="{ left: panel.x + 'px', top: panel.y + 'px' }" role="dialog" :aria-label="'Назначить состояние'">
           <div class="ts-panel-head">
             <span class="ts-panel-title">{{ employeeName(panel.employeeId) }}</span>
-            <span class="ts-panel-range" :title="`${fmtFull(panel.startDate)} — ${fmtFull(panel.endDate)}`">{{ fmtDM(panel.startDate) }}–{{ fmtDM(panel.endDate) }}</span>
+            <TooltipCell class="ts-panel-range" :multiline="true">
+              <span>{{ fmtDM(panel.startDate) }}–{{ fmtDM(panel.endDate) }}</span>
+              <template #popup>
+                <InfoTooltip :lines="[`${fmtFull(panel.startDate)} — ${fmtFull(panel.endDate)}`]" />
+              </template>
+            </TooltipCell>
             <button type="button" class="ts-panel-close" aria-label="Закрыть" @click="closePanel">×</button>
           </div>
           <div class="ts-panel-states">
@@ -358,6 +370,7 @@ const labelsH = computed(() => props.employees.length * ROW_H)
   box-sizing: border-box;
   border-bottom: 1px solid #f0f0f0;
   overflow: hidden;
+  cursor: default;
 }
 .ts-label-name {
   font-weight: 700;

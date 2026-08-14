@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '../store'
+import { isOffline } from '../offline/state'
 import MainLayout from '../layouts/MainLayout.vue'
 import AuthLayout from '../layouts/AuthLayout.vue'
 
@@ -63,6 +64,16 @@ const router = createRouter({
           component: () => import('../views/StatusesPage.vue'),
         },
         {
+          path: 'users',
+          name: 'users',
+          component: () => import('../views/UsersPage.vue'),
+        },
+        {
+          path: 'structure',
+          name: 'structure',
+          component: () => import('../views/CompanyStructure.vue'),
+        },
+        {
           path: 'permissions',
           name: 'permissions',
           component: () => import('../views/PermissionsPage.vue'),
@@ -82,7 +93,11 @@ const router = createRouter({
 router.beforeEach(async (to) => {
   const auth = useAuthStore()
 
-  if (to.meta.requiresAuth && (!auth.isAuthenticated || auth.accessExpired)) {
+  if (
+    to.meta.requiresAuth &&
+    (!auth.isAuthenticated || auth.accessExpired) &&
+    !isOffline.value
+  ) {
     await auth.refreshSession()
   }
 
@@ -93,7 +108,12 @@ router.beforeEach(async (to) => {
 
   // Уже авторизованных не пускаем на страницу входа
   if (to.name === 'login' && auth.isAuthenticated) {
-    return { name: 'dashboard' }
+    return { name: auth.user?.role === 'worker' ? 'profile' : 'dashboard' }
+  }
+
+  // worker видит только свой профиль: любые другие страницы — на profile
+  if (auth.user?.role === 'worker' && to.name !== 'profile') {
+    return { name: 'profile' }
   }
 
   // Табель и Сотрудники доступны только vp и admin
@@ -104,9 +124,9 @@ router.beforeEach(async (to) => {
     return { name: 'dashboard' }
   }
 
-  // Статусы и Права — только admin
+  // Статусы, Права, Пользователи, Структура — только admin
   if (
-    (to.name === 'statuses' || to.name === 'permissions') &&
+    (to.name === 'statuses' || to.name === 'permissions' || to.name === 'users' || to.name === 'structure') &&
     auth.user?.role !== 'admin'
   ) {
     return { name: 'dashboard' }

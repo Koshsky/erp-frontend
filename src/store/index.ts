@@ -1,8 +1,13 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { AuthApi, ProjectsApi, ProcessesApi, TasksApi, TimesheetResourcesApi, TimesheetCalendarApi, TimesheetEmployeesApi, TimesheetStatesApi, PlanningApi, MilestonesApi, UsersApi, AssignmentsApi, Configuration } from '@/api'
-import type { DtoUserInfo, DtoProject, DtoResourceResponse, DtoResourceCalendar, DtoEmployeeResponse, DtoEmployeeStateResponse, DtoStateResponse, DtoCreateResourceRequest, DtoUpdateResourceRequest, JwtTokenPair } from '@/api'
+import axios, { type AxiosError, type Method } from 'axios'
+import { AuthApi, ProjectsApi, ProcessesApi, TasksApi, TimesheetResourcesApi, TimesheetCalendarApi, TimesheetStatesApi, PlanningApi, MilestonesApi, UsersApi, AssignmentsApi, Configuration } from '@/api'
+import type { DtoUserInfo, DtoProject, DtoResourceResponse, DtoResourceCalendar, DtoResourceMemberResponse, DtoUserResponse, DtoUserStateResponse, DtoStateResponse, DtoCreateResourceRequest, DtoUpdateResourceRequest, DtoCreateUserRequest, DtoUpdateUserRequest, DtoSetDaysRequest, DtoAdminUserResponse, DtoCreateUserResult, DtoResetPasswordResponse, JwtTokenPair } from '@/api'
 import { apiErrorMessage } from '@/utils'
+import { isOffline } from '@/offline/state'
+import { scheduleWarmup } from '@/offline/warmup'
+import { enqueueMutation, isNetworkError, clearOutbox, type MutationEntity } from '@/offline/outbox'
+import { applyRangeSplit } from '@/offline/periodSplit'
 
 const TOKEN_KEY = 'mvs_erp_access_token'
 const REFRESH_KEY = 'mvs_erp_refresh_token'
@@ -15,6 +20,58 @@ const REFRESH_INTERVAL_MS = 30 * 1000
 /** Размер страницы листингов (совпадает с дефолтом бэкенда). */
 const PAGE_SIZE = 50
 
+/** Временный (отрицательный) id для сущностей, созданных офлайн (уникален во времени) */
+function nextTempId(): number {
+  return -Date.now()
+}
+
+interface MutationOptions {
+  call: () => Promise<unknown>
+  entity: MutationEntity
+  tempId?: number
+  /** Штатный путь после успешного ответа сервера (data — полезная часть ответа) */
+  apply: (data: any) => void | Promise<void>
+  /** Оптимистичный путь при офлайне (запрос уже ушёл в очередь outbox) */
+  optimistic: () => void
+  onError: (message: string) => void
+}
+
+/**
+ * Выполняет мутацию с офлайн-поддержкой:
+ *  - сеть недоступна (или сетевая ошибка) → запрос сохраняется в очередь
+ *    (outbox) и применяется оптимистичное изменение, возвращается true;
+ *  - успех онлайн → штатный apply;
+ *  - ошибка сервера → false + onError (как было без офлайна).
+ *  Авторизация/пароли (/auth/*, changePassword) через этот путь не ходят.
+ */
+async function runMutation(opts: MutationOptions): Promise<boolean> {
+  try {
+    const resp = await opts.call()
+    await opts.apply((resp as { data?: { data?: unknown } })?.data?.data ?? null)
+    return true
+  } catch (e: any) {
+    const err = e as AxiosError
+    if (err?.config && isNetworkError(e)) {
+      try {
+        await enqueueMutation({
+          entity: opts.entity,
+          tempId: opts.tempId,
+          method: (err.config.method ?? 'get') as Method,
+          url: axios.getUri(err.config),
+          body: err.config.data,
+        })
+      } catch {
+        opts.onError(e?.message ?? String(e))
+        return false
+      }
+      opts.optimistic()
+      return true
+    }
+    opts.onError(e?.message ?? String(e))
+    return false
+  }
+}
+
 function apiConfig(): Configuration {
   return new Configuration({
     basePath: import.meta.env.VITE_API_URL,
@@ -22,6 +79,8 @@ function apiConfig(): Configuration {
     apiKey: () => `Bearer ${localStorage.getItem(TOKEN_KEY) ?? ''}`,
   })
 }
+
+export { apiConfig }
 
 function readStoredUser(): DtoUserInfo | null {
   try {
@@ -87,6 +146,8 @@ export const useAuthStore = defineStore('auth', () => {
     }
     isAuthenticated.value = Boolean(token)
     scheduleProactiveRefresh()
+    // Фоновая прогревка офлайн-кэша данными под роль пользователя
+    scheduleWarmup()
   }
 
   async function login(username: string, password: string) {
@@ -197,6 +258,8 @@ export const useAuthStore = defineStore('auth', () => {
       logout()
       return false
     }
+    // Офлайн refresh не выполнить: не разлогиниваем, сессия живёт до возврата сети
+    if (isOffline.value) return true
     loading.value = true
     error.value = null
     try {
@@ -218,6 +281,8 @@ export const useAuthStore = defineStore('auth', () => {
 
   function logout() {
     stopProactiveRefresh()
+    // Не даём очереди уйти под новым пользователем/токеном
+    void clearOutbox()
     localStorage.removeItem(TOKEN_KEY)
     localStorage.removeItem(REFRESH_KEY)
     localStorage.removeItem(USER_KEY)
@@ -225,12 +290,13 @@ export const useAuthStore = defineStore('auth', () => {
     isAuthenticated.value = false
   }
 
-  /** Получает свежие данные пользователя по id через UsersApi.userIdGet */
+  /** Получает свежие данные пользователя по id через UsersApi.usersIdGet */
   async function fetchProfile(userId: number) {
+    if (isOffline.value && user.value) return true
     error.value = null
     try {
       const api = new UsersApi(apiConfig())
-      const resp = await api.userIdGet(userId)
+      const resp = await api.usersIdGet(userId)
       const body = resp.data
       const errBody = body?.error as { code?: unknown; message?: string } | undefined
       if (errBody && errBody.code != null) throw new Error(apiErrorMessage(errBody))
@@ -246,7 +312,10 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   // После перезагрузки страницы с сохранёнными токенами продолжаем проактивный refresh
-  if (isAuthenticated.value) scheduleProactiveRefresh()
+  if (isAuthenticated.value) {
+    scheduleProactiveRefresh()
+    scheduleWarmup()
+  }
 
   return {
     user,
@@ -271,6 +340,15 @@ export const useAppStore = defineStore('app', () => {
   const projectsError = ref<string | null>(null)
 
   async function loadProjects() {
+    // Проекты видят только admin/dp/rp (по RBAC-матрице). Для остальных ролей
+    // листинг запрещён бэкендом (403) — не отправляем запрос вовсе.
+    const role = useAuthStore().user?.role
+    if (role && role !== 'admin' && role !== 'dp' && role !== 'rp') {
+      projects.value = []
+      projectsTotal.value = 0
+      return
+    }
+    if (isOffline.value && projects.value.length) return
     projectsLoading.value = true
     projectsError.value = null
     try {
@@ -292,6 +370,7 @@ export const useAppStore = defineStore('app', () => {
   const resourcesError = ref<string | null>(null)
 
   async function loadResources(ownerId?: number) {
+    if (isOffline.value && resources.value.length) return
     resourcesLoading.value = true
     resourcesError.value = null
     try {
@@ -309,51 +388,141 @@ export const useAppStore = defineStore('app', () => {
 
   async function createResource(payload: DtoCreateResourceRequest): Promise<boolean> {
     resourcesError.value = null
-    try {
-      const api = new TimesheetResourcesApi(apiConfig())
-      const resp = await api.resourcesPost(payload)
-      const body = resp.data
-      const errBody = body?.error as { code?: unknown; message?: string } | undefined
-      if (errBody && errBody.code != null) throw new Error(apiErrorMessage(errBody))
-      if (body?.data) resources.value.push(body.data)
-      return true
-    } catch (e: any) {
-      resourcesError.value = e.message || String(e)
-      return false
-    }
+    const tempId = nextTempId()
+    return runMutation({
+      entity: 'resource',
+      tempId,
+      call: async () => {
+        const resp = await new TimesheetResourcesApi(apiConfig()).resourcesPost(payload)
+        const errBody = resp.data?.error as { code?: unknown; message?: string } | undefined
+        if (errBody && errBody.code != null) throw new Error(apiErrorMessage(errBody))
+        return resp
+      },
+      apply: (data) => {
+        if (data) resources.value.push(data)
+      },
+      optimistic: () => {
+        resources.value.push({ id: tempId, ...payload } as unknown as DtoResourceResponse)
+      },
+      onError: (m) => {
+        resourcesError.value = m
+      },
+    })
   }
 
   async function updateResource(id: number, patch: DtoUpdateResourceRequest): Promise<boolean> {
     resourcesError.value = null
-    try {
-      const api = new TimesheetResourcesApi(apiConfig())
-      const resp = await api.resourcesIdPut(id, patch)
-      const body = resp.data
-      const errBody = body?.error as { code?: unknown; message?: string } | undefined
-      if (errBody && errBody.code != null) throw new Error(apiErrorMessage(errBody))
-      const updated = body?.data
-      if (updated) {
+    return runMutation({
+      entity: 'resource',
+      call: async () => {
+        const resp = await new TimesheetResourcesApi(apiConfig()).resourcesIdPut(id, patch)
+        const errBody = resp.data?.error as { code?: unknown; message?: string } | undefined
+        if (errBody && errBody.code != null) throw new Error(apiErrorMessage(errBody))
+        return resp
+      },
+      apply: (updated) => {
+        if (!updated) return
         const i = resources.value.findIndex((r) => r.id === id)
         if (i >= 0) resources.value[i] = updated
-      }
-      return true
-    } catch (e: any) {
-      resourcesError.value = e.message || String(e)
-      return false
-    }
+      },
+      optimistic: () => {
+        const i = resources.value.findIndex((r) => r.id === id)
+        if (i >= 0) resources.value[i] = { ...resources.value[i], ...patch }
+      },
+      onError: (m) => {
+        resourcesError.value = m
+      },
+    })
   }
 
   async function deleteResource(id: number): Promise<boolean> {
     resourcesError.value = null
-    try {
-      await new TimesheetResourcesApi(apiConfig()).resourcesIdDelete(id)
+    const remove = () => {
       const i = resources.value.findIndex((r) => r.id === id)
       if (i >= 0) resources.value.splice(i, 1)
-      return true
+    }
+    return runMutation({
+      entity: 'resource',
+      call: () => new TimesheetResourcesApi(apiConfig()).resourcesIdDelete(id),
+      apply: remove,
+      optimistic: remove,
+      onError: (m) => {
+        resourcesError.value = m
+      },
+    })
+  }
+
+  // === Пользователи ресурса (/resources/{id}/members) ===
+  const resourceMembers = ref<Record<number, DtoResourceMemberResponse[]>>({})
+
+  /** Загружает список участников (пользователей) ресурса */
+  async function loadResourceMembers(resourceId: number) {
+    if (isOffline.value && resourceMembers.value[resourceId]?.length) return
+    try {
+      const api = new TimesheetResourcesApi(apiConfig())
+      const resp = await api.resourcesIdMembersGet(resourceId)
+      resourceMembers.value[resourceId] = resp.data?.data ?? []
     } catch (e: any) {
       resourcesError.value = e.message || String(e)
-      return false
     }
+  }
+
+  /** Добавляет пользователя в ресурс (POST members); участник — любой пользователь */
+  async function addResourceMember(resourceId: number, userId: number): Promise<boolean> {
+    resourcesError.value = null
+    const tempId = nextTempId()
+    return runMutation({
+      entity: 'member',
+      tempId,
+      call: () => new TimesheetResourcesApi(apiConfig()).resourcesIdMembersPost(resourceId, {
+        user_id: userId,
+      }),
+      apply: async () => {
+        await loadResourceMembers(resourceId)
+        await loadResources()
+      },
+      optimistic: () => {
+        const list = resourceMembers.value[resourceId] ?? []
+        const w = useTimesheetStore().employees.find((e) => e.id === userId)
+        if (!list.some((m) => m.id === userId)) {
+          list.push({
+            id: userId,
+            name: w?.name ?? `#${userId}`,
+            role: 'worker',
+            position: w?.position,
+            manager_id: w?.manager_id,
+            hire_date: w?.hire_date,
+            termination_date: w?.termination_date,
+          })
+        }
+        resourceMembers.value[resourceId] = list
+      },
+      onError: (m) => {
+        resourcesError.value = m
+      },
+    })
+  }
+
+  /** Убирает пользователя из ресурса (DELETE members/{userId}) */
+  async function removeResourceMember(resourceId: number, userId: number): Promise<boolean> {
+    resourcesError.value = null
+    const remove = () => {
+      const list = resourceMembers.value[resourceId]
+      if (!list) return
+      resourceMembers.value[resourceId] = list.filter((m) => m.id !== userId)
+    }
+    return runMutation({
+      entity: 'member',
+      call: () => new TimesheetResourcesApi(apiConfig()).resourcesIdMembersUserIdDelete(resourceId, userId),
+      apply: async () => {
+        remove()
+        await loadResources()
+      },
+      optimistic: remove,
+      onError: (m) => {
+        resourcesError.value = m
+      },
+    })
   }
 
   // === Календарь доступности ресурсов (/timesheet/calendar) ===
@@ -374,6 +543,7 @@ export const useAppStore = defineStore('app', () => {
 
   /** Загружает доступность ресурсов за окно «назад 180 / вперёд 360 дней» (в лимите бэкенда) */
   async function loadCalendar() {
+    if (isOffline.value && calendar.value.length) return
     calendarLoading.value = true
     calendarError.value = null
     try {
@@ -396,6 +566,7 @@ export const useAppStore = defineStore('app', () => {
   const usersError = ref<string | null>(null)
 
   async function loadUsers() {
+    if (isOffline.value && users.value.length) return
     usersLoading.value = true
     usersError.value = null
     try {
@@ -406,6 +577,77 @@ export const useAppStore = defineStore('app', () => {
       usersError.value = e.message || String(e)
     } finally {
       usersLoading.value = false
+    }
+  }
+
+  // === Админ: пользователи (все роли, с хешем пароля) ===
+  const adminUsers = ref<DtoAdminUserResponse[]>([])
+  const adminUsersLoading = ref(false)
+  const adminUsersError = ref<string | null>(null)
+
+  /** Полный список пользователей для админ-страницы (включает password_hash) */
+  async function loadAdminUsers(includeHash = true) {
+    adminUsersLoading.value = true
+    adminUsersError.value = null
+    try {
+      const api = new UsersApi(apiConfig())
+      const resp = await api.usersGet(500, undefined, undefined, includeHash, 0)
+      adminUsers.value = resp.data?.data?.items ?? []
+    } catch (e: any) {
+      adminUsersError.value = apiErrorMessage(e)
+    } finally {
+      adminUsersLoading.value = false
+    }
+  }
+
+  /** Создать пользователя; возвращает сгенерированный пароль (если есть) */
+  async function createUser(payload: DtoCreateUserRequest): Promise<DtoCreateUserResult | null> {
+    try {
+      const api = new UsersApi(apiConfig())
+      const resp = await api.usersPost(payload)
+      await loadAdminUsers()
+      return resp.data?.data ?? null
+    } catch (e: any) {
+      adminUsersError.value = apiErrorMessage(e)
+      return null
+    }
+  }
+
+  /** Сбросить пароль пользователя; возвращает новый пароль (показать один раз) */
+  async function resetPassword(id: number): Promise<string | null> {
+    try {
+      const api = new UsersApi(apiConfig())
+      const resp = await api.usersIdResetPasswordPost(id)
+      return resp.data?.data?.password ?? null
+    } catch (e: any) {
+      adminUsersError.value = apiErrorMessage(e)
+      return null
+    }
+  }
+
+  /** Обновить пользователя (роль/менеджер/профиль) */
+  async function updateUser(id: number, patch: DtoUpdateUserRequest): Promise<boolean> {
+    try {
+      const api = new UsersApi(apiConfig())
+      await api.usersIdPut(id, patch)
+      await loadAdminUsers()
+      return true
+    } catch (e: any) {
+      adminUsersError.value = apiErrorMessage(e)
+      return false
+    }
+  }
+
+  /** Задать/сбросить руководителя пользователя (manager_id: null — без руководителя) */
+  async function updateManager(id: number, managerId: number | null): Promise<boolean> {
+    try {
+      const api = new UsersApi(apiConfig())
+      await api.usersIdManagerPut(id, { manager_id: managerId ?? undefined })
+      await loadAdminUsers()
+      return true
+    } catch (e: any) {
+      adminUsersError.value = apiErrorMessage(e)
+      return false
     }
   }
 
@@ -433,47 +675,65 @@ export const useAppStore = defineStore('app', () => {
     loadResources,
     loadCalendar,
     loadUsers,
+    adminUsers,
+    adminUsersLoading,
+    adminUsersError,
+    loadAdminUsers,
+    createUser,
+    resetPassword,
+    updateUser,
+    updateManager,
     createResource,
     updateResource,
     deleteResource,
+    resourceMembers,
+    loadResourceMembers,
+    addResourceMember,
+    removeResourceMember,
   }
 })
 
 // === Табель (состояния сотрудников, страница для vp/admin) ===
 export const useTimesheetStore = defineStore('timesheet', () => {
   const app = useAppStore()
+  const auth = useAuthStore()
 
   // Окно загрузки состояний: по умолчанию «назад 180 / вперёд 360 дней»; при
   // инфинит-скролле шкалы расширяется через ensureRange (дозагрузка новых диапазонов).
   const WINDOW_BACK_DAYS = 180
   const WINDOW_FORWARD_DAYS = 360
 
-  const employees = ref<DtoEmployeeResponse[]>([])
+  const employees = ref<DtoUserResponse[]>([])
   const employeesTotal = ref(0)
   const states = ref<DtoStateResponse[]>([])
-  const periodsByEmployee = ref<Record<number, DtoEmployeeStateResponse[]>>({})
+  const periodsByEmployee = ref<Record<number, DtoUserStateResponse[]>>({})
   const windowStart = ref('')
   const windowEnd = ref('')
   const loading = ref(false)
   const busy = ref(false)
   const error = ref<string | null>(null)
 
-  /** Сотрудники, обогащённые названием категории ресурса (resource_title) из app.resources */
-  const employeesWithTitles = computed<Array<DtoEmployeeResponse & { resource_title?: string }>>(() => {
-    const titleById = new Map<number, string>()
-    for (const r of app.resources) {
-      if (r.id != null) titleById.set(r.id, r.title ?? '')
-    }
-    return employees.value
-      .map((e) => ({
-        ...e,
-        resource_title: e.resource_id != null ? (titleById.get(e.resource_id) ?? '') : '',
-      }))
-      .sort(
-        (a, b) =>
-          (a.position || a.resource_title || '').localeCompare(b.position || b.resource_title || '', 'ru') ||
-          (a.name ?? '').localeCompare(b.name ?? '', 'ru'),
-      )
+  /** Сотрудники (пользователи с ролью worker), отсортированные по ФИО */
+  const employeesWithTitles = computed<DtoUserResponse[]>(() =>
+    [...employees.value].sort(
+      (a, b) =>
+        (a.name ?? '').localeCompare(b.name ?? '', 'ru') ||
+        (a.position || '').localeCompare(b.position || '', 'ru'),
+    ),
+  )
+
+  /** Текущий пользователь как строка табеля («себя» видит каждый) */
+  const selfEmployee = computed<DtoUserResponse | null>(() => {
+    const u = auth.user
+    if (u?.id == null) return null
+    return { id: u.id, name: u.name ?? '', username: u.username, role: u.role, position: '' }
+  })
+
+  /** Строки табеля: сам пользователь + его прямые подчинённые */
+  const timesheetRows = computed<DtoUserResponse[]>(() => {
+    const rows = [...employeesWithTitles.value]
+    if (selfEmployee.value) rows.unshift(selfEmployee.value)
+    return rows
   })
 
   /** Дата YYYY-MM-DD через n дней от ISO-даты (локальная зона) */
@@ -496,13 +756,13 @@ export const useTimesheetStore = defineStore('timesheet', () => {
     error.value = e?.message || String(e)
   }
 
-  /** Загружает состояния сотрудников за [start, end] и мёржит в кэш по id */
+  /** Загружает состояния (включая самого пользователя) за [start, end] и мёржит в кэш по id */
   async function fetchPeriods(start: string, end: string) {
-    const api = new TimesheetEmployeesApi(apiConfig())
+    const api = new UsersApi(apiConfig())
     const results = await Promise.all(
-      employees.value.map((emp) =>
+      timesheetRows.value.map((emp) =>
         api
-          .employeesIdDaysGet(emp.id ?? 0, start, end)
+          .usersIdDaysGet(emp.id ?? 0, start, end)
           .then((r) => ({ id: emp.id, list: r.data?.data ?? [] }))
           .catch((e: any) => {
             setError(e)
@@ -520,7 +780,7 @@ export const useTimesheetStore = defineStore('timesheet', () => {
         (p) =>
           !(p.start_date != null && p.end_date != null && !(p.end_date < start || p.start_date > end)),
       )
-      const byId = new Map<number, DtoEmployeeStateResponse>()
+      const byId = new Map<number, DtoUserStateResponse>()
       for (const p of kept) if (p.id != null) byId.set(p.id, p)
       for (const p of list) if (p.id != null) byId.set(p.id, p)
       periodsByEmployee.value[id] = [...byId.values()].sort((a, b) =>
@@ -530,7 +790,7 @@ export const useTimesheetStore = defineStore('timesheet', () => {
   }
 
   /** Период сотрудника, покрывающий день (бинарный поиск по отсортированным периодам) */
-  function periodFor(employeeId: number, iso: string): DtoEmployeeStateResponse | undefined {
+  function periodFor(employeeId: number, iso: string): DtoUserStateResponse | undefined {
     const list = periodsByEmployee.value[employeeId] ?? []
     let lo = 0
     let hi = list.length - 1
@@ -548,15 +808,16 @@ export const useTimesheetStore = defineStore('timesheet', () => {
     return p && p.end_date != null && p.end_date >= iso ? p : undefined
   }
 
-  /** Загружает список сотрудников (бэкенд фильтрует по роли из JWT: vp — подчинённые, admin — все) */
+  /** Загружает список сотрудников (users с ролью worker; vp видит подчинённых, admin — всех) */
   async function fetchEmployees(managerId?: number) {
+    if (isOffline.value && employees.value.length) return
     loading.value = true
     error.value = null
     try {
-      const api = new TimesheetEmployeesApi(apiConfig())
-      const resp = await api.employeesGet(PAGE_SIZE, managerId ?? undefined, 0)
+      const api = new UsersApi(apiConfig())
+      const resp = await api.usersGet(PAGE_SIZE, 'worker', managerId ?? undefined, undefined, 0)
       const data = resp.data?.data
-      // Сортировку и resource_title добавляет computed employeesWithTitles.
+      // Сортировку добавляет computed employeesWithTitles.
       employees.value = data?.items ?? []
       employeesTotal.value = data?.total ?? 0
     } catch (e: any) {
@@ -568,33 +829,45 @@ export const useTimesheetStore = defineStore('timesheet', () => {
 
   /** Загружает сотрудников и инициализирует окно состояний (для табеля) */
   async function loadEmployees() {
+    if (isOffline.value && employees.value.length) return
     periodsByEmployee.value = {}
     await fetchEmployees()
     await loadInitialWindow()
   }
 
-  /** Поля запроса создания/изменения сотрудника */
+  /** Поля запроса создания/изменения сотрудника (пользователь с ролью worker) */
   interface EmployeePayload {
     name: string
-    resource_id?: number
+    role?: string
     position?: string
     manager_id?: number
     hire_date?: string
     termination_date?: string
   }
 
-  /** Создаёт сотрудника на должности (ресурсе); для vp manager принудительно = текущему пользователю */
-  async function createEmployee(resourceId: number, payload: EmployeePayload): Promise<boolean> {
+  /** Создаёт сотрудника (worker); для vp manager принудительно = текущему пользователю */
+  async function createEmployee(payload: EmployeePayload): Promise<boolean> {
     busy.value = true
     error.value = null
+    const tempId = nextTempId()
     try {
-      const api = new TimesheetEmployeesApi(apiConfig())
-      await api.resourcesIdEmployeesPost(resourceId, payload)
-      await fetchEmployees()
-      return true
-    } catch (e: any) {
-      setError(e)
-      return false
+      return await runMutation({
+        entity: 'user',
+        tempId,
+        call: () => {
+          const req: DtoCreateUserRequest = { ...payload, role: 'worker' }
+          return new UsersApi(apiConfig()).usersPost(req)
+        },
+        apply: async () => {
+          await fetchEmployees()
+        },
+        optimistic: () => {
+          employees.value.push({ id: tempId, ...payload, role: 'worker' } as unknown as DtoUserResponse)
+        },
+        onError: (m) => {
+          error.value = m
+        },
+      })
     } finally {
       busy.value = false
     }
@@ -605,13 +878,20 @@ export const useTimesheetStore = defineStore('timesheet', () => {
     busy.value = true
     error.value = null
     try {
-      const api = new TimesheetEmployeesApi(apiConfig())
-      await api.employeesIdPut(id, payload)
-      await fetchEmployees()
-      return true
-    } catch (e: any) {
-      setError(e)
-      return false
+      return await runMutation({
+        entity: 'user',
+        call: () => new UsersApi(apiConfig()).usersIdPut(id, payload as DtoUpdateUserRequest),
+        apply: async () => {
+          await fetchEmployees()
+        },
+        optimistic: () => {
+          const i = employees.value.findIndex((e) => e.id === id)
+          if (i >= 0) employees.value[i] = { ...employees.value[i], ...payload }
+        },
+        onError: (m) => {
+          error.value = m
+        },
+      })
     } finally {
       busy.value = false
     }
@@ -621,14 +901,23 @@ export const useTimesheetStore = defineStore('timesheet', () => {
   async function deleteEmployee(id: number): Promise<boolean> {
     busy.value = true
     error.value = null
+    const remove = () => {
+      const i = employees.value.findIndex((e) => e.id === id)
+      if (i >= 0) employees.value.splice(i, 1)
+      delete periodsByEmployee.value[id]
+    }
     try {
-      const api = new TimesheetEmployeesApi(apiConfig())
-      await api.employeesIdDelete(id)
-      await fetchEmployees()
-      return true
-    } catch (e: any) {
-      setError(e)
-      return false
+      return await runMutation({
+        entity: 'user',
+        call: () => new UsersApi(apiConfig()).usersIdDelete(id),
+        apply: async () => {
+          await fetchEmployees()
+        },
+        optimistic: remove,
+        onError: (m) => {
+          error.value = m
+        },
+      })
     } finally {
       busy.value = false
     }
@@ -636,6 +925,7 @@ export const useTimesheetStore = defineStore('timesheet', () => {
 
   /** Загружает справочник состояний */
   async function loadStates() {
+    if (isOffline.value && states.value.length) return
     try {
       const api = new TimesheetStatesApi(apiConfig())
       const resp = await api.timesheetStatesGet()
@@ -656,13 +946,22 @@ export const useTimesheetStore = defineStore('timesheet', () => {
   async function createState(payload: StatePayload): Promise<boolean> {
     busy.value = true
     error.value = null
+    const tempId = nextTempId()
     try {
-      await new TimesheetStatesApi(apiConfig()).timesheetStatesPost(payload)
-      await loadStates()
-      return true
-    } catch (e: any) {
-      setError(e)
-      return false
+      return await runMutation({
+        entity: 'state',
+        tempId,
+        call: () => new TimesheetStatesApi(apiConfig()).timesheetStatesPost(payload),
+        apply: async () => {
+          await loadStates()
+        },
+        optimistic: () => {
+          states.value.push({ id: tempId, ...payload } as unknown as DtoStateResponse)
+        },
+        onError: (m) => {
+          error.value = m
+        },
+      })
     } finally {
       busy.value = false
     }
@@ -673,12 +972,20 @@ export const useTimesheetStore = defineStore('timesheet', () => {
     busy.value = true
     error.value = null
     try {
-      await new TimesheetStatesApi(apiConfig()).timesheetStatesIdPut(id, payload)
-      await loadStates()
-      return true
-    } catch (e: any) {
-      setError(e)
-      return false
+      return await runMutation({
+        entity: 'state',
+        call: () => new TimesheetStatesApi(apiConfig()).timesheetStatesIdPut(id, payload),
+        apply: async () => {
+          await loadStates()
+        },
+        optimistic: () => {
+          const i = states.value.findIndex((s) => s.id === id)
+          if (i >= 0) states.value[i] = { ...states.value[i], ...payload }
+        },
+        onError: (m) => {
+          error.value = m
+        },
+      })
     } finally {
       busy.value = false
     }
@@ -688,13 +995,22 @@ export const useTimesheetStore = defineStore('timesheet', () => {
   async function deleteState(id: number): Promise<boolean> {
     busy.value = true
     error.value = null
+    const remove = () => {
+      const i = states.value.findIndex((s) => s.id === id)
+      if (i >= 0) states.value.splice(i, 1)
+    }
     try {
-      await new TimesheetStatesApi(apiConfig()).timesheetStatesIdDelete(id)
-      await loadStates()
-      return true
-    } catch (e: any) {
-      setError(e)
-      return false
+      return await runMutation({
+        entity: 'state',
+        call: () => new TimesheetStatesApi(apiConfig()).timesheetStatesIdDelete(id),
+        apply: async () => {
+          await loadStates()
+        },
+        optimistic: remove,
+        onError: (m) => {
+          error.value = m
+        },
+      })
     } finally {
       busy.value = false
     }
@@ -733,17 +1049,35 @@ export const useTimesheetStore = defineStore('timesheet', () => {
     busy.value = true
     error.value = null
     try {
-      const api = new TimesheetEmployeesApi(apiConfig())
-      await api.employeesIdDaysPut(employeeId, {
+      const body: DtoSetDaysRequest = {
         state_id: stateId,
         start_date: startDate,
         end_date: endDate,
+      }
+      return await runMutation({
+        entity: 'period',
+        call: () => new UsersApi(apiConfig()).usersIdDaysPut(employeeId, body),
+        apply: async () => {
+          await fetchPeriods(windowStart.value, windowEnd.value)
+        },
+        optimistic: () => {
+          const existing = periodsByEmployee.value[employeeId] ?? []
+          // Поля статуса нужны для цвета и аббревиатуры ячейки офлайн
+          const st = states.value.find((s) => s.id === stateId)
+          // Разбиение как на бэкенде: вычитаем [startDate, endDate], хвосты
+          // пересекающихся диапазонов сохраняются, старый диапазон не исчезает.
+          periodsByEmployee.value[employeeId] = applyRangeSplit(existing, 'put', startDate, endDate, undefined, {
+            id: nextTempId(),
+            state_id: stateId,
+            state_code: st?.code,
+            state_name: st?.name,
+            is_available: st?.is_available,
+          })
+        },
+        onError: (m) => {
+          error.value = m
+        },
       })
-      await fetchPeriods(windowStart.value, windowEnd.value)
-      return true
-    } catch (e: any) {
-      setError(e)
-      return false
     } finally {
       busy.value = false
     }
@@ -759,13 +1093,34 @@ export const useTimesheetStore = defineStore('timesheet', () => {
     busy.value = true
     error.value = null
     try {
-      const api = new TimesheetEmployeesApi(apiConfig())
-      await api.employeesIdDaysDelete(employeeId, startDate, endDate, stateId)
-      await fetchPeriods(windowStart.value, windowEnd.value)
-      return true
-    } catch (e: any) {
-      setError(e)
-      return false
+      return await runMutation({
+        entity: 'period',
+        call: () =>
+          new UsersApi(apiConfig()).usersIdDaysDelete(
+            employeeId,
+            startDate,
+            endDate,
+            stateId,
+          ),
+        apply: async () => {
+          await fetchPeriods(windowStart.value, windowEnd.value)
+        },
+        optimistic: () => {
+          const existing = periodsByEmployee.value[employeeId] ?? []
+          // Как бэкенд DeleteStateRange: вычитаем диапазон из пересекающихся
+          // интервалов (хвосты сохраняются); при stateId — только его состояния.
+          periodsByEmployee.value[employeeId] = applyRangeSplit(
+            existing,
+            'delete',
+            startDate,
+            endDate,
+            stateId,
+          )
+        },
+        onError: (m) => {
+          error.value = m
+        },
+      })
     } finally {
       busy.value = false
     }
@@ -774,6 +1129,7 @@ export const useTimesheetStore = defineStore('timesheet', () => {
   return {
     employees,
     employeesWithTitles,
+    timesheetRows,
     employeesTotal,
     states,
     periodsByEmployee,
@@ -823,6 +1179,7 @@ export const usePlanningStore = defineStore('planning', () => {
   }
 
   async function loadProjectPlanning(silent = false) {
+    if (isOffline.value && projectPlanning.value) return
     await runLoad(silent, async () => {
       const resp = await new PlanningApi(apiConfig()).planningProjectsGet()
       projectPlanning.value = resp.data?.data ?? null
@@ -830,6 +1187,7 @@ export const usePlanningStore = defineStore('planning', () => {
   }
 
   async function loadProcessPlanning(silent = false) {
+    if (isOffline.value && processPlanning.value) return
     await runLoad(silent, async () => {
       const resp = await new PlanningApi(apiConfig()).planningProcessesGet()
       processPlanning.value = resp.data?.data ?? null
@@ -837,6 +1195,7 @@ export const usePlanningStore = defineStore('planning', () => {
   }
 
   async function loadTaskPlanning(silent = false) {
+    if (isOffline.value && taskPlanning.value) return
     await runLoad(silent, async () => {
       const resp = await new PlanningApi(apiConfig()).planningTasksGet()
       taskPlanning.value = resp.data?.data ?? null
@@ -845,130 +1204,181 @@ export const usePlanningStore = defineStore('planning', () => {
 
   /** Сохраняет новые даты бара, затем тихо перезагружает данные (без спиннера).
    *  При ошибке сохранения показывает сообщение и откатывается к серверным данным. */
-  async function updateDates(
-    save: () => Promise<unknown>,
-    reload: (silent: boolean) => Promise<void>,
-    id: number,
-    start_date: string,
-    end_date: string,
-  ) {
-    let saveError: string | null = null
-    try {
-      await save()
-    } catch (e: any) {
-      saveError = e.message || String(e)
+  function findProjectRow(id: number): any {
+    return projectPlanning.value?.projects?.find((p: any) => p.id === id)
+  }
+
+  function findProcessRow(id: number): any {
+    for (const p of processPlanning.value?.projects ?? []) {
+      const pr = (p.processes ?? []).find((x: any) => x.id === id)
+      if (pr) return pr
     }
-    await reload(true)
-    if (saveError) error.value = saveError
+    return undefined
   }
 
-  async function updateTaskDates(id: number, start_date: string, end_date: string) {
-    await updateDates(
-      () => new TasksApi(apiConfig()).taskIdPut(id, { start_date, end_date }),
-      loadTaskPlanning,
-      id,
-      start_date,
-      end_date,
-    )
+  function findTaskRow(id: number): any {
+    for (const p of taskPlanning.value?.processes ?? []) {
+      const t = (p.tasks ?? []).find((x: any) => x.id === id)
+      if (t) return t
+    }
+    return undefined
   }
 
-  async function updateProcessDates(id: number, start_date: string, end_date: string) {
-    await updateDates(
-      () => new ProcessesApi(apiConfig()).processIdPut(id, { start_date, end_date }),
-      loadProcessPlanning,
-      id,
-      start_date,
-      end_date,
-    )
+  function findMilestoneRow(id: number): any {
+    for (const p of taskPlanning.value?.processes ?? []) {
+      const m = (p.milestones ?? []).find((x: any) => x.id === id)
+      if (m) return m
+    }
+    return undefined
   }
 
-  async function updateProjectDates(id: number, start_date: string, end_date: string) {
-    await updateDates(
-      () => new ProjectsApi(apiConfig()).projectIdPut(id, { start_date, end_date }),
-      loadProjectPlanning,
-      id,
-      start_date,
-      end_date,
-    )
+  /** Сдвиг дат бара: PUT дат + тихий reload (онлайн) / локальная правка (офлайн) */
+  async function updateTaskDates(id: number, start_date: string, end_date: string): Promise<boolean> {
+    return runMutation({
+      entity: 'task',
+      call: () => new TasksApi(apiConfig()).taskIdPut(id, { start_date, end_date }),
+      apply: async () => {
+        await loadTaskPlanning(true)
+      },
+      optimistic: () => {
+        const t = findTaskRow(id)
+        if (t) Object.assign(t, { start_date, end_date })
+      },
+      onError: (m) => {
+        error.value = m
+      },
+    })
+  }
+
+  async function updateProcessDates(id: number, start_date: string, end_date: string): Promise<boolean> {
+    return runMutation({
+      entity: 'process',
+      call: () => new ProcessesApi(apiConfig()).processIdPut(id, { start_date, end_date }),
+      apply: async () => {
+        await loadProcessPlanning(true)
+      },
+      optimistic: () => {
+        const pr = findProcessRow(id)
+        if (pr) Object.assign(pr, { start_date, end_date })
+      },
+      onError: (m) => {
+        error.value = m
+      },
+    })
+  }
+
+  async function updateProjectDates(id: number, start_date: string, end_date: string): Promise<boolean> {
+    return runMutation({
+      entity: 'project',
+      call: () => new ProjectsApi(apiConfig()).projectIdPut(id, { start_date, end_date }),
+      apply: async () => {
+        await loadProjectPlanning(true)
+      },
+      optimistic: () => {
+        const p = findProjectRow(id)
+        if (p) Object.assign(p, { start_date, end_date })
+      },
+      onError: (m) => {
+        error.value = m
+      },
+    })
   }
 
   /** Сдвиг вехи (одиночная дата): PUT /milestone/{id} + тихая перезагрузка задач */
-  async function updateMilestoneDate(id: number, date: string) {
-    await updateDates(
-      () => new MilestonesApi(apiConfig()).milestoneIdPut(id, { date }),
-      loadTaskPlanning,
-      id,
-      date,
-      date,
-    )
-  }
-
-  /** Общий путь обновления полей (модалка редактирования): PUT + тихий reload;
-   *  при ошибке показывает сообщение и возвращает false (модалка остаётся открытой). */
-  async function updateMeta(
-    save: () => Promise<unknown>,
-    reload: (silent: boolean) => Promise<void>,
-  ): Promise<boolean> {
-    let saveError: string | null = null
-    try {
-      await save()
-    } catch (e: any) {
-      saveError = e.message || String(e)
-    }
-    await reload(true)
-    if (saveError) {
-      error.value = saveError
-      return false
-    }
-    return true
+  async function updateMilestoneDate(id: number, date: string): Promise<boolean> {
+    return runMutation({
+      entity: 'milestone',
+      call: () => new MilestonesApi(apiConfig()).milestoneIdPut(id, { date }),
+      apply: async () => {
+        await loadTaskPlanning(true)
+      },
+      optimistic: () => {
+        const m = findMilestoneRow(id)
+        if (m) m.date = date
+      },
+      onError: (m) => {
+        error.value = m
+      },
+    })
   }
 
   async function updateProjectMeta(
     id: number,
     patch: { code?: string; owner_id?: number },
   ): Promise<boolean> {
-    return updateMeta(
-      () => new ProjectsApi(apiConfig()).projectIdPut(id, patch),
-      loadProjectPlanning,
-    )
+    return runMutation({
+      entity: 'project',
+      call: () => new ProjectsApi(apiConfig()).projectIdPut(id, patch),
+      apply: async () => {
+        await loadProjectPlanning(true)
+      },
+      optimistic: () => {
+        const p = findProjectRow(id)
+        if (p) Object.assign(p, patch)
+        const ap = useAppStore().projects.find((x) => x.id === id)
+        if (ap) Object.assign(ap, patch)
+      },
+      onError: (m) => {
+        error.value = m
+      },
+    })
   }
 
   async function updateProcessMeta(
     id: number,
     patch: { title?: string; owner_id?: number },
   ): Promise<boolean> {
-    return updateMeta(
-      () => new ProcessesApi(apiConfig()).processIdPut(id, patch),
-      loadProcessPlanning,
-    )
+    return runMutation({
+      entity: 'process',
+      call: () => new ProcessesApi(apiConfig()).processIdPut(id, patch),
+      apply: async () => {
+        await loadProcessPlanning(true)
+      },
+      optimistic: () => {
+        const pr = findProcessRow(id)
+        if (pr) Object.assign(pr, patch)
+      },
+      onError: (m) => {
+        error.value = m
+      },
+    })
   }
 
   async function updateTaskMeta(id: number, patch: { title?: string }): Promise<boolean> {
-    return updateMeta(
-      () => new TasksApi(apiConfig()).taskIdPut(id, patch),
-      loadTaskPlanning,
-    )
+    return runMutation({
+      entity: 'task',
+      call: () => new TasksApi(apiConfig()).taskIdPut(id, patch),
+      apply: async () => {
+        await loadTaskPlanning(true)
+      },
+      optimistic: () => {
+        const t = findTaskRow(id)
+        if (t) Object.assign(t, patch)
+      },
+      onError: (m) => {
+        error.value = m
+      },
+    })
   }
 
   async function updateMilestoneMeta(
     id: number,
     patch: { title?: string; content?: string },
   ): Promise<boolean> {
-    return updateMeta(
-      () => new MilestonesApi(apiConfig()).milestoneIdPut(id, patch),
-      loadTaskPlanning,
-    )
-  }
-
-  /** Общий путь создания: POST; при успехе возвращает created-ответ, иначе null. */
-  async function postCreate(create: () => Promise<{ data?: { data?: unknown } }>): Promise<unknown> {
-    try {
-      const resp = await create()
-      return resp.data?.data ?? null
-    } catch (e: any) {
-      error.value = e.message || String(e)
-      return null
-    }
+    return runMutation({
+      entity: 'milestone',
+      call: () => new MilestonesApi(apiConfig()).milestoneIdPut(id, patch),
+      apply: async () => {
+        await loadTaskPlanning(true)
+      },
+      optimistic: () => {
+        const m = findMilestoneRow(id)
+        if (m) Object.assign(m, patch)
+      },
+      onError: (m) => {
+        error.value = m
+      },
+    })
   }
 
   /** Вставка элемента в массив по индексу (сдвиг строк вниз); index по умолчанию — в конец. */
@@ -987,31 +1397,55 @@ export const usePlanningStore = defineStore('planning', () => {
       priority?: number
     },
   ): Promise<boolean> {
-    const created = await postCreate(() =>
-      new ProjectsApi(apiConfig()).projectPost({ ...payload, priority: 100 }),
-    )
-    if (created == null) return false
-    const dto = created as {
-      id?: number
-      code?: string
-      start_date?: string
-      end_date?: string
-      priority?: number
-      owner_id?: number
-    }
-
-    const item = {
-      id: dto.id ?? 0,
-      project_code: dto.code ?? payload.code,
-      start_date: dto.start_date ?? payload.start_date,
-      end_date: dto.end_date ?? payload.end_date,
-      priority: dto.priority ?? 100,
-      owner_id: dto.owner_id,
-    }
-    const app = useAppStore()
-    insertAt(projectPlanning.value?.projects, undefined, item)
-    insertAt(app.projects, undefined, item)
-    return true
+    const tempId = nextTempId()
+    return runMutation({
+      entity: 'project',
+      tempId,
+      call: async () => {
+        const resp = await new ProjectsApi(apiConfig()).projectPost({ ...payload, priority: 100 })
+        const errBody = resp.data?.error as { code?: unknown; message?: string } | undefined
+        if (errBody && errBody.code != null) throw new Error(apiErrorMessage(errBody))
+        return resp
+      },
+      apply: (dto) => {
+        if (!dto) return
+        const d = dto as {
+          id?: number
+          code?: string
+          start_date?: string
+          end_date?: string
+          priority?: number
+          owner_id?: number
+        }
+        const item = {
+          id: d.id ?? 0,
+          project_code: d.code ?? payload.code,
+          start_date: d.start_date ?? payload.start_date,
+          end_date: d.end_date ?? payload.end_date,
+          priority: d.priority ?? 100,
+          owner_id: d.owner_id,
+        }
+        const app = useAppStore()
+        insertAt(projectPlanning.value?.projects, undefined, item)
+        insertAt(app.projects, undefined, item)
+      },
+      optimistic: () => {
+        const item = {
+          id: tempId,
+          project_code: payload.code,
+          start_date: payload.start_date,
+          end_date: payload.end_date,
+          priority: payload.priority ?? 100,
+          owner_id: undefined,
+        }
+        const app = useAppStore()
+        insertAt(projectPlanning.value?.projects, undefined, item)
+        insertAt(app.projects, undefined, item)
+      },
+      onError: (m) => {
+        error.value = m
+      },
+    })
   }
 
   async function createProcess(
@@ -1023,18 +1457,42 @@ export const usePlanningStore = defineStore('planning', () => {
     },
     index?: number,
   ): Promise<boolean> {
-    const created = await postCreate(() => new ProcessesApi(apiConfig()).processPost(payload))
-    if (created == null) return false
-    const dto = created as { id?: number; title?: string; start_date?: string; end_date?: string }
-    const project = processPlanning.value?.projects?.find((p: any) => p.id === payload.project_id)
-    insertAt(project?.processes, index, {
-      id: dto.id ?? 0,
-      title: dto.title ?? payload.title,
-      start_date: dto.start_date ?? payload.start_date,
-      end_date: dto.end_date ?? payload.end_date,
-      project_id: payload.project_id,
+    const tempId = nextTempId()
+    return runMutation({
+      entity: 'process',
+      tempId,
+      call: async () => {
+        const resp = await new ProcessesApi(apiConfig()).processPost(payload)
+        const errBody = resp.data?.error as { code?: unknown; message?: string } | undefined
+        if (errBody && errBody.code != null) throw new Error(apiErrorMessage(errBody))
+        return resp
+      },
+      apply: (dto) => {
+        if (!dto) return
+        const d = dto as { id?: number; title?: string; start_date?: string; end_date?: string }
+        const project = processPlanning.value?.projects?.find((p: any) => p.id === payload.project_id)
+        insertAt(project?.processes, index, {
+          id: d.id ?? 0,
+          title: d.title ?? payload.title,
+          start_date: d.start_date ?? payload.start_date,
+          end_date: d.end_date ?? payload.end_date,
+          project_id: payload.project_id,
+        })
+      },
+      optimistic: () => {
+        const project = processPlanning.value?.projects?.find((p: any) => p.id === payload.project_id)
+        insertAt(project?.processes, index, {
+          id: tempId,
+          title: payload.title,
+          start_date: payload.start_date,
+          end_date: payload.end_date,
+          project_id: payload.project_id,
+        })
+      },
+      onError: (m) => {
+        error.value = m
+      },
     })
-    return true
   }
 
   async function createTask(
@@ -1046,18 +1504,42 @@ export const usePlanningStore = defineStore('planning', () => {
     },
     index?: number,
   ): Promise<boolean> {
-    const created = await postCreate(() => new TasksApi(apiConfig()).taskPost(payload))
-    if (created == null) return false
-    const dto = created as { id?: number; title?: string; start_date?: string; end_date?: string }
-    const proc = taskPlanning.value?.processes?.find((p: any) => p.id === payload.process_id)
-    insertAt(proc?.tasks, index, {
-      id: dto.id ?? 0,
-      title: dto.title ?? payload.title,
-      start_date: dto.start_date ?? payload.start_date,
-      end_date: dto.end_date ?? payload.end_date,
-      resources: [],
+    const tempId = nextTempId()
+    return runMutation({
+      entity: 'task',
+      tempId,
+      call: async () => {
+        const resp = await new TasksApi(apiConfig()).taskPost(payload)
+        const errBody = resp.data?.error as { code?: unknown; message?: string } | undefined
+        if (errBody && errBody.code != null) throw new Error(apiErrorMessage(errBody))
+        return resp
+      },
+      apply: (dto) => {
+        if (!dto) return
+        const d = dto as { id?: number; title?: string; start_date?: string; end_date?: string }
+        const proc = taskPlanning.value?.processes?.find((p: any) => p.id === payload.process_id)
+        insertAt(proc?.tasks, index, {
+          id: d.id ?? 0,
+          title: d.title ?? payload.title,
+          start_date: d.start_date ?? payload.start_date,
+          end_date: d.end_date ?? payload.end_date,
+          resources: [],
+        })
+      },
+      optimistic: () => {
+        const proc = taskPlanning.value?.processes?.find((p: any) => p.id === payload.process_id)
+        insertAt(proc?.tasks, index, {
+          id: tempId,
+          title: payload.title,
+          start_date: payload.start_date,
+          end_date: payload.end_date,
+          resources: [],
+        })
+      },
+      onError: (m) => {
+        error.value = m
+      },
     })
-    return true
   }
 
   async function createMilestone(payload: {
@@ -1066,17 +1548,40 @@ export const usePlanningStore = defineStore('planning', () => {
     process_id: number
     date: string
   }): Promise<boolean> {
-    const created = await postCreate(() => new MilestonesApi(apiConfig()).milestonePost(payload))
-    if (created == null) return false
-    const dto = created as { id?: number; title?: string; content?: string; date?: string }
-    const proc = taskPlanning.value?.processes?.find((p: any) => p.id === payload.process_id)
-    proc?.milestones?.push({
-      id: dto.id ?? 0,
-      title: dto.title ?? payload.title,
-      content: dto.content ?? payload.content ?? '',
-      date: dto.date ?? payload.date,
+    const tempId = nextTempId()
+    return runMutation({
+      entity: 'milestone',
+      tempId,
+      call: async () => {
+        const resp = await new MilestonesApi(apiConfig()).milestonePost(payload)
+        const errBody = resp.data?.error as { code?: unknown; message?: string } | undefined
+        if (errBody && errBody.code != null) throw new Error(apiErrorMessage(errBody))
+        return resp
+      },
+      apply: (dto) => {
+        if (!dto) return
+        const d = dto as { id?: number; title?: string; content?: string; date?: string }
+        const proc = taskPlanning.value?.processes?.find((p: any) => p.id === payload.process_id)
+        proc?.milestones?.push({
+          id: d.id ?? 0,
+          title: d.title ?? payload.title,
+          content: d.content ?? payload.content ?? '',
+          date: d.date ?? payload.date,
+        })
+      },
+      optimistic: () => {
+        const proc = taskPlanning.value?.processes?.find((p: any) => p.id === payload.process_id)
+        proc?.milestones?.push({
+          id: tempId,
+          title: payload.title,
+          content: payload.content ?? '',
+          date: payload.date,
+        })
+      },
+      onError: (m) => {
+        error.value = m
+      },
     })
-    return true
   }
 
   /** Удаление элемента из массива по id (no-op, если списка или элемента нет). */
@@ -1086,44 +1591,65 @@ export const usePlanningStore = defineStore('planning', () => {
     if (i >= 0) list.splice(i, 1)
   }
 
-  /** Общий путь удаления: DELETE по id; true при успехе, иначе false. */
-  async function deleteBy(remove: () => Promise<unknown>): Promise<boolean> {
-    try {
-      await remove()
-      return true
-    } catch (e: any) {
-      error.value = e.message || String(e)
-      return false
-    }
-  }
-
   async function deleteProject(id: number): Promise<boolean> {
-    const ok = await deleteBy(() => new ProjectsApi(apiConfig()).projectIdDelete(id))
-    if (!ok) return false
-    removeById(projectPlanning.value?.projects, id)
-    removeById(useAppStore().projects, id)
-    return true
+    const remove = () => {
+      removeById(projectPlanning.value?.projects, id)
+      removeById(useAppStore().projects, id)
+    }
+    return runMutation({
+      entity: 'project',
+      call: () => new ProjectsApi(apiConfig()).projectIdDelete(id),
+      apply: remove,
+      optimistic: remove,
+      onError: (m) => {
+        error.value = m
+      },
+    })
   }
 
   async function deleteProcess(id: number): Promise<boolean> {
-    const ok = await deleteBy(() => new ProcessesApi(apiConfig()).processIdDelete(id))
-    if (!ok) return false
-    for (const p of processPlanning.value?.projects ?? []) removeById(p.processes, id)
-    return true
+    const remove = () => {
+      for (const p of processPlanning.value?.projects ?? []) removeById(p.processes, id)
+    }
+    return runMutation({
+      entity: 'process',
+      call: () => new ProcessesApi(apiConfig()).processIdDelete(id),
+      apply: remove,
+      optimistic: remove,
+      onError: (m) => {
+        error.value = m
+      },
+    })
   }
 
   async function deleteTask(id: number): Promise<boolean> {
-    const ok = await deleteBy(() => new TasksApi(apiConfig()).taskIdDelete(id))
-    if (!ok) return false
-    for (const p of taskPlanning.value?.processes ?? []) removeById(p.tasks, id)
-    return true
+    const remove = () => {
+      for (const p of taskPlanning.value?.processes ?? []) removeById(p.tasks, id)
+    }
+    return runMutation({
+      entity: 'task',
+      call: () => new TasksApi(apiConfig()).taskIdDelete(id),
+      apply: remove,
+      optimistic: remove,
+      onError: (m) => {
+        error.value = m
+      },
+    })
   }
 
   async function deleteMilestone(id: number): Promise<boolean> {
-    const ok = await deleteBy(() => new MilestonesApi(apiConfig()).milestoneIdDelete(id))
-    if (!ok) return false
-    for (const p of taskPlanning.value?.processes ?? []) removeById(p.milestones, id)
-    return true
+    const remove = () => {
+      for (const p of taskPlanning.value?.processes ?? []) removeById(p.milestones, id)
+    }
+    return runMutation({
+      entity: 'milestone',
+      call: () => new MilestonesApi(apiConfig()).milestoneIdDelete(id),
+      apply: remove,
+      optimistic: remove,
+      onError: (m) => {
+        error.value = m
+      },
+    })
   }
 
   /** Находит ресурс (из /planning/tasks) задачи по resource_id вместе с assignment_id */
@@ -1144,15 +1670,39 @@ export const usePlanningStore = defineStore('planning', () => {
     resourceId: number,
     quantity: number,
   ): Promise<boolean> {
-    return updateMeta(
-      () =>
+    const tempId = nextTempId()
+    return runMutation({
+      entity: 'assignment',
+      tempId,
+      call: () =>
         new AssignmentsApi(apiConfig()).assignmentPost({
           task_id: taskId,
           resource_id: resourceId,
           quantity,
         }),
-      loadTaskPlanning,
-    )
+      apply: async () => {
+        await loadTaskPlanning(true)
+      },
+      optimistic: () => {
+        const t = findTaskRow(taskId)
+        if (!t) return
+        const resources = t.resources ?? []
+        if (!resources.some((r: any) => r.id === resourceId)) {
+          // Поля кода/названия нужны для бейджа ресурса офлайн (код из справочника)
+          const meta = useAppStore().resources.find((r: any) => r.id === resourceId)
+          resources.push({
+            id: resourceId,
+            assignment_id: tempId,
+            quantity,
+            code: meta?.code,
+            title: meta?.title,
+          })
+        }
+      },
+      onError: (m) => {
+        error.value = m
+      },
+    })
   }
 
   /** Снимает назначение ресурса с задачи: DELETE /assignment/{id} (по assignment_id из
@@ -1179,7 +1729,20 @@ export const usePlanningStore = defineStore('planning', () => {
         return false
       }
     }
-    return updateMeta(() => new AssignmentsApi(apiConfig()).assignmentIdDelete(assignmentId!), loadTaskPlanning)
+    return runMutation({
+      entity: 'assignment',
+      call: () => new AssignmentsApi(apiConfig()).assignmentIdDelete(assignmentId!),
+      apply: async () => {
+        await loadTaskPlanning(true)
+      },
+      optimistic: () => {
+        const t = findTaskRow(taskId)
+        if (t) t.resources = (t.resources ?? []).filter((r: any) => r.id !== resourceId)
+      },
+      onError: (m) => {
+        error.value = m
+      },
+    })
   }
 
   /** Переупорядочивает проекты (драг строки): новые приоритеты = index+1, PUT уходят
@@ -1199,21 +1762,38 @@ export const usePlanningStore = defineStore('planning', () => {
     })
     if (!changes.length) return true
 
-    let saveError: string | null = null
     try {
       await Promise.all(
         changes.map((c) => new ProjectsApi(apiConfig()).projectIdPut(c.id, { priority: c.priority })),
       )
     } catch (e: any) {
-      saveError = e.message || String(e)
-    }
-
-    await loadProjectPlanning(true)
-    if (saveError) {
-      error.value = saveError
+      const err = e as AxiosError
+      if (err?.config && isNetworkError(e)) {
+        // Офлайн: локальная перестановка уже применена, PUT'ы уходят в очередь.
+        const base = axios.getUri(err.config).replace(/\d+$/, '')
+        for (const c of changes) {
+          try {
+            await enqueueMutation({
+              entity: 'project',
+              method: (err.config.method ?? 'put') as Method,
+              url: `${base}${c.id}`,
+              body: { priority: c.priority },
+            })
+          } catch {
+            // очередь недоступна — откатываемся к обычной ошибке
+            error.value = e?.message ?? String(e)
+            await loadProjectPlanning(true)
+            return false
+          }
+        }
+        return true
+      }
+      error.value = e.message || String(e)
+      await loadProjectPlanning(true)
       return false
     }
 
+    await loadProjectPlanning(true)
     const appProjects = useAppStore().projects
     if (Array.isArray(appProjects)) {
       for (const p of appProjects) {

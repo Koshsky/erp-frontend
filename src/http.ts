@@ -2,6 +2,9 @@ import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios'
 import { useAuthStore } from './store'
 import router from './router'
 import { apiErrorMessage } from './utils'
+import { cacheGet, cachePut } from './offline/cache'
+import { replayOutboxToCache } from './offline/outbox'
+import { isOffline } from './offline/state'
 
 const TOKEN_KEY = 'mvs_erp_access_token'
 const REFRESH_KEY = 'mvs_erp_refresh_token'
@@ -11,6 +14,11 @@ const AUTH_PATHS = ['/auth/login', '/auth/refresh', '/auth/register']
 
 interface RetryableConfig extends InternalAxiosRequestConfig {
   _retried?: boolean
+}
+
+/** Полный URL запроса — единый ключ для кэша (и запись, и чтение) */
+function cacheKey(config: InternalAxiosRequestConfig): string {
+  return axios.getUri(config)
 }
 
 /** Единственный «в полёте» refresh для всех параллельных 401 */
@@ -29,11 +37,61 @@ function redirectToLogin() {
  * сгенерированные API-клиенты (src/api/base.ts: globalAxios).
  */
 export function setupHttp() {
+  // Успешные GET пишем в офлайн-кэш (сеть доступна — данные свежие).
   axios.interceptors.response.use(
-    (response) => response,
+    async (response) => {
+      const { config, status } = response
+      if (
+        status >= 200 &&
+        status < 300 &&
+        config.method === 'get' &&
+        config.url &&
+        !AUTH_PATHS.some((path) => config.url!.includes(path))
+      ) {
+        await cachePut(cacheKey(config), response.data)
+        // Инвариант «кэш = сервер + очередь»: после свежей записи снова накладываем
+        // несинхронизированные мутации — warmup/reconcile не должны стирать их
+        // серверной правдой (иначе офлайн-правки пропадают после перезагрузки).
+        await replayOutboxToCache()
+      }
+      return response
+    },
     async (error: AxiosError) => {
-      const { config, response } = error
-      if (!config || !response) {
+      const { config } = error
+      if (!config) {
+        return Promise.reject(error)
+      }
+
+      // Сервер недоступен (сеть, таймаут, abort — любой GET без HTTP-ответа):
+      // отдаём последний сохранённый ответ из кэша (тот же формат { data, error }).
+      // Read-time overlay: перед чтением накладываем несинхронизированные мутации
+      // на нагретый кэш, чтобы странице ВСЕГДА уходил «серверный снимок + очередь»
+      // (даже если write-through при постановке в очередь не успел).
+      if (!error.response) {
+        if ((config.method ?? 'get').toLowerCase() === 'get') {
+          await replayOutboxToCache()
+          const cached = await cacheGet<unknown>(cacheKey(config))
+          if (cached != null) {
+            isOffline.value = true
+            console.log(`[offline] served cache: ${cacheKey(config)}`)
+            return {
+              data: cached,
+              status: 200,
+              statusText: 'OK',
+              headers: {},
+              config,
+              request: error.request,
+            }
+          }
+          ;(error as AxiosError & { message: string }).message =
+            'Нет сохранённых данных: откройте эту страницу онлайн хотя бы раз'
+          console.log(`[offline] cache miss: ${cacheKey(config)}`)
+        }
+        return Promise.reject(error)
+      }
+
+      const { response } = error
+      if (!response) {
         return Promise.reject(error)
       }
 

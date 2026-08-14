@@ -1,6 +1,7 @@
 <script setup lang="ts">
 /** Read-only матрица прав доступа: единый источник — матрица в бэкенде
  * (internal/rbac/policy.go). Страница дублирует её для наглядности. */
+import { TooltipCell, InfoTooltip } from '@/components/common'
 
 interface MatrixCell {
   /** Короткая подпись в ячейке */
@@ -190,9 +191,16 @@ const ROLE_SUMMARIES: RoleSummary[] = [
         </div>
         <div v-for="row in block.rows" :key="row.action" class="tr">
           <div class="pm-action">{{ row.action }}</div>
-          <div v-for="col in ROLE_COLS" :key="col.key" class="pm-cell" :title="row.cells[col.key]?.hint">
+          <TooltipCell
+            v-for="col in ROLE_COLS"
+            :key="col.key"
+            class="pm-cell"
+          >
             {{ row.cells[col.key]?.label }}
-          </div>
+            <template v-if="row.cells[col.key]?.hint" #popup>
+              <InfoTooltip :lines="[row.cells[col.key]!.hint].filter((x): x is string => Boolean(x))" />
+            </template>
+          </TooltipCell>
         </div>
       </div>
     </div>

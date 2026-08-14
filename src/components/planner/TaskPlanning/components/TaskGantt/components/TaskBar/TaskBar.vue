@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import LabeledBar from '../../../../../Bar/Bar.vue'
-import { GanttTooltip } from '@/components/common'
+import { BarTooltip } from '@/components/common'
+import { useDragPreview } from '@/composables/useDragPreview'
 import type { Task } from './types'
 import type { TimelineCtx } from '@/composables/timeline-context'
 
@@ -27,6 +28,24 @@ const emit = defineEmits<{
   change: [payload: { start_date: string; end_date: string }]
   contextmenu: [payload: { clientX: number; clientY: number }]
 }>()
+
+/** Live-предпросмотр загрузки: публикуем перетаскиваемую задачу и её новые даты */
+const dragPreview = useDragPreview()
+
+function setDragPreview(d: { start_date: string; end_date: string } | null) {
+  if (!dragPreview) return
+  if (!d) {
+    dragPreview.value.active = false
+    return
+  }
+  if (!props.task.resources?.length) return
+  dragPreview.value = {
+    active: true,
+    taskId: props.task.id,
+    startDate: d.start_date,
+    endDate: d.end_date,
+  }
+}
 
 /** Название ресурса для бейджа: код, при его отсутствии — полное название */
 function badgeLabel(r: { code?: string; title?: string }): string {
@@ -93,6 +112,9 @@ watch(
     :draggable="draggable"
     @change="(d) => emit('change', d)"
     @contextmenu="(p) => emit('contextmenu', p)"
+    @dragstart="(d) => setDragPreview(d)"
+    @dragmove="(d) => setDragPreview(d)"
+    @dragend="() => setDragPreview(null)"
   >
     <span ref="contentRef" class="tb-content">
       <span ref="titleRef" class="tb-title">{{ task.title }}</span>
@@ -102,13 +124,13 @@ watch(
           v-for="r in task.resources"
           :key="r.resource_id"
           class="tb-badge"
-          :title="r.title || r.code"
         >{{ badgeLabel(r) }}×{{ r.quantity }}</span>
       </span>
     </span>
     <template #tooltip="{ dateRange }">
-      <GanttTooltip
+      <BarTooltip
         :title="task.title"
+        :accent="'#34a853'"
         :rows="[dateRange]"
         :resources="(task.resources || []).map((r) => ({ label: r.title || r.code, quantity: r.quantity }))"
       />
@@ -154,8 +176,11 @@ watch(
   flex-shrink: 0;
   white-space: nowrap;
 }
+/* Бейдж — прямой flex-элемент, размер строго по тексту; зазор между бейджами 6px */
 .tb-badge {
   flex-shrink: 0;
+  width: fit-content;
+  margin-left: 6px;
   font-size: 10px;
   font-weight: 700;
   line-height: 1.6;
@@ -164,7 +189,6 @@ watch(
   border: 1px solid rgba(255, 255, 255, 0.55);
   border-radius: 10px;
   padding: 0 7px;
-  margin-left: 6px;
   white-space: nowrap;
   pointer-events: none;
 }

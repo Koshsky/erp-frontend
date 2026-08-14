@@ -113,6 +113,9 @@ function onMilestoneEdit(id: number) {
   /* Боковая панель — выше линии текущей даты (25) */
   z-index: 65;
   margin-top: -20px;
+  cursor: default;
+  user-select: none;
+  -webkit-user-select: none;
 }
 .gl-code {
   font-size: 16px;
