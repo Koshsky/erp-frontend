@@ -2,6 +2,8 @@ import { ref } from 'vue'
 import axios, { type AxiosError, type Method } from 'axios'
 import { idbAll, idbDel, idbPut } from './db'
 import { applyToCache } from './cacheApply'
+import { probeBackend } from './state'
+import { getApiUrl } from '@/config'
 
 /**
  * Очередь мутаций (outbox-паттерн): запросы создания/изменения/удаления,
@@ -15,8 +17,6 @@ import { applyToCache } from './cacheApply'
 
 const OUTBOX_STORE = 'outbox'
 const TOKEN_KEY = 'mvs_erp_access_token'
-/** Таймаут probe доступности сервера */
-const REACH_PROBE_TIMEOUT_MS = 4000
 /** Сколько ждать перед повторной попыткой записи, отклонённой сервером */
 const FAILED_BACKOFF_MS = 60 * 1000
 /** После скольких серверных ошибок запись уходит в карантин (без авто-ретраев) */
@@ -86,6 +86,14 @@ export interface QueueViewItem {
   summary: string
   /** Ключевые поля из тела запроса (для отображения) */
   details: Array<{ key: string; value: string }>
+  /** Технические данные записи для просмотра (по клику): method/url/body */
+  method: string
+  url: string
+  body?: unknown
+  tempId?: number
+  /** Запись не отправилась (есть ошибка), но осталась в очереди */
+  error?: boolean
+  message?: string
 }
 
 /** Русские имена сущностей для отображения в очереди */
@@ -144,63 +152,58 @@ function firstString(body: Record<string, unknown> | undefined, keys: string[]):
   return undefined
 }
 
-function firstNumber(body: Record<string, unknown> | undefined, keys: string[]): number | undefined {
-  if (!body) return undefined
-  for (const k of keys) {
-    const v = body[k]
-    if (typeof v === 'number' && Number.isFinite(v)) return v
-  }
-  return undefined
-}
-
-/** Короткая подпись изменяемого объекта: название/код + ключевая ссылка на родителя */
+/** Короткая подпись изменяемого объекта: название/код (без id — id выводится отдельно) */
 function summarizeEntry(entry: OutboxEntry): string {
   const body = (entry.body ?? {}) as Record<string, unknown>
-  const title = firstString(body, ['title', 'name', 'code', 'username'])
-  const ref = firstNumber(body, [
-    'project_id',
-    'process_id',
-    'task_id',
-    'resource_id',
-    'user_id',
-    'owner_id',
-  ])
-  const id = entryIdOf(entry)
-  if (title) return ref != null ? `${title} (${ref})` : title
-  if (id != null) return `id ${id}`
-  return ref != null ? `id ${ref}` : 'без названия'
+  return firstString(body, ['title', 'name', 'code', 'username', 'last_name']) ?? ''
+}
+
+/** Русские подписи ключевых полей для отображения деталей записи */
+const FIELD_LABELS: Record<string, string> = {
+  code: 'Код',
+  title: 'Название',
+  name: 'Имя',
+  last_name: 'Фамилия',
+  first_name: 'Имя',
+  middle_name: 'Отчество',
+  username: 'Логин',
+  position: 'Должность',
+  role: 'Роль',
+  priority: 'Приоритет',
+  start_date: 'Начало',
+  end_date: 'Конец',
+  date: 'Дата',
+  owner_id: 'Владелец',
+  project_id: 'Проект',
+  process_id: 'Процесс',
+  task_id: 'Задача',
+  resource_id: 'Ресурс',
+  user_id: 'Сотрудник',
+  state_id: 'Статус',
+  quantity: 'Кол-во',
+}
+
+/** Форматирует одно поле в пару «подпись → значение» (для деталей и сравнения). */
+function formatField(k: string, v: unknown): { key: string; value: string } {
+  const value = typeof v === 'object' ? JSON.stringify(v) : String(v)
+  return { key: FIELD_LABELS[k] ?? k, value }
+}
+
+/** Поля из Record в пары {key,value}, исключая пустые/нулевые значения. */
+function fieldsOf(obj: Record<string, unknown> | undefined): Array<{ key: string; value: string }> {
+  if (!obj) return []
+  const out: Array<{ key: string; value: string }> = []
+  for (const [k, v] of Object.entries(obj)) {
+    if (v == null || v === '') continue
+    out.push(formatField(k, v))
+  }
+  return out
 }
 
 /** Только ключевые поля из тела запроса — для компактного отображения */
 function detailsOf(entry: OutboxEntry): Array<{ key: string; value: string }> {
   const body = (entry.body ?? {}) as Record<string, unknown>
-  const labelOf: Record<string, string> = {
-    code: 'Код',
-    title: 'Название',
-    name: 'Имя',
-    username: 'Логин',
-    position: 'Должность',
-    role: 'Роль',
-    priority: 'Приоритет',
-    start_date: 'Начало',
-    end_date: 'Конец',
-    date: 'Дата',
-    owner_id: 'Владелец',
-    project_id: 'Проект',
-    process_id: 'Процесс',
-    task_id: 'Задача',
-    resource_id: 'Ресурс',
-    user_id: 'Сотрудник',
-    state_id: 'Статус',
-    quantity: 'Кол-во',
-  }
-  const out: Array<{ key: string; value: string }> = []
-  for (const [k, v] of Object.entries(body)) {
-    if (v == null) continue
-    const key = labelOf[k] ?? k
-    const value = typeof v === 'object' ? JSON.stringify(v) : String(v)
-    out.push({ key, value })
-  }
+  const out = fieldsOf(body)
   // Период табеля: DELETE несёт диапазон в query-параметрах, не в теле.
   if (entry.entity === 'period' && Object.keys(body).length === 0) {
     try {
@@ -242,6 +245,12 @@ function toViewItem(entry: OutboxEntry): QueueViewItem {
     targetId: entryIdOf(entry),
     summary: summarizeEntry(entry),
     details: detailsOf(entry),
+    method: (entry.method || '').toUpperCase(),
+    url: entry.url,
+    body: entry.body,
+    tempId: entry.tempId,
+    error: entry.failed != null,
+    message: entry.failed?.message ?? '',
   }
 }
 
@@ -313,6 +322,28 @@ function rewriteIds(input: string, idMap: Map<number, number>): string {
   return out
 }
 
+/**
+ * Переводит сохранённый URL записи очереди на ТЕКУЩИЙ API-адрес.
+ * URL в записи фиксируется в момент создания мутации и может устареть
+ * (сменили сервер, или API_URL меняли для симуляции простоя). Заменяем только
+ * origin (схема+хост), путь и query сохраняем — поэтому устаревший/битый хост
+ * (например localhosat) больше не ломает отправку: запись уходит по текущему адресу.
+ */
+function rebasedUrl(url: string): string {
+  const current = getApiUrl()
+  try {
+    const u = new URL(url, current ?? 'http://localhost')
+    if (current) {
+      const base = new URL(current)
+      u.protocol = base.protocol
+      u.host = base.host
+    }
+    return u.toString()
+  } catch {
+    return url
+  }
+}
+
 function isNetworkError(e: unknown): boolean {
   const err = e as AxiosError
   return Boolean(err && !err.response && (err.code === 'ERR_NETWORK' || err.message === 'Network Error'))
@@ -327,25 +358,39 @@ function errorMessage(e: unknown): string {
 
 export { errorMessage }
 
+/** Подробно логирует ошибку отправки записи очереди (для диагностики). */
+function logOutboxError(entry: OutboxEntry, url: string, e: unknown): void {
+  const err = e as AxiosError & { code?: string; timeout?: number }
+  const base = {
+    method: (entry.method || '').toUpperCase(),
+    url,
+    body: entry.body,
+    tempId: entry.tempId,
+    entity: entry.entity,
+    message: errorMessage(e),
+  }
+  const detail = err.response
+    ? { kind: 'http', status: err.response.status, statusText: err.response.statusText }
+    : {
+        kind: 'network',
+        code: err.code,
+        timeout_ms: err.timeout,
+        message: err.message,
+      }
+  // eslint-disable-next-line no-console
+  console.error('[outbox] не удалось отправить запись:', base, detail, {
+    config: err.config ? { method: err.config.method, url: err.config.url, data: err.config.data } : undefined,
+  })
+}
+
 /**
- * Проверка реальной доступности сервера. navigator.onLine врёт (на «мёртвом»
- * WiFi он true), поэтому перед отправкой очереди убеждаемся, что сервер
- * отвечает. Любой HTTP-статус (<500) = достижим; сеть недоступна только при
- * сетевой ошибке/таймауте.
+ * Проверка реальной доступности бэкенда. navigator.onLine врёт (на «мёртвом»
+ * WiFi он true), поэтому перед отправкой очереди пингуем настоящий эндпоинт
+ * /api/v1/health. Любой HTTP-статус (<500) = достижим; сеть недоступна только
+ * при сетевой ошибке/таймауте.
  */
 async function isServerReachable(): Promise<boolean> {
-  try {
-    const ctrl = new AbortController()
-    const timer = window.setTimeout(() => ctrl.abort(), REACH_PROBE_TIMEOUT_MS)
-    try {
-      const res = await fetch('/precache-manifest.json', { cache: 'no-store', signal: ctrl.signal })
-      return res.status < 500
-    } finally {
-      window.clearTimeout(timer)
-    }
-  } catch {
-    return false
-  }
+  return probeBackend()
 }
 
 export interface FlushResult {
@@ -391,7 +436,7 @@ export async function flushOutbox(): Promise<FlushResult> {
       if (entry.failed && Date.now() - entry.failed.at < FAILED_BACKOFF_MS) continue
 
       result.entities.add(entry.entity)
-      const url = rewriteIds(entry.url, idMap)
+      const url = rewriteIds(rebasedUrl(entry.url), idMap)
       const body = entry.body != null ? rewriteIds(JSON.stringify(entry.body), idMap) : undefined
       try {
         const token = localStorage.getItem(TOKEN_KEY) ?? ''
@@ -417,25 +462,23 @@ export async function flushOutbox(): Promise<FlushResult> {
         result.ok++
       } catch (e) {
         const err = e as AxiosError
-        // Нет HTTP-ответа (ERR_NETWORK, таймаут, abort) — сеть снова оборвалась:
-        // останавливаемся, запись НЕ помечаем failed и НЕ удаляем.
+        // Ошибка без HTTP-ответа (ERR_NETWORK, таймаут, abort). Это не всегда
+        // обрыв сети: перед отправкой health-проба прошла, поэтому сервер мог
+        // быть жив, а «пропал» конкретный запрос (таймаут/единичный сбой).
         if (!err.response) {
-          result.interrupted = true
-          break
-        }
-        // DELETE несуществующей сущности (404/410) — она уже удалена, целевое
-        // состояние достигнуто. Идемпотентный сброс вместо вечных ретраев.
-        const status = err.response.status
-        const method = (entry.method || '').toUpperCase()
-        if (method === 'DELETE' && (status === 404 || status === 410)) {
-          await idbDel(OUTBOX_STORE, entry.id)
-          result.ok++
-        } else {
-          // Сервер реально ответил (400/403/409/422/500...) — настоящая ошибка.
-          // Считаем попытки; стабильно отвергнутые записи уходят в карантин.
+          // Перепроверяем здоровье бэкенда: если он снова недоступен — это
+          // реальный обрыв, прерываем остаток очереди.
+          if (!(await isServerReachable())) {
+            result.interrupted = true
+            break
+          }
+          // Бэкенд жив: одиночная ошибка конкретной записи. Помечаем её failed
+          // (остаётся в очереди) и продолжаем отправку остальных — одна упавшая
+          // запись не должна рвать всю синхронизацию.
+          logOutboxError(entry, url, e)
           const attempts = (entry.attempts ?? 0) + 1
           const quarantined = attempts >= MAX_FAILED_ATTEMPTS
-          const message = errorMessage(e)
+          const message = errorMessage(e) || 'Запрос не выполнен (нет ответа от сервера)'
           await idbPut(OUTBOX_STORE, entry.id, {
             ...entry,
             attempts,
@@ -444,6 +487,30 @@ export async function flushOutbox(): Promise<FlushResult> {
           })
           result.failed++
           result.failedEntries.push({ method: entry.method, url, message })
+        } else {
+          // DELETE несуществующей сущности (404/410) — она уже удалена, целевое
+          // состояние достигнуто. Идемпотентный сброс вместо вечных ретраев.
+          const status = err.response.status
+          const method = (entry.method || '').toUpperCase()
+          if (method === 'DELETE' && (status === 404 || status === 410)) {
+            await idbDel(OUTBOX_STORE, entry.id)
+            result.ok++
+          } else {
+            // Сервер реально ответил (400/403/409/422/500...) — настоящая ошибка.
+            // Считаем попытки; стабильно отвергнутые записи уходят в карантин.
+            logOutboxError(entry, url, e)
+            const attempts = (entry.attempts ?? 0) + 1
+            const quarantined = attempts >= MAX_FAILED_ATTEMPTS
+            const message = errorMessage(e)
+            await idbPut(OUTBOX_STORE, entry.id, {
+              ...entry,
+              attempts,
+              quarantined,
+              failed: { message, at: Date.now() },
+            })
+            result.failed++
+            result.failedEntries.push({ method: entry.method, url, message })
+          }
         }
       }
       // Рейт-лимит: пауза между реальными отправками, чтобы не слать пачку

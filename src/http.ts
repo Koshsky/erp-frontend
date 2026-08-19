@@ -2,7 +2,7 @@ import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios'
 import { useAuthStore } from './store'
 import router from './router'
 import { apiErrorMessage } from './utils'
-import { cacheGet, cachePut } from './offline/cache'
+import { cacheGet, cacheGetByPath, cachePut } from './offline/cache'
 import { replayOutboxToCache } from './offline/outbox'
 import { isOffline } from './offline/state'
 import { isElectron } from './electron'
@@ -73,10 +73,23 @@ export function setupHttp() {
       if (!error.response) {
         if (isElectron && (config.method ?? 'get').toLowerCase() === 'get') {
           await replayOutboxToCache()
-          const cached = await cacheGet<unknown>(cacheKey(config))
+          const key = cacheKey(config)
+          let cached = await cacheGet<unknown>(key)
+          // Точный ключ мог не совпасть (GET с дата-окном зависит от «сегодня»
+          // и после прогревки отличается) — ищем свежий ответ по эндпоинту.
+          if (cached == null) {
+            const pathname = (() => {
+              try {
+                return new URL(key).pathname
+              } catch {
+                return key.split('?')[0]
+              }
+            })()
+            cached = await cacheGetByPath<unknown>(pathname)
+          }
           if (cached != null) {
             isOffline.value = true
-            console.log(`[offline] served cache: ${cacheKey(config)}`)
+            console.log(`[offline] served cache: ${key}`)
             return {
               data: cached,
               status: 200,
@@ -88,8 +101,20 @@ export function setupHttp() {
           }
           ;(error as AxiosError & { message: string }).message =
             'Нет сохранённых данных: откройте эту страницу онлайн хотя бы раз'
-          console.log(`[offline] cache miss: ${cacheKey(config)}`)
+          console.log(`[offline] cache miss: ${key}`)
         }
+        // Диагностика сетевой ошибки (таймаут/обрыв/CORS/abort) — подробно в консоль.
+        const ax = error as AxiosError & { code?: string; timeout?: number }
+        console.error(
+          `[http] сетевая ошибка (нет HTTP-ответа): ${(config.method || 'get').toUpperCase()} ${config.url ?? ''}`,
+          {
+            kind: 'network',
+            code: ax.code,
+            timeout_ms: ax.timeout,
+            message: ax.message,
+            data: config.data,
+          },
+        )
         return Promise.reject(error)
       }
 
