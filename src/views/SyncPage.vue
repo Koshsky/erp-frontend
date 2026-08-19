@@ -15,7 +15,7 @@ import {
 } from '../syncCredentials'
 import { warmNow, warmupProgress, lastWarmedAt } from '../offline/warmup'
 import { syncNow, syncNotice, dismissSyncNotice, retryFailed, discardFailed } from '../offline/sync'
-import { pendingCount, refreshPendingCount, getFailedEntries } from '../offline/outbox'
+import { pendingCount, refreshPendingCount, getFailedEntries, queueItems } from '../offline/outbox'
 import { idbCount } from '../offline/db'
 import { isOffline } from '../offline/state'
 
@@ -73,6 +73,19 @@ function shortUrl(url: string): string {
     return u.pathname + u.search
   } catch {
     return url
+  }
+}
+
+function formatTime(ts: number): string {
+  try {
+    return new Date(ts).toLocaleString('ru-RU', {
+      day: '2-digit',
+      month: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+  } catch {
+    return ''
   }
 }
 
@@ -418,6 +431,34 @@ onBeforeUnmount(() => {
           </p>
         </div>
 
+        <div v-if="queueItems.length > 0" class="sp-card">
+          <h3 class="sp-card-title">
+            Очередь изменений
+            <span class="sp-card-badge">{{ queueItems.length }}</span>
+          </h3>
+          <p v-if="isOffline" class="sp-hint queue-hint">
+            Бэкенд недоступен: изменения копятся в очереди и отправятся при появлении сети.
+          </p>
+          <ul class="queue-list">
+            <li v-for="it in queueItems" :key="it.id" class="queue-item">
+              <div class="queue-item-head">
+                <span class="queue-op" :class="`queue-op--${it.operation}`">{{ it.operationLabel }}</span>
+                <span class="queue-entity">{{ it.entityLabel }}</span>
+                <span class="queue-time">{{ formatTime(it.ts) }}</span>
+              </div>
+              <div class="queue-summary">
+                {{ it.summary }}<template v-if="it.targetId != null"> · id {{ it.targetId }}</template>
+              </div>
+              <div v-if="it.details.length" class="queue-details">
+                <span v-for="(d, i) in it.details" :key="i" class="queue-detail">
+                  <span class="queue-detail-key">{{ d.key }}:</span>
+                  {{ d.value }}
+                </span>
+              </div>
+            </li>
+          </ul>
+        </div>
+
         <div class="sp-card">
           <h3 class="sp-card-title">Приложение и офлайн</h3>
           <div class="sp-status-rows">
@@ -733,5 +774,101 @@ onBeforeUnmount(() => {
   font-size: 12px;
   color: #555;
   text-align: right;
+}
+
+.sp-card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sp-card-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: #f39c12;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.queue-hint {
+  color: #b26a00;
+}
+
+.queue-list {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.queue-item {
+  border: 1px solid #eef0f4;
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: #fafbfc;
+}
+
+.queue-item-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.queue-op {
+  padding: 1px 8px;
+  border-radius: 999px;
+  color: #fff;
+  font-weight: 600;
+}
+
+.queue-op--create {
+  background: #188038;
+}
+
+.queue-op--update {
+  background: #1a73e8;
+}
+
+.queue-op--delete {
+  background: #d93025;
+}
+
+.queue-entity {
+  font-weight: 700;
+  color: #333;
+}
+
+.queue-time {
+  margin-left: auto;
+  color: #999;
+  white-space: nowrap;
+}
+
+.queue-summary {
+  margin-top: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #333;
+}
+
+.queue-details {
+  margin-top: 4px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  font-size: 12px;
+  color: #555;
+}
+
+.queue-detail-key {
+  color: #888;
 }
 </style>

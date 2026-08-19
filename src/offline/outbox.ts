@@ -68,9 +68,200 @@ export const OUTBOX_STORE_NAME = OUTBOX_STORE
 /** Число ожидающих синхронизации изменений (реактивно для UI). Карантинные не входят. */
 export const pendingCount = ref(0)
 
+/**
+ * Человекочитаемое представление записи очереди для UI («Очередь изменений»
+ * на экране синхронизации): какой объект, какая операция и ключевые поля.
+ */
+export interface QueueViewItem {
+  id: string
+  /** Порядок отправки (FIFO) */
+  ts: number
+  entity: MutationEntity
+  entityLabel: string
+  operation: 'create' | 'update' | 'delete'
+  operationLabel: string
+  /** id цели из URL (или временный id для созданных офлайн) */
+  targetId?: number
+  /** Короткая подпись изменяемого объекта (title/name/code/даты) */
+  summary: string
+  /** Ключевые поля из тела запроса (для отображения) */
+  details: Array<{ key: string; value: string }>
+}
+
+/** Русские имена сущностей для отображения в очереди */
+const ENTITY_LABELS: Record<MutationEntity, string> = {
+  resource: 'Ресурс',
+  user: 'Сотрудник',
+  member: 'Участник ресурса',
+  state: 'Статус',
+  period: 'Период табеля',
+  project: 'Проект',
+  process: 'Процесс',
+  task: 'Задача',
+  milestone: 'Веха',
+  assignment: 'Назначение',
+  reorder: 'Приоритет/порядок',
+}
+
+export function entityLabel(entity: MutationEntity): string {
+  return ENTITY_LABELS[entity] ?? entity
+}
+
+export function operationLabel(method: string): string {
+  switch ((method || '').toUpperCase()) {
+    case 'POST':
+      return 'Создание'
+    case 'PUT':
+    case 'PATCH':
+      return 'Изменение'
+    case 'DELETE':
+      return 'Удаление'
+    default:
+      return (method || '').toUpperCase()
+  }
+}
+
+function operationOf(method: string): QueueViewItem['operation'] {
+  switch ((method || '').toUpperCase()) {
+    case 'POST':
+      return 'create'
+    case 'PUT':
+    case 'PATCH':
+      return 'update'
+    case 'DELETE':
+      return 'delete'
+    default:
+      return 'update'
+  }
+}
+
+function firstString(body: Record<string, unknown> | undefined, keys: string[]): string | undefined {
+  if (!body) return undefined
+  for (const k of keys) {
+    const v = body[k]
+    if (typeof v === 'string' && v.length > 0) return v
+  }
+  return undefined
+}
+
+function firstNumber(body: Record<string, unknown> | undefined, keys: string[]): number | undefined {
+  if (!body) return undefined
+  for (const k of keys) {
+    const v = body[k]
+    if (typeof v === 'number' && Number.isFinite(v)) return v
+  }
+  return undefined
+}
+
+/** Короткая подпись изменяемого объекта: название/код + ключевая ссылка на родителя */
+function summarizeEntry(entry: OutboxEntry): string {
+  const body = (entry.body ?? {}) as Record<string, unknown>
+  const title = firstString(body, ['title', 'name', 'code', 'username'])
+  const ref = firstNumber(body, [
+    'project_id',
+    'process_id',
+    'task_id',
+    'resource_id',
+    'user_id',
+    'owner_id',
+  ])
+  const id = entryIdOf(entry)
+  if (title) return ref != null ? `${title} (${ref})` : title
+  if (id != null) return `id ${id}`
+  return ref != null ? `id ${ref}` : 'без названия'
+}
+
+/** Только ключевые поля из тела запроса — для компактного отображения */
+function detailsOf(entry: OutboxEntry): Array<{ key: string; value: string }> {
+  const body = (entry.body ?? {}) as Record<string, unknown>
+  const labelOf: Record<string, string> = {
+    code: 'Код',
+    title: 'Название',
+    name: 'Имя',
+    username: 'Логин',
+    position: 'Должность',
+    role: 'Роль',
+    priority: 'Приоритет',
+    start_date: 'Начало',
+    end_date: 'Конец',
+    date: 'Дата',
+    owner_id: 'Владелец',
+    project_id: 'Проект',
+    process_id: 'Процесс',
+    task_id: 'Задача',
+    resource_id: 'Ресурс',
+    user_id: 'Сотрудник',
+    state_id: 'Статус',
+    quantity: 'Кол-во',
+  }
+  const out: Array<{ key: string; value: string }> = []
+  for (const [k, v] of Object.entries(body)) {
+    if (v == null) continue
+    const key = labelOf[k] ?? k
+    const value = typeof v === 'object' ? JSON.stringify(v) : String(v)
+    out.push({ key, value })
+  }
+  // Период табеля: DELETE несёт диапазон в query-параметрах, не в теле.
+  if (entry.entity === 'period' && Object.keys(body).length === 0) {
+    try {
+      const u = new URL(entry.url, 'https://mvs.local')
+      const start = u.searchParams.get('start_date')
+      const end = u.searchParams.get('end_date')
+      const state = u.searchParams.get('state_id')
+      if (start) out.push({ key: 'Начало', value: start })
+      if (end) out.push({ key: 'Конец', value: end })
+      if (state) out.push({ key: 'Статус', value: state })
+    } catch {
+      // невалидный URL — пропускаем query-данные
+    }
+  }
+  return out
+}
+
+/** id цели из последнего сегмента URL (PUT/DELETE /entity/{id}), иначе — временный id */
+function entryIdOf(entry: OutboxEntry): number | undefined {
+  if (entry.tempId != null) return entry.tempId
+  try {
+    const p = new URL(entry.url, 'https://mvs.local').pathname.replace(/\/+$/, '')
+    const seg = p.split('/').pop() ?? ''
+    const n = Number(seg)
+    return Number.isFinite(n) ? n : undefined
+  } catch {
+    return undefined
+  }
+}
+
+function toViewItem(entry: OutboxEntry): QueueViewItem {
+  return {
+    id: entry.id,
+    ts: entry.ts,
+    entity: entry.entity,
+    entityLabel: entityLabel(entry.entity),
+    operation: operationOf(entry.method),
+    operationLabel: operationLabel(entry.method),
+    targetId: entryIdOf(entry),
+    summary: summarizeEntry(entry),
+    details: detailsOf(entry),
+  }
+}
+
+/** Реактивный список ожидающих отправки изменений (для экрана синхронизации) */
+export const queueItems = ref<QueueViewItem[]>([])
+
+/** Перечитывает очередь в queueItems. Только не отправленные и не синхронизированные
+ *  записи (!quarantined), по порядку отправки (FIFO). Карантинные видны в блоке ошибок. */
+export async function refreshQueue(): Promise<void> {
+  const entries = await idbAll<OutboxEntry>(OUTBOX_STORE).catch(() => [] as OutboxEntry[])
+  queueItems.value = entries
+    .filter((e) => !e.quarantined)
+    .sort((a, b) => a.ts - b.ts)
+    .map(toViewItem)
+}
+
 export async function refreshPendingCount(): Promise<void> {
   const entries = await idbAll<OutboxEntry>(OUTBOX_STORE).catch(() => [] as OutboxEntry[])
   pendingCount.value = entries.filter((e) => !e.quarantined).length
+  await refreshQueue()
 }
 
 function uid(): string {

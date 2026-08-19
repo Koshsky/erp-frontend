@@ -6,7 +6,7 @@ import { pendingCount } from './outbox'
 <template>
   <transition name="offline-fade">
     <div v-if="isOffline" class="offline-banner" role="status">
-      <span>Офлайн-режим: показаны сохранённые данные, изменения копятся в очереди</span>
+      <span>Бэкенд недоступен: показаны сохранённые данные, изменения копятся в очереди</span>
       <span v-if="pendingCount > 0" class="offline-banner__count">
         {{ pendingCount }} ожид. синхронизации
       </span>
