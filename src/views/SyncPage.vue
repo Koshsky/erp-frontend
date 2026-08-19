@@ -2,8 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../store'
-import { ConfirmDialog, PasswordField } from '../components/common'
-import { useConfirm } from '../composables/useConfirm'
+import { PasswordField } from '../components/common'
 import { getApiUrl, setApiUrl, hasApiUrlOverride } from '../config'
 import { autoSync, saveSyncSettings } from '../settings'
 import { isElectron } from '../electron'
@@ -18,7 +17,6 @@ import { warmNow, warmupProgress, lastWarmedAt } from '../offline/warmup'
 import { syncNow, syncNotice, dismissSyncNotice, retryFailed, discardFailed } from '../offline/sync'
 import { pendingCount, refreshPendingCount, getFailedEntries } from '../offline/outbox'
 import { idbCount } from '../offline/db'
-import { clearLocalData } from '../offline/reset'
 import { isOffline } from '../offline/state'
 import { checkForUpdates, swControlled } from '../offline/registration'
 
@@ -50,8 +48,6 @@ const appBuildVersion = __APP_VERSION__
 const cachedAssets = ref(0)
 const checkMsg = ref<string | null>(null)
 let refreshTimer: number | null = null
-
-const { confirm: confirmDialog, ask, proceed, cancel } = useConfirm()
 
 const pendingLabel = computed(() => (pendingCount.value > 0 ? `PUSH (${pendingCount.value})` : 'PUSH'))
 const failedCount = computed(() => failedEntries.value.length)
@@ -173,25 +169,6 @@ async function refreshAppInfo() {
     cachedAssets.value = count
   } catch {
     cachedAssets.value = 0
-  }
-}
-
-async function onWarmNow() {
-  if (busy.value) return
-  busy.value = true
-  statusMsg.value = null
-  try {
-    const ran = await warmNow()
-    if (ran) {
-      okMsg('Данные прогреты')
-    } else if (isOffline.value) {
-      failMsg('Прогревка недоступна: нет сети')
-    } else {
-      failMsg('Прогревка уже идёт')
-    }
-    await refreshStatus()
-  } finally {
-    busy.value = false
   }
 }
 
@@ -326,12 +303,6 @@ async function onDiscard() {
   }
 }
 
-function onClear() {
-  ask('Удалить все локальные данные (кэш и очередь изменений) и выйти из аккаунта?', () => {
-    void clearLocalData()
-  }, 'Очистить')
-}
-
 watch(autoSync, saveSyncSettings)
 
 onMounted(() => {
@@ -431,7 +402,7 @@ onBeforeUnmount(() => {
             <div class="warm-bar">
               <div class="warm-fill" :style="{ width: warmupProgress + '%' }" />
             </div>
-            <span class="warm-label">Прогрев данных: {{ warmupProgress }}%</span>
+            <span class="warm-label">Скачивание данных: {{ warmupProgress }}%</span>
           </div>
 
           <div class="sp-actions">
@@ -486,37 +457,22 @@ onBeforeUnmount(() => {
               <span class="sp-value">{{ cachedData }} записей</span>
             </div>
             <div class="sp-row">
-              <span class="sp-label">Последняя прогревка</span>
+              <span class="sp-label">Последний PULL</span>
               <span class="sp-value">{{ lastWarmedLabel }}</span>
             </div>
           </div>
 
           <p v-if="cachedData === 0" class="sp-msg warn">
-            Кэш данных пуст. Для офлайна зайдите онлайн и нажмите «PULL» или «Прогреть данные сейчас».
+            Кэш данных пуст. Для офлайна зайдите онлайн и нажмите «PULL».
           </p>
           <p v-if="checkMsg" class="sp-msg">{{ checkMsg }}</p>
 
-          <button type="button" class="sp-btn" :disabled="busy || isOffline" @click="onWarmNow">
-            Прогреть данные сейчас
-          </button>
           <button type="button" class="sp-btn ghost" :disabled="busy" @click="onCheckUpdates">
             Проверить обновление
-          </button>
-
-          <button type="button" class="sp-btn danger" :disabled="busy" @click="onClear">
-            Очистить локальные данные
           </button>
         </div>
       </div>
     </div>
-
-    <ConfirmDialog
-      :open="!!confirmDialog"
-      :message="confirmDialog?.message ?? ''"
-      :confirm-label="confirmDialog?.confirmLabel"
-      @confirm="proceed"
-      @close="cancel"
-    />
   </section>
 </template>
 
