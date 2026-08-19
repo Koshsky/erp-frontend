@@ -37,6 +37,23 @@ npm run dist:linux # Linux (AppImage + deb)
 
 Готовые файлы — в `release/`.
 
+### Portable (без установки) — Windows и Linux
+
+Скрипт `build-portable.sh` собирает переносные версии (распакованные, не требуют
+установки): Windows — `win-unpacked/` + `*-win.zip`, Linux — `linux-unpacked/`:
+
+```bash
+./build-portable.sh            # и Windows, и Linux
+./build-portable.sh --win      # только Windows portable
+./build-portable.sh --linux    # только Linux portable
+./build-portable.sh --build-web  # принудительно пересобрать dist/ перед упаковкой
+./build-portable.sh --clean      # очистить release/ перед сборкой
+```
+
+Portable не требует wine/NSIS: Windows собирается через таргет `zip`, Linux — через
+таргет `dir`. (NSIS `.exe`-установщик — НЕ portable, ему на Linux нужны wine +
+makensis; это отдельный `npm run dist:win`.)
+
 Запуск в dev (без упаковки):
 
 ```bash
