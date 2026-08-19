@@ -57,6 +57,12 @@ async function onDiscard() {
     busy.value = false
   }
 }
+
+/** Закрыть уведомление, отложив обработку ошибок на потом: очередь не трогаем. */
+function onClose() {
+  visible.value = false
+  dismissSyncNotice()
+}
 </script>
 
 <template>
@@ -67,6 +73,15 @@ async function onDiscard() {
       :class="{ error: syncNotice.failed > 0 || syncNotice.interrupted }"
       role="status"
     >
+      <button
+        type="button"
+        class="sync-toast__close"
+        aria-label="Закрыть"
+        title="Отложить на потом"
+        @click="onClose"
+      >
+        ×
+      </button>
       <template v-if="syncNotice.interrupted">
         Сеть снова пропала: отправлено {{ syncNotice.ok }}, остальное в очереди
       </template>
@@ -101,7 +116,7 @@ async function onDiscard() {
   z-index: 1001;
   background: #16a34a;
   color: #fff;
-  padding: 10px 18px;
+  padding: 10px 30px 10px 18px;
   border-radius: 8px;
   box-shadow: 0 4px 12px rgb(0 0 0 / 0.2);
   font-size: 14px;
@@ -112,6 +127,25 @@ async function onDiscard() {
 
 .sync-toast.error {
   background: #b91c1c;
+}
+
+.sync-toast__close {
+  position: absolute;
+  top: 4px;
+  right: 8px;
+  background: transparent;
+  border: none;
+  color: rgb(255 255 255 / 0.85);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.sync-toast__close:hover {
+  background: rgb(0 0 0 / 0.15);
+  color: #fff;
 }
 
 .sync-toast__head {

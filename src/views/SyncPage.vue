@@ -15,7 +15,7 @@ import {
 } from '../syncCredentials'
 import { warmNow, warmupProgress, lastWarmedAt } from '../offline/warmup'
 import { syncNow, syncNotice, dismissSyncNotice, retryFailed, discardFailed } from '../offline/sync'
-import { pendingCount, refreshPendingCount, getFailedEntries, queueItems } from '../offline/outbox'
+import { pendingCount, refreshPendingCount, getFailedEntries, queueItems, type QueueViewItem } from '../offline/outbox'
 import { idbCount } from '../offline/db'
 import { isOffline } from '../offline/state'
 
@@ -56,6 +56,23 @@ const lastWarmedLabel = computed(() =>
     ? new Date(lastWarmedAt.value).toLocaleString('ru-RU')
     : 'ещё не было',
 )
+
+// === Очередь изменений: выбор блока и просмотр технической информации ===
+const selectedId = ref<string | null>(null)
+
+function toggleItem(id: string) {
+  selectedId.value = selectedId.value === id ? null : id
+}
+
+/** Красивый JSON для отображения тела запроса. */
+function jsonBody(body: unknown): string {
+  if (body == null) return '—'
+  try {
+    return JSON.stringify(body, null, 2)
+  } catch {
+    return String(body)
+  }
+}
 
 function okMsg(msg: string) {
   statusMsg.value = msg
@@ -453,20 +470,59 @@ onBeforeUnmount(() => {
             Бэкенд недоступен: изменения копятся в очереди и отправятся при появлении сети.
           </p>
           <ul class="queue-list">
-            <li v-for="it in queueItems" :key="it.id" class="queue-item">
+            <li
+              v-for="it in queueItems"
+              :key="it.id"
+              class="queue-item"
+              :class="{ open: selectedId === it.id }"
+              @click="toggleItem(it.id)"
+            >
               <div class="queue-item-head">
                 <span class="queue-op" :class="`queue-op--${it.operation}`">{{ it.operationLabel }}</span>
                 <span class="queue-entity">{{ it.entityLabel }}</span>
+                <span v-if="it.error" class="queue-error-badge" :title="it.message">ошибка</span>
                 <span class="queue-time">{{ formatTime(it.ts) }}</span>
               </div>
               <div class="queue-summary">
-                {{ it.summary }}<template v-if="it.targetId != null"> · id {{ it.targetId }}</template>
+                <template v-if="it.summary">
+                  {{ it.summary }}<template v-if="it.targetId != null"> · id {{ it.targetId }}</template>
+                </template>
+                <template v-else-if="it.targetId != null">id {{ it.targetId }}</template>
+                <span class="queue-toggle">{{ selectedId === it.id ? '—' : '↕ подробно' }}</span>
               </div>
-              <div v-if="it.details.length" class="queue-details">
+              <div v-if="it.details.length && selectedId !== it.id" class="queue-details">
                 <span v-for="(d, i) in it.details" :key="i" class="queue-detail">
                   <span class="queue-detail-key">{{ d.key }}:</span>
                   {{ d.value }}
                 </span>
+              </div>
+              <div v-if="selectedId === it.id" class="queue-info">
+                <div class="queue-info-list">
+                  <div class="queue-info-row">
+                    <span class="queue-info-label">Метод</span>
+                    <span class="queue-info-value">{{ it.method }}</span>
+                  </div>
+                  <div class="queue-info-row">
+                    <span class="queue-info-label">Entity</span>
+                    <span class="queue-info-value">{{ it.entityLabel }}</span>
+                  </div>
+                  <div v-if="it.tempId != null" class="queue-info-row">
+                    <span class="queue-info-label">Временный id</span>
+                    <span class="queue-info-value">{{ it.tempId }}</span>
+                  </div>
+                  <div v-if="it.error" class="queue-info-row">
+                    <span class="queue-info-label">Ошибка</span>
+                    <span class="queue-info-value queue-info-error">{{ it.message }}</span>
+                  </div>
+                  <div class="queue-info-row">
+                    <span class="queue-info-label">URL</span>
+                    <span class="queue-info-value queue-info-url">{{ it.url }}</span>
+                  </div>
+                </div>
+                <div class="queue-info-row queue-info-body-row">
+                  <span class="queue-info-label">Body</span>
+                  <pre class="queue-info-body">{{ jsonBody(it.body) }}</pre>
+                </div>
               </div>
             </li>
           </ul>
@@ -870,6 +926,16 @@ onBeforeUnmount(() => {
   color: #333;
 }
 
+.queue-error-badge {
+  padding: 0 7px;
+  border-radius: 999px;
+  background: #fdecea;
+  color: #c5221f;
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
 .queue-time {
   margin-left: auto;
   color: #999;
@@ -894,5 +960,86 @@ onBeforeUnmount(() => {
 
 .queue-detail-key {
   color: #888;
+}
+
+.queue-item {
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.queue-item:hover {
+  border-color: #c9d6ef;
+}
+
+.queue-item.open {
+  border-color: #1a73e8;
+  background: #f4f8ff;
+}
+
+.queue-toggle {
+  float: right;
+  font-size: 11px;
+  font-weight: 500;
+  color: #1a73e8;
+}
+
+.queue-info {
+  margin-top: 8px;
+  border-top: 1px dashed #cfd8e6;
+  padding-top: 8px;
+}
+
+.queue-info-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.queue-info-row {
+  display: flex;
+  gap: 8px;
+  font-size: 12px;
+  align-items: baseline;
+}
+
+.queue-info-label {
+  flex: 0 0 92px;
+  color: #888;
+  font-weight: 600;
+}
+
+.queue-info-value {
+  color: #333;
+  word-break: break-all;
+}
+
+.queue-info-url {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: #444;
+}
+
+.queue-info-error {
+  color: #c5221f;
+}
+
+.queue-info-body-row {
+  margin-top: 6px;
+  align-items: flex-start;
+}
+
+.queue-info-body {
+  flex: 1;
+  margin: 0;
+  padding: 8px 10px;
+  background: #f2f5f9;
+  border: 1px solid #e4e9f0;
+  border-radius: 6px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  line-height: 1.5;
+  color: #333;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-x: auto;
 }
 </style>
