@@ -98,6 +98,14 @@ function applyApiUrl(): boolean {
   return applied
 }
 
+/** Кнопка «Сохранить» для API_URL: валидирует и сохраняет в localStorage */
+function onSaveApiUrl(): boolean {
+  statusMsg.value = null
+  if (!applyApiUrl()) return false
+  okMsg('API_URL сохранён')
+  return true
+}
+
 /** Подтягивает сохранённый логин/пароль в поля (для отображения в exe) */
 async function loadSyncCredentials() {
   syncLogin.value = getSavedLogin() ?? ''
@@ -328,6 +336,11 @@ onBeforeUnmount(() => {
             <span>API_URL бэкенда</span>
             <input v-model="apiUrl" type="text" spellcheck="false" placeholder="https://host/api/v1" />
           </label>
+          <div class="sp-actions sp-actions--tight">
+            <button type="button" class="sp-btn sp-btn--sm" :disabled="busy" @click="onSaveApiUrl">
+              Сохранить
+            </button>
+          </div>
 
           <label class="sp-option">
             <input v-model="autoSync" type="checkbox" />
@@ -655,6 +668,17 @@ onBeforeUnmount(() => {
   display: flex;
   gap: 10px;
   margin-top: 4px;
+}
+
+.sp-actions--tight {
+  margin-top: 0;
+}
+
+.sp-btn--sm {
+  width: auto;
+  margin-top: 0;
+  padding: 9px 16px;
+  font-size: 13px;
 }
 
 .sp-actions .sp-btn {
