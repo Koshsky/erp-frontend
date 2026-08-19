@@ -287,6 +287,14 @@ export const useAuthStore = defineStore('auth', () => {
       applySession(body?.data)
       return true
     } catch (e: any) {
+      // Сетевая ошибка (нет HTTP-ответа): сервер недоступен. Не разлогиниваем.
+      // В desktop-сборке уходим в офлайн-режим (сессия и очередь изменений в
+      // IndexedDB живут до возврата сети); в вебе офлайна нет — просто не
+      // выкидываем пользователя. Разлогин — только при реальном отказе сервера.
+      if (isNetworkError(e)) {
+        if (isElectron) isOffline.value = true
+        return true
+      }
       error.value = e.message || String(e)
       logout()
       return false
