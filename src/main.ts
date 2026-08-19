@@ -4,9 +4,7 @@ import App from './App.vue'
 import router from './router'
 import { setupHttp } from './http'
 import { initOfflineSync, ensureDesktopAutoSyncSession } from './offline/sync'
-import { initServiceWorker } from './offline/registration'
 import { startConnectivityMonitor } from './offline/state'
-import { isElectron } from './electron'
 
 setupHttp()
 
@@ -20,11 +18,6 @@ setActivePinia(pinia)
 await ensureDesktopAutoSyncSession()
 
 await initOfflineSync()
-// В Electron Service Worker не нужен: офлайн даёт локальный http + IndexedDB,
-// а SW между сборками только конфликтует с кэшем. В браузере — как обычно PWA.
-if (!isElectron) {
-  initServiceWorker()
-}
 startConnectivityMonitor()
 
 console.log(`[build] ${__APP_VERSION__}`)

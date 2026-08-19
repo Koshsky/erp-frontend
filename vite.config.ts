@@ -1,6 +1,5 @@
 import { defineConfig, loadEnv, type Plugin } from 'vite'
 import vue from '@vitejs/plugin-vue'
-import { VitePWA } from 'vite-plugin-pwa'
 import checker from 'vite-plugin-checker'
 import { fileURLToPath, URL } from 'node:url'
 import { readdirSync, writeFileSync } from 'node:fs'
@@ -20,9 +19,9 @@ function buildVersion(root: string): string {
 
 /**
  * Пишет dist/precache-manifest.json: { version, assets }. Файл используется
- * только приложением: версия сборки в UI профиля и проверка доступности
- * сервера (outbox). Precache Service Worker теперь строит Workbox
- * (vite-plugin-pwa) со списком чанков и ревизией прямо в sw.js.
+ * приложением: версия сборки в UI профиля и проверка доступности сервера
+ * (outbox/state). Service Worker отсутствует (не используется), поэтому
+ * precache-manifest — это только источник версии, а не список для SW.
  */
 function versionManifest(version: string): Plugin {
   let root = process.cwd()
@@ -75,17 +74,6 @@ export default defineConfig(({ mode }) => {
       typescript: true,
     }),
     versionManifest(appVersion),
-    VitePWA({
-      registerType: 'autoUpdate',
-      includeAssets: ['icons/*.svg', 'icons/*.png', 'manifest.webmanifest'],
-      manifest: false,
-      workbox: {
-        globPatterns: ['assets/**/*.{js,css,ttf,woff2,svg,png}', 'index.html'],
-        navigateFallback: '/index.html',
-        cleanupOutdatedCaches: true,
-        maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
-      },
-    }),
   ],
   resolve: {
     alias: {

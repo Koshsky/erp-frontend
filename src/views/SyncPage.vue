@@ -18,7 +18,6 @@ import { syncNow, syncNotice, dismissSyncNotice, retryFailed, discardFailed } fr
 import { pendingCount, refreshPendingCount, getFailedEntries } from '../offline/outbox'
 import { idbCount } from '../offline/db'
 import { isOffline } from '../offline/state'
-import { swControlled } from '../offline/registration'
 
 const TOKEN_KEY = 'mvs_erp_access_token'
 
@@ -429,10 +428,6 @@ onBeforeUnmount(() => {
             <div class="sp-row">
               <span class="sp-label">Версия сборки (запущенная)</span>
               <span class="sp-value">{{ appBuildVersion }}</span>
-            </div>
-            <div class="sp-row">
-              <span class="sp-label">Управление SW</span>
-              <span class="sp-value">{{ swControlled ? 'активен' : 'нет' }}</span>
             </div>
             <div class="sp-row">
               <span class="sp-label">Кэш ассетов</span>

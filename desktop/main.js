@@ -5,8 +5,8 @@
  *
  * Приложение подаёт собранный vite-фронтенд (services/frontend/dist) через
  * локальный HTTP-сервер на 127.0.0.1, а не через file://. Причина: фронтенд
- * жёстко использует корневые пути (/precache-manifest.json, /assets/*,
- * /manifest.webmanifest) и Service Worker, рассчитанные на http-контекст.
+ * жёстко использует корневые пути (/precache-manifest.json, /assets/*),
+ * рассчитанные на http-контекст.
  * Локальный http-сервер сохраняет их рабочими без правок фронтенда.
  *
  * API подключается внешний: пользователь задаёт URL бэкенда на экране
@@ -104,16 +104,11 @@ function serveStatic(req, res) {
   }
 
   // Кэш по образцу nginx-конфига фронтенда: хэшированные ассеты — immutable,
-  // index.html/sw/manifest — без кэша (чтобы всегда получать свежую сборку).
+  // index.html/precache-manifest — без кэша (всегда свежая версия).
   const base = path.basename(resolved)
   if (IMMUTABLE_EXT.has(ext) && resolved.startsWith(path.join(WEB_DIR, 'assets'))) {
     headers['Cache-Control'] = 'public, max-age=31536000, immutable'
-  } else if (
-    base === 'index.html' ||
-    base === 'sw.js' ||
-    base === 'manifest.webmanifest' ||
-    base === 'precache-manifest.json'
-  ) {
+  } else if (base === 'index.html' || base === 'precache-manifest.json') {
     headers['Cache-Control'] = 'no-cache'
   }
 
