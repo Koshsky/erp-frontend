@@ -18,7 +18,7 @@ import { syncNow, syncNotice, dismissSyncNotice, retryFailed, discardFailed } fr
 import { pendingCount, refreshPendingCount, getFailedEntries } from '../offline/outbox'
 import { idbCount } from '../offline/db'
 import { isOffline } from '../offline/state'
-import { checkForUpdates, swControlled } from '../offline/registration'
+import { swControlled } from '../offline/registration'
 
 const TOKEN_KEY = 'mvs_erp_access_token'
 
@@ -46,7 +46,6 @@ const appVersion = ref('—')
 /** Версия запущенного бандла (инжектится на build; в dev — 'dev-...') */
 const appBuildVersion = __APP_VERSION__
 const cachedAssets = ref(0)
-const checkMsg = ref<string | null>(null)
 let refreshTimer: number | null = null
 
 const pendingLabel = computed(() => (pendingCount.value > 0 ? `PUSH (${pendingCount.value})` : 'PUSH'))
@@ -169,19 +168,6 @@ async function refreshAppInfo() {
     cachedAssets.value = count
   } catch {
     cachedAssets.value = 0
-  }
-}
-
-async function onCheckUpdates() {
-  if (busy.value) return
-  busy.value = true
-  statusMsg.value = null
-  try {
-    const ok = await checkForUpdates()
-    okMsg(ok ? 'Обновлений не найдено' : 'Проверка недоступна')
-    await refreshStatus()
-  } finally {
-    busy.value = false
   }
 }
 
@@ -465,11 +451,6 @@ onBeforeUnmount(() => {
           <p v-if="cachedData === 0" class="sp-msg warn">
             Кэш данных пуст. Для офлайна зайдите онлайн и нажмите «PULL».
           </p>
-          <p v-if="checkMsg" class="sp-msg">{{ checkMsg }}</p>
-
-          <button type="button" class="sp-btn ghost" :disabled="busy" @click="onCheckUpdates">
-            Проверить обновление
-          </button>
         </div>
       </div>
     </div>
