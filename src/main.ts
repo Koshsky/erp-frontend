@@ -1,22 +1,37 @@
 import { createApp } from 'vue'
-import { createPinia } from 'pinia'
+import { createPinia, setActivePinia } from 'pinia'
 import App from './App.vue'
 import router from './router'
 import { setupHttp } from './http'
-import { initOfflineSync } from './offline/sync'
+import { initOfflineSync, ensureDesktopAutoSyncSession } from './offline/sync'
 import { initServiceWorker } from './offline/registration'
 import { startConnectivityMonitor } from './offline/state'
+import { isElectron } from './electron'
 
 setupHttp()
+
+// Pinia активируем до обращения к сторам (авторелогin для exe): иначе
+// useXStore() вне setup упадёт «no active Pinia».
+const pinia = createPinia()
+setActivePinia(pinia)
+
+// В Electron при старте пробуем тихо восстановить сессию по сохранённым
+// (safeStorage) логину+паролю, чтобы автосинк работал без ручного входа.
+await ensureDesktopAutoSyncSession()
+
 await initOfflineSync()
-initServiceWorker()
+// В Electron Service Worker не нужен: офлайн даёт локальный http + IndexedDB,
+// а SW между сборками только конфликтует с кэшем. В браузере — как обычно PWA.
+if (!isElectron) {
+  initServiceWorker()
+}
 startConnectivityMonitor()
 
 console.log(`[build] ${__APP_VERSION__}`)
 
 const app = createApp(App)
 
-app.use(createPinia())
+app.use(pinia)
 app.use(router)
 
 app.mount('#app')

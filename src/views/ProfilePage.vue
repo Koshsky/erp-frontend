@@ -1,12 +1,8 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useAuthStore } from '../store'
 import { PasswordField, PasswordRequirements } from '../components/common'
 import { passwordRules, validatePassword } from '../composables/usePasswordValidation'
-import { idbCount } from '../offline/db'
-import { lastWarmedAt, warmNow, warmupProgress } from '../offline/warmup'
-import { isOffline } from '../offline/state'
-import { checkForUpdates, swControlled } from '../offline/registration'
 
 const auth = useAuthStore()
 
@@ -37,78 +33,9 @@ const profile = computed<ProfileField[]>(() => {
   ]
 })
 
-// === Приложение / офлайн: версии, состояние кэша, ручная прогревка ===
-const appVersion = ref('—')
-/** Версия запущенного бандла (инжектится на build; в dev — 'dev-...') */
-const appBuildVersion = __APP_VERSION__
-const cachedAssets = ref(0)
-const cachedData = ref(0)
-const checkMsg = ref<string | null>(null)
-let refreshTimer: number | null = null
-
-const lastWarmedLabel = computed(() =>
-  lastWarmedAt.value != null
-    ? new Date(lastWarmedAt.value).toLocaleString('ru-RU')
-    : 'ещё не было',
-)
-
-async function refreshOfflineInfo() {
-  try {
-    const res = await fetch('/precache-manifest.json')
-    if (res.ok) {
-      const data = (await res.json()) as { version?: string }
-      appVersion.value = data.version ?? '—'
-    }
-  } catch {
-    // офлайн — версия сборки не критична
-  }
-  try {
-    const cacheNames = await caches.keys()
-    let count = 0
-    for (const name of cacheNames) {
-      const c = await caches.open(name)
-      const keys = await c.keys()
-      count += keys.filter((r) => r.url.includes('/assets/')).length
-    }
-    cachedAssets.value = count
-  } catch {
-    cachedAssets.value = 0
-  }
-  cachedData.value = await idbCount('cache').catch(() => 0)
-}
-
-async function onWarmNow() {
-  checkMsg.value = null
-  const ran = await warmNow()
-  await refreshOfflineInfo()
-  if (ran) {
-    checkMsg.value = 'Данные прогреты'
-  } else if (isOffline.value) {
-    checkMsg.value = 'Прогревка недоступна: нет сети'
-  } else {
-    checkMsg.value = 'Прогревка уже идёт'
-  }
-}
-
-async function onCheckUpdates() {
-  checkMsg.value = null
-  const ok = await checkForUpdates()
-  if (ok) {
-    checkMsg.value = 'Обновлений не найдено'
-  } else {
-    checkMsg.value = 'Проверка недоступна'
-  }
-}
-
 onMounted(() => {
   const id = auth.user?.id
   if (id != null) auth.fetchProfile(id)
-  void refreshOfflineInfo()
-  refreshTimer = window.setInterval(refreshOfflineInfo, 5000)
-})
-
-onBeforeUnmount(() => {
-  if (refreshTimer != null) window.clearInterval(refreshTimer)
 })
 
 async function onChangePassword() {
@@ -143,78 +70,30 @@ async function onChangePassword() {
   <section class="pf">
     <h2 class="pf-title">Профиль</h2>
 
-    <div class="pf-columns">
-      <div class="pf-col">
-        <div class="pf-card">
-          <div v-for="field in profile" :key="field.label" class="pf-row">
-            <span class="pf-label">{{ field.label }}</span>
-            <span class="pf-value">{{ field.value }}</span>
-          </div>
-        </div>
-
-        <div class="pf-card pw-form">
-          <h3 class="pf-title sm">Смена пароля</h3>
-          <form @submit.prevent="onChangePassword">
-            <div class="pw-fields">
-              <PasswordField v-model="oldPassword" label="Старый пароль" autocomplete="current-password" placeholder="••••••••" />
-              <PasswordField v-model="newPassword" label="Новый пароль" autocomplete="new-password" placeholder="Придумайте новый пароль" />
-              <PasswordField v-model="confirmPassword" label="Подтверждение пароля" autocomplete="new-password" placeholder="Повторите пароль" />
-              <PasswordRequirements :model-value="newPassword" :rules="passwordChecks" />
-            </div>
-
-            <p v-if="changeMsg" class="pf-msg" :class="{ ok: changeOk }">{{ changeMsg }}</p>
-
-            <button type="submit" class="pf-btn" :disabled="auth.loading">
-              {{ auth.loading ? 'Сохранение…' : 'Сменить пароль' }}
-            </button>
-          </form>
+    <div class="pf-cards">
+      <div class="pf-card">
+        <div v-for="field in profile" :key="field.label" class="pf-row">
+          <span class="pf-label">{{ field.label }}</span>
+          <span class="pf-value">{{ field.value }}</span>
         </div>
       </div>
 
-      <div class="pf-col">
-        <div class="pf-card">
-          <h3 class="pf-title sm app-title">Приложение и офлайн</h3>
-          <div class="pf-row">
-            <span class="pf-label">Версия приложения</span>
-            <span class="pf-value">{{ appVersion }}</span>
+      <div class="pf-card pw-form">
+        <h3 class="pf-title sm">Смена пароля</h3>
+        <form @submit.prevent="onChangePassword">
+          <div class="pw-fields">
+            <PasswordField v-model="oldPassword" label="Старый пароль" autocomplete="current-password" placeholder="••••••••" />
+            <PasswordField v-model="newPassword" label="Новый пароль" autocomplete="new-password" placeholder="Придумайте новый пароль" />
+            <PasswordField v-model="confirmPassword" label="Подтверждение пароля" autocomplete="new-password" placeholder="Повторите пароль" />
+            <PasswordRequirements :model-value="newPassword" :rules="passwordChecks" />
           </div>
-          <div class="pf-row">
-            <span class="pf-label">Версия сборки (запущенная)</span>
-            <span class="pf-value">{{ appBuildVersion }}</span>
-          </div>
-          <div class="pf-row">
-            <span class="pf-label">Управление SW</span>
-            <span class="pf-value">{{ swControlled ? 'активен' : 'нет' }}</span>
-          </div>
-          <div class="pf-row">
-            <span class="pf-label">Кэш ассетов</span>
-            <span class="pf-value">{{ cachedAssets }} чанков</span>
-          </div>
-          <div class="pf-row">
-            <span class="pf-label">Сохранённых данных</span>
-            <span class="pf-value">{{ cachedData }} записей</span>
-          </div>
-          <div class="pf-row">
-            <span class="pf-label">Последняя прогревка</span>
-            <span class="pf-value">{{ lastWarmedLabel }}</span>
-          </div>
-        <div class="app-actions">
-          <p v-if="cachedData === 0" class="pf-msg warn">
-            Кэш данных пуст. Для офлайна зайдите онлайн и нажмите «Прогреть данные сейчас».
-          </p>
-          <div v-if="warmupProgress != null" class="warm-progress" role="progressbar" :aria-valuenow="warmupProgress">
-            <div class="warm-bar">
-              <div class="warm-fill" :style="{ width: warmupProgress + '%' }" />
-            </div>
-            <span class="warm-label">Прогрев данных: {{ warmupProgress }}%</span>
-          </div>
-          <button type="button" class="pf-btn" @click="onWarmNow">Прогреть данные сейчас</button>
-            <button type="button" class="pf-btn ghost" @click="onCheckUpdates">
-              Проверить обновление
-            </button>
-            <p v-if="checkMsg" class="pf-msg app-msg">{{ checkMsg }}</p>
-          </div>
-        </div>
+
+          <p v-if="changeMsg" class="pf-msg" :class="{ ok: changeOk }">{{ changeMsg }}</p>
+
+          <button type="submit" class="pf-btn" :disabled="auth.loading">
+            {{ auth.loading ? 'Сохранение…' : 'Сменить пароль' }}
+          </button>
+        </form>
       </div>
     </div>
   </section>
@@ -228,24 +107,11 @@ async function onChangePassword() {
   margin-bottom: 20px;
 }
 
-.pf-columns {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 24px;
-  align-items: start;
-}
-
-.pf-col {
+.pf-cards {
   display: flex;
   flex-direction: column;
   gap: 24px;
-  min-width: 0;
-}
-
-@media (max-width: 860px) {
-  .pf-columns {
-    grid-template-columns: 1fr;
-  }
+  max-width: 720px;
 }
 
 .pf-card {
@@ -355,47 +221,5 @@ async function onChangePassword() {
 }
 .pf-btn.accent:hover:not(:disabled) {
   background: #146b30;
-}
-
-.app-title {
-  padding: 20px 20px 0;
-}
-
-.app-actions {
-  padding: 8px 20px 20px;
-}
-
-.app-actions .pf-btn + .pf-btn {
-  margin-top: 0;
-}
-
-.app-msg {
-  margin-top: 10px;
-}
-
-.warm-progress {
-  margin: 4px 0 2px;
-}
-
-.warm-bar {
-  height: 8px;
-  border-radius: 999px;
-  background: #e9edf2;
-  overflow: hidden;
-}
-
-.warm-fill {
-  height: 100%;
-  border-radius: 999px;
-  background: #1a73e8;
-  transition: width 0.3s ease;
-}
-
-.warm-label {
-  display: block;
-  margin-top: 6px;
-  font-size: 12px;
-  color: #555;
-  text-align: right;
 }
 </style>

@@ -176,6 +176,8 @@ function goToRedirect() {
           {{ auth.loading ? 'Подождите…' : (mode === 'login' ? 'Войти →' : 'Создать аккаунт') }}
         </button>
       </form>
+
+      <RouterLink to="/login/settings" class="lp-settings-link">⚙ Настройки сервера</RouterLink>
     </div>
   </div>
 </template>

@@ -1,5 +1,8 @@
 import { ref, watch } from 'vue'
 import { useAppStore, useAuthStore, usePlanningStore, useTimesheetStore } from '@/store'
+import { shouldAutoSync } from '@/settings'
+import { isElectron } from '@/electron'
+import { getSyncCredentials } from '@/syncCredentials'
 import {
   flushOutbox,
   pendingCount,
@@ -113,6 +116,14 @@ async function runSync(): Promise<void> {
   }
 }
 
+/**
+ * Кнопка «PUSH» на экране синхронизации: отправка очереди + reconcile.
+ * Синхронный вызов внутри приложения (автосинк) идёт через initOfflineSync.
+ */
+export function syncNow(): Promise<void> {
+  return runSync()
+}
+
 /** Кнопка «Повторить»: снимаем карантин и пробуем отправить снова */
 export async function retryFailed(): Promise<void> {
   await resetFailedRetries()
@@ -132,17 +143,34 @@ export async function initOfflineSync(): Promise<void> {
   await replayOutboxToCache()
   void refreshPendingCount()
   watch(isOffline, (offline) => {
-    if (!offline) void runSync()
+    if (!offline && shouldAutoSync()) void runSync()
   })
   if (!isOffline.value) {
     void refreshPendingCount().then(() => {
-      if (pendingCount.value > 0) void runSync()
+      if (shouldAutoSync() && pendingCount.value > 0) void runSync()
     })
   }
   // Интернет может вернуться без события online (интерфейс всё время «up»).
   // runSync сам проверит доступность сервера (probe в flushOutbox), так что
   // поллинг безопасен и дешёв — работает только пока есть очередь.
   window.setInterval(() => {
-    if (pendingCount.value > 0 && !isOffline.value) void runSync()
+    if (shouldAutoSync() && pendingCount.value > 0 && !isOffline.value) void runSync()
   }, SYNC_POLL_MS)
+}
+
+/**
+ * Авторелогin для настольной версии (Electron).
+ * Если автосинк включён, сессии нет (токены протухли/отсутствуют) и в
+ * safeStorage сохранены логин+пароль — тихо входим, чтобы автосинк мог
+ * работать без ручного ввода. В браузере (нет safeStorage) ничего не делает.
+ */
+export async function ensureDesktopAutoSyncSession(): Promise<void> {
+  if (!isElectron || !shouldAutoSync()) return
+  const auth = useAuthStore()
+  // Сессия уже жива — не трогаем.
+  if (auth.isAuthenticated && !auth.accessExpired) return
+  if (isOffline.value) return
+  const creds = await getSyncCredentials()
+  if (!creds?.login || !creds.password) return
+  await auth.login(creds.login, creds.password)
 }

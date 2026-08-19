@@ -4,6 +4,7 @@ import axios, { type AxiosError, type Method } from 'axios'
 import { AuthApi, ProjectsApi, ProcessesApi, TasksApi, TimesheetResourcesApi, TimesheetCalendarApi, TimesheetStatesApi, PlanningApi, MilestonesApi, UsersApi, AssignmentsApi, AutoCreateApi, Configuration } from '@/api'
 import type { DtoUserInfo, DtoProject, DtoResourceResponse, DtoResourceCalendar, DtoResourceMemberResponse, DtoResourceAbsenceResponse, DtoUserResponse, DtoUserStateResponse, DtoStateResponse, DtoCreateResourceRequest, DtoUpdateResourceRequest, DtoCreateUserRequest, DtoUpdateUserRequest, DtoSetDaysRequest, DtoAdminUserResponse, DtoCreateUserResult, DtoResetPasswordResponse, DtoAutoCreateConfig, JwtTokenPair } from '@/api'
 import { apiErrorMessage, fullName } from '@/utils'
+import { getApiUrl } from '@/config'
 import { isOffline } from '@/offline/state'
 import { scheduleWarmup } from '@/offline/warmup'
 import { enqueueMutation, isNetworkError, clearOutbox, type MutationEntity } from '@/offline/outbox'
@@ -74,7 +75,7 @@ async function runMutation(opts: MutationOptions): Promise<boolean> {
 
 function apiConfig(): Configuration {
   return new Configuration({
-    basePath: import.meta.env.VITE_API_URL,
+    basePath: getApiUrl(),
     baseOptions: { headers: { 'Content-Type': 'application/json' } },
     apiKey: () => `Bearer ${localStorage.getItem(TOKEN_KEY) ?? ''}`,
   })

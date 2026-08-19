@@ -96,6 +96,7 @@ onBeforeUnmount(() => {
     <div class="ah-spacer"></div>
     <div class="ah-actions">
       <RouterLink to="/profile" class="ah-link" :class="{ active: route.name === 'profile' }">Профиль</RouterLink>
+      <RouterLink to="/sync" class="ah-link" :class="{ active: route.name === 'sync' }">Синхронизация</RouterLink>
       <button type="button" class="ah-logout" @click="onLogout">Выйти</button>
     </div>
   </header>

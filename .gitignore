@@ -14,7 +14,8 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-build/
+build/*
+!build/icon.png
 dist/
 out/
 *.tsbuildinfo
@@ -42,6 +43,12 @@ storybook-static
 
 coverage/
 .nyc_output/
+
+# Electron-обвязка (desktop/): установщики и ресурсы сборки не коммитим
+desktop/release/
+desktop/.cache/
+# Но иконка приложения нужна для сборки — не игнорируем её (build/ выше ловит всё)
+!desktop/build/icon.png
 
 *.log
 logs/

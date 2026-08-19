@@ -16,6 +16,13 @@ const router = createRouter({
           name: 'login',
           component: () => import('../views/LoginPage.vue'),
         },
+        {
+          // Настройка адреса сервера — доступна до входа (нужно для exe:
+          // на другом компьютере бэкенд может быть не на localhost).
+          path: 'settings',
+          name: 'server-settings',
+          component: () => import('../views/ServerSettingsPage.vue'),
+        },
       ],
     },
     {
@@ -87,6 +94,11 @@ const router = createRouter({
           path: 'profile',
           name: 'profile',
           component: () => import('../views/ProfilePage.vue'),
+        },
+        {
+          path: 'sync',
+          name: 'sync',
+          component: () => import('../views/SyncPage.vue'),
         },
       ],
     },

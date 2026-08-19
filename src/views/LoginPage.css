@@ -222,6 +222,19 @@
   cursor: not-allowed;
 }
 
+.lp-settings-link {
+  display: block;
+  text-align: center;
+  margin-top: 14px;
+  font-size: 13px;
+  color: #1a73e8;
+  text-decoration: none;
+}
+
+.lp-settings-link:hover {
+  text-decoration: underline;
+}
+
 @media (max-width: 760px) {
   .lp {
     grid-template-columns: 1fr;

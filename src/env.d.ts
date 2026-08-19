@@ -25,3 +25,23 @@ declare module 'pdfjs-dist/build/pdf.worker.min.mjs' {
   export default workerModule
 }
 
+/**
+ * Мост Electron, инжектируемый preload (services/desktop/preload.js).
+ * В браузере отсутствует — приложение продолжает работать как обычный PWA.
+ */
+interface ErpDesktopPassword {
+  get: () => Promise<string | null>
+  set: (value: string) => Promise<boolean>
+  clear: () => Promise<boolean>
+}
+
+interface ErpDesktop {
+  isElectron: true
+  appVersion: () => Promise<{ version: string; electron: string }>
+  password: ErpDesktopPassword
+}
+
+interface Window {
+  erpDesktop?: ErpDesktop
+}
+
