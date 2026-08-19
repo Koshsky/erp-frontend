@@ -6,6 +6,7 @@ import type { DtoUserInfo, DtoProject, DtoResourceResponse, DtoResourceCalendar,
 import { apiErrorMessage, fullName } from '@/utils'
 import { getApiUrl } from '@/config'
 import { isOffline } from '@/offline/state'
+import { isElectron } from '@/electron'
 import { scheduleWarmup } from '@/offline/warmup'
 import { enqueueMutation, isNetworkError, clearOutbox, type MutationEntity } from '@/offline/outbox'
 import { applyRangeSplit } from '@/offline/periodSplit'
@@ -52,7 +53,9 @@ async function runMutation(opts: MutationOptions): Promise<boolean> {
     return true
   } catch (e: any) {
     const err = e as AxiosError
-    if (err?.config && isNetworkError(e)) {
+    if (err?.config && isElectron && isNetworkError(e)) {
+      // Офлайн-очередь (outbox) — только в настольной (Electron) сборке.
+      // В вебе сетевой сбой мутации — это обычная ошибка (оптимистики нет).
       try {
         await enqueueMutation({
           entity: opts.entity,
@@ -1842,8 +1845,9 @@ export const usePlanningStore = defineStore('planning', () => {
       )
     } catch (e: any) {
       const err = e as AxiosError
-      if (err?.config && isNetworkError(e)) {
+      if (err?.config && isElectron && isNetworkError(e)) {
         // Офлайн: локальная перестановка уже применена, PUT'ы уходят в очередь.
+        // (очередь — только в настольной сборке)
         const base = axios.getUri(err.config).replace(/\d+$/, '')
         for (const c of changes) {
           try {

@@ -5,6 +5,7 @@ import { apiErrorMessage } from './utils'
 import { cacheGet, cachePut } from './offline/cache'
 import { replayOutboxToCache } from './offline/outbox'
 import { isOffline } from './offline/state'
+import { isElectron } from './electron'
 
 const TOKEN_KEY = 'mvs_erp_access_token'
 const REFRESH_KEY = 'mvs_erp_refresh_token'
@@ -38,10 +39,12 @@ function redirectToLogin() {
  */
 export function setupHttp() {
   // Успешные GET пишем в офлайн-кэш (сеть доступна — данные свежие).
+  // Кэш и write-through overlay нужны только офлайн-режиму (Electron).
   axios.interceptors.response.use(
     async (response) => {
       const { config, status } = response
       if (
+        isElectron &&
         status >= 200 &&
         status < 300 &&
         config.method === 'get' &&
@@ -62,13 +65,13 @@ export function setupHttp() {
         return Promise.reject(error)
       }
 
-      // Сервер недоступен (сеть, таймаут, abort — любой GET без HTTP-ответа):
-      // отдаём последний сохранённый ответ из кэша (тот же формат { data, error }).
-      // Read-time overlay: перед чтением накладываем несинхронизированные мутации
-      // на нагретый кэш, чтобы странице ВСЕГДА уходил «серверный снимок + очередь»
-      // (даже если write-through при постановке в очередь не успел).
+      // Сервер недоступен (сеть, таймаут, abort — любой запрос без HTTP-ответа):
+      // в офлайн-режиме (Electron) отдаём последний сохранённый ответ из кэша
+      // (тот же формат { data, error }). Read-time overlay: перед чтением
+      // накладываем несинхронизированные мутации на нагретый кэш.
+      // В web-сборке офлайна нет — просто пробрасываем ошибку.
       if (!error.response) {
-        if ((config.method ?? 'get').toLowerCase() === 'get') {
+        if (isElectron && (config.method ?? 'get').toLowerCase() === 'get') {
           await replayOutboxToCache()
           const cached = await cacheGet<unknown>(cacheKey(config))
           if (cached != null) {

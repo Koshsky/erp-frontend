@@ -2,6 +2,7 @@ import { ref, watch } from 'vue'
 import { AssignmentsApi } from '@/api'
 import { apiConfig, useAppStore, useAuthStore, usePlanningStore, useTimesheetStore } from '@/store'
 import { isOffline } from './state'
+import { isElectron } from '@/electron'
 
 /**
  * Фоновая «прогревка» офлайн-кэша данных: после логина (и при возврате сети,
@@ -122,6 +123,7 @@ async function warmUp(): Promise<void> {
  * пропущена (офлайн или уже идёт другая).
  */
 export function warmNow(): Promise<boolean> {
+  if (!isElectron) return Promise.resolve(false)
   if (running || isOffline.value) return Promise.resolve(false)
   running = true
   return warmUp()
@@ -140,8 +142,10 @@ export function warmNow(): Promise<boolean> {
     })
 }
 
-/** Планирует прогревку при простое. Идемпотентна (один запуск за раз). */
+/** Планирует прогревку при простое. Идемпотентна (один запуск за раз).
+ *  Прогревка офлайн-кэша — только в настольной (Electron) сборке. */
 export function scheduleWarmup(): void {
+  if (!isElectron) return
   if (running || scheduled) return
   if (isOffline.value) return
   if (!useAuthStore().isAuthenticated) return
@@ -162,9 +166,9 @@ function ensureRewarmTimer(): void {
   }, REWARM_INTERVAL_MS)
 }
 
-if (typeof window !== 'undefined') ensureRewarmTimer()
+if (isElectron && typeof window !== 'undefined') ensureRewarmTimer()
 
 // Возврат сети → прогреваем то, что не успели (или подгружаем свежее)
 watch(isOffline, (offline) => {
-  if (!offline) scheduleWarmup()
+  if (isElectron && !offline) scheduleWarmup()
 })

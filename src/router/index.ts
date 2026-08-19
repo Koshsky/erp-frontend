@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '../store'
 import { isOffline } from '../offline/state'
+import { isElectron } from '../electron'
 import MainLayout from '../layouts/MainLayout.vue'
 import AuthLayout from '../layouts/AuthLayout.vue'
 
@@ -146,6 +147,12 @@ router.beforeEach(async (to) => {
     (to.name === 'statuses' || to.name === 'permissions' || to.name === 'users' || to.name === 'structure' || to.name === 'auto-create') &&
     auth.user?.role !== 'admin'
   ) {
+    return { name: 'dashboard' }
+  }
+
+  // Синхронизация (офлайн-настройки) — доступна только в настольной (Electron)
+  // сборке. В веб-версии офлайна нет, страница недоступна.
+  if (to.name === 'sync' && !isElectron) {
     return { name: 'dashboard' }
   }
 

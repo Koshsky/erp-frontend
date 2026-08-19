@@ -1,16 +1,21 @@
 import { ref } from 'vue'
 import type { Ref } from 'vue'
+import { isElectron } from '@/electron'
 
 /**
  * Реактивное состояние сети. Обновляется событиями window online/offline и
  * фоновым пингом API (startConnectivityMonitor). Используется, чтобы офлайн
  * не выбрасывало на /login (refresh токена) и для баннера «офлайн-режим».
+ *
+ * Офлайн-режим существует ТОЛЬКО в настольной (Electron) сборке. В вебе
+ * фронтенд считается строго онлайн: isOffline всегда false, монитор и
+ * window-слушатели не активируются.
  */
 export const isOffline: Ref<boolean> = ref(
-  typeof navigator !== 'undefined' && navigator.onLine === false,
+  isElectron && typeof navigator !== 'undefined' && navigator.onLine === false,
 )
 
-if (typeof window !== 'undefined') {
+if (isElectron && typeof window !== 'undefined') {
   window.addEventListener('online', () => {
     isOffline.value = false
   })
@@ -50,6 +55,8 @@ async function probeReachable(): Promise<boolean> {
  * всегда, пока сервер недоступен (даже когда кэш прогреты).
  */
 export function startConnectivityMonitor(): void {
+  // В браузерной (web) сборке офлайн-режима нет — монитор не запускаем.
+  if (!isElectron) return
   if (probeTimer != null) return
   const tick = () => {
     void probeReachable().then((reachable) => {

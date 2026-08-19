@@ -5,6 +5,7 @@ import router from './router'
 import { setupHttp } from './http'
 import { initOfflineSync, ensureDesktopAutoSyncSession } from './offline/sync'
 import { startConnectivityMonitor } from './offline/state'
+import { isElectron } from './electron'
 
 setupHttp()
 
@@ -15,10 +16,12 @@ setActivePinia(pinia)
 
 // В Electron при старте пробуем тихо восстановить сессию по сохранённым
 // (safeStorage) логину+паролю, чтобы автосинк работал без ручного входа.
-await ensureDesktopAutoSyncSession()
-
-await initOfflineSync()
-startConnectivityMonitor()
+// Офлайн-механизм (очередь, кэш, монитор сети) — только в настольной сборке.
+if (isElectron) {
+  await ensureDesktopAutoSyncSession()
+  await initOfflineSync()
+  startConnectivityMonitor()
+}
 
 console.log(`[build] ${__APP_VERSION__}`)
 

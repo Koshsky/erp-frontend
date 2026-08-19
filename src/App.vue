@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import OfflineBanner from './offline/OfflineBanner.vue'
 import SyncToast from './offline/SyncToast.vue'
+import { isElectron } from './electron'
 </script>
 
 <template>
-  <OfflineBanner />
-  <SyncToast />
+  <OfflineBanner v-if="isElectron" />
+  <SyncToast v-if="isElectron" />
   <RouterView />
 </template>
 
