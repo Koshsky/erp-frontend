@@ -17,6 +17,7 @@ import { useUnitMenu } from '../composables/useUnitMenu'
 import { useRoleAccess } from '../composables/useRoleAccess'
 import { useFindPlanningItem } from '../composables/useFindPlanningItem'
 import { usePlanningStore, useAppStore } from '../store'
+import { compareByName } from '../utils'
 import { addDaysISO, shiftSpanDates, clampDateToBounds } from '../components/planner/calendar'
 import { CELL_WIDTH } from '../components/planner/layout'
 import type { PdfGanttGroup } from '../components/planner/PdfExport/pdfRenderer'
@@ -116,10 +117,18 @@ const menuItems = computed<ContextMenuItem[]>(() => {
   ]
 })
 
-// Модалка редактирования задачи (название) или вехи (название + контент)
+// Модалка редактирования задачи (название, ответственный) или вехи (название + контент)
 type EditState =
-  | { type: 'task'; id: number; title: string }
+  | { type: 'task'; id: number; title: string; ownerId?: number }
   | { type: 'milestone'; id: number; title: string; content: string }
+
+/** Кандидаты в «ответственные» задачи — только свои сотрудники (прямые подчинённые) */
+const ownerOptions = computed(() =>
+  [...app.myStaff]
+    .sort(compareByName)
+    .map((u) => ({ value: u.id ?? 0, label: u.name ?? '' })),
+)
+
 const { open: openEdit, close: closeEdit, submit: submitEdit, bind: editBind } = useEditModal<EditState>(
   (state) => {
     const base: ModalField = {
@@ -135,17 +144,31 @@ const { open: openEdit, close: closeEdit, submit: submitEdit, bind: editBind } =
         { key: 'content', label: 'Контент', type: 'textarea', value: state.content },
       ]
     }
-    return [base]
+    return [
+      base,
+      // Ответственный выбирается из своих сотрудников. Владельца нельзя удалить
+      // (set null); если не выбрать никого из списка — поле owner_id не отправляется.
+      {
+        key: 'owner_id',
+        label: 'Ответственный',
+        type: 'select',
+        value: state.ownerId ?? '',
+        options: ownerOptions.value,
+      },
+    ]
   },
   async (state, values) => {
     const title = String(values.title ?? '')
-    const ok =
-      state.type === 'task'
-        ? await planning.updateTaskMeta(state.id, { title })
-        : await planning.updateMilestoneMeta(state.id, {
-            title,
-            content: String(values.content ?? ''),
-          })
+    if (state.type === 'task') {
+      // Пустое значение (не выбран сотрудник) — владельца не меняем: поле не отправляется.
+      const ownerId = values.owner_id === '' ? undefined : Number(values.owner_id)
+      const ok = await planning.updateTaskMeta(state.id, { title, owner_id: ownerId })
+      return { ok, error: ok ? null : planning.error }
+    }
+    const ok = await planning.updateMilestoneMeta(state.id, {
+      title,
+      content: String(values.content ?? ''),
+    })
     return { ok, error: ok ? null : planning.error }
   },
   (state) => (state.type === 'task' ? 'Редактировать задачу' : 'Редактировать веху'),
@@ -168,7 +191,14 @@ const { open: openMenu, close: closeMenu, select, bind: menuBind } = useContextM
 
 function openTaskEdit(id: number) {
   const task = findTask(id)
-  if (task) openEdit({ type: 'task', id, title: task.title ?? '' })
+  if (task) {
+    openEdit({
+      type: 'task',
+      id,
+      title: task.title ?? '',
+      ownerId: task.owner_id ?? undefined,
+    })
+  }
 }
 
 function openMilestoneEdit(id: number) {
@@ -291,6 +321,10 @@ onMounted(async () => {
   // Проекты получают только admin/dp/rp; у vp/worker их нет (403) — сортировка по id.
   if (canViewProjects.value && !app.projects.length) await app.loadProjects()
   if (!resources.value.length) await app.loadResources()
+  // Справочник пользователей — для имён ответственных задач (owner_id → name)
+  if (!app.users.length) await app.loadUsers()
+  // Свои сотрудники — пул кандидатов в «ответственные» задачи
+  await app.loadMyStaff()
   // Календарь доступности обновляем при КАЖДОМ заходе на страницу: табель мог
   // измениться, и ResourceHeader должен сразу показывать свежую доступность.
   await app.loadCalendar()
@@ -370,6 +404,7 @@ const taskGroups = computed<PdfGanttGroup[]>(() =>
       :resources="resources"
       :calendar="calendar"
       :absence-by-resource="absenceByResource"
+      :users="app.users"
       :loading="loading"
       :error="error"
       :origin="origin"

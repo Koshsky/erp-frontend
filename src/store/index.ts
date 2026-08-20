@@ -603,6 +603,12 @@ export const useAppStore = defineStore('app', () => {
   const usersLoading = ref(false)
   const usersError = ref<string | null>(null)
 
+  /** Прямые подчинённые текущего пользователя (скоуп /users): «свои сотрудники».
+   *  Для vp — только пользователи с manager_id = текущий пользователь; для admin — все.
+   *  Используется как пул кандидатов в «ответственные» задач. */
+  const myStaff = ref<DtoUserResponse[]>([])
+  const myStaffLoading = ref(false)
+
   async function loadUsers() {
     if (isOffline.value && users.value.length) return
     usersLoading.value = true
@@ -615,6 +621,21 @@ export const useAppStore = defineStore('app', () => {
       usersError.value = e.message || String(e)
     } finally {
       usersLoading.value = false
+    }
+  }
+
+  /** Загружает «свой персонал» (скоупированный /users без фильтра роли). */
+  async function loadMyStaff() {
+    if (isOffline.value && myStaff.value.length) return
+    myStaffLoading.value = true
+    try {
+      const api = new UsersApi(apiConfig())
+      const resp = await api.usersGet(500, undefined, undefined, undefined, 0)
+      myStaff.value = resp.data?.data?.items ?? []
+    } catch {
+      // Не критично: пул кандидатов остаётся прежним.
+    } finally {
+      myStaffLoading.value = false
     }
   }
 
@@ -748,6 +769,9 @@ export const useAppStore = defineStore('app', () => {
     absenceByResource,
     loadResourceAbsence,
     loadUsers,
+    myStaff,
+    myStaffLoading,
+    loadMyStaff,
     adminUsers,
     adminUsersLoading,
     adminUsersError,
@@ -1429,7 +1453,7 @@ export const usePlanningStore = defineStore('planning', () => {
     })
   }
 
-  async function updateTaskMeta(id: number, patch: { title?: string }): Promise<boolean> {
+  async function updateTaskMeta(id: number, patch: { title?: string; owner_id?: number }): Promise<boolean> {
     return runMutation({
       entity: 'task',
       call: () => new TasksApi(apiConfig()).taskIdPut(id, patch),

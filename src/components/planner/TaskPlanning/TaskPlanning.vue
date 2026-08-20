@@ -7,11 +7,12 @@ import ResourceHeader from '@/components/common/ResourceHeader/ResourceHeader.vu
 import TaskGantt from './components/TaskGantt/TaskGantt.vue'
 import { provideDragPreview } from '@/composables/useDragPreview'
 import type { DragPreviewState } from '@/composables/useDragPreview'
-import type { DtoDetailedProcess, DtoResource, DtoResourceResponse, DtoResourceCalendar, DtoResourceAbsenceResponse, DtoAvailabilityPeriod } from '@/api'
+import type { DtoDetailedProcess, DtoResource, DtoResourceResponse, DtoResourceCalendar, DtoResourceAbsenceResponse, DtoAvailabilityPeriod, DtoUserInfo } from '@/api'
 import type { Resource } from '@/components/common/ResourceHeader/types'
 import type { Process } from './types'
 import type { PlanningUnit } from '../calendar'
 import { toDate, fmtDate } from '../calendar'
+import { shortName } from '@/utils'
 
 const props = withDefaults(defineProps<{
   processes?: DtoDetailedProcess[] | null
@@ -28,6 +29,8 @@ const props = withDefaults(defineProps<{
   unit?: PlanningUnit
   /** Разрешает изменение задач и вех: перенос дат, редактирование, удаление */
   canManage?: boolean
+  /** Пользователи для отображения ответственного (owner_id → name) в тултипах */
+  users?: DtoUserInfo[] | null
   /** При открытии прокрутить шкалу к этой дате (навигация с другой вкладки) */
   focusDate?: string | null
   /** При открытии прокрутить по вертикали к группе (строке) процесса */
@@ -42,6 +45,7 @@ const props = withDefaults(defineProps<{
   origin: '',
   unit: 'day',
   canManage: true,
+  users: null,
   focusDate: null,
   focusGroupId: null,
 })
@@ -61,6 +65,8 @@ const dragPreview = ref<DragPreviewState>({ active: false, taskId: null, startDa
 provideDragPreview(dragPreview)
 
 /** Маппим DTO (из /planning/tasks) во внутренние типы. Задачи сортируем по алфавиту. */
+const userById = computed(() => new Map((props.users || []).map((u) => [u.id ?? 0, u])))
+
 const displayProcesses = computed<Process[]>(() =>
   (props.processes || []).map((dto) => ({
     id: dto.id ?? 0,
@@ -70,19 +76,25 @@ const displayProcesses = computed<Process[]>(() =>
     project_code: dto.project_code ?? '',
     tasks: [...(dto.tasks || [])]
       .sort((a, b) => (a.title || '').localeCompare(b.title || '', 'ru'))
-      .map((t) => ({
-        id: t.id ?? 0,
-        title: t.title ?? '',
-        start_date: t.start_date ?? '',
-        end_date: t.end_date ?? '',
-        resources: (t.resources || []).map((r) => ({
-          resource_id: r.id ?? 0,
-          assignment_id: r.assignment_id ?? 0,
-          quantity: r.quantity ?? 0,
-          code: r.code ?? '',
-          title: r.title ?? '',
-        })),
-      })),
+      .map((t) => {
+        const owner = t.owner_id != null ? userById.value.get(t.owner_id) : undefined
+        return {
+          id: t.id ?? 0,
+          title: t.title ?? '',
+          start_date: t.start_date ?? '',
+          end_date: t.end_date ?? '',
+          owner_id: t.owner_id ?? null,
+          owner_name: owner?.name,
+          owner_short: owner ? shortName(owner) : undefined,
+          resources: (t.resources || []).map((r) => ({
+            resource_id: r.id ?? 0,
+            assignment_id: r.assignment_id ?? 0,
+            quantity: r.quantity ?? 0,
+            code: r.code ?? '',
+            title: r.title ?? '',
+          })),
+        }
+      }),
     milestones: (dto.milestones || []).map((m) => ({
       id: m.id ?? 0,
       title: m.title ?? '',
