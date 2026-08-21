@@ -260,13 +260,6 @@ export interface DtoRefreshResponse {
 export interface DtoRefreshTokenRequest {
     'refresh_token'?: string;
 }
-export interface DtoRegisterRequest {
-    'first_name'?: string;
-    'last_name'?: string;
-    'middle_name'?: string;
-    'password'?: string;
-    'username'?: string;
-}
 export interface DtoResetPasswordResponse {
     'password'?: string;
 }
@@ -1082,41 +1075,6 @@ export const AuthApiAxiosParamCreator = function (configuration?: Configuration)
                 options: localVarRequestOptions,
             };
         },
-        /**
-         * Create user and return JWT token
-         * @summary Register
-         * @param {DtoRegisterRequest} request Register credentials
-         * @param {*} [options] Override http request option.
-         * @throws {RequiredError}
-         */
-        authRegisterPost: async (request: DtoRegisterRequest, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
-            // verify required parameter 'request' is not null or undefined
-            assertParamExists('authRegisterPost', 'request', request)
-            const localVarPath = `/auth/register`;
-            // use dummy base URL string because the URL constructor only accepts absolute URLs.
-            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
-            let baseOptions;
-            if (configuration) {
-                baseOptions = configuration.baseOptions;
-            }
-
-            const localVarRequestOptions = { method: 'POST', ...baseOptions, ...options};
-            const localVarHeaderParameter = {} as any;
-            const localVarQueryParameter = {} as any;
-
-            localVarHeaderParameter['Content-Type'] = 'application/json';
-            localVarHeaderParameter['Accept'] = 'application/json';
-
-            setSearchParams(localVarUrlObj, localVarQueryParameter);
-            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
-            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
-            localVarRequestOptions.data = serializeDataIfNeeded(request, localVarRequestOptions, configuration)
-
-            return {
-                url: toPathString(localVarUrlObj),
-                options: localVarRequestOptions,
-            };
-        },
     }
 };
 
@@ -1152,19 +1110,6 @@ export const AuthApiFp = function(configuration?: Configuration) {
             const localVarOperationServerBasePath = operationServerMap['AuthApi.authRefreshPost']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
-        /**
-         * Create user and return JWT token
-         * @summary Register
-         * @param {DtoRegisterRequest} request Register credentials
-         * @param {*} [options] Override http request option.
-         * @throws {RequiredError}
-         */
-        async authRegisterPost(request: DtoRegisterRequest, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<AuthLoginPost200Response>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.authRegisterPost(request, options);
-            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
-            const localVarOperationServerBasePath = operationServerMap['AuthApi.authRegisterPost']?.[localVarOperationServerIndex]?.url;
-            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
-        },
     }
 };
 
@@ -1194,16 +1139,6 @@ export const AuthApiFactory = function (configuration?: Configuration, basePath?
         authRefreshPost(request: DtoRefreshTokenRequest, options?: RawAxiosRequestConfig): AxiosPromise<AuthRefreshPost200Response> {
             return localVarFp.authRefreshPost(request, options).then((request) => request(axios, basePath));
         },
-        /**
-         * Create user and return JWT token
-         * @summary Register
-         * @param {DtoRegisterRequest} request Register credentials
-         * @param {*} [options] Override http request option.
-         * @throws {RequiredError}
-         */
-        authRegisterPost(request: DtoRegisterRequest, options?: RawAxiosRequestConfig): AxiosPromise<AuthLoginPost200Response> {
-            return localVarFp.authRegisterPost(request, options).then((request) => request(axios, basePath));
-        },
     };
 };
 
@@ -1231,17 +1166,6 @@ export class AuthApi extends BaseAPI {
      */
     public authRefreshPost(request: DtoRefreshTokenRequest, options?: RawAxiosRequestConfig) {
         return AuthApiFp(this.configuration).authRefreshPost(request, options).then((request) => request(this.axios, this.basePath));
-    }
-
-    /**
-     * Create user and return JWT token
-     * @summary Register
-     * @param {DtoRegisterRequest} request Register credentials
-     * @param {*} [options] Override http request option.
-     * @throws {RequiredError}
-     */
-    public authRegisterPost(request: DtoRegisterRequest, options?: RawAxiosRequestConfig) {
-        return AuthApiFp(this.configuration).authRegisterPost(request, options).then((request) => request(this.axios, this.basePath));
     }
 }
 

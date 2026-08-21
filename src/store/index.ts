@@ -173,37 +173,6 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  async function register(
-    username: string,
-    password: string,
-    lastName: string,
-    firstName: string,
-    middleName: string,
-  ) {
-    loading.value = true
-    error.value = null
-    try {
-      const api = new AuthApi(apiConfig())
-      const resp = await api.authRegisterPost({
-        username: username.trim(),
-        password,
-        last_name: lastName.trim(),
-        first_name: firstName.trim(),
-        middle_name: middleName.trim() || undefined,
-      })
-      const body = resp.data
-      const errBody = body?.error as { code?: unknown; message?: string } | undefined
-      if (errBody && errBody.code != null) throw new Error(apiErrorMessage(errBody))
-      applySession(body?.data)
-      return true
-    } catch (e: any) {
-      error.value = e.message || String(e)
-      return false
-    } finally {
-      loading.value = false
-    }
-  }
-
   async function changePassword(oldPassword: string, newPassword: string) {
     loading.value = true
     error.value = null
@@ -348,7 +317,6 @@ export const useAuthStore = defineStore('auth', () => {
     loading,
     error,
     login,
-    register,
     changePassword,
     refreshSession,
     fetchProfile,
