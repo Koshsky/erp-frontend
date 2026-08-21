@@ -4,6 +4,7 @@ import { idbAll, idbDel, idbPut } from './db'
 import { applyToCache } from './cacheApply'
 import { probeBackend } from './state'
 import { getApiUrl } from '@/config'
+import { getAccessToken } from '../token'
 
 /**
  * Очередь мутаций (outbox-паттерн): запросы создания/изменения/удаления,
@@ -16,7 +17,6 @@ import { getApiUrl } from '@/config'
  */
 
 const OUTBOX_STORE = 'outbox'
-const TOKEN_KEY = 'mvs_erp_access_token'
 /** Сколько ждать перед повторной попыткой записи, отклонённой сервером */
 const FAILED_BACKOFF_MS = 60 * 1000
 /** После скольких серверных ошибок запись уходит в карантин (без авто-ретраев) */
@@ -439,7 +439,7 @@ export async function flushOutbox(): Promise<FlushResult> {
       const url = rewriteIds(rebasedUrl(entry.url), idMap)
       const body = entry.body != null ? rewriteIds(JSON.stringify(entry.body), idMap) : undefined
       try {
-        const token = localStorage.getItem(TOKEN_KEY) ?? ''
+        const token = getAccessToken()
         const res = await axios({
           method: entry.method,
           url,

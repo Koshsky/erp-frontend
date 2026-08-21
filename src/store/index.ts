@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import axios, { type AxiosError, type Method } from 'axios'
 import { AuthApi, ProjectsApi, ProcessesApi, TasksApi, TimesheetResourcesApi, TimesheetCalendarApi, TimesheetStatesApi, PlanningApi, MilestonesApi, UsersApi, AssignmentsApi, AutoCreateApi, Configuration } from '@/api'
-import type { DtoUserInfo, DtoProject, DtoResourceResponse, DtoResourceCalendar, DtoResourceMemberResponse, DtoResourceAbsenceResponse, DtoUserResponse, DtoUserStateResponse, DtoStateResponse, DtoCreateResourceRequest, DtoUpdateResourceRequest, DtoCreateUserRequest, DtoUpdateUserRequest, DtoSetDaysRequest, DtoAdminUserResponse, DtoCreateUserResult, DtoResetPasswordResponse, DtoAutoCreateConfig, JwtTokenPair } from '@/api'
+import type { DtoUserInfo, DtoProject, DtoResourceResponse, DtoResourceCalendar, DtoResourceMemberResponse, DtoResourceAbsenceResponse, DtoUserResponse, DtoUserStateResponse, DtoStateResponse, DtoCreateResourceRequest, DtoUpdateResourceRequest, DtoCreateUserRequest, DtoUpdateUserRequest, DtoSetDaysRequest, DtoAdminUserResponse, DtoCreateUserResult, DtoResetPasswordResponse, DtoAutoCreateConfig } from '@/api'
 import { apiErrorMessage, fullName } from '@/utils'
 import { getApiUrl } from '@/config'
 import { isOffline } from '@/offline/state'
@@ -10,9 +10,8 @@ import { isElectron } from '@/electron'
 import { scheduleWarmup } from '@/offline/warmup'
 import { enqueueMutation, isNetworkError, clearOutbox, type MutationEntity } from '@/offline/outbox'
 import { applyRangeSplit } from '@/offline/periodSplit'
+import { getAccessToken, setAccessToken } from '@/token'
 
-const TOKEN_KEY = 'mvs_erp_access_token'
-const REFRESH_KEY = 'mvs_erp_refresh_token'
 const USER_KEY = 'mvs_erp_user'
 
 /** Сколько времени до истечения токена, когда начинаем проактивный refresh */
@@ -80,7 +79,7 @@ function apiConfig(): Configuration {
   return new Configuration({
     basePath: getApiUrl(),
     baseOptions: { headers: { 'Content-Type': 'application/json' } },
-    apiKey: () => `Bearer ${localStorage.getItem(TOKEN_KEY) ?? ''}`,
+    apiKey: () => `Bearer ${getAccessToken()}`,
   })
 }
 
@@ -115,35 +114,32 @@ function decodeTokenExp(token: string | null): number | null {
 
 /** Протух ли access-токен: отсутствует, не парсится или exp уже прошёл */
 function accessTokenExpired(): boolean {
-  const exp = decodeTokenExp(localStorage.getItem(TOKEN_KEY))
+  const exp = decodeTokenExp(getAccessToken())
   if (exp == null) return true
   return exp - Date.now() <= 0
 }
 
 /** Не пора ли продлить токен заранее (до истечения меньше запаса) */
 function accessTokenExpiring(): boolean {
-  const exp = decodeTokenExp(localStorage.getItem(TOKEN_KEY))
+  const exp = decodeTokenExp(getAccessToken())
   if (exp == null) return true
   return exp - Date.now() <= REFRESH_MARGIN_MS
 }
 
 // === Auth ===
 export const useAuthStore = defineStore('auth', () => {
+  // На старте access-токена в памяти нет; «залогинен» пока есть сохранённый
+  // профиль (не секрет). Guard восстановит сессию через /auth/refresh по
+  // HttpOnly-куке; если куки нет — refresh вернёт 401 и разлогинит.
   const user = ref<DtoUserInfo | null>(readStoredUser())
-  const isAuthenticated = ref<boolean>(Boolean(localStorage.getItem(TOKEN_KEY)))
+  const isAuthenticated = ref<boolean>(Boolean(readStoredUser()))
   const accessExpired = computed<boolean>(() => accessTokenExpired())
   const loading = ref(false)
   const error = ref<string | null>(null)
 
-  function applySession(
-    data:
-      | { access_token?: string; refresh_token?: string; user?: DtoUserInfo; tokens?: JwtTokenPair }
-      | undefined,
-  ) {
-    const token = data?.access_token ?? data?.tokens?.access_token
-    const refresh = data?.refresh_token ?? data?.tokens?.refresh_token
-    if (token) localStorage.setItem(TOKEN_KEY, token)
-    if (refresh) localStorage.setItem(REFRESH_KEY, refresh)
+  function applySession(data: { access_token?: string; user?: DtoUserInfo } | undefined) {
+    const token = data?.access_token
+    setAccessToken(token ?? null)
     if (data?.user) {
       localStorage.setItem(USER_KEY, JSON.stringify(data.user))
       user.value = data.user
@@ -202,7 +198,7 @@ export const useAuthStore = defineStore('auth', () => {
   function scheduleProactiveRefresh() {
     if (proactiveTimer != null) return
     proactiveTimer = window.setInterval(() => {
-      if (accessTokenExpiring() && localStorage.getItem(REFRESH_KEY)) {
+      if (accessTokenExpiring()) {
         void refreshSession()
       }
     }, REFRESH_INTERVAL_MS)
@@ -238,18 +234,14 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function doRefresh(): Promise<boolean> {
-    const refresh = localStorage.getItem(REFRESH_KEY)
-    if (!refresh) {
-      logout()
-      return false
-    }
-    // Офлайн refresh не выполнить: не разлогиниваем, сессия живёт до возврата сети
+    // Refresh-токен живёт в HttpOnly-куке (AD-05): тело не шлём, кука приложится сама.
+    // Офлайн refresh не выполнить: не разлогиниваем, сессия живёт до возврата сети.
     if (isOffline.value) return true
     loading.value = true
     error.value = null
     try {
       const api = new AuthApi(apiConfig())
-      const resp = await api.authRefreshPost({ refresh_token: refresh })
+      const resp = await api.authRefreshPost()
       const body = resp.data
       const errBody = body?.error as { code?: unknown; message?: string } | undefined
       if (errBody && errBody.code != null) throw new Error(apiErrorMessage(errBody))
@@ -276,8 +268,13 @@ export const useAuthStore = defineStore('auth', () => {
     stopProactiveRefresh()
     // Не даём очереди уйти под новым пользователем/токеном
     void clearOutbox()
-    localStorage.removeItem(TOKEN_KEY)
-    localStorage.removeItem(REFRESH_KEY)
+    // Отзываем refresh-сессию на сервере и снимаем куку (best-effort)
+    try {
+      void new AuthApi(apiConfig()).authLogoutPost()
+    } catch {
+      // кука очистится и на клиенте ниже
+    }
+    setAccessToken(null)
     localStorage.removeItem(USER_KEY)
     user.value = null
     isAuthenticated.value = false

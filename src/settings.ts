@@ -2,8 +2,9 @@ import { ref } from 'vue'
 
 /**
  * Настройки синхронизации (экран «Синхронизация»). Хранятся в localStorage
- * под ключами mvs_erp_sync_*. Логин/пароль здесь не хранятся: сессия живёт
- * в токенах (mvs_erp_access/refresh_token) и переживает офлайн-перезапуск.
+ * под ключами mvs_erp_sync_*. Логин/пароль здесь не хранятся: сессия
+ * живёт в access-токене (в памяти, AD-05) и HttpOnly refresh-куке; после
+ * перезагрузки восстановление идёт через /auth/refresh.
  */
 
 const AUTO_SYNC_KEY = 'mvs_erp_auto_sync'

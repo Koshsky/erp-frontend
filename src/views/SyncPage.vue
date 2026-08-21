@@ -18,8 +18,7 @@ import { syncNow, syncNotice, dismissSyncNotice, retryFailed, discardFailed } fr
 import { pendingCount, refreshPendingCount, getFailedEntries, queueItems, type QueueViewItem } from '../offline/outbox'
 import { idbCount } from '../offline/db'
 import { isOffline } from '../offline/state'
-
-const TOKEN_KEY = 'mvs_erp_access_token'
+import { getAccessToken } from '../token'
 
 const router = useRouter()
 const route = useRoute()
@@ -217,7 +216,7 @@ async function probeConnection(): Promise<boolean> {
     const ctrl = new AbortController()
     const timer = window.setTimeout(() => ctrl.abort(), 5000)
     try {
-      const token = localStorage.getItem(TOKEN_KEY) ?? ''
+      const token = getAccessToken()
       const res = await fetch(`${base}/user/${id}`, {
         headers: token ? { Authorization: `Bearer ${token}` } : undefined,
         cache: 'no-store',

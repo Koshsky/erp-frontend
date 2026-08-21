@@ -6,12 +6,10 @@ import { cacheGet, cacheGetByPath, cachePut } from './offline/cache'
 import { replayOutboxToCache } from './offline/outbox'
 import { isOffline } from './offline/state'
 import { isElectron } from './electron'
-
-const TOKEN_KEY = 'mvs_erp_access_token'
-const REFRESH_KEY = 'mvs_erp_refresh_token'
+import { getAccessToken } from './token'
 
 /** Пути, где 401 не означает «токен протух» — их не трогаем (защита от петли) */
-const AUTH_PATHS = ['/auth/login', '/auth/refresh', '/auth/register']
+const AUTH_PATHS = ['/auth/login', '/auth/refresh', '/auth/logout']
 
 interface RetryableConfig extends InternalAxiosRequestConfig {
   _retried?: boolean
@@ -143,12 +141,6 @@ export function setupHttp() {
 
       const auth = useAuthStore()
 
-      if (!localStorage.getItem(REFRESH_KEY)) {
-        auth.logout()
-        redirectToLogin()
-        return Promise.reject(error)
-      }
-
       if ((config as RetryableConfig)._retried) {
         return Promise.reject(error)
       }
@@ -164,7 +156,7 @@ export function setupHttp() {
       }
 
       ;(config as RetryableConfig)._retried = true
-      const token = localStorage.getItem(TOKEN_KEY) ?? ''
+      const token = getAccessToken()
       config.headers = config.headers ?? {}
       delete config.headers['authorization']
       config.headers['Authorization'] = `Bearer ${token}`
