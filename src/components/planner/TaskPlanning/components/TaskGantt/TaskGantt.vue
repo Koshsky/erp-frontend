@@ -110,9 +110,12 @@ function onMilestoneEdit(id: number) {
   left: 0;
   height: 20px;
   background: #fff;
-  /* Боковая панель — выше линии текущей даты (60) */
+  /* Боковая панель — выше линии текущей даты (25) */
   z-index: 65;
   margin-top: -20px;
+  cursor: default;
+  user-select: none;
+  -webkit-user-select: none;
 }
 .gl-code {
   font-size: 16px;

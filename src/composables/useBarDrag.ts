@@ -26,6 +26,8 @@ export interface BarDrag {
   isDragging: Ref<boolean>
   cursor: Ref<'grabbing' | 'ew-resize' | null>
   previewStyle: Ref<Record<string, string | number> | null>
+  /** Текущий диапазон ячеек во время драга (null — нет драга). Публикуется для live-предпросмотра загрузки */
+  dragSpan: Ref<CellSpan | null>
   startDrag: (e: PointerEvent, mode: BarDragMode) => void
 }
 
@@ -42,11 +44,11 @@ export function useBarDrag(options: UseBarDragOptions): BarDrag {
   const isDragging = ref(false)
   const cursor = ref<'grabbing' | 'ew-resize' | null>(null)
   const previewStyle = ref<Record<string, string | number> | null>(null)
+  const dragSpan = ref<CellSpan | null>(null)
 
   let mode: BarDragMode | null = null
   let startPointerCell = 0
   let startSpan: CellSpan | null = null
-  let dragSpan: CellSpan | null = null
   let lastClientX = 0
   let rafId: number | null = null
   let scrollDir = 0
@@ -75,10 +77,12 @@ export function useBarDrag(options: UseBarDragOptions): BarDrag {
     let s = startSpan.startCell
     let end = startSpan.endCell
     if (mode === 'move') {
-      const width = startSpan.endCell - startSpan.startCell
+      // Оба края ведёт дельта мыши; границы зажимает общий клэмп ниже.
+      // У родительской границы передний край «замирает», а противоположная
+      // сторона ужимается (бар как будто уходит за границу, но не уходит);
+      // при обратном движении длина наращивается до исходной.
       s = Math.round(startSpan.startCell + delta)
-      s = clamp(s, bMin, Math.max(bMin, bMax - width))
-      end = Math.min(s + width, bMax)
+      end = Math.round(startSpan.endCell + delta)
     } else if (mode === 'resizeStart') {
       s = clamp(Math.round(startSpan.startCell + delta), bMin, Math.max(bMin, end - 1))
     } else {
@@ -87,7 +91,7 @@ export function useBarDrag(options: UseBarDragOptions): BarDrag {
 
     s = clamp(s, bMin, Math.max(bMin, bMax - 1))
     end = clamp(end, Math.min(bMax, s + 1), bMax)
-    dragSpan = { startCell: s, endCell: end }
+    dragSpan.value = { startCell: s, endCell: end }
     previewStyle.value = {
       left: t.cellLeft(s) + 'px',
       width: (end - s) * t.cellPx + 'px',
@@ -127,7 +131,7 @@ export function useBarDrag(options: UseBarDragOptions): BarDrag {
   }
 
   function onUp() {
-    const span = dragSpan
+    const span = dragSpan.value
     const changed =
       span != null &&
       startSpan != null &&
@@ -146,7 +150,7 @@ export function useBarDrag(options: UseBarDragOptions): BarDrag {
     stopAutoscroll()
     mode = null
     startSpan = null
-    dragSpan = null
+    dragSpan.value = null
     isDragging.value = false
     cursor.value = null
     previewStyle.value = null
@@ -162,7 +166,7 @@ export function useBarDrag(options: UseBarDragOptions): BarDrag {
     lastClientX = e.clientX
     startPointerCell = currentPointerCell(e.clientX)
     startSpan = { ...span }
-    dragSpan = { ...span }
+    dragSpan.value = { ...span }
     isDragging.value = true
     cursor.value = m === 'move' ? 'grabbing' : 'ew-resize'
     previewStyle.value = null
@@ -173,5 +177,5 @@ export function useBarDrag(options: UseBarDragOptions): BarDrag {
   // без этого слушатели и userSelect=«none» остаются навсегда.
   onBeforeUnmount(endDrag)
 
-  return { isDragging, cursor, previewStyle, startDrag }
+  return { isDragging, cursor, previewStyle, dragSpan, startDrag }
 }

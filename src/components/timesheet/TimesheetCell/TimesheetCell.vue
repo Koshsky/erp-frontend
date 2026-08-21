@@ -2,6 +2,8 @@
 import { computed } from 'vue'
 import type { TimesheetCellProps } from './types'
 import { stateBackground } from '../stateColors'
+import { TooltipCell } from '@/components/common/TooltipCell'
+import { InfoTooltip } from '@/components/common/Tooltips'
 
 const props = withDefaults(defineProps<TimesheetCellProps>(), {
   state: null,
@@ -24,34 +26,51 @@ function fmtDM(iso?: string): string {
   return `${d}.${m}`
 }
 
-const tooltip = computed(() => {
+/** Цветной маркер состояния (для пустого дня — нет маркера) */
+const marker = computed<string | null>(() => {
   const s = props.state
-  if (!s) return props.isWeekend ? 'Выходной' : 'Рабочий день'
-  return `${s.state_name} ${fmtDM(s.start_date)}–${fmtDM(s.end_date)}`
+  if (!s) return null
+  return stateBackground(s.state_code, s.is_available, s.state_id)
 })
+
+const period = computed(() => {
+  const s = props.state
+  if (!s) return ''
+  return `${fmtDM(s.start_date)}–${fmtDM(s.end_date)}`
+})
+
+const emptyLabel = computed(() => (props.isWeekend ? 'Выходной' : 'Рабочий день'))
 </script>
 
 <template>
-  <div
-    class="tsc"
-    :class="{ 'tsc--selected': selected, 'tsc--show-text': showText }"
-    :style="{ background: bg }"
-    :title="tooltip"
-  >
-    <span v-if="showText && state" class="tsc-code">{{ state.state_code }}</span>
-  </div>
+  <TooltipCell class="tsc" :multiline="true">
+    <div
+      class="tsc-inner"
+      :class="{ 'tsc--selected': selected, 'tsc--show-text': showText }"
+      :style="{ background: bg }"
+    >
+      <span v-if="showText && state" class="tsc-code">{{ state.state_code }}</span>
+    </div>
+    <template #popup>
+      <InfoTooltip :title="state ? state.state_name : emptyLabel" :lines="state ? [period] : []" :marker="marker" />
+    </template>
+  </TooltipCell>
 </template>
 
 <style scoped>
 .tsc {
+  display: flex;
   width: 100%;
   height: 100%;
+  cursor: cell;
+}
+.tsc-inner {
+  flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
   box-sizing: border-box;
-  cursor: cell;
 }
 .tsc--selected {
   outline: 2px solid #1a73e8;

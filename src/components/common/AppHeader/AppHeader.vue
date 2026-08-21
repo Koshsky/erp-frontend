@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../../../store'
 import { useNavigation } from '../../../composables/useNavigation'
 import type { NavCategory } from '../../../composables/useNavigation'
+import { isElectron } from '../../../electron'
 
 const props = withDefaults(defineProps<{ brand?: string }>(), { brand: 'MVS ERP' })
 
@@ -96,6 +97,7 @@ onBeforeUnmount(() => {
     <div class="ah-spacer"></div>
     <div class="ah-actions">
       <RouterLink to="/profile" class="ah-link" :class="{ active: route.name === 'profile' }">Профиль</RouterLink>
+      <RouterLink v-if="isElectron" to="/sync" class="ah-link" :class="{ active: route.name === 'sync' }">Синхронизация</RouterLink>
       <button type="button" class="ah-logout" @click="onLogout">Выйти</button>
     </div>
   </header>
@@ -113,7 +115,8 @@ onBeforeUnmount(() => {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
   position: sticky;
   top: 0;
-  /* Шапка и её выпадающие меню — поверх всех компонентов (включая модалки z-20000) */
+  /* Шапка и её выпадающие меню — поверх контента страницы; модальные окна
+     (z-40000) рисуются поверх шапки и затемняют её */
   z-index: 30000;
 }
 

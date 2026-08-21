@@ -3,11 +3,14 @@ import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import ProjectPlanning from '../components/planner/ProjectPlanning/ProjectPlanning.vue'
+import { PdfExport } from '../components/planner'
+import type { PdfGanttGroup } from '../components/planner/PdfExport/pdfRenderer'
 import { ContextMenu, ModalForm, ConfirmDialog } from '../components/common'
 import type { ContextMenuItem } from '../components/common/ContextMenu'
 import type { ModalField } from '../components/common/ModalForm'
 import { useConfirm } from '../composables/useConfirm'
 import { useContextMenu } from '../composables/useContextMenu'
+import { compareByName } from '../utils'
 import { useEditModal } from '../composables/useEditModal'
 import { usePlanningOrigin } from '../composables/usePlanningOrigin'
 import { useUnitMenu } from '../composables/useUnitMenu'
@@ -15,6 +18,7 @@ import { useRoleAccess } from '../composables/useRoleAccess'
 import { useFindPlanningItem } from '../composables/useFindPlanningItem'
 import { usePlanningStore, useAppStore } from '../store'
 import { addMonthsISO } from '../components/planner/calendar'
+import { CELL_WIDTH } from '../components/planner/layout'
 
 const store = usePlanningStore()
 const app = useAppStore()
@@ -23,13 +27,37 @@ const { projectPlanning, loading, error } = storeToRefs(store)
 
 const { unit, origin } = usePlanningOrigin()
 
+/** Текущее видимое окно шкалы (период «как на экране») + зум — для печати в PDF */
+const viewRange = ref<{ from: string; to: string; cellWidthPx: number; scale: number }>({
+  from: '',
+  to: '',
+  cellWidthPx: CELL_WIDTH,
+  scale: 1,
+})
+function onVisibleRange(v: { from: string; to: string; cellWidthPx: number; scale: number }) {
+  viewRange.value = v
+}
+
+/** Печатная модель для PdfExport: одна группа «Проекты», строки = проекты */
+const projectGroups = computed<PdfGanttGroup[]>(() => {
+  const rows = (projectPlanning.value?.projects ?? []).map((p: any) => ({
+    id: p.id,
+    title: p.project_code ?? '',
+    start_date: p.start_date ?? '',
+    end_date: p.end_date ?? '',
+    project_id: p.id,
+    owner_id: p.owner_id ?? undefined,
+  }))
+  return rows.length ? [{ id: 'projects', title: 'Проекты', rows }] : []
+})
+
 // Меню ПКМ по шапке таблицы: переключение масштаба «День» / «Декада»
 const { open: openUnitMenu, close: closeUnitMenu, select: selectUnit, bind: unitMenuBind } = useUnitMenu(unit)
 
 // === Права по ролям ===
 // dp (директор проектов): просматривает и редактирует все проекты, не удаляет
 // rp (руководитель проекта): создаёт проекты (сам становится owner), редактирует и удаляет свои
-const { role, canCreateProject, canReorderProjects, canManageProject, canDeleteProject } = useRoleAccess()
+const { role, userId, canCreateProject, canReorderProjects, canManageProject, canDeleteProject } = useRoleAccess()
 
 const { findProject } = useFindPlanningItem()
 
@@ -65,7 +93,10 @@ const menuItems = computed<ContextMenuItem[]>(() => {
 })
 
 const ownerOptions = computed(() =>
-  app.users.map((u) => ({ value: u.id ?? 0, label: u.name ?? '' })),
+  app.users
+    .filter((u) => u.role !== 'worker')
+    .sort(compareByName)
+    .map((u) => ({ value: u.id ?? 0, label: u.name ?? '' })),
 )
 
 // Модалка редактирования проекта (код, владелец)
@@ -167,6 +198,22 @@ onMounted(() => {
 
 <template>
   <section class="pp">
+    <!-- Печать диаграммы проектов в PDF: период и ширина ячейки со страницы -->
+    <div class="pp-toolbar">
+      <PdfExport
+        :groups="projectGroups"
+        :origin="origin"
+        :unit="unit"
+        :owner-id="userId"
+        :role="role"
+        scope="projects"
+        :period-from="viewRange.from"
+        :period-to="viewRange.to"
+        :scale="viewRange.scale"
+        page-title="Диаграмма проектов"
+      />
+    </div>
+
     <ProjectPlanning
       :projects="projectPlanning?.projects || []"
       :loading="loading"
@@ -181,6 +228,7 @@ onMounted(() => {
       @header-ctxmenu="onHeaderCtx"
       @reorder="onReorder"
       @navigate="goToProcesses"
+      @visible-range="onVisibleRange"
     />
 
     <ContextMenu v-bind="menuBind" @select="select" @close="closeMenu" />
@@ -200,6 +248,11 @@ onMounted(() => {
 </template>
 
 <style scoped>
+.pp-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 12px;
+}
 .pp-st {
   color: #666;
   font-size: 14px;

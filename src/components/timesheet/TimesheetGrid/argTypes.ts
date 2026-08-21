@@ -7,7 +7,7 @@ export const timesheetGridArgTypes: ArgTypes<TimesheetGridProps> = {
     name: 'Сотрудники',
     description: 'Список сотрудников (строки сетки)',
     control: 'object',
-    table: { type: { summary: 'DtoEmployeeResponse[]' }, category: 'Data' },
+    table: { type: { summary: 'DtoUserResponse[]' }, category: 'Data' },
   },
   states: {
     name: 'Состояния',
@@ -19,7 +19,7 @@ export const timesheetGridArgTypes: ArgTypes<TimesheetGridProps> = {
     name: 'Состояние на день',
     description: 'Функция: состояние сотрудника на конкретный день',
     control: false,
-    table: { type: { summary: '(employeeId, iso) => DtoEmployeeStateResponse | undefined' }, category: 'Logic' },
+    table: { type: { summary: '(employeeId, iso) => DtoUserStateResponse | undefined' }, category: 'Logic' },
   },
   error: {
     name: 'Ошибка',

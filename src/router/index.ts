@@ -1,5 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '../store'
+import { isOffline } from '../offline/state'
+import { isElectron } from '../electron'
 import MainLayout from '../layouts/MainLayout.vue'
 import AuthLayout from '../layouts/AuthLayout.vue'
 
@@ -14,6 +16,13 @@ const router = createRouter({
           path: '',
           name: 'login',
           component: () => import('../views/LoginPage.vue'),
+        },
+        {
+          // Настройка адреса сервера — доступна до входа (нужно для exe:
+          // на другом компьютере бэкенд может быть не на localhost).
+          path: 'settings',
+          name: 'server-settings',
+          component: () => import('../views/ServerSettingsPage.vue'),
         },
       ],
     },
@@ -63,6 +72,21 @@ const router = createRouter({
           component: () => import('../views/StatusesPage.vue'),
         },
         {
+          path: 'users',
+          name: 'users',
+          component: () => import('../views/UsersPage.vue'),
+        },
+        {
+          path: 'structure',
+          name: 'structure',
+          component: () => import('../views/CompanyStructure.vue'),
+        },
+        {
+          path: 'auto-create',
+          name: 'auto-create',
+          component: () => import('../views/AutoCreatePage.vue'),
+        },
+        {
           path: 'permissions',
           name: 'permissions',
           component: () => import('../views/PermissionsPage.vue'),
@@ -71,6 +95,11 @@ const router = createRouter({
           path: 'profile',
           name: 'profile',
           component: () => import('../views/ProfilePage.vue'),
+        },
+        {
+          path: 'sync',
+          name: 'sync',
+          component: () => import('../views/SyncPage.vue'),
         },
       ],
     },
@@ -82,7 +111,11 @@ const router = createRouter({
 router.beforeEach(async (to) => {
   const auth = useAuthStore()
 
-  if (to.meta.requiresAuth && (!auth.isAuthenticated || auth.accessExpired)) {
+  if (
+    to.meta.requiresAuth &&
+    (!auth.isAuthenticated || auth.accessExpired) &&
+    !isOffline.value
+  ) {
     await auth.refreshSession()
   }
 
@@ -93,7 +126,12 @@ router.beforeEach(async (to) => {
 
   // Уже авторизованных не пускаем на страницу входа
   if (to.name === 'login' && auth.isAuthenticated) {
-    return { name: 'dashboard' }
+    return { name: auth.user?.role === 'worker' ? 'profile' : 'dashboard' }
+  }
+
+  // worker видит только свой профиль: любые другие страницы — на profile
+  if (auth.user?.role === 'worker' && to.name !== 'profile') {
+    return { name: 'profile' }
   }
 
   // Табель и Сотрудники доступны только vp и admin
@@ -104,11 +142,17 @@ router.beforeEach(async (to) => {
     return { name: 'dashboard' }
   }
 
-  // Статусы и Права — только admin
+  // Статусы, Права, Пользователи, Структура, Автосоздание — только admin
   if (
-    (to.name === 'statuses' || to.name === 'permissions') &&
+    (to.name === 'statuses' || to.name === 'permissions' || to.name === 'users' || to.name === 'structure' || to.name === 'auto-create') &&
     auth.user?.role !== 'admin'
   ) {
+    return { name: 'dashboard' }
+  }
+
+  // Синхронизация (офлайн-настройки) — доступна только в настольной (Electron)
+  // сборке. В веб-версии офлайна нет, страница недоступна.
+  if (to.name === 'sync' && !isElectron) {
     return { name: 'dashboard' }
   }
 

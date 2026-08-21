@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import LabeledBar from '../../../Bar/Bar.vue'
-import { GanttTooltip } from '@/components/common'
+import { BarTooltip } from '@/components/common'
 import type { ProcessBarProps } from './types'
 
 const props = withDefaults(defineProps<ProcessBarProps>(), {
@@ -45,8 +45,9 @@ const emit = defineEmits<{
   >
     <template #tooltip="{ dateRange }">
       <slot name="tooltip">
-        <GanttTooltip
+        <BarTooltip
           :title="title"
+          :accent="'#1a73e8'"
           :rows="[ownerName ? `Владелец: ${ownerName}` : '', dateRange].filter(Boolean)"
         />
       </slot>

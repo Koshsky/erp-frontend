@@ -23,9 +23,9 @@ export const NAV_CATEGORIES: NavCategory[] = [
     label: 'Планировщик',
     roles: null,
     items: [
-      { label: 'Проекты', to: '/projects', name: 'projects', roles: ['dp', 'rp', 'admin', 'worker'] },
-      { label: 'Процессы', to: '/processes', name: 'processes', roles: ['dp', 'rp', 'admin', 'worker'] },
-      { label: 'Задачи', to: '/planner', name: 'planner' },
+      { label: 'Проекты', to: '/projects', name: 'projects', roles: ['dp', 'rp', 'admin'] },
+      { label: 'Процессы', to: '/processes', name: 'processes', roles: ['dp', 'rp', 'admin'] },
+      { label: 'Задачи', to: '/planner', name: 'planner', roles: ['dp', 'rp', 'admin', 'vp'] },
     ],
   },
   {
@@ -41,6 +41,9 @@ export const NAV_CATEGORIES: NavCategory[] = [
     label: 'Админ',
     roles: ['admin'],
     items: [
+      { label: 'Пользователи', to: '/users', name: 'users' },
+      { label: 'Структура компании', to: '/structure', name: 'structure' },
+      { label: 'Автосоздание проектов', to: '/auto-create', name: 'auto-create' },
       { label: 'Статусы', to: '/statuses', name: 'statuses' },
       { label: 'Права', to: '/permissions', name: 'permissions' },
     ],
@@ -49,7 +52,7 @@ export const NAV_CATEGORIES: NavCategory[] = [
 
 /** Прямые ссылки в шапке (вне категорий) */
 export const STANDALONE_NAV: NavItem[] = [
-  { label: 'Дашборд', to: '/', name: 'dashboard' },
+  { label: 'Дашборд', to: '/', name: 'dashboard', roles: ['admin', 'dp', 'rp', 'vp'] },
 ]
 
 /** Навигация с учётом роли текущего пользователя */
@@ -72,5 +75,10 @@ export function useNavigation() {
     visibleCategories.value.find((c) => c.items.some((i) => i.name === route.name)),
   )
 
-  return { visibleCategories, activeCategory, standalone: STANDALONE_NAV }
+  /** Прямые ссылки с учётом роли (например, дашборд скрыт от worker) */
+  const standalone = computed(() =>
+    STANDALONE_NAV.filter((i) => !i.roles || i.roles.includes(auth.user?.role ?? '')),
+  )
+
+  return { visibleCategories, activeCategory, standalone }
 }

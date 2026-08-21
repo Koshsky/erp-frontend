@@ -14,6 +14,12 @@ export interface Task {
   start_date: string
   end_date: string
   resources: TaskResource[]
+  /** Ответственный (владелец) задачи: id назначенного пользователя */
+  owner_id?: number | null
+  /** Имя ответственного (резолвится из owner_id по справочнику users) */
+  owner_name?: string
+  /** Короткое ФИО ответственного «Фамилия И.О.» — для бейджа на баре задачи */
+  owner_short?: string
 }
 
 export interface TaskBarProps {

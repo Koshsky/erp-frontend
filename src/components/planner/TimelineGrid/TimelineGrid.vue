@@ -37,6 +37,12 @@ const emit = defineEmits<{
   }]
   /** ПКМ по шапке таблицы (календарный заголовок / корнер): переключение масштаба */
   'header-ctxmenu': [payload: { clientX: number; clientY: number }]
+  /**
+   * Текущее видимое окно шкалы (период «как на экране») + эффективная ширина
+   * ячейки с учётом зума + масштаб зума (Ctrl+wheel). Дебаунс ~150 мс; испускается
+   * при прокрутке/зуме/смене масштаба и после монтирования. Потребитель — печать в PDF.
+   */
+  'visible-range': [payload: { from: string; to: string; cellWidthPx: number; scale: number }]
 }>()
 
 const scrollEl = ref<HTMLElement | null>(null)
@@ -60,7 +66,39 @@ onMounted(async () => {
     await nextTick()
     applyFocus()
   }
+  emitVisibleRange()
 })
+
+/** Видимое окно шкалы для потребителей (печать): первая/последняя видимая дата + ширина ячейки */
+function emitVisibleRange() {
+  const start = tl.windowStart.value
+  const count = tl.viewportCells.value
+  if (count <= 0) return
+  const from = fmtDate(tl.cellStart(start))
+  const to = fmtDate(tl.cellEnd(start + count - 1))
+  const cellWidthPx = Math.round(tl.cellPx.value * tl.tableScale.value * 100) / 100
+  emit('visible-range', { from, to, cellWidthPx, scale: tl.tableScale.value })
+}
+
+let rangeTimer: ReturnType<typeof setTimeout> | null = null
+function scheduleVisibleRange() {
+  if (rangeTimer != null) clearTimeout(rangeTimer)
+  rangeTimer = setTimeout(() => {
+    rangeTimer = null
+    emitVisibleRange()
+  }, 150)
+}
+
+watch(
+  [
+    () => tl.windowStart.value,
+    () => tl.viewportCells.value,
+    () => tl.cellPx.value,
+    () => tl.tableScale.value,
+    () => unit.value,
+  ],
+  scheduleVisibleRange,
+)
 
 /** Изменение якоря без перемонтирования (смена query на той же странице) */
 watch(
@@ -130,6 +168,7 @@ function scrollGroupToTop(target: HTMLElement): number {
 }
 
 onBeforeUnmount(() => {
+  if (rangeTimer != null) clearTimeout(rangeTimer)
   pan.disable()
   tl.unmount()
 })

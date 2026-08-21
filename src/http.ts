@@ -2,15 +2,22 @@ import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios'
 import { useAuthStore } from './store'
 import router from './router'
 import { apiErrorMessage } from './utils'
-
-const TOKEN_KEY = 'mvs_erp_access_token'
-const REFRESH_KEY = 'mvs_erp_refresh_token'
+import { cacheGet, cacheGetByPath, cachePut } from './offline/cache'
+import { replayOutboxToCache } from './offline/outbox'
+import { isOffline } from './offline/state'
+import { isElectron } from './electron'
+import { getAccessToken } from './token'
 
 /** Пути, где 401 не означает «токен протух» — их не трогаем (защита от петли) */
-const AUTH_PATHS = ['/auth/login', '/auth/refresh', '/auth/register']
+const AUTH_PATHS = ['/auth/login', '/auth/refresh', '/auth/logout']
 
 interface RetryableConfig extends InternalAxiosRequestConfig {
   _retried?: boolean
+}
+
+/** Полный URL запроса — единый ключ для кэша (и запись, и чтение) */
+function cacheKey(config: InternalAxiosRequestConfig): string {
+  return axios.getUri(config)
 }
 
 /** Единственный «в полёте» refresh для всех параллельных 401 */
@@ -29,11 +36,88 @@ function redirectToLogin() {
  * сгенерированные API-клиенты (src/api/base.ts: globalAxios).
  */
 export function setupHttp() {
+  // Успешные GET пишем в офлайн-кэш (сеть доступна — данные свежие).
+  // Кэш и write-through overlay нужны только офлайн-режиму (Electron).
   axios.interceptors.response.use(
-    (response) => response,
+    async (response) => {
+      const { config, status } = response
+      if (
+        isElectron &&
+        status >= 200 &&
+        status < 300 &&
+        config.method === 'get' &&
+        config.url &&
+        !AUTH_PATHS.some((path) => config.url!.includes(path))
+      ) {
+        await cachePut(cacheKey(config), response.data)
+        // Инвариант «кэш = сервер + очередь»: после свежей записи снова накладываем
+        // несинхронизированные мутации — warmup/reconcile не должны стирать их
+        // серверной правдой (иначе офлайн-правки пропадают после перезагрузки).
+        await replayOutboxToCache()
+      }
+      return response
+    },
     async (error: AxiosError) => {
-      const { config, response } = error
-      if (!config || !response) {
+      const { config } = error
+      if (!config) {
+        return Promise.reject(error)
+      }
+
+      // Сервер недоступен (сеть, таймаут, abort — любой запрос без HTTP-ответа):
+      // в офлайн-режиме (Electron) отдаём последний сохранённый ответ из кэша
+      // (тот же формат { data, error }). Read-time overlay: перед чтением
+      // накладываем несинхронизированные мутации на нагретый кэш.
+      // В web-сборке офлайна нет — просто пробрасываем ошибку.
+      if (!error.response) {
+        if (isElectron && (config.method ?? 'get').toLowerCase() === 'get') {
+          await replayOutboxToCache()
+          const key = cacheKey(config)
+          let cached = await cacheGet<unknown>(key)
+          // Точный ключ мог не совпасть (GET с дата-окном зависит от «сегодня»
+          // и после прогревки отличается) — ищем свежий ответ по эндпоинту.
+          if (cached == null) {
+            const pathname = (() => {
+              try {
+                return new URL(key).pathname
+              } catch {
+                return key.split('?')[0]
+              }
+            })()
+            cached = await cacheGetByPath<unknown>(pathname)
+          }
+          if (cached != null) {
+            isOffline.value = true
+            console.log(`[offline] served cache: ${key}`)
+            return {
+              data: cached,
+              status: 200,
+              statusText: 'OK',
+              headers: {},
+              config,
+              request: error.request,
+            }
+          }
+          ;(error as AxiosError & { message: string }).message =
+            'Нет сохранённых данных: откройте эту страницу онлайн хотя бы раз'
+          console.log(`[offline] cache miss: ${key}`)
+        }
+        // Диагностика сетевой ошибки (таймаут/обрыв/CORS/abort) — подробно в консоль.
+        const ax = error as AxiosError & { code?: string; timeout?: number }
+        console.error(
+          `[http] сетевая ошибка (нет HTTP-ответа): ${(config.method || 'get').toUpperCase()} ${config.url ?? ''}`,
+          {
+            kind: 'network',
+            code: ax.code,
+            timeout_ms: ax.timeout,
+            message: ax.message,
+            data: config.data,
+          },
+        )
+        return Promise.reject(error)
+      }
+
+      const { response } = error
+      if (!response) {
         return Promise.reject(error)
       }
 
@@ -57,12 +141,6 @@ export function setupHttp() {
 
       const auth = useAuthStore()
 
-      if (!localStorage.getItem(REFRESH_KEY)) {
-        auth.logout()
-        redirectToLogin()
-        return Promise.reject(error)
-      }
-
       if ((config as RetryableConfig)._retried) {
         return Promise.reject(error)
       }
@@ -78,7 +156,7 @@ export function setupHttp() {
       }
 
       ;(config as RetryableConfig)._retried = true
-      const token = localStorage.getItem(TOKEN_KEY) ?? ''
+      const token = getAccessToken()
       config.headers = config.headers ?? {}
       delete config.headers['authorization']
       config.headers['Authorization'] = `Bearer ${token}`

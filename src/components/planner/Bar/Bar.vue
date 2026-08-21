@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, useSlots } from 'vue'
+import { computed, onBeforeUnmount, ref, useSlots, watch } from 'vue'
 import { cellRangeForSpan, clampSpanDates, spanToDates, formatDateRange } from '../calendar'
 import { useTimelineItem } from '../../../composables/useTimelineItem'
-import { TooltipCell, GanttTooltip } from '../../common'
+import { TooltipCell } from '../../common'
 import type { BarProps } from './types'
 
 const slots = useSlots()
@@ -28,6 +28,12 @@ const emit = defineEmits<{
   contextmenu: [payload: { clientX: number; clientY: number }]
   /** Одиночный клик (без перетаскивания) — навигация между вкладками */
   click: []
+  /** Старт драга/ресайза: предложенные новые даты (live-предпросмотр загрузки) */
+  dragstart: [payload: { start_date: string; end_date: string }]
+  /** Драг продолжается — новые даты обновились */
+  dragmove: [payload: { start_date: string; end_date: string }]
+  /** Драг закончен (любым образом) — превью сбросить */
+  dragend: []
 }>()
 
 // === Разграничение одиночного клика и даблклика ===
@@ -73,7 +79,7 @@ const span = computed(() =>
   cellRangeForSpan(props.timeline.origin, props.timeline.unit, props.startDate, props.endDate),
 )
 
-const { bounds, visible, isDragging, cursor, previewStyle, startDrag } = useTimelineItem({
+const { bounds, visible, isDragging, cursor, previewStyle, dragSpan, startDrag } = useTimelineItem({
   timeline: () => props.timeline,
   groupStartDate: props.groupStartDate,
   groupEndDate: props.groupEndDate,
@@ -83,6 +89,23 @@ const { bounds, visible, isDragging, cursor, previewStyle, startDrag } = useTime
     emit('change', clampSpanDates(d.start_date, d.end_date, props.groupStartDate, props.groupEndDate))
   },
 })
+
+/** Live-предпросмотр: публикуем предложенные даты бара, пока идёт драг/ресайз.
+ *  flush:'sync' — цвет ячеек пересчитывается сразу на каждый move. */
+watch(
+  dragSpan,
+  (sp) => {
+    if (!sp) {
+      emit('dragend')
+      return
+    }
+    const d = spanToDates(props.timeline.origin, props.timeline.unit, sp.startCell, sp.endCell)
+    const payload = clampSpanDates(d.start_date, d.end_date, props.groupStartDate, props.groupEndDate)
+    if (isDragging.value) emit('dragmove', payload)
+    else emit('dragstart', payload)
+  },
+  { flush: 'sync' },
+)
 
 const barStyle = computed<Record<string, string | number> | null>(() => {
   if (!span.value || !visible.value) return null
@@ -145,7 +168,10 @@ function onContextMenu(e: MouseEvent) {
       </slot>
       <template #popup>
         <slot name="tooltip" :dateRange="dateRange">
-          <GanttTooltip :title="title" :rows="[dateRange]" />
+          <div class="lb-tt">
+            <div class="lb-tt-title">{{ title }}</div>
+            <div class="lb-tt-row">{{ dateRange }}</div>
+          </div>
         </slot>
       </template>
     </TooltipCell>
@@ -236,5 +262,18 @@ function onContextMenu(e: MouseEvent) {
   margin-left: 6px;
   white-space: nowrap;
   pointer-events: none;
+}
+.lb-tt {
+  font-size: 12px;
+  line-height: 1.5;
+}
+.lb-tt-title {
+  font-weight: 700;
+  font-size: 13px;
+  margin-bottom: 2px;
+}
+.lb-tt-row {
+  color: #666;
+  white-space: nowrap;
 }
 </style>

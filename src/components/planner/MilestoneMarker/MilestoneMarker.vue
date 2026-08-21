@@ -8,6 +8,7 @@ import {
 } from '../calendar'
 import { useTimelineItem } from '../../../composables/useTimelineItem'
 import { TooltipCell } from '../../common/TooltipCell'
+import { BarTooltip } from '../../common/Tooltips'
 import type { MilestoneMarkerProps } from './types'
 
 const props = withDefaults(defineProps<MilestoneMarkerProps>(), {
@@ -107,11 +108,11 @@ function onDblClick() {
       <TooltipCell :text="title" :multiline="true">
         <span class="ms-hit" />
         <template #popup>
-          <div class="ms-popup">
-            <div class="ms-popup-title">{{ title }}</div>
-            <div v-if="content" class="ms-popup-content">{{ content }}</div>
-            <div class="ms-popup-date">{{ formattedDate }}</div>
-          </div>
+          <BarTooltip
+            :title="title"
+            :accent="'#fbbc04'"
+            :rows="[content, formattedDate].filter((x): x is string => Boolean(x))"
+          />
         </template>
       </TooltipCell>
     </div>
@@ -161,20 +162,5 @@ function onDblClick() {
   width: 2px;
   opacity: 0.9;
   pointer-events: none;
-}
-</style>
-
-<style>
-.ms-popup-title {
-  font-weight: 700;
-  margin-bottom: 2px;
-}
-.ms-popup-content {
-  color: rgba(255, 255, 255, 0.85);
-}
-.ms-popup-date {
-  color: rgba(255, 255, 255, 0.85);
-  margin-top: 4px;
-  font-size: 12px;
 }
 </style>

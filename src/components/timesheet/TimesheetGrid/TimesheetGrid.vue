@@ -4,6 +4,7 @@ import { fmtDate } from '../../planner/calendar'
 import { LABEL_WIDTH } from '../../planner/layout'
 import { stateBackground } from '../stateColors'
 import TimesheetCell from '../TimesheetCell/TimesheetCell.vue'
+import { TooltipCell, InfoTooltip } from '@/components/common'
 import type { ClearPayload, TimesheetGridProps } from './types'
 
 const props = withDefaults(defineProps<TimesheetGridProps>(), {
@@ -140,6 +141,9 @@ function onPointerUp(e: PointerEvent) {
   document.body.style.userSelect = ''
   window.removeEventListener('pointermove', onPointerMove)
   window.removeEventListener('pointerup', onPointerUp)
+  // Драг мог оставить якорь браузерного выделения — снимаем, чтобы клик вне панели
+  // не «растянул» текст между кликами
+  window.getSelection()?.removeAllRanges()
   if (!s || Number.isNaN(s.endIdx)) return
   const lo = Math.min(s.startIdx, s.endIdx)
   const hi = Math.max(s.startIdx, s.endIdx)
@@ -192,6 +196,14 @@ function closePanel() {
   }
   panel.value = null
   selection.value = null
+  // Убираем браузерное выделение, оставшееся после драга/клика вне панели
+  window.getSelection()?.removeAllRanges()
+}
+
+/** Клик вне панели (оверлей): закрываем и запрещаем создание/расширение выделения текста */
+function onOverlayPointerDown(e: PointerEvent) {
+  e.preventDefault()
+  closePanel()
 }
 
 /**
@@ -247,16 +259,22 @@ const labelsH = computed(() => props.employees.length * ROW_H)
       class="ts-labels"
       :style="{ width: LABEL_WIDTH + 'px', marginBottom: '-' + labelsH + 'px' }"
     >
-      <div
+      <TooltipCell
         v-for="emp in employees"
         :key="'tsl' + emp.id"
         class="ts-label"
         :style="{ height: ROW_H + 'px' }"
-        :title="emp.position || emp.resource_title ? `${emp.name} — ${emp.position || emp.resource_title}` : emp.name"
+        :multiline="true"
       >
         <span class="ts-label-name">{{ emp.name }}</span>
-        <span class="ts-label-pos">{{ emp.position || emp.resource_title }}</span>
-      </div>
+        <span class="ts-label-pos">{{ emp.position }}</span>
+        <template #popup>
+          <InfoTooltip
+            :title="emp.name"
+            :lines="[emp.position].filter((x): x is string => Boolean(x))"
+          />
+        </template>
+      </TooltipCell>
     </div>
 
     <!-- Сетка ячеек: ряд на сотрудника, ячейки по видимым дням -->
@@ -290,11 +308,16 @@ const labelsH = computed(() => props.employees.length * ROW_H)
     <!-- Плавающая панель назначения состояния выделенному диапазону -->
     <Teleport to="body">
       <template v-if="panel">
-        <div class="ts-overlay" @pointerdown="closePanel" />
+        <div class="ts-overlay" @pointerdown="onOverlayPointerDown" />
         <div class="ts-panel" ref="panelEl" :style="{ left: panel.x + 'px', top: panel.y + 'px' }" role="dialog" :aria-label="'Назначить состояние'">
           <div class="ts-panel-head">
             <span class="ts-panel-title">{{ employeeName(panel.employeeId) }}</span>
-            <span class="ts-panel-range" :title="`${fmtFull(panel.startDate)} — ${fmtFull(panel.endDate)}`">{{ fmtDM(panel.startDate) }}–{{ fmtDM(panel.endDate) }}</span>
+            <TooltipCell class="ts-panel-range" :multiline="true">
+              <span>{{ fmtDM(panel.startDate) }}–{{ fmtDM(panel.endDate) }}</span>
+              <template #popup>
+                <InfoTooltip :lines="[`${fmtFull(panel.startDate)} — ${fmtFull(panel.endDate)}`]" />
+              </template>
+            </TooltipCell>
             <button type="button" class="ts-panel-close" aria-label="Закрыть" @click="closePanel">×</button>
           </div>
           <div class="ts-panel-states">
@@ -327,7 +350,7 @@ const labelsH = computed(() => props.employees.length * ROW_H)
   position: relative;
 }
 /* Боковая панель имён: липнет слева, поверх контента (ячеек/линий), шапки календаря
-   (30) и линии текущей даты (60), но под корнером (90). Ширина колонки 180px, поэтому
+   (30) и линии текущей даты (25), но под корнером (90). Ширина колонки 180px, поэтому
    с шапкой не пересекается (у шапки слева — корнер), а линия «сегодня» идёт от x>=180. */
 .ts-labels {
   position: sticky;
@@ -335,6 +358,8 @@ const labelsH = computed(() => props.employees.length * ROW_H)
   z-index: 80;
   background: #fff;
   box-sizing: border-box;
+  user-select: none;
+  -webkit-user-select: none;
 }
 .ts-label {
   display: flex;
@@ -345,6 +370,7 @@ const labelsH = computed(() => props.employees.length * ROW_H)
   box-sizing: border-box;
   border-bottom: 1px solid #f0f0f0;
   overflow: hidden;
+  cursor: default;
 }
 .ts-label-name {
   font-weight: 700;
@@ -376,6 +402,8 @@ const labelsH = computed(() => props.employees.length * ROW_H)
   top: 0;
   bottom: 0;
   box-sizing: border-box;
+  user-select: none;
+  -webkit-user-select: none;
 }
 .ts-error {
   margin: 10px 0 0;
@@ -388,6 +416,8 @@ const labelsH = computed(() => props.employees.length * ROW_H)
   inset: 0;
   z-index: 1000;
   background: transparent;
+  user-select: none;
+  -webkit-user-select: none;
 }
 .ts-panel {
   position: fixed;

@@ -1,0 +1,83 @@
+# MVS ERP — настольная обвязка (Electron)
+
+Оборачивает собранный vite-фронтенд (`dist/`) в нативное десктоп-приложение
+(Windows / macOS / Linux). Приложение работает онлайн и офлайн (IndexedDB +
+локальный http), подключается к внешнему бэкенду по API_URL (задаётся на
+экране «Синхронизация» или в настройках до входа).
+
+## Как это работает
+
+- `main.js` (main-процесс) поднимает локальный HTTP-сервер на `127.0.0.1`,
+  отдающий `../dist` (собранный фронтенд). Это нужно, потому что фронтенд
+  жёстко использует корневые пути `/precache-manifest.json`, `/assets/*` —
+  через `http` они работают без правок кода (в отличие от `file://`).
+- `preload.js` через `contextBridge` отдаёт renderer'у минимальный API
+  `window.erpDesktop` (флаг `isElectron` + доступ к safeStorage для пароля).
+- Service Worker отсутствует (в проекте вырезан): офлайн в приложении даёт
+  локальный http + IndexedDB (кэш данных и очередь изменений).
+
+## Сборка
+
+Предварительно собрать фронтенд:
+
+```bash
+cd ../            # services/frontend
+npm run build     # → dist/
+```
+
+Затем собрать установщики (из `desktop/`):
+
+```bash
+npm install        # electron + electron-builder (уже в devDependencies)
+npm run dist       # все платформы
+npm run dist:win   # только Windows (NSIS .exe)
+npm run dist:mac   # macOS (dmg + zip)
+npm run dist:linux # Linux (AppImage + deb)
+```
+
+Готовые файлы — в `release/`.
+
+### Portable (без установки) — Windows и Linux
+
+Скрипт `build-portable.sh` собирает переносные версии (распакованные, не требуют
+установки): Windows — `win-unpacked/` + `*-win.zip`, Linux — `linux-unpacked/`:
+
+```bash
+./build-portable.sh            # и Windows, и Linux
+./build-portable.sh --win      # только Windows portable
+./build-portable.sh --linux    # только Linux portable
+./build-portable.sh --build-web  # принудительно пересобрать dist/ перед упаковкой
+./build-portable.sh --clean      # очистить release/ перед сборкой
+```
+
+Portable не требует wine/NSIS: Windows собирается через таргет `zip`, Linux — через
+таргет `dir`. (NSIS `.exe`-установщик — НЕ portable, ему на Linux нужны wine +
+makensis; это отдельный `npm run dist:win`.)
+
+Запуск в dev (без упаковки):
+
+```bash
+npm start          # открывает Electron-окно с локально поданным dist/
+```
+
+## Пароль автосинка
+
+Пароль для автосинхронизации хранится **не в браузере**, а в main-процессе
+через `safeStorage` (шифрование на уровне ОС, файл в `userData`), и доступен
+renderer'у только через IPC (`window.erpDesktop.password.get/set/clear`).
+В обычном браузере (не Electron) пароль не хранится вовсе.
+
+На экране «Синхронизация» (только в настольной версии) есть блок «Данные
+для автосинка»: логин сохраняется в localStorage, пароль — в safeStorage.
+При запуске приложение автоматически восстанавливает сессию по сохранённым
+креденшелам (`ensureDesktopAutoSyncSession` в `src/offline/sync.ts`), если
+автосинк включён и сессия отсутствует, — и выполняет синхронизацию без
+ручного входа.
+
+## Требования
+
+- Node.js ≥ 20 (для сборки/упаковки).
+- Для сборки macOS-установщика нужен macOS; Windows .exe удобнее собирать
+  на Windows (electron-builder умеет и кросс-сборку с ограничениями).
+- safeStorage работает там, где ОС даёт шифрование (macOS Keychain, Windows
+  DPAPI, Linux — keyring); если ключа нет, пароль просто не сохраняется.

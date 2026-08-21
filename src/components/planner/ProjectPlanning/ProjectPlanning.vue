@@ -44,6 +44,8 @@ const emit = defineEmits<{
   'header-ctxmenu': [payload: { clientX: number; clientY: number }]
   reorder: [payload: { from: number; to: number }]
   navigate: [payload: number]
+  /** Видимое окно шкалы (период «как на экране») — проброс из TimelineGrid */
+  'visible-range': [payload: { from: string; to: string; cellWidthPx: number; scale: number }]
 }>()
 
 const userNames = computed(() => new Map((props.users || []).map((u) => [u.id, u.name])))
@@ -72,7 +74,7 @@ function onGridCtx(p: { clientX: number; clientY: number; date: string | null; r
 
 <template>
   <PlannerStates :loading="loading" :error="error" :has-data="displayProjects.length > 0">
-    <TimelineGrid v-if="displayProjects.length" id="project" :origin="origin" :unit="unit" :focus-date="focusDate" :focus-group-id="focusGroupId" @ctxmenu="onGridCtx" @header-ctxmenu="(p) => emit('header-ctxmenu', p)">
+    <TimelineGrid v-if="displayProjects.length" id="project" :origin="origin" :unit="unit" :focus-date="focusDate" :focus-group-id="focusGroupId" @ctxmenu="onGridCtx" @header-ctxmenu="(p) => emit('header-ctxmenu', p)" @visible-range="(p) => emit('visible-range', p)">
       <template #default="{ t }">
         <CalendarHeader :t="t" />
         <ProjectGantt

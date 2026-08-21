@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { ContextMenu, ModalForm, ConfirmDialog } from '../components/common'
 import type { ContextMenuItem } from '../components/common/ContextMenu'
@@ -9,13 +9,14 @@ import { useContextMenu } from '../composables/useContextMenu'
 import { useEditModal } from '../composables/useEditModal'
 import { useRoleAccess } from '../composables/useRoleAccess'
 import { useAppStore, useTimesheetStore } from '../store'
-import type { DtoEmployeeResponse } from '@/api'
+import { compareByName } from '../utils'
+import type { DtoUserResponse } from '@/api'
 
 const ts = useTimesheetStore()
-const { employees, loading, error } = storeToRefs(ts)
+const { employees, employeesWithTitles, loading, error } = storeToRefs(ts)
 
 const app = useAppStore()
-const { resources, users } = storeToRefs(app)
+const { users } = storeToRefs(app)
 
 // Редактирование/удаление: admin — любого, остальные (vp) — только подчинённых
 const { role, userId, canManageEmployees, canEditEmployee } = useRoleAccess()
@@ -36,25 +37,27 @@ function managerLabel(managerId?: number | null): string {
   return u?.name ?? `#${managerId}`
 }
 
-/** Поиск по ФИО, должности и типу ресурса (регистронезависимый) */
+/** Поиск по ФИО и должности (регистронезависимый) */
 const search = ref('')
 
-/** Фильтр по руководителю (manager_id): '' — все, 'none' — без руководителя, число — конкретный */
+/** Фильтр по руководителю (manager_id): '' — все, 'none' — без руководителя (клиент), число — серверный фильтр */
 const managerFilter = ref<number | 'none' | ''>('')
 const filteredEmployees = computed(() => {
-  let list = employees.value
+  let list = employeesWithTitles.value
   const q = search.value.trim().toLowerCase()
   if (q) {
-    list = list.filter((e) =>
-      `${e.name ?? ''} ${e.position ?? ''} ${e.resource_title ?? ''}`.toLowerCase().includes(q),
-    )
+    list = list.filter((e) => `${e.name ?? ''} ${e.position ?? ''}`.toLowerCase().includes(q))
   }
-  if (managerFilter.value !== '') {
-    list = list.filter((e) =>
-      managerFilter.value === 'none' ? e.manager_id == null : e.manager_id === managerFilter.value,
-    )
+  // 'none' (без руководителя) фильтруем на клиенте; числовой manager_id уже отфильтрован сервером
+  if (managerFilter.value === 'none') {
+    list = list.filter((e) => e.manager_id == null)
   }
   return list
+})
+
+// Смена фильтра руководителя перезагружает листинг с manager_id (только для admin)
+watch(managerFilter, (v) => {
+  if (isAdmin.value) ts.fetchEmployees(typeof v === 'number' ? v : undefined)
 })
 
 // ПКМ по строке: редактирование/удаление (только свои сотрудники / admin)
@@ -77,26 +80,21 @@ type ModalMode =
   | {
       type: 'edit'
       id: number
-      name: string
+      lastName: string
+      firstName: string
+      middleName?: string
       position?: string
-      resourceId?: number
       managerId?: number | null
       hireDate?: string
       terminationDate?: string
     }
 
-/** Варианты типов ресурсов (категорий) из справочника */
-const resourceOptions = computed(() =>
-  resources.value
-    .filter((r) => r.id != null)
-    .map((r) => ({ value: r.id as number, label: r.title ?? '' })),
-)
-
-/** Варианты руководителей (пользователей) + «Без руководителя» */
+/** Варианты руководителей (пользователей, без workers) + «Без руководителя» */
 const managerOptions = computed<ModalField['options']>(() => [
   { value: '', label: 'Без руководителя' },
   ...users.value
-    .filter((u) => u.id != null)
+    .filter((u) => u.id != null && u.role !== 'worker')
+    .sort(compareByName)
     .map((u) => ({ value: u.id as number, label: u.name ?? `#${u.id}` })),
 ])
 
@@ -104,11 +102,24 @@ const { open: openModal, close: closeModal, submit: submitModal, bind: modalBind
   (state) => {
     const fields: ModalField[] = [
       {
-        key: 'name',
-        label: 'ФИО',
+        key: 'lastName',
+        label: 'Фамилия',
         type: 'text',
-        value: state.type === 'edit' ? state.name : '',
+        value: state.type === 'edit' ? state.lastName : '',
         required: true,
+      },
+      {
+        key: 'firstName',
+        label: 'Имя',
+        type: 'text',
+        value: state.type === 'edit' ? state.firstName : '',
+        required: true,
+      },
+      {
+        key: 'middleName',
+        label: 'Отчество',
+        type: 'text',
+        value: state.type === 'edit' ? (state.middleName ?? '') : '',
       },
       {
         key: 'position',
@@ -116,14 +127,6 @@ const { open: openModal, close: closeModal, submit: submitModal, bind: modalBind
         type: 'text',
         value: state.type === 'edit' ? (state.position ?? '') : '',
         placeholder: 'Свободный текст, например «Ведущий инженер»',
-      },
-      {
-        key: 'resourceId',
-        label: 'Тип ресурса',
-        type: 'select',
-        options: resourceOptions.value,
-        required: true,
-        value: state.type === 'edit' ? (state.resourceId ?? '') : '',
       },
     ]
     fields.push(
@@ -143,16 +146,13 @@ const { open: openModal, close: closeModal, submit: submitModal, bind: modalBind
     return fields
   },
   async (state, values) => {
-    const payload: { name: string; resource_id?: number; position?: string; manager_id?: number; hire_date?: string; termination_date?: string } = {
-      name: String(values.name ?? '').trim(),
+    const payload: { last_name: string; first_name: string; middle_name?: string; role?: string; position?: string; manager_id?: number; hire_date?: string; termination_date?: string } = {
+      last_name: String(values.lastName ?? '').trim(),
+      first_name: String(values.firstName ?? '').trim(),
+      middle_name: String(values.middleName ?? '').trim() || undefined,
     }
     if (values.position != null) {
       payload.position = String(values.position).trim()
-    }
-    if (state.type === 'create') {
-      payload.resource_id = Number(values.resourceId)
-    } else if (values.resourceId != null) {
-      payload.resource_id = Number(values.resourceId)
     }
     if (values.hireDate) payload.hire_date = String(values.hireDate)
     if (values.terminationDate) payload.termination_date = String(values.terminationDate)
@@ -162,7 +162,7 @@ const { open: openModal, close: closeModal, submit: submitModal, bind: modalBind
     }
     const ok =
       state.type === 'create'
-        ? await ts.createEmployee(Number(values.resourceId), payload)
+        ? await ts.createEmployee({ ...payload, role: 'worker' })
         : await ts.updateEmployee(state.id, payload)
     return { ok, error: ok ? null : error.value }
   },
@@ -170,7 +170,7 @@ const { open: openModal, close: closeModal, submit: submitModal, bind: modalBind
   (state) => (state.type === 'create' ? 'Создать' : 'Сохранить'),
 )
 
-function onRowContextMenu(e: MouseEvent, emp: DtoEmployeeResponse) {
+function onRowContextMenu(e: MouseEvent, emp: DtoUserResponse) {
   if (emp.id == null || !canEditEmployee(emp)) return
   openMenu({ x: e.clientX, y: e.clientY, employeeId: emp.id })
 }
@@ -187,9 +187,10 @@ function openEdit(id: number) {
     openModal({
       type: 'edit',
       id,
-      name: emp.name ?? '',
+      lastName: emp.last_name ?? '',
+      firstName: emp.first_name ?? '',
+      middleName: emp.middle_name ?? '',
       position: emp.position ?? '',
-      resourceId: emp.resource_id ?? undefined,
       managerId: emp.manager_id ?? null,
       hireDate: emp.hire_date,
       terminationDate: emp.termination_date,
@@ -211,7 +212,6 @@ function handleSelect(id: string) {
 
 onMounted(async () => {
   if (!employees.value.length) await ts.fetchEmployees()
-  if (!resources.value.length) await app.loadResources()
   if (isAdmin.value && !users.value.length) await app.loadUsers()
 })
 </script>
@@ -225,7 +225,7 @@ onMounted(async () => {
         <select v-if="isAdmin" v-model="managerFilter" class="ep-filter">
           <option value="">Все руководители</option>
           <option value="none">Без руководителя</option>
-          <option v-for="u in users" :key="u.id" :value="u.id">{{ u.name ?? `#${u.id}` }}</option>
+          <option v-for="u in users.filter((u) => u.role !== 'worker').sort(compareByName)" :key="u.id" :value="u.id">{{ u.name ?? `#${u.id}` }}</option>
         </select>
         <button v-if="canManageEmployees" type="button" class="ep-add" @click="openCreate">Создать сотрудника</button>
       </div>
@@ -238,7 +238,6 @@ onMounted(async () => {
       <div class="tr th">
         <div>ФИО</div>
         <div>Должность</div>
-        <div>Тип ресурса</div>
         <div>Дата приёма</div>
         <div>Дата увольнения</div>
         <div>Руководитель</div>
@@ -251,7 +250,6 @@ onMounted(async () => {
       >
         <div class="name">{{ emp.name }}</div>
         <div>{{ emp.position || '—' }}</div>
-        <div>{{ emp.resource_title }}</div>
         <div>{{ fmtDate(emp.hire_date) }}</div>
         <div>{{ fmtDate(emp.termination_date) }}</div>
         <div>{{ managerLabel(emp.manager_id) }}</div>
@@ -355,7 +353,7 @@ onMounted(async () => {
 }
 .tr {
   display: grid;
-  grid-template-columns: 1.4fr 1.3fr 1.1fr 110px 140px 1fr;
+  grid-template-columns: 1.4fr 1.3fr 110px 140px 1fr;
   gap: 8px;
   padding: 12px 20px;
   border-bottom: 1px solid #f0f0f0;

@@ -33,7 +33,6 @@ const profile = computed<ProfileField[]>(() => {
   ]
 })
 
-// Подтягиваем свежие данные профиля по id пользователя
 onMounted(() => {
   const id = auth.user?.id
   if (id != null) auth.fetchProfile(id)
@@ -71,7 +70,7 @@ async function onChangePassword() {
   <section class="pf">
     <h2 class="pf-title">Профиль</h2>
 
-    <div class="pf-columns">
+    <div class="pf-cards">
       <div class="pf-card">
         <div v-for="field in profile" :key="field.label" class="pf-row">
           <span class="pf-label">{{ field.label }}</span>
@@ -108,21 +107,14 @@ async function onChangePassword() {
   margin-bottom: 20px;
 }
 
-.pf-columns {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+.pf-cards {
+  display: flex;
+  flex-direction: column;
   gap: 24px;
-  align-items: start;
-}
-
-@media (max-width: 860px) {
-  .pf-columns {
-    grid-template-columns: 1fr;
-  }
+  max-width: 720px;
 }
 
 .pf-card {
-  max-width: 520px;
   background: #fff;
   border-radius: 12px;
   box-shadow: 0 1px 6px rgba(0, 0, 0, 0.08);
@@ -192,6 +184,10 @@ async function onChangePassword() {
 .pf-msg.ok {
   color: #188038;
 }
+.pf-msg.warn {
+  color: #b26a00;
+  margin-bottom: 4px;
+}
 
 .pf-btn {
   margin-top: 18px;
@@ -212,5 +208,18 @@ async function onChangePassword() {
 .pf-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+.pf-btn.ghost {
+  background: #f2f2f2;
+  color: #444;
+}
+.pf-btn.ghost:hover:not(:disabled) {
+  background: #e6e6e6;
+}
+.pf-btn.accent {
+  background: #188038;
+}
+.pf-btn.accent:hover:not(:disabled) {
+  background: #146b30;
 }
 </style>

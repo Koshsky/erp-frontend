@@ -136,7 +136,7 @@ function onKeydown(e: KeyboardEvent) {
 .mf-overlay {
   position: fixed;
   inset: 0;
-  z-index: 20000;
+  z-index: 40000;
   display: flex;
   align-items: center;
   justify-content: center;

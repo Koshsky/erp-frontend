@@ -49,7 +49,7 @@ export function useTimelineItem(options: UseTimelineItemOptions) {
     )
   })
 
-  const { isDragging, cursor, previewStyle, startDrag } = useBarDrag({
+  const { isDragging, cursor, previewStyle, dragSpan, startDrag } = useBarDrag({
     timeline: options.timeline,
     scrollEl: () => scrollEl?.value ?? null,
     sync: timelineSync,
@@ -58,5 +58,5 @@ export function useTimelineItem(options: UseTimelineItemOptions) {
     onCommit: options.onCommit,
   })
 
-  return { scrollEl, timelineSync, bounds, visible, isDragging, cursor, previewStyle, startDrag }
+  return { scrollEl, timelineSync, bounds, visible, isDragging, cursor, previewStyle, dragSpan, startDrag }
 }

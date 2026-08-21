@@ -3,6 +3,7 @@ import { ref, onMounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import TaskPlanning from '../components/planner/TaskPlanning/TaskPlanning.vue'
+import { PdfExport } from '../components/planner'
 import { ResourceManagerModal } from '../components/planner'
 import type { AssignedResource, AddResourcePayload } from '../components/planner/ResourceManagerModal'
 import { ContextMenu, ModalForm, ConfirmDialog } from '../components/common'
@@ -16,7 +17,10 @@ import { useUnitMenu } from '../composables/useUnitMenu'
 import { useRoleAccess } from '../composables/useRoleAccess'
 import { useFindPlanningItem } from '../composables/useFindPlanningItem'
 import { usePlanningStore, useAppStore } from '../store'
+import { compareByName } from '../utils'
 import { addDaysISO, shiftSpanDates, clampDateToBounds } from '../components/planner/calendar'
+import { CELL_WIDTH } from '../components/planner/layout'
+import type { PdfGanttGroup } from '../components/planner/PdfExport/pdfRenderer'
 
 const planning = usePlanningStore()
 const app = useAppStore()
@@ -26,6 +30,33 @@ const { taskPlanning, loading, error } = storeToRefs(planning)
 const { resources, calendar } = storeToRefs(app)
 
 const { unit, origin } = usePlanningOrigin()
+
+/** Текущее видимое окно шкалы (период «как на экране») + зум — для печати в PDF */
+const viewRange = ref<{ from: string; to: string; cellWidthPx: number; scale: number }>({
+  from: '',
+  to: '',
+  cellWidthPx: CELL_WIDTH,
+  scale: 1,
+})
+
+/** Отсутствия членов ресурсов (для тултипа UsageCell) */
+const { absenceByResource } = storeToRefs(app)
+
+let absenceTimer: ReturnType<typeof setTimeout> | null = null
+
+/** Загрузить отсутствия по всем ресурсам за видимое окно (с дебаунсом при скролле/зуме) */
+function loadAbsenceForRange(from: string, to: string) {
+  if (!from || !to) return
+  for (const r of resources.value) {
+    if (r.id != null) void app.loadResourceAbsence(r.id, from, to)
+  }
+}
+
+function onVisibleRange(v: { from: string; to: string; cellWidthPx: number; scale: number }) {
+  viewRange.value = v
+  if (absenceTimer) clearTimeout(absenceTimer)
+  absenceTimer = setTimeout(() => loadAbsenceForRange(v.from, v.to), 300)
+}
 
 // Меню ПКМ по шапке таблицы: переключение масштаба «День» / «Декада»
 const { open: openUnitMenu, close: closeUnitMenu, select: selectUnit, bind: unitMenuBind } = useUnitMenu(unit)
@@ -46,7 +77,7 @@ const focusGroupId = computed(() => {
 
 // vp владеет задачами/вехами/назначениями своих процессов; rp — view only
 // (список задач для него уже отфильтрован бэкендом), dp — read-only.
-const { canManageTasks } = useRoleAccess()
+const { canManageTasks, canViewProjects, role, userId } = useRoleAccess()
 
 const { findTask, findMilestone } = useFindPlanningItem()
 
@@ -86,10 +117,18 @@ const menuItems = computed<ContextMenuItem[]>(() => {
   ]
 })
 
-// Модалка редактирования задачи (название) или вехи (название + контент)
+// Модалка редактирования задачи (название, ответственный) или вехи (название + контент)
 type EditState =
-  | { type: 'task'; id: number; title: string }
+  | { type: 'task'; id: number; title: string; ownerId?: number }
   | { type: 'milestone'; id: number; title: string; content: string }
+
+/** Кандидаты в «ответственные» задачи — только свои сотрудники (прямые подчинённые) */
+const ownerOptions = computed(() =>
+  [...app.myStaff]
+    .sort(compareByName)
+    .map((u) => ({ value: u.id ?? 0, label: u.name ?? '' })),
+)
+
 const { open: openEdit, close: closeEdit, submit: submitEdit, bind: editBind } = useEditModal<EditState>(
   (state) => {
     const base: ModalField = {
@@ -105,17 +144,31 @@ const { open: openEdit, close: closeEdit, submit: submitEdit, bind: editBind } =
         { key: 'content', label: 'Контент', type: 'textarea', value: state.content },
       ]
     }
-    return [base]
+    return [
+      base,
+      // Ответственный выбирается из своих сотрудников. Владельца нельзя удалить
+      // (set null); если не выбрать никого из списка — поле owner_id не отправляется.
+      {
+        key: 'owner_id',
+        label: 'Ответственный',
+        type: 'select',
+        value: state.ownerId ?? '',
+        options: ownerOptions.value,
+      },
+    ]
   },
   async (state, values) => {
     const title = String(values.title ?? '')
-    const ok =
-      state.type === 'task'
-        ? await planning.updateTaskMeta(state.id, { title })
-        : await planning.updateMilestoneMeta(state.id, {
-            title,
-            content: String(values.content ?? ''),
-          })
+    if (state.type === 'task') {
+      // Пустое значение (не выбран сотрудник) — владельца не меняем: поле не отправляется.
+      const ownerId = values.owner_id === '' ? undefined : Number(values.owner_id)
+      const ok = await planning.updateTaskMeta(state.id, { title, owner_id: ownerId })
+      return { ok, error: ok ? null : planning.error }
+    }
+    const ok = await planning.updateMilestoneMeta(state.id, {
+      title,
+      content: String(values.content ?? ''),
+    })
     return { ok, error: ok ? null : planning.error }
   },
   (state) => (state.type === 'task' ? 'Редактировать задачу' : 'Редактировать веху'),
@@ -138,7 +191,14 @@ const { open: openMenu, close: closeMenu, select, bind: menuBind } = useContextM
 
 function openTaskEdit(id: number) {
   const task = findTask(id)
-  if (task) openEdit({ type: 'task', id, title: task.title ?? '' })
+  if (task) {
+    openEdit({
+      type: 'task',
+      id,
+      title: task.title ?? '',
+      ownerId: task.owner_id ?? undefined,
+    })
+  }
 }
 
 function openMilestoneEdit(id: number) {
@@ -258,9 +318,16 @@ async function onRemoveResource(payload: { resource_id: number }) {
 onMounted(async () => {
   // Приоритеты проектов и ресурсы нужны до задач: processesByPriority сортируется по ним,
   // и при монтировании шкалы порядок групп уже финальный (иначе якорь навигации уезжает).
-  if (!app.projects.length) await app.loadProjects()
+  // Проекты получают только admin/dp/rp; у vp/worker их нет (403) — сортировка по id.
+  if (canViewProjects.value && !app.projects.length) await app.loadProjects()
   if (!resources.value.length) await app.loadResources()
-  if (!calendar.value.length) await app.loadCalendar()
+  // Справочник пользователей — для имён ответственных задач (owner_id → name)
+  if (!app.users.length) await app.loadUsers()
+  // Свои сотрудники — пул кандидатов в «ответственные» задачи
+  await app.loadMyStaff()
+  // Календарь доступности обновляем при КАЖДОМ заходе на страницу: табель мог
+  // измениться, и ResourceHeader должен сразу показывать свежую доступность.
+  await app.loadCalendar()
   await planning.loadTaskPlanning()
 })
 
@@ -273,22 +340,71 @@ const processesByPriority = computed(() => {
   for (const p of app.projects) {
     if (p.id != null) prio.set(p.id, p.priority ?? Number.MAX_SAFE_INTEGER)
   }
-  return [...(taskPlanning.value?.processes ?? [])].sort((a, b) => {
+  let list = taskPlanning.value?.processes ?? []
+  // vp: показываем процессы только в проектах, где у vp есть хотя бы один процесс
+  if (role.value === 'vp' && userId.value != null) {
+    const myProjects = new Set(
+      list.filter((p: any) => p.owner_id === userId.value).map((p: any) => p.project_id),
+    )
+    list = list.filter((p: any) => myProjects.has(p.project_id))
+  }
+  return [...list].sort((a, b) => {
     const pa = prio.get(a.project_id ?? -1) ?? Number.MAX_SAFE_INTEGER
     const pb = prio.get(b.project_id ?? -1) ?? Number.MAX_SAFE_INTEGER
     return pa - pb || (a.id ?? 0) - (b.id ?? 0)
   })
 })
+
+/** Печатная модель для PdfExport: процесс = группа, задачи = строки */
+const taskGroups = computed<PdfGanttGroup[]>(() =>
+  processesByPriority.value.map((p: any) => ({
+    id: p.id,
+    code: p.project_code,
+    title: p.title ?? '',
+    start_date: p.start_date ?? '',
+    end_date: p.end_date ?? '',
+    project_id: p.project_id,
+    owner_id: p.owner_id ?? undefined,
+    rows: (p.tasks ?? []).map((t: any) => ({
+      id: t.id,
+      title: t.title ?? '',
+      start_date: t.start_date ?? '',
+      end_date: t.end_date ?? '',
+      resources: (t.resources ?? []).map((r: any) => ({ id: r.id, code: r.code, title: r.title, quantity: r.quantity })),
+    })),
+    milestones: (p.milestones ?? []).map((m: any) => ({ id: m.id, title: m.title ?? '', date: m.date ?? '' })),
+  })),
+)
 </script>
 
 <template>
   <section class="pp">
+    <!-- Печать диаграммы в PDF: период и ширина ячейки берутся с текущего вида страницы -->
+    <div class="pp-toolbar">
+      <PdfExport
+        :groups="taskGroups"
+        :resources="resources"
+        :calendar="calendar"
+        :origin="origin"
+        :unit="unit"
+        :owner-id="userId"
+        :role="role"
+        scope="tasks"
+        :period-from="viewRange.from"
+        :period-to="viewRange.to"
+        :scale="viewRange.scale"
+        page-title="Диаграмма задач"
+      />
+    </div>
+
     <!-- Диаграмма Задач: данные загружает PlannerPage (view) через store,
          TaskPlanning получает их через props -->
     <TaskPlanning
       :processes="processesByPriority"
       :resources="resources"
       :calendar="calendar"
+      :absence-by-resource="absenceByResource"
+      :users="app.users"
       :loading="loading"
       :error="error"
       :origin="origin"
@@ -301,6 +417,7 @@ const processesByPriority = computed(() => {
       @contextmenu="onContextMenu"
       @header-ctxmenu="onHeaderCtx"
       @milestone-edit="openMilestoneEdit"
+      @visible-range="onVisibleRange"
     />
 
     <ContextMenu v-bind="menuBind" @select="select" @close="closeMenu" />
@@ -335,5 +452,10 @@ const processesByPriority = computed(() => {
 <style scoped>
 .pp {
   --planner-max-height: calc(100vh - 112px);
+}
+.pp-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 12px;
 }
 </style>

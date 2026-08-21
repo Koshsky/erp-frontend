@@ -1,8 +1,8 @@
-import type { DtoEmployeeStateResponse } from '@/api'
+import type { DtoUserStateResponse } from '@/api'
 
 export interface TimesheetCellProps {
   /** Состояние, покрывающее день; null — рабочий день без записи */
-  state?: DtoEmployeeStateResponse | null
+  state?: DtoUserStateResponse | null
   /** Выходной ли день (когда нет состояния) */
   isWeekend?: boolean
   /** Ячейка выделена (drag-выделение диапазона) */
