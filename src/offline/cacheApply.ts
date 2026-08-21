@@ -390,7 +390,7 @@ function parseEmployeeDays(entry: OutboxEntry): {
     // В проде URL запроса относительный (basePath /api/v1) — без base
     // new URL() бросает, и дельты табеля молча не применялись.
     const u = new URL(entry.url, 'https://mvs.local')
-    const m = u.pathname.match(/\/users\/(\d+)\/days/)
+    const m = u.pathname.match(/\/user\/(\d+)\/days/)
     const stateRaw = u.searchParams.get('state_id')
     const stateN = stateRaw ? Number(stateRaw) : NaN
     return {
@@ -442,13 +442,13 @@ async function getResourceFields(resourceId: number | undefined): Promise<Record
   return {}
 }
 
-/** Периоды табеля /users/{id}/days (окна кэшируются по диапазонам) */
+/** Периоды табеля /user/{id}/days (окна кэшируются по диапазонам) */
 async function applyPeriod(entry: OutboxEntry): Promise<void> {
   const { employeeId, start, end, stateId } = parseEmployeeDays(entry)
   if (employeeId == null) return
   const body = entry.body as Record<string, any> | undefined
   const method = (entry.method || '').toUpperCase()
-  const prefix = `/api/v1/users/${employeeId}/days`
+  const prefix = `/api/v1/user/${employeeId}/days`
   const enrichment =
     method === 'PUT' ? await getStateFields(body?.state_id as number | undefined) : {}
   await forEachCacheKey((p) => p === prefix, (cachedBody) => {
@@ -478,7 +478,7 @@ async function getUserFields(userId: number | undefined): Promise<Record<string,
   if (userId == null) return {}
   const keys = await idbKeys(CACHE_STORE)
   for (const key of keys) {
-    if (pathnameOf(key) !== '/api/v1/users') continue
+    if (pathnameOf(key) !== '/api/v1/user') continue
     const cached = await idbGet<{ data: { data?: { items?: any[] } } }>(CACHE_STORE, key)
     const u = cached?.data?.data?.items?.find((x) => x.id === userId)
     if (u) {
@@ -541,7 +541,7 @@ export async function applyToCache(entry: OutboxEntry): Promise<void> {
         await listApplier('/api/v1/resources', makeResource)(entry)
         break
       case 'user':
-        await listApplier('/api/v1/users', makeEmployee)(entry)
+        await listApplier('/api/v1/user', makeEmployee)(entry)
         break
       case 'member':
         await applyMembers(entry)

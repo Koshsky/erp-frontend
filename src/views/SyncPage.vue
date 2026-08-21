@@ -218,7 +218,7 @@ async function probeConnection(): Promise<boolean> {
     const timer = window.setTimeout(() => ctrl.abort(), 5000)
     try {
       const token = localStorage.getItem(TOKEN_KEY) ?? ''
-      const res = await fetch(`${base}/users/${id}`, {
+      const res = await fetch(`${base}/user/${id}`, {
         headers: token ? { Authorization: `Bearer ${token}` } : undefined,
         cache: 'no-store',
         signal: ctrl.signal,

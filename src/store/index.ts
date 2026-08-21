@@ -289,7 +289,7 @@ export const useAuthStore = defineStore('auth', () => {
     error.value = null
     try {
       const api = new UsersApi(apiConfig())
-      const resp = await api.usersIdGet(userId)
+      const resp = await api.userIdGet(userId)
       const body = resp.data
       const errBody = body?.error as { code?: unknown; message?: string } | undefined
       if (errBody && errBody.code != null) throw new Error(apiErrorMessage(errBody))
@@ -583,7 +583,7 @@ export const useAppStore = defineStore('app', () => {
     usersError.value = null
     try {
       const api = new UsersApi(apiConfig())
-      const resp = await api.userGet()
+      const resp = await api.userAllGet()
       users.value = resp.data?.data ?? []
     } catch (e: any) {
       usersError.value = e.message || String(e)
@@ -598,7 +598,7 @@ export const useAppStore = defineStore('app', () => {
     myStaffLoading.value = true
     try {
       const api = new UsersApi(apiConfig())
-      const resp = await api.usersGet(500, undefined, undefined, undefined, 0)
+      const resp = await api.userGet(500, undefined, undefined, undefined, 0)
       myStaff.value = resp.data?.data?.items ?? []
     } catch {
       // Не критично: пул кандидатов остаётся прежним.
@@ -618,7 +618,7 @@ export const useAppStore = defineStore('app', () => {
     adminUsersError.value = null
     try {
       const api = new UsersApi(apiConfig())
-      const resp = await api.usersGet(500, undefined, undefined, includeHash, 0)
+      const resp = await api.userGet(500, undefined, undefined, includeHash, 0)
       adminUsers.value = resp.data?.data?.items ?? []
     } catch (e: any) {
       adminUsersError.value = apiErrorMessage(e)
@@ -631,7 +631,7 @@ export const useAppStore = defineStore('app', () => {
   async function createUser(payload: DtoCreateUserRequest): Promise<DtoCreateUserResult | null> {
     try {
       const api = new UsersApi(apiConfig())
-      const resp = await api.usersPost(payload)
+      const resp = await api.userPost(payload)
       await loadAdminUsers()
       return resp.data?.data ?? null
     } catch (e: any) {
@@ -644,7 +644,7 @@ export const useAppStore = defineStore('app', () => {
   async function resetPassword(id: number): Promise<string | null> {
     try {
       const api = new UsersApi(apiConfig())
-      const resp = await api.usersIdResetPasswordPost(id)
+      const resp = await api.userIdResetPasswordPost(id)
       return resp.data?.data?.password ?? null
     } catch (e: any) {
       adminUsersError.value = apiErrorMessage(e)
@@ -656,7 +656,7 @@ export const useAppStore = defineStore('app', () => {
   async function updateUser(id: number, patch: DtoUpdateUserRequest): Promise<boolean> {
     try {
       const api = new UsersApi(apiConfig())
-      await api.usersIdPut(id, patch)
+      await api.userIdPut(id, patch)
       await loadAdminUsers()
       return true
     } catch (e: any) {
@@ -669,7 +669,7 @@ export const useAppStore = defineStore('app', () => {
   async function updateManager(id: number, managerId: number | null): Promise<boolean> {
     try {
       const api = new UsersApi(apiConfig())
-      await api.usersIdManagerPut(id, { manager_id: managerId ?? undefined })
+      await api.userIdManagerPut(id, { manager_id: managerId ?? undefined })
       await loadAdminUsers()
       return true
     } catch (e: any) {
@@ -832,7 +832,7 @@ export const useTimesheetStore = defineStore('timesheet', () => {
     const results = await Promise.all(
       timesheetRows.value.map((emp) =>
         api
-          .usersIdDaysGet(emp.id ?? 0, start, end)
+          .userIdDaysGet(emp.id ?? 0, start, end)
           .then((r) => ({ id: emp.id, list: r.data?.data ?? [] }))
           .catch((e: any) => {
             setError(e)
@@ -885,7 +885,7 @@ export const useTimesheetStore = defineStore('timesheet', () => {
     error.value = null
     try {
       const api = new UsersApi(apiConfig())
-      const resp = await api.usersGet(PAGE_SIZE, 'worker', managerId ?? undefined, undefined, 0)
+      const resp = await api.userGet(PAGE_SIZE, 'worker', managerId ?? undefined, undefined, 0)
       const data = resp.data?.data
       // Сортировку добавляет computed employeesWithTitles.
       employees.value = data?.items ?? []
@@ -928,7 +928,7 @@ export const useTimesheetStore = defineStore('timesheet', () => {
         tempId,
         call: () => {
           const req: DtoCreateUserRequest = { ...payload, role: 'worker' }
-          return new UsersApi(apiConfig()).usersPost(req)
+          return new UsersApi(apiConfig()).userPost(req)
         },
         apply: async () => {
           await fetchEmployees()
@@ -957,7 +957,7 @@ export const useTimesheetStore = defineStore('timesheet', () => {
     try {
       return await runMutation({
         entity: 'user',
-        call: () => new UsersApi(apiConfig()).usersIdPut(id, payload as DtoUpdateUserRequest),
+        call: () => new UsersApi(apiConfig()).userIdPut(id, payload as DtoUpdateUserRequest),
         apply: async () => {
           await fetchEmployees()
         },
@@ -986,7 +986,7 @@ export const useTimesheetStore = defineStore('timesheet', () => {
     try {
       return await runMutation({
         entity: 'user',
-        call: () => new UsersApi(apiConfig()).usersIdDelete(id),
+        call: () => new UsersApi(apiConfig()).userIdDelete(id),
         apply: async () => {
           await fetchEmployees()
         },
@@ -1133,7 +1133,7 @@ export const useTimesheetStore = defineStore('timesheet', () => {
       }
       return await runMutation({
         entity: 'period',
-        call: () => new UsersApi(apiConfig()).usersIdDaysPut(employeeId, body),
+        call: () => new UsersApi(apiConfig()).userIdDaysPut(employeeId, body),
         apply: async () => {
           await fetchPeriods(windowStart.value, windowEnd.value)
         },
@@ -1173,7 +1173,7 @@ export const useTimesheetStore = defineStore('timesheet', () => {
       return await runMutation({
         entity: 'period',
         call: () =>
-          new UsersApi(apiConfig()).usersIdDaysDelete(
+          new UsersApi(apiConfig()).userIdDaysDelete(
             employeeId,
             startDate,
             endDate,
