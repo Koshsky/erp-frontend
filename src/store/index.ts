@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import axios, { type AxiosError, type Method } from 'axios'
 import { AuthApi, ProjectsApi, ProcessesApi, TasksApi, TimesheetResourcesApi, TimesheetCalendarApi, TimesheetStatesApi, PlanningApi, MilestonesApi, UsersApi, AssignmentsApi, AutoCreateApi, Configuration } from '@/api'
-import type { DtoUserInfo, DtoProject, DtoResourceResponse, DtoResourceCalendar, DtoResourceMemberResponse, DtoResourceAbsenceResponse, DtoUserResponse, DtoUserStateResponse, DtoStateResponse, DtoCreateResourceRequest, DtoUpdateResourceRequest, DtoCreateUserRequest, DtoUpdateUserRequest, DtoSetDaysRequest, DtoAdminUserResponse, DtoCreateUserResult, DtoResetPasswordResponse, DtoAutoCreateConfig } from '@/api'
+import type { DtoUserInfo, DtoProject, DtoResourceResponse, DtoResourceCalendar, DtoResourceMemberResponse, DtoResourceAbsenceResponse, DtoUserResponse, DtoUserStateResponse, DtoStateResponse, DtoCreateResourceRequest, DtoUpdateResourceRequest, DtoCreateUserRequest, DtoUpdateUserRequest, DtoSetDaysRequest, DtoAdminUserResponse, DtoCreateUserResult, DtoResetPasswordResponse, DtoAutoCreateConfig, DtoCommentResponse } from '@/api'
 import { apiErrorMessage, fullName } from '@/utils'
 import { getApiUrl } from '@/config'
 import { isOffline } from '@/offline/state'
@@ -1300,6 +1300,12 @@ export const usePlanningStore = defineStore('planning', () => {
   const loading = ref(false)
   const error = ref<string | null>(null)
 
+  // === Комментарии задач (цепочки обсуждений) ===
+  // Кэш по задаче; в офлайне отдаётся последний загруженный список (online-only).
+  const commentsByTask = ref<Record<number, DtoCommentResponse[]>>({})
+  const commentsLoading = ref(false)
+  const commentsError = ref<string | null>(null)
+
   /** Общий путь загрузки планирования: silent-режим не трогает loading/error,
    *  чтобы фоновый reload после мутации не сбрасывал видимую ошибку и не показывал спиннер. */
   async function runLoad(silent: boolean, load: () => Promise<unknown>) {
@@ -1975,12 +1981,72 @@ export const usePlanningStore = defineStore('planning', () => {
     return true
   }
 
+  // === Комментарии задач ===
+  /** Загрузить комментарии задачи в кэш по task_id (online-only: офлайн — кэш). */
+  async function loadTaskComments(taskId: number): Promise<void> {
+    if (isOffline.value && commentsByTask.value[taskId] != null) return
+    commentsLoading.value = true
+    commentsError.value = null
+    try {
+      const resp = await new TasksApi(apiConfig()).taskIdCommentsGet(taskId)
+      commentsByTask.value[taskId] = (resp.data?.data as DtoCommentResponse[] | undefined) ?? []
+    } catch (e: any) {
+      commentsError.value = e?.message || String(e)
+    } finally {
+      commentsLoading.value = false
+    }
+  }
+
+  /** Создать комментарий задачи (parent_id — ответ на комментарий той же задачи). */
+  async function createTaskComment(
+    taskId: number,
+    content: string,
+    parentId?: number,
+  ): Promise<boolean> {
+    commentsError.value = null
+    try {
+      const resp = await new TasksApi(apiConfig()).taskIdCommentsPost(taskId, {
+        content,
+        parent_id: parentId,
+      })
+      const errBody = resp.data?.error as { code?: unknown; message?: string } | undefined
+      if (errBody && errBody.code != null) throw new Error(apiErrorMessage(errBody))
+      const dto = resp.data?.data as DtoCommentResponse | undefined
+      if (dto) {
+        const list = commentsByTask.value[taskId] ?? []
+        list.push(dto)
+        commentsByTask.value[taskId] = [...list]
+      }
+      return true
+    } catch (e: any) {
+      commentsError.value = e?.message || String(e)
+      return false
+    }
+  }
+
+  /** Удалить комментарий (мягко; ответы остаются — станут «осиротевшими» в дереве). */
+  async function deleteTaskComment(taskId: number, commentId: number): Promise<boolean> {
+    commentsError.value = null
+    try {
+      await new TasksApi(apiConfig()).taskIdCommentsCommentIdDelete(taskId, commentId)
+      const list = commentsByTask.value[taskId]
+      if (list) commentsByTask.value[taskId] = list.filter((c) => c.id !== commentId)
+      return true
+    } catch (e: any) {
+      commentsError.value = e?.message || String(e)
+      return false
+    }
+  }
+
   return {
     projectPlanning,
     processPlanning,
     taskPlanning,
     loading,
     error,
+    commentsByTask,
+    commentsLoading,
+    commentsError,
     loadProjectPlanning,
     loadProcessPlanning,
     loadTaskPlanning,
@@ -2004,5 +2070,8 @@ export const usePlanningStore = defineStore('planning', () => {
     removeResource,
     taskOwnerIds,
     reorderProjects,
+    loadTaskComments,
+    createTaskComment,
+    deleteTaskComment,
   }
 })

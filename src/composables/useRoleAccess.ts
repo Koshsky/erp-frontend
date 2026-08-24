@@ -23,6 +23,11 @@ export function useRoleAccess() {
   /** Задачи/вехи/назначения (страница задач): admin и vp — в своих процессах; rp — view only */
   const canManageTasks = computed(() => role.value === 'admin' || role.value === 'vp')
 
+  /** Просмотр задач и участие в обсуждениях (комментарии): роли, чьи задачи видны на диаграмме */
+  const canViewTasks = computed(() =>
+    role.value === 'admin' || role.value === 'dp' || role.value === 'rp' || role.value === 'vp',
+  )
+
   /** Создание проекта: admin и rp (rp становится владельцем) */
   const canCreateProject = computed(() => role.value === 'admin' || role.value === 'rp')
 
@@ -70,6 +75,7 @@ export function useRoleAccess() {
     canManageResources,
     canManageProcesses,
     canManageTasks,
+    canViewTasks,
     canCreateProject,
     canReorderProjects,
     canManageProject,

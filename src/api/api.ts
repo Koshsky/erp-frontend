@@ -103,10 +103,25 @@ export interface DtoChangePasswordRequest {
 export interface DtoChangePasswordResponse {
     'message'?: string;
 }
+export interface DtoCommentResponse {
+    'author_id'?: number;
+    'content'?: string;
+    'created_at'?: string;
+    'id'?: number;
+    'parent_id'?: number;
+    'task_id'?: number;
+}
 export interface DtoCreateAssignmentRequest {
     'quantity'?: number;
     'resource_id'?: number;
     'task_id'?: number;
+}
+export interface DtoCreateCommentRequest {
+    'content'?: string;
+    /**
+     * Ответ на другой комментарий той же задачи; пусто — корневой комментарий.
+     */
+    'parent_id'?: number;
 }
 export interface DtoCreateMilestoneRequest {
     'content'?: string;
@@ -517,6 +532,14 @@ export interface TaskGet200ResponseAllOfData {
     'limit'?: number;
     'offset'?: number;
     'total'?: number;
+}
+export interface TaskIdCommentsGet200Response {
+    'data'?: Array<DtoCommentResponse>;
+    'error'?: object;
+}
+export interface TaskIdCommentsPost201Response {
+    'data'?: DtoCommentResponse;
+    'error'?: object;
 }
 export interface TaskPost201Response {
     'data'?: DtoTaskResponse;
@@ -2897,6 +2920,126 @@ export const TasksApiAxiosParamCreator = function (configuration?: Configuration
             };
         },
         /**
+         * Soft-delete a comment (replies stay; the thread keeps consistency in the UI)
+         * @summary Delete task comment
+         * @param {number} id Task ID
+         * @param {number} commentId Comment ID
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        taskIdCommentsCommentIdDelete: async (id: number, commentId: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'id' is not null or undefined
+            assertParamExists('taskIdCommentsCommentIdDelete', 'id', id)
+            // verify required parameter 'commentId' is not null or undefined
+            assertParamExists('taskIdCommentsCommentIdDelete', 'commentId', commentId)
+            const localVarPath = `/task/{id}/comments/{comment_id}`
+                .replace('{id}', encodeURIComponent(String(id)))
+                .replace('{comment_id}', encodeURIComponent(String(commentId)));
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'DELETE', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication ApiKeyAuth required
+            await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
+
+            localVarHeaderParameter['Accept'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * Get all comments of a task (flat list, ordered by creation time; the client builds the thread tree by parent_id)
+         * @summary List task comments
+         * @param {number} id Task ID
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        taskIdCommentsGet: async (id: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'id' is not null or undefined
+            assertParamExists('taskIdCommentsGet', 'id', id)
+            const localVarPath = `/task/{id}/comments`
+                .replace('{id}', encodeURIComponent(String(id)));
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'GET', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication ApiKeyAuth required
+            await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
+
+            localVarHeaderParameter['Accept'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * Create a comment on a task (reply to another comment via parent_id). The author is taken from the authenticated user
+         * @summary Create task comment
+         * @param {number} id Task ID
+         * @param {DtoCreateCommentRequest} comment Comment data
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        taskIdCommentsPost: async (id: number, comment: DtoCreateCommentRequest, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'id' is not null or undefined
+            assertParamExists('taskIdCommentsPost', 'id', id)
+            // verify required parameter 'comment' is not null or undefined
+            assertParamExists('taskIdCommentsPost', 'comment', comment)
+            const localVarPath = `/task/{id}/comments`
+                .replace('{id}', encodeURIComponent(String(id)));
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'POST', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication ApiKeyAuth required
+            await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
+
+            localVarHeaderParameter['Content-Type'] = 'application/json';
+            localVarHeaderParameter['Accept'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+            localVarRequestOptions.data = serializeDataIfNeeded(comment, localVarRequestOptions, configuration)
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
          * Delete a task by ID
          * @summary Delete a task
          * @param {number} id Task ID
@@ -3075,6 +3218,47 @@ export const TasksApiFp = function(configuration?: Configuration) {
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
+         * Soft-delete a comment (replies stay; the thread keeps consistency in the UI)
+         * @summary Delete task comment
+         * @param {number} id Task ID
+         * @param {number} commentId Comment ID
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async taskIdCommentsCommentIdDelete(id: number, commentId: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<void>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.taskIdCommentsCommentIdDelete(id, commentId, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['TasksApi.taskIdCommentsCommentIdDelete']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
+         * Get all comments of a task (flat list, ordered by creation time; the client builds the thread tree by parent_id)
+         * @summary List task comments
+         * @param {number} id Task ID
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async taskIdCommentsGet(id: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<TaskIdCommentsGet200Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.taskIdCommentsGet(id, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['TasksApi.taskIdCommentsGet']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
+         * Create a comment on a task (reply to another comment via parent_id). The author is taken from the authenticated user
+         * @summary Create task comment
+         * @param {number} id Task ID
+         * @param {DtoCreateCommentRequest} comment Comment data
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async taskIdCommentsPost(id: number, comment: DtoCreateCommentRequest, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<TaskIdCommentsPost201Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.taskIdCommentsPost(id, comment, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['TasksApi.taskIdCommentsPost']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
          * Delete a task by ID
          * @summary Delete a task
          * @param {number} id Task ID
@@ -3149,6 +3333,38 @@ export const TasksApiFactory = function (configuration?: Configuration, basePath
             return localVarFp.taskGet(limit, ownerId, offset, options).then((request) => request(axios, basePath));
         },
         /**
+         * Soft-delete a comment (replies stay; the thread keeps consistency in the UI)
+         * @summary Delete task comment
+         * @param {number} id Task ID
+         * @param {number} commentId Comment ID
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        taskIdCommentsCommentIdDelete(id: number, commentId: number, options?: RawAxiosRequestConfig): AxiosPromise<void> {
+            return localVarFp.taskIdCommentsCommentIdDelete(id, commentId, options).then((request) => request(axios, basePath));
+        },
+        /**
+         * Get all comments of a task (flat list, ordered by creation time; the client builds the thread tree by parent_id)
+         * @summary List task comments
+         * @param {number} id Task ID
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        taskIdCommentsGet(id: number, options?: RawAxiosRequestConfig): AxiosPromise<TaskIdCommentsGet200Response> {
+            return localVarFp.taskIdCommentsGet(id, options).then((request) => request(axios, basePath));
+        },
+        /**
+         * Create a comment on a task (reply to another comment via parent_id). The author is taken from the authenticated user
+         * @summary Create task comment
+         * @param {number} id Task ID
+         * @param {DtoCreateCommentRequest} comment Comment data
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        taskIdCommentsPost(id: number, comment: DtoCreateCommentRequest, options?: RawAxiosRequestConfig): AxiosPromise<TaskIdCommentsPost201Response> {
+            return localVarFp.taskIdCommentsPost(id, comment, options).then((request) => request(axios, basePath));
+        },
+        /**
          * Delete a task by ID
          * @summary Delete a task
          * @param {number} id Task ID
@@ -3207,6 +3423,41 @@ export class TasksApi extends BaseAPI {
      */
     public taskGet(limit?: number, ownerId?: number, offset?: number, options?: RawAxiosRequestConfig) {
         return TasksApiFp(this.configuration).taskGet(limit, ownerId, offset, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * Soft-delete a comment (replies stay; the thread keeps consistency in the UI)
+     * @summary Delete task comment
+     * @param {number} id Task ID
+     * @param {number} commentId Comment ID
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    public taskIdCommentsCommentIdDelete(id: number, commentId: number, options?: RawAxiosRequestConfig) {
+        return TasksApiFp(this.configuration).taskIdCommentsCommentIdDelete(id, commentId, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * Get all comments of a task (flat list, ordered by creation time; the client builds the thread tree by parent_id)
+     * @summary List task comments
+     * @param {number} id Task ID
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    public taskIdCommentsGet(id: number, options?: RawAxiosRequestConfig) {
+        return TasksApiFp(this.configuration).taskIdCommentsGet(id, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * Create a comment on a task (reply to another comment via parent_id). The author is taken from the authenticated user
+     * @summary Create task comment
+     * @param {number} id Task ID
+     * @param {DtoCreateCommentRequest} comment Comment data
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    public taskIdCommentsPost(id: number, comment: DtoCreateCommentRequest, options?: RawAxiosRequestConfig) {
+        return TasksApiFp(this.configuration).taskIdCommentsPost(id, comment, options).then((request) => request(this.axios, this.basePath));
     }
 
     /**

@@ -27,6 +27,8 @@ const props = withDefaults(
 const emit = defineEmits<{
   change: [payload: { start_date: string; end_date: string }]
   contextmenu: [payload: { clientX: number; clientY: number }]
+  /** Одиночный клик по бару (без перетаскивания) — открыть комментарии задачи */
+  'open-comments': [payload: number]
 }>()
 
 /** Строки тултипа: ответственный (если назначен) + диапазон дат */
@@ -135,6 +137,7 @@ watch(
     @dragstart="(d) => setDragPreview(d)"
     @dragmove="(d) => setDragPreview(d)"
     @dragend="() => setDragPreview(null)"
+    @click="emit('open-comments', task.id)"
   >
     <span ref="contentRef" class="tb-content">
       <span ref="titleRef" class="tb-title">{{ task.title }}</span>

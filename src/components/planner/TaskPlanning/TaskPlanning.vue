@@ -58,6 +58,8 @@ const emit = defineEmits<{
   'milestone-edit': [payload: number]
   /** Видимое окно шкалы (период «как на экране») — проброс из TimelineGrid */
   'visible-range': [payload: { from: string; to: string; cellWidthPx: number; scale: number }]
+  /** Клик по бару задачи — открыть её комментарии */
+  'open-comments': [payload: number]
 }>()
 
 /** Активный драг задачи — для live-предпросмотра загрузки ресурсов (пишется из TaskBar) */
@@ -214,6 +216,7 @@ function onGridCtx(p: { clientX: number; clientY: number; date: string | null; r
           @milestone-change="(p) => emit('milestone-change', p)"
           @contextmenu="(p) => emit('contextmenu', p)"
           @milestone-edit="(id) => emit('milestone-edit', id)"
+          @open-comments="(id) => emit('open-comments', id)"
         />
       </template>
     </TimelineGrid>

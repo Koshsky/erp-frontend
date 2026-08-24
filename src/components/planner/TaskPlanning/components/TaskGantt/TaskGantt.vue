@@ -16,6 +16,7 @@ const emit = defineEmits<{
   'milestone-change': [payload: { id: number; date: string }]
   contextmenu: [payload: { clientX: number; clientY: number; date: string; rowIndex: number; processId?: number; taskId?: number; milestoneId?: number }]
   'milestone-edit': [payload: number]
+  'open-comments': [payload: number]
 }>()
 
 const groupItems = computed(() => props.tasks)
@@ -76,6 +77,7 @@ function onMilestoneEdit(id: number) {
           :draggable="canManage"
           @change="(d) => onBarChange(item.id, d)"
           @contextmenu="(p) => onBarContextMenu(p, item.id)"
+          @open-comments="(id) => emit('open-comments', id)"
         />
       </template>
     </GroupGantt>
