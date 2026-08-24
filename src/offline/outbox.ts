@@ -70,6 +70,9 @@ export const OUTBOX_STORE_NAME = OUTBOX_STORE
 /** Число ожидающих синхронизации изменений (реактивно для UI). Карантинные не входят. */
 export const pendingCount = ref(0)
 
+/** Живой прогресс отправки очереди (для UI): { done, total } или null, когда не идёт */
+export const pushProgress = ref<{ done: number; total: number } | null>(null)
+
 /**
  * Человекочитаемое представление записи очереди для UI («Очередь изменений»
  * на экране синхронизации): какой объект, какая операция и ключевые поля.
@@ -390,12 +393,21 @@ function currentUsername(): string | null {
 }
 
 /**
- * Детерминированные клиентские ошибки (4xx, кроме 429): повтор не исправит
- * (нет прав, неверные данные, конфликт) — карантин сразу, без 5 попыток.
- * 429 — «замедли темп»: остаётся на обычном backoff-ретрае.
+ * Детерминированные клиентские ошибки (4xx, кроме 409/429): повтор не исправит
+ * (нет прав, неверные данные) — карантин сразу. 429 — «замедли темп»; 409 —
+ * «в полёте»/бизнес-конфликт от идемпотентности: первый вызов может ещё
+ * выполняться (ретрай получит сохранённый ответ) — оба остаются на
+ * backoff-ретраях и уходят в карантин после MAX_FAILED_ATTEMPTS.
  */
 function isPermanentFailure(status: number): boolean {
-  return status >= 400 && status < 500 && status !== 429
+  return status >= 400 && status < 500 && status !== 409 && status !== 429
+}
+
+/** Idempotency-Key шлём на мутирующие методы (не GET): id записи — стабильный
+ *  UUID между ретраями очереди, сервер вернёт сохранённый ответ вместо
+ *  повторного выполнения при потере ответа первого вызова. */
+function needsIdempotencyKey(method: Method): boolean {
+  return (method || 'get').toUpperCase() !== 'GET'
 }
 
 /** Подробно логирует ошибку отправки записи очереди (для диагностики). */
@@ -469,6 +481,8 @@ export async function flushOutbox(): Promise<FlushResult> {
 
     const entries = (await idbAll<OutboxEntry>(OUTBOX_STORE)).sort((a, b) => a.ts - b.ts)
     const idMap = new Map<number, number>()
+    pushProgress.value = { done: 0, total: entries.length }
+    let done = 0
 
     for (const entry of entries) {
       // Карантин и backoff: не дёргаем записи, которые сервер только что отверг.
@@ -501,6 +515,7 @@ export async function flushOutbox(): Promise<FlushResult> {
           headers: {
             'Content-Type': 'application/json',
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            ...(needsIdempotencyKey(entry.method) ? { 'Idempotency-Key': entry.id } : {}),
           },
           timeout: 15000,
         })
@@ -571,9 +586,12 @@ export async function flushOutbox(): Promise<FlushResult> {
       // Рейт-лимит: пауза между реальными отправками, чтобы не слать пачку
       // запросов (прогревка и очередь не должны класть сервер на колени).
       await pause()
+      done++
+      pushProgress.value = { done, total: entries.length }
     }
   } finally {
     flushing = false
+    pushProgress.value = null
     await refreshPendingCount()
   }
   return result
