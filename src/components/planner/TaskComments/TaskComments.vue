@@ -135,10 +135,30 @@ function sendReply(commentId: number) {
             <button
               v-if="canDelete(n.comment)"
               type="button"
-              class="tc-btn tc-del"
+              class="tc-icon tc-del"
               :disabled="busy"
+              title="Удалить комментарий"
+              aria-label="Удалить комментарий"
               @click="emit('delete', { comment_id: n.comment.id ?? 0 })"
-            >Удалить</button>
+            >
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M3 6h18" />
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+                <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                <line x1="10" y1="11" x2="10" y2="17" />
+                <line x1="14" y1="11" x2="14" y2="17" />
+              </svg>
+            </button>
           </div>
           <div v-if="replyTo === (n.comment.id ?? 0)" class="tc-reply">
             <textarea
@@ -147,6 +167,7 @@ function sendReply(commentId: number) {
               rows="2"
               :disabled="composerDisabled"
               placeholder="Ответ…"
+              @keydown.enter.exact.prevent="sendReply(n.comment.id ?? 0)"
             />
             <div class="tc-reply-row">
               <button
@@ -167,6 +188,7 @@ function sendReply(commentId: number) {
           rows="3"
           :disabled="composerDisabled"
           placeholder="Написать комментарий…"
+          @keydown.enter.exact.prevent="sendRoot"
         />
         <div class="tc-composer-row">
           <span v-if="disabledReason" class="tc-hint">{{ disabledReason }}</span>
@@ -313,22 +335,38 @@ function sendReply(commentId: number) {
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  background: #e8f0fe;
+  background: transparent;
   color: #1a73e8;
 }
 .tc-btn:hover:not(:disabled) {
-  background: #d2e3fc;
+  background: rgba(26, 115, 232, 0.08);
 }
 .tc-btn:disabled {
   opacity: 0.55;
   cursor: not-allowed;
 }
+/* Квадратная кнопка-иконка (удаление комментария) */
+.tc-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  background: transparent;
+}
+.tc-icon:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 .tc-del {
-  background: #ffe5e5;
   color: #d93025;
 }
 .tc-del:hover:not(:disabled) {
-  background: #ffd0d0;
+  background: #ffe5e5;
 }
 .tc-send {
   background: #1a73e8;
