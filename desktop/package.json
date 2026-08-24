@@ -1,6 +1,6 @@
 {
   "name": "mvs-erp-desktop",
-  "version": "1.0.1",
+  "version": "1.0.5",
   "description": "Настольная обвязка MVS ERP (Electron) вокруг собранного vite-фронтенда",
   "main": "main.js",
   "author": "MVS ERP",

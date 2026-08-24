@@ -2,13 +2,16 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { getServerBase, getApiUrl, setServerBase, httpSchemeWarning } from '../config'
+import { isElectron } from '../electron'
 
 /**
  * Экран настройки адреса сервера (до входа).
- * Позволяет задать, к какому бэкенду подключаться: пользователь вводит
- * базовый адрес сервера (https://localhost / https://erp.example.ru),
- * приложение добавляет /api/v1. Нужен в настольной версии, где адрес
- * бэкенда может отличаться от машины, на которой стоит exe.
+ * В настольной (Electron) версии позволяет задать, к какому бэкенду
+ * подключаться: пользователь вводит базовый адрес сервера, приложение
+ * добавляет /api/v1 (адрес на машине с exe может отличаться).
+ * В браузерной версии смена адреса невозможна (same-origin nginx-прокси,
+ * CSP connect-src 'self', refresh-кука не переживает смену origin) — экран
+ * показывает развёрнутый адрес как информацию, без возможности редактирования.
  */
 
 const router = useRouter()
@@ -111,29 +114,51 @@ function onSave() {
 
     <div class="lp-form-side">
       <h2 class="lp-title">Адрес сервера</h2>
-      <p class="lp-subtitle">Адрес подключаемого бэкенда. Сохраняется на этом устройстве.</p>
 
-      <form class="lp-form" @submit.prevent="onSave">
-        <label class="lp-field">
-          <span>Адрес сервера</span>
-          <input
-            v-model="serverBase"
-            type="text"
-            spellcheck="false"
-            autocomplete="url"
-            placeholder="https://localhost"
-          />
-        </label>
+      <!-- Electron: адрес можно задать (exe подключается к внешнему бэкенду) -->
+      <template v-if="isElectron">
+        <p class="lp-subtitle">Адрес подключаемого бэкенда. Сохраняется на этом устройстве.</p>
 
-        <p v-if="warning" class="lp-warn">{{ warning }}</p>
-        <p v-if="msg" class="lp-error" :class="{ ok }">{{ msg }}</p>
+        <form class="lp-form" @submit.prevent="onSave">
+          <label class="lp-field">
+            <span>Адрес сервера</span>
+            <input
+              v-model="serverBase"
+              type="text"
+              spellcheck="false"
+              autocomplete="url"
+              placeholder="https://localhost"
+            />
+          </label>
 
-        <button type="button" class="lp-btn" :disabled="busy" @click="onCheck">
-          {{ busy ? 'Проверяю…' : 'Проверить соединение' }}
-        </button>
-        <button type="submit" class="lp-btn" :disabled="busy">Сохранить и перейти ко входу</button>
-        <RouterLink to="/login" class="ss-back">← Назад ко входу</RouterLink>
-      </form>
+          <p v-if="warning" class="lp-warn">{{ warning }}</p>
+          <p v-if="msg" class="lp-error" :class="{ ok }">{{ msg }}</p>
+
+          <button type="button" class="lp-btn" :disabled="busy" @click="onCheck">
+            {{ busy ? 'Проверяю…' : 'Проверить соединение' }}
+          </button>
+          <button type="submit" class="lp-btn" :disabled="busy">Сохранить и перейти ко входу</button>
+        </form>
+      </template>
+
+      <!-- Web: адрес задаётся деплоем (same-origin nginx-прокси) — только информация -->
+      <template v-else>
+        <p class="lp-subtitle">
+          Браузерная версия подключается к API того же адреса, с которого открыта
+          (nginx-прокси /api/v1). Адрес задаётся при развёртывании и изменению не подлежит.
+        </p>
+
+        <div class="ss-info">
+          <span class="ss-label">Сервер</span>
+          <code class="ss-value">{{ serverBase || '—' }}</code>
+        </div>
+        <div class="ss-info">
+          <span class="ss-label">API</span>
+          <code class="ss-value">{{ getApiUrl() || '—' }}</code>
+        </div>
+      </template>
+
+      <RouterLink to="/login" class="ss-back">← Назад ко входу</RouterLink>
     </div>
   </div>
 </template>
@@ -153,6 +178,33 @@ function onSave() {
   font-size: 13px;
   color: #1a73e8;
   text-decoration: none;
+}
+
+/* Информационная карточка адреса (web: смена сервера недоступна) */
+.ss-info {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 14px;
+  border: 1px solid #e4e9f0;
+  border-radius: 10px;
+  background: #fafbfc;
+  margin-bottom: 10px;
+  font-size: 13px;
+}
+
+.ss-label {
+  color: #888;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.ss-value {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: #333;
+  word-break: break-all;
+  text-align: right;
 }
 
 .ss-back:hover {

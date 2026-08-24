@@ -7,7 +7,15 @@
  * быть переопределён в рантайме (экран настроек до входа / экран
  * синхронизации). Override хранится в localStorage (mvs_erp_api_url) и
  * переживает перезагрузки.
+ *
+ * Смена адреса — только для настольной (Electron) сборки. В браузерной версии
+ * SPA и API живут на одном origin (nginx-прокси /api/v1), CSP
+ * «connect-src 'self'» блокирует кросс-ориджин, а refresh-кука (HttpOnly,
+ * SameSite=Strict) не переживает смену origin, поэтому override в вебе
+ * игнорируется и не сохраняется (см. также ServerSettingsPage/SyncPage).
  */
+
+import { isElectron } from './electron'
 
 const API_URL_KEY = 'mvs_erp_api_url'
 
@@ -16,6 +24,17 @@ const API_PREFIX = '/api/v1'
 
 /** Текущий override (в памяти) — чтобы не читать localStorage на каждый запрос */
 let override: string | null = null
+
+// В вебе устаревший override (например, остался от десктоп-сессии в том же
+// браузерном профиле) не должен влиять на приложение — сразу чистим.
+if (!isElectron) {
+  override = null
+  try {
+    localStorage.removeItem(API_URL_KEY)
+  } catch {
+    // ключа нет — ок
+  }
+}
 
 function isValidApiUrl(url: string): boolean {
   try {
@@ -40,7 +59,9 @@ function readStored(): string | null {
  * undefined — клиенты сами откатятся на встроенный default (как было).
  */
 export function getApiUrl(): string | undefined {
-  const stored = override ?? readStored()
+  // Override (смена сервера) — только в настольной сборке; в вебе адрес
+  // всегда берётся из env (same-origin nginx-прокси).
+  const stored = isElectron ? (override ?? readStored()) : null
   if (stored) return stored.replace(/\/+$/, '')
   const env = import.meta.env.VITE_API_URL
   return env ? env.replace(/\/+$/, '') : undefined
@@ -75,6 +96,7 @@ export function normalizeServerToApiUrl(input: string): string | null {
  * persist=true сохраняет в localStorage. Возвращает false при невалидном URL.
  */
 export function setServerBase(input: string, persist: boolean): boolean {
+  if (!isElectron) return false
   const full = normalizeServerToApiUrl(input)
   if (!full) return false
   return setApiUrl(full, persist)
@@ -86,6 +108,7 @@ export function setServerBase(input: string, persist: boolean): boolean {
  * Возвращает false, если URL некорректен (не http(s)).
  */
 export function setApiUrl(url: string, persist: boolean): boolean {
+  if (!isElectron) return false
   const full = normalizeServerToApiUrl(url)
   if (!full) return false
   override = full
@@ -110,7 +133,7 @@ export function resetApiUrl(): void {
 
 /** Есть ли сохранённый runtime-URL (для показа «используется override») */
 export function hasApiUrlOverride(): boolean {
-  return Boolean(override ?? readStored())
+  return isElectron && Boolean(override ?? readStored())
 }
 
 /** Предупреждение при http-схеме для не-loopback-хоста: Secure-кука refresh

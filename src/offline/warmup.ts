@@ -103,7 +103,10 @@ async function warmUp(): Promise<void> {
   let done = 0
   warmupProgress.value = total > 0 ? 0 : null
   for (const step of steps) {
-    if (isOffline.value) break
+    // Остановка прогревки: офлайн ИЛИ пользователь вышел (logout). Иначе цикл
+    // продолжает слать запросы без токена — каждый 401 запускает refresh-попытку
+    // отозванной сессии и даёт ложные «Сессия истекла, войдите заново».
+    if (isOffline.value || !useAuthStore().isAuthenticated) break
     try {
       await step()
     } catch {

@@ -241,6 +241,58 @@
   text-decoration: underline;
 }
 
+/* === Строка «Сервер: …» + пинг (символ-кнопка с сигнализатором) === */
+.lp-server-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 14px;
+  font-size: 13px;
+  color: #888;
+}
+
+.lp-server {
+  max-width: 75%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Символ-кнопка пинга: без рамок/фона/тени — просто «ссылка»-символ */
+.lp-ping {
+  border: none;
+  background: transparent;
+  padding: 0 2px;
+  font-size: 15px;
+  line-height: 1;
+  color: #999;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.lp-ping:hover:not(:disabled) {
+  color: #1a73e8;
+}
+
+.lp-ping:disabled {
+  cursor: default;
+}
+
+/* Сигнализатор соединения: цвет символа = состояние */
+.lp-ping.ping-ok {
+  color: #188038;
+}
+
+.lp-ping.ping-fail {
+  color: #d93025;
+}
+
+/* Настройки сразу под строкой сервера — компактно, одной группой */
+.lp-server-row + .lp-settings-link {
+  margin-top: 4px;
+}
+
 @media (max-width: 760px) {
   .lp {
     grid-template-columns: 1fr;

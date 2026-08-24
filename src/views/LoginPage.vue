@@ -3,7 +3,7 @@ import { ref, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '../store'
 import { PasswordField } from '../components/common'
-import { isOffline } from '../offline/state'
+import { isOffline, probeBackend } from '../offline/state'
 import { isElectron } from '../electron'
 import { getSavedLogin, saveSyncCredentials } from '../syncCredentials'
 import { getServerBase } from '../config'
@@ -31,6 +31,43 @@ const serverBase = computed(() => getServerBase())
 const submitLabel = computed(() =>
   auth.loading ? 'Подождите…' : offline.value ? 'Войти офлайн' : 'Войти →',
 )
+
+// === Пинг сервера: символ-кнопка + сигнализатор соединения ===
+const pinging = ref(false)
+/** Результат пинга: null — ещё не было, true — доступен, false — недоступен */
+const pingOk = ref<boolean | null>(null)
+// Если сервер уже известен как недоступный (офлайн) — индикатор сразу красный
+if (isElectron && isOffline.value) pingOk.value = false
+
+const pingSymbol = computed(() => (pinging.value ? '⏳' : '⇄'))
+
+const pingClass = computed(() => {
+  if (pinging.value) return 'pinging'
+  if (pingOk.value === true) return 'ping-ok'
+  if (pingOk.value === false) return 'ping-fail'
+  return ''
+})
+
+const pingTitle = computed(() => {
+  if (pinging.value) return 'Проверка соединения…'
+  if (pingOk.value === true) return 'Сервер доступен'
+  if (pingOk.value === false) return 'Сервер недоступен'
+  return 'Проверить соединение с сервером'
+})
+
+/** Пинг бэкенда (GET /health, публичный): любой статус <500 = жив */
+async function onPing() {
+  if (pinging.value) return
+  pinging.value = true
+  pingOk.value = null
+  try {
+    pingOk.value = await probeBackend()
+  } catch {
+    pingOk.value = false
+  } finally {
+    pinging.value = false
+  }
+}
 
 function getError(): string | null {
   return localError.value || auth.error
@@ -128,9 +165,22 @@ if (isElectron && isOffline.value && !username.value) {
         </button>
       </form>
 
-      <RouterLink to="/login/settings" class="lp-settings-link">
-        <span v-if="serverBase">Сервер: {{ serverBase }} · </span>⚙ Настройки сервера
-      </RouterLink>
+      <div v-if="serverBase" class="lp-server-row">
+        <span class="lp-server">Сервер: {{ serverBase }}</span>
+        <button
+          type="button"
+          class="lp-ping"
+          :class="pingClass"
+          :disabled="pinging"
+          :title="pingTitle"
+          :aria-label="pingTitle"
+          @click="onPing"
+        >
+          {{ pingSymbol }}
+        </button>
+      </div>
+
+      <RouterLink to="/login/settings" class="lp-settings-link">⚙ Настройки сервера</RouterLink>
     </div>
   </div>
 </template>

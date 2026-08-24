@@ -38,6 +38,15 @@ export async function getDesktopPassword(): Promise<string | null> {
 }
 
 /**
+ * Сохранён ли пароль автосинка (для UI-статуса «креды сохранены»).
+ * В браузере всегда false.
+ */
+export async function hasDesktopPassword(): Promise<boolean> {
+  const p = await getDesktopPassword()
+  return Boolean(p && p.length > 0)
+}
+
+/**
  * Сохранить/удалить пароль автосинка.
  * В Electron — через safeStorage; в браузере всегда false (не умеем).
  */

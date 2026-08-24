@@ -1,6 +1,6 @@
 import { ref } from 'vue'
 import axios, { type AxiosError, type Method } from 'axios'
-import { idbAll, idbDel, idbPut } from './db'
+import { idbAll, idbDel, idbPut, IDMAP_STORE_NAME, type IdMapEntry } from './db'
 import { applyToCache } from './cacheApply'
 import { probeBackend } from './state'
 import { getApiUrl } from '@/config'
@@ -403,6 +403,29 @@ function isPermanentFailure(status: number): boolean {
   return status >= 400 && status < 500 && status !== 409 && status !== 429
 }
 
+/** Признак «ссылки на ещё не созданный объект»: в URL/body есть отрицательный
+ *  (временный, офлайн) id — запись ждёт синхронизации записи-создателя. */
+function referencesPendingCreation(url: string, body: unknown): boolean {
+  const text = `${url} ${typeof body === 'string' ? body : JSON.stringify(body ?? '')}`
+  return /-\d{6,}/.test(text)
+}
+
+/** Достаёт реальный id созданной сущности из полезной части ответа { data, error }.
+ *  У большинства сущностей id лежит на верхнем уровне (data.id), но у создания
+ *  пользователя — во вложенном data.user (DtoCreateUserResult = { user, password }).
+ *  Без этого маппинг tempId→realId не создаётся и зависимые записи (например
+ *  PUT /user/{tempId}/days) уходят с фейковым id → 404. */
+function createdIdOf(data: unknown): number | undefined {
+  if (!data || typeof data !== 'object') return undefined
+  const obj = data as Record<string, unknown>
+  if (typeof obj.id === 'number') return obj.id
+  const nested = obj.user
+  if (nested && typeof nested === 'object' && typeof (nested as Record<string, unknown>).id === 'number') {
+    return (nested as Record<string, unknown>).id as number
+  }
+  return undefined
+}
+
 /** Idempotency-Key шлём на мутирующие методы (не GET): id записи — стабильный
  *  UUID между ретраями очереди, сервер вернёт сохранённый ответ вместо
  *  повторного выполнения при потере ответа первого вызова. */
@@ -480,7 +503,11 @@ export async function flushOutbox(): Promise<FlushResult> {
     }
 
     const entries = (await idbAll<OutboxEntry>(OUTBOX_STORE)).sort((a, b) => a.ts - b.ts)
-    const idMap = new Map<number, number>()
+    // Персистентный маппинг tempId → realId: накоплен прошлыми прогонами
+    // (прерванный flush, повторные запуски). Без него записи, ссылающиеся на
+    // уже отправленные создания, ушли бы с фейковым id → 404 «Объект не найден».
+    const persisted = await idbAll<IdMapEntry>(IDMAP_STORE_NAME).catch(() => [] as IdMapEntry[])
+    const idMap = new Map<number, number>(persisted.map((e) => [e.temp, e.real]))
     pushProgress.value = { done: 0, total: entries.length }
     let done = 0
 
@@ -521,10 +548,15 @@ export async function flushOutbox(): Promise<FlushResult> {
         })
 
         // Создание вернуло реальную сущность → запоминаем temp→real для
-        // переписывания последующих записей очереди.
+        // переписывания последующих записей очереди. Маппинг пишем в IndexedDB
+        // ДО удаления записи-создания: даже если flush оборвётся сразу после,
+        // следующий прогон перепишет зависящие записи реальным id.
         if (entry.tempId != null) {
-          const created = res.data?.data as { id?: number } | undefined
-          if (created?.id != null) idMap.set(entry.tempId, created.id)
+          const created = createdIdOf(res.data?.data)
+          if (created != null) {
+            idMap.set(entry.tempId, created)
+            await idbPut(IDMAP_STORE_NAME, String(entry.tempId), { temp: entry.tempId, real: created } satisfies IdMapEntry)
+          }
         }
 
         await idbDel(OUTBOX_STORE, entry.id)
@@ -570,8 +602,17 @@ export async function flushOutbox(): Promise<FlushResult> {
             // не исправит; 5xx — считаем попытки с backoff.
             logOutboxError(entry, url, e)
             const attempts = (entry.attempts ?? 0) + 1
-            const quarantined = isPermanentFailure(status) || attempts >= MAX_FAILED_ATTEMPTS
-            const message = errorMessage(e)
+            // Запись ссылается на ещё не синхронизированный объект (в URL/body
+            // отрицательный временный id — например PUT /user/{tempId}/days до
+            // создания сотрудника). Такой 404 — не фатальный: создатель уйдёт
+            // следующим flush'ем (или после «Повторить»), поэтому на карантин
+            // не ставим, оставляем на backoff-ретраях.
+            const waitsForCreator = referencesPendingCreation(url, body ?? '')
+            const quarantined = !waitsForCreator && (isPermanentFailure(status) || attempts >= MAX_FAILED_ATTEMPTS)
+            const message =
+              waitsForCreator && status === 404
+                ? 'Объект ещё не создан: сначала синхронизируется запись-создание с временным id'
+                : errorMessage(e)
             await idbPut(OUTBOX_STORE, entry.id, {
               ...entry,
               attempts,
@@ -593,6 +634,15 @@ export async function flushOutbox(): Promise<FlushResult> {
     flushing = false
     pushProgress.value = null
     await refreshPendingCount()
+    // Очередь отправлена целиком (ни записей, ни зависимостей) — маппинги
+    // больше не нужны (reconcile вернул в стор реальные id). Если в очереди
+    // ещё есть записи (прерывание/ошибки) — маппинг сохраняем: следующий
+    // прогон перепишет ими зависящие URL/body.
+    const remaining = await idbAll<OutboxEntry>(OUTBOX_STORE).catch(() => [] as OutboxEntry[])
+    if (remaining.length === 0) {
+      const maps = await idbAll<IdMapEntry>(IDMAP_STORE_NAME).catch(() => [] as IdMapEntry[])
+      await Promise.all(maps.map((m) => idbDel(IDMAP_STORE_NAME, String(m.temp))))
+    }
   }
   return result
 }
@@ -601,6 +651,10 @@ export async function flushOutbox(): Promise<FlushResult> {
 export async function clearOutbox(): Promise<void> {
   const entries = await idbAll<OutboxEntry>(OUTBOX_STORE)
   await Promise.all(entries.map((e) => idbDel(OUTBOX_STORE, e.id)))
+  // Вместе с очередью сбрасываем маппинги: отрицательные id новой сессии не
+  // должны случайно подмениться старыми соответствиями.
+  const maps = await idbAll<IdMapEntry>(IDMAP_STORE_NAME).catch(() => [] as IdMapEntry[])
+  await Promise.all(maps.map((m) => idbDel(IDMAP_STORE_NAME, String(m.temp))))
   await refreshPendingCount()
 }
 

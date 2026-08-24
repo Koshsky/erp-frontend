@@ -142,6 +142,16 @@ export function setupHttp() {
         return Promise.reject(error)
       }
 
+      // Пользователь явно вышел (logout): не пытаемся восстановить сессию.
+      // Refresh-кука уже отозвана сервером, запрос /auth/refresh вернёт 401,
+      // а повторное использование отозванного токена сервер трактует как
+      // reuse (отзыв ВСЕХ сессий пользователя) — плюс UI покажет ложное
+      // «Сессия истекла» вместо ожидаемого состояния «вышел».
+      if (isLoggedOut()) {
+        redirectToLogin()
+        return Promise.reject(error)
+      }
+
       const auth = useAuthStore()
 
       if ((config as RetryableConfig)._retried) {

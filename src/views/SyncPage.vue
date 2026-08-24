@@ -4,10 +4,11 @@ import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../store'
 import { getApiUrl, setApiUrl, hasApiUrlOverride, httpSchemeWarning } from '../config'
 import { autoSync, saveSyncSettings } from '../settings'
-import { isElectron } from '../electron'
+import { isElectron, hasDesktopPassword } from '../electron'
+import { getSavedLogin, saveSyncCredentials } from '../syncCredentials'
 import { warmNow, warmupProgress, lastWarmedAt } from '../offline/warmup'
-import { syncNow, syncNotice, dismissSyncNotice, retryFailed, discardFailed } from '../offline/sync'
-import { pendingCount, refreshPendingCount, getFailedEntries, queueItems, type QueueViewItem } from '../offline/outbox'
+import { syncNow, syncAll, syncNotice, dismissSyncNotice, retryFailed, discardFailed, lastPushAt } from '../offline/sync'
+import { pendingCount, pushProgress, refreshPendingCount, getFailedEntries, queueItems, type QueueViewItem } from '../offline/outbox'
 import { idbCount } from '../offline/db'
 import { isOffline } from '../offline/state'
 import { getAccessToken } from '../token'
@@ -27,6 +28,15 @@ const apiUrlWarn = ref<string | null>(null)
 const failedEntries = ref<Array<{ method: string; url: string; message: string }>>([])
 const cachedData = ref(0)
 
+// === Аккаунт синка: логин (localStorage) + пароль (safeStorage) ===
+const savedLogin = ref(getSavedLogin() ?? '')
+const credsSaved = ref(false)
+const editingCreds = ref(false)
+const credLogin = ref('')
+const credPassword = ref('')
+const credMsg = ref<string | null>(null)
+const credOk = ref(false)
+
 // === Приложение / офлайн (перенесено с экрана профиля) ===
 const appVersion = ref('—')
 /** Версия запущенного бандла (инжектится на build; в dev — 'dev-...') */
@@ -43,6 +53,19 @@ const lastWarmedLabel = computed(() =>
     ? new Date(lastWarmedAt.value).toLocaleString('ru-RU')
     : 'ещё не было',
 )
+
+const lastPushLabel = computed(() =>
+  lastPushAt.value != null
+    ? new Date(lastPushAt.value).toLocaleString('ru-RU')
+    : 'ещё не было',
+)
+
+/** Процент отправленной очереди (для прогресс-бара PUSH) */
+const pushPercent = computed(() => {
+  const p = pushProgress.value
+  if (!p || p.total === 0) return 0
+  return Math.round((p.done / p.total) * 100)
+})
 
 // === Очередь изменений: выбор блока и просмотр технической информации ===
 const selectedId = ref<string | null>(null)
@@ -126,6 +149,8 @@ async function refreshStatus() {
     message: e.message,
   }))
   cachedData.value = await idbCount('cache').catch(() => 0)
+  savedLogin.value = getSavedLogin() ?? ''
+  credsSaved.value = await hasDesktopPassword()
   await refreshAppInfo()
 }
 
@@ -197,6 +222,48 @@ async function onCheck() {
   }
 }
 
+/** Кнопка «Сменить» у аккаунта синка: открывает форму логин/пароль */
+function onEditCreds() {
+  credMsg.value = null
+  editingCreds.value = true
+  credLogin.value = savedLogin.value
+  credPassword.value = ''
+}
+
+function onCancelCreds() {
+  credMsg.value = null
+  editingCreds.value = false
+}
+
+/** «Сохранить и проверить»: вход проверяет пару, затем сохраняем креды синка */
+async function onSaveCreds() {
+  if (busy.value) return
+  credMsg.value = null
+  const login = credLogin.value.trim()
+  if (!login || !credPassword.value) {
+    credMsg.value = 'Заполните логин и пароль'
+    credOk.value = false
+    return
+  }
+  busy.value = true
+  try {
+    const ok = await auth.login(login, credPassword.value)
+    if (ok) {
+      await saveSyncCredentials(login, credPassword.value)
+      savedLogin.value = getSavedLogin() ?? ''
+      credsSaved.value = await hasDesktopPassword()
+      editingCreds.value = false
+      credMsg.value = 'Креды сохранены, аккаунт проверен'
+      credOk.value = true
+    } else {
+      credMsg.value = auth.error ?? 'Не удалось войти: проверьте логин и пароль'
+      credOk.value = false
+    }
+  } finally {
+    busy.value = false
+  }
+}
+
 async function onPull() {
   if (busy.value) return
   busy.value = true
@@ -237,6 +304,36 @@ async function onPush() {
       okMsg(`Отправлено изменений: ${n.ok}`)
     } else {
       okMsg('Нечего отправлять')
+    }
+    await refreshStatus()
+  } finally {
+    busy.value = false
+  }
+}
+
+/** Кнопка «Синхронизировать всё»: PUSH (отправка очереди) → PULL (прогревка) */
+async function onSyncAll() {
+  if (busy.value) return
+  busy.value = true
+  statusMsg.value = null
+  try {
+    if (!requireAuth()) return
+    if (!applyApiUrl()) return
+    if (isOffline.value) {
+      failMsg('Нет соединения с сервером — синхронизация недоступна')
+      return
+    }
+    const res = await syncAll()
+    const n = syncNotice.value
+    const parts: string[] = []
+    if (res.pushed) parts.push(`отправлено изменений: ${n?.ok ?? 0}`)
+    if (res.pulled) parts.push('данные скачаны')
+    if (parts.length > 0) {
+      okMsg('Синхронизация завершена: ' + parts.join(', '))
+    } else if (n && n.failed > 0) {
+      failMsg(`Отправлено ${n.ok}, ошибок ${n.failed}. Повторите или пропустите ошибки`)
+    } else {
+      okMsg('Синхронизация завершена: отправлять и скачивать нечего')
     }
     await refreshStatus()
   } finally {
@@ -291,6 +388,52 @@ onBeforeUnmount(() => {
 
     <div class="sp-columns">
       <div class="sp-col">
+        <div class="sp-card">
+          <h3 class="sp-card-title">Аккаунт синка</h3>
+          <p class="sp-hint">
+            Операции PULL и PUSH выполняются от этого пользователя (и автосинк
+            при запуске и возврате сети). Креды сохраняются автоматически при
+            входе; здесь их можно проверить и сменить.
+          </p>
+
+          <div class="sp-status-rows">
+            <div class="sp-row">
+              <span class="sp-label">Логин</span>
+              <span class="sp-value">{{ savedLogin || '—' }}</span>
+            </div>
+            <div class="sp-row">
+              <span class="sp-label">Пароль</span>
+              <span class="sp-value" :class="credsSaved ? 'on' : 'off'">
+                {{ credsSaved ? 'сохранён (safeStorage)' : 'не сохранён' }}
+              </span>
+            </div>
+          </div>
+
+          <button v-if="!editingCreds" type="button" class="sp-btn ghost" :disabled="busy" @click="onEditCreds">
+            Сменить креды синка
+          </button>
+
+          <div v-else class="sp-card-inner">
+            <label class="sp-field">
+              <span>Логин</span>
+              <input v-model="credLogin" type="text" spellcheck="false" autocomplete="username" />
+            </label>
+            <label class="sp-field">
+              <span>Пароль</span>
+              <input v-model="credPassword" type="password" autocomplete="current-password" />
+            </label>
+            <p v-if="credMsg" class="sp-msg" :class="{ ok: credOk }">{{ credMsg }}</p>
+            <div class="sp-actions sp-actions--tight">
+              <button type="button" class="sp-btn sp-btn--sm" :disabled="busy" @click="onSaveCreds">
+                {{ busy ? 'Проверка…' : 'Сохранить и проверить' }}
+              </button>
+              <button type="button" class="sp-btn sp-btn--sm ghost" :disabled="busy" @click="onCancelCreds">
+                Отмена
+              </button>
+            </div>
+          </div>
+        </div>
+
         <div class="sp-card">
           <h3 class="sp-card-title">Подключение</h3>
 
@@ -356,6 +499,13 @@ onBeforeUnmount(() => {
             <span class="warm-label">Скачивание данных: {{ warmupProgress }}%</span>
           </div>
 
+          <div v-if="pushProgress != null" class="warm-progress" role="progressbar" :aria-valuenow="pushPercent">
+            <div class="warm-bar">
+              <div class="warm-fill warm-fill--push" :style="{ width: pushPercent + '%' }" />
+            </div>
+            <span class="warm-label">Отправка изменений: {{ pushProgress.done }} из {{ pushProgress.total }}</span>
+          </div>
+
           <div class="sp-actions">
             <button type="button" class="sp-btn" :disabled="busy || isOffline" @click="onPull">
               PULL — скачать данные
@@ -364,6 +514,10 @@ onBeforeUnmount(() => {
               {{ pendingLabel }}
             </button>
           </div>
+
+          <button type="button" class="sp-btn accent" :disabled="busy || isOffline" @click="onSyncAll">
+            Синхронизировать всё (PUSH → PULL)
+          </button>
 
           <div v-if="canRetry" class="sp-errors">
             <div class="sp-errors-head">Ошибки синхронизации ({{ failedCount }})</div>
@@ -473,6 +627,10 @@ onBeforeUnmount(() => {
             <div class="sp-row">
               <span class="sp-label">Последний PULL</span>
               <span class="sp-value">{{ lastWarmedLabel }}</span>
+            </div>
+            <div class="sp-row">
+              <span class="sp-label">Последний PUSH</span>
+              <span class="sp-value">{{ lastPushLabel }}</span>
             </div>
           </div>
 
@@ -769,6 +927,10 @@ onBeforeUnmount(() => {
   border-radius: 999px;
   background: #1a73e8;
   transition: width 0.3s ease;
+}
+
+.warm-fill--push {
+  background: #188038;
 }
 
 .warm-label {

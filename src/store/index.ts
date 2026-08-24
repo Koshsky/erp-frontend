@@ -7,6 +7,7 @@ import { apiErrorMessage, fullName } from '@/utils'
 import { getApiUrl } from '@/config'
 import { isOffline } from '@/offline/state'
 import { isElectron, setDesktopPassword } from '@/electron'
+import { offlineFailFastAdapter } from '@/offline/failFast'
 import { scheduleWarmup } from '@/offline/warmup'
 import { enqueueMutation, isNetworkError, clearOutbox, type MutationEntity } from '@/offline/outbox'
 import { applyRangeSplit } from '@/offline/periodSplit'
@@ -81,7 +82,15 @@ async function runMutation(opts: MutationOptions): Promise<boolean> {
 function apiConfig(): Configuration {
   return new Configuration({
     basePath: getApiUrl(),
-    baseOptions: { headers: { 'Content-Type': 'application/json' } },
+    baseOptions: {
+      headers: { 'Content-Type': 'application/json' },
+      // Fail-fast при известном оффлайне (баннер висит): запрос не уходит в
+      // сеть и не ждёт таймаута — мутации мгновенно попадают в очередь outbox,
+      // GET отдаются из кэша. Адаптер стоит только здесь (клиенты стора), чтобы
+      // служебная отправка очереди (flushOutbox, сырой axios) ходила в сеть как
+      // обычно: иначе при уже вернувшейся сети записи падали бы с Network Error.
+      ...(isElectron && isOffline.value ? { adapter: offlineFailFastAdapter } : {}),
+    },
     apiKey: () => `Bearer ${getAccessToken()}`,
   })
 }
@@ -282,6 +291,11 @@ export const useAuthStore = defineStore('auth', () => {
     // Refresh-токен живёт в HttpOnly-куке (AD-05): тело не шлём, кука приложится сама.
     // Офлайн refresh не выполнить: не разлогиниваем, сессия живёт до возврата сети.
     if (isOffline.value) return true
+    // После явного выхода (logout) не дёргаем /auth/refresh: кука уже отозвана,
+    // запрос вернёт 401 и покажет ложное «Сессия истекла», а на сервере повторное
+    // использование отозванного токена сработает как reuse-детект (отзыв всех
+    // сессий пользователя). Возвращаем false без сети — вызывающий разлогинен.
+    if (isLoggedOut()) return false
     loading.value = true
     error.value = null
     try {

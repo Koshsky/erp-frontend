@@ -6,6 +6,7 @@ import { useNavigation } from '../../../composables/useNavigation'
 import type { NavCategory } from '../../../composables/useNavigation'
 import { isElectron } from '../../../electron'
 import { isOffline } from '../../../offline/state'
+import { pendingCount } from '../../../offline/outbox'
 
 const props = withDefaults(defineProps<{ brand?: string }>(), { brand: 'MVS ERP' })
 
@@ -16,6 +17,9 @@ const authStore = useAuthStore()
 // Локальный computed поверх импортированного ref — гарантированная реактивность
 // в шаблоне (импортированные ref привязываются без автораспаковки).
 const offline = computed(() => isOffline.value)
+
+// Ожидающие отправки изменения (бейдж у «Синхронизация»)
+const pending = computed(() => pendingCount.value)
 
 // Шапка — список категорий; подкатегории открываются выпадающим меню.
 const { visibleCategories, activeCategory, standalone } = useNavigation()
@@ -105,7 +109,12 @@ onBeforeUnmount(() => {
     <div class="ah-spacer"></div>
     <div class="ah-actions">
       <RouterLink to="/profile" class="ah-link" :class="{ active: route.name === 'profile' }">Профиль</RouterLink>
-      <RouterLink v-if="isElectron" to="/sync" class="ah-link" :class="{ active: route.name === 'sync' }">Синхронизация</RouterLink>
+      <RouterLink v-if="isElectron" to="/sync" class="ah-link" :class="{ active: route.name === 'sync' }">
+        Синхронизация
+        <span v-if="pending > 0" class="ah-sync-badge" :title="`Ожидают отправки: ${pending}`">
+          {{ pending }}
+        </span>
+      </RouterLink>
       <!-- Выход офлайн недоступен: logout чистит очередь изменений, а её нужно сохранить до возврата сети -->
       <button
         type="button"
@@ -184,6 +193,21 @@ onBeforeUnmount(() => {
 .ah-caret {
   font-size: 10px;
   opacity: 0.8;
+}
+
+.ah-sync-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: #f39c12;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
 }
 
 .ah-cat-wrap {
