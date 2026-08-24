@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, ref, shallowRef, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../../../store'
 import { useNavigation } from '../../../composables/useNavigation'
@@ -12,6 +12,10 @@ const props = withDefaults(defineProps<{ brand?: string }>(), { brand: 'MVS ERP'
 const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
+
+// Локальный computed поверх импортированного ref — гарантированная реактивность
+// в шаблоне (импортированные ref привязываются без автораспаковки).
+const offline = computed(() => isOffline.value)
 
 // Шапка — список категорий; подкатегории открываются выпадающим меню.
 const { visibleCategories, activeCategory, standalone } = useNavigation()
@@ -30,6 +34,9 @@ function closeCategory() {
 }
 
 function onLogout() {
+  // Страховка на уровне обработчика: офлайн выход не выполняется (logout
+  // чистит очередь изменений), даже если атрибут disabled не сработал.
+  if (offline.value) return
   authStore.logout()
   router.push('/login')
 }
@@ -103,8 +110,9 @@ onBeforeUnmount(() => {
       <button
         type="button"
         class="ah-logout"
-        :disabled="isOffline"
-        :title="isOffline ? 'Выход недоступен офлайн: очередь изменений сохранится до возврата сети' : undefined"
+        :class="{ 'ah-logout--off': offline }"
+        :disabled="offline"
+        :title="offline ? 'Выход недоступен офлайн: очередь изменений сохранится до возврата сети' : undefined"
         @click="onLogout"
       >
         Выйти
@@ -245,9 +253,11 @@ onBeforeUnmount(() => {
   color: #fff;
 }
 
-.ah-logout:disabled {
-  opacity: 0.5;
+.ah-logout:disabled,
+.ah-logout--off {
+  opacity: 0.45;
   cursor: not-allowed;
+  pointer-events: none;
 }
 
 @media (max-width: 720px) {

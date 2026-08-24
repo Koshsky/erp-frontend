@@ -1,7 +1,10 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted } from 'vue'
+import { computed, onBeforeUnmount, onMounted } from 'vue'
 import AppHeader from '../components/common/AppHeader/AppHeader.vue'
 import { isOffline } from '../offline/state'
+
+// Локальный computed поверх импортированного ref — гарантированная реактивность в шаблоне
+const offline = computed(() => isOffline.value)
 
 /**
  * Глобальный перехват Ctrl/Cmd+P и Ctrl/Cmd+S: браузерные «Печать страницы»
@@ -31,7 +34,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onPrintHotkey, true)
   <div class="ml">
     <AppHeader />
     <!-- Глобальный индикатор офлайна (Desktop): данные из кэша, изменения копятся в очереди -->
-    <div v-if="isOffline" class="ml-offline" role="status">
+    <div v-if="offline" class="ml-offline" role="status">
       Офлайн-режим: данные из кэша, изменения копятся в очереди
     </div>
     <div class="ml-body">
