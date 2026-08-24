@@ -5,6 +5,7 @@ import { useAuthStore } from '../../../store'
 import { useNavigation } from '../../../composables/useNavigation'
 import type { NavCategory } from '../../../composables/useNavigation'
 import { isElectron } from '../../../electron'
+import { isOffline } from '../../../offline/state'
 
 const props = withDefaults(defineProps<{ brand?: string }>(), { brand: 'MVS ERP' })
 
@@ -98,7 +99,16 @@ onBeforeUnmount(() => {
     <div class="ah-actions">
       <RouterLink to="/profile" class="ah-link" :class="{ active: route.name === 'profile' }">Профиль</RouterLink>
       <RouterLink v-if="isElectron" to="/sync" class="ah-link" :class="{ active: route.name === 'sync' }">Синхронизация</RouterLink>
-      <button type="button" class="ah-logout" @click="onLogout">Выйти</button>
+      <!-- Выход офлайн недоступен: logout чистит очередь изменений, а её нужно сохранить до возврата сети -->
+      <button
+        type="button"
+        class="ah-logout"
+        :disabled="isOffline"
+        :title="isOffline ? 'Выход недоступен офлайн: очередь изменений сохранится до возврата сети' : undefined"
+        @click="onLogout"
+      >
+        Выйти
+      </button>
     </div>
   </header>
 </template>
@@ -230,9 +240,14 @@ onBeforeUnmount(() => {
   transition: background 0.15s, color 0.15s;
 }
 
-.ah-logout:hover {
+.ah-logout:hover:not(:disabled) {
   background: rgba(255, 255, 255, 0.28);
   color: #fff;
+}
+
+.ah-logout:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 @media (max-width: 720px) {
