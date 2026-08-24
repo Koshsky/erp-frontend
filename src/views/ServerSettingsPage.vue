@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { getServerBase, getApiUrl, setServerBase } from '../config'
+import { getServerBase, getApiUrl, setServerBase, httpSchemeWarning } from '../config'
 
 /**
  * Экран настройки адреса сервера (до входа).
@@ -17,9 +17,12 @@ const serverBase = ref(getServerBase())
 const busy = ref(false)
 const msg = ref<string | null>(null)
 const ok = ref(false)
+/** Предупреждение про http-схему (Secure-кука refresh не работает) */
+const warning = ref<string | null>(null)
 
 function applyAndStore(url: string): boolean {
   const saved = setServerBase(url, true)
+  warning.value = httpSchemeWarning(url)
   if (!saved) {
     msg.value = 'Некорректный адрес: ожидается http(s)://host (или http(s)://host:port)'
     ok.value = false
@@ -122,6 +125,7 @@ function onSave() {
           />
         </label>
 
+        <p v-if="warning" class="lp-warn">{{ warning }}</p>
         <p v-if="msg" class="lp-error" :class="{ ok }">{{ msg }}</p>
 
         <button type="button" class="lp-btn" :disabled="busy" @click="onCheck">

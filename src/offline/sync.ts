@@ -3,6 +3,7 @@ import { useAppStore, useAuthStore, usePlanningStore, useTimesheetStore } from '
 import { shouldAutoSync } from '@/settings'
 import { isElectron } from '@/electron'
 import { getSyncCredentials } from '@/syncCredentials'
+import { isLoggedOut } from '@/loggedOut'
 import {
   flushOutbox,
   pendingCount,
@@ -163,9 +164,11 @@ export async function initOfflineSync(): Promise<void> {
  * Если автосинк включён, сессии нет (токены протухли/отсутствуют) и в
  * safeStorage сохранены логин+пароль — тихо входим, чтобы автосинк мог
  * работать без ручного ввода. В браузере (нет safeStorage) ничего не делает.
+ * После явного выхода (флаг mvs_erp_logged_out) не входит до ручного входа.
  */
 export async function ensureDesktopAutoSyncSession(): Promise<void> {
   if (!isElectron || !shouldAutoSync()) return
+  if (isLoggedOut()) return
   const auth = useAuthStore()
   // Сессия уже жива — не трогаем.
   if (auth.isAuthenticated && !auth.accessExpired) return
@@ -173,4 +176,23 @@ export async function ensureDesktopAutoSyncSession(): Promise<void> {
   const creds = await getSyncCredentials()
   if (!creds?.login || !creds.password) return
   await auth.login(creds.login, creds.password)
+}
+
+/** Период фоновой поддержки сессии (продление access-токена тихим входом) */
+const SESSION_MAINTENANCE_MS = 30 * 1000
+
+let maintenanceTimer: number | null = null
+
+/**
+ * Фоновая поддержка сессии в Desktop: каждые 30 с тихо обновляем access-токен
+ * по кредам автосинка, когда он на исходе (refresh-кука не работает
+ * кросс-сайт, поэтому продлеваем входом). Идемпотентна: ensure... сам
+ * отсекает свежую сессию, офлайн и флаг «после выхода». Офлайн-сессия
+ * (вход без сети) автоматически становится реальной при возврате сети.
+ */
+export function startSessionMaintenance(): void {
+  if (!isElectron || maintenanceTimer != null) return
+  maintenanceTimer = window.setInterval(() => {
+    void ensureDesktopAutoSyncSession()
+  }, SESSION_MAINTENANCE_MS)
 }

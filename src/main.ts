@@ -3,7 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import App from './App.vue'
 import router from './router'
 import { setupHttp } from './http'
-import { initOfflineSync, ensureDesktopAutoSyncSession } from './offline/sync'
+import { initOfflineSync, ensureDesktopAutoSyncSession, startSessionMaintenance } from './offline/sync'
 import { startConnectivityMonitor } from './offline/state'
 import { isElectron } from './electron'
 
@@ -16,11 +16,13 @@ setActivePinia(pinia)
 
 // В Electron при старте пробуем тихо восстановить сессию по сохранённым
 // (safeStorage) логину+паролю, чтобы автосинк работал без ручного входа.
-// Офлайн-механизм (очередь, кэш, монитор сети) — только в настольной сборке.
+// Офлайн-механизм (очередь, кэш, монитор сети) и фоновая поддержка сессии —
+// только в настольной сборке.
 if (isElectron) {
   await ensureDesktopAutoSyncSession()
   await initOfflineSync()
   startConnectivityMonitor()
+  startSessionMaintenance()
 }
 
 console.log(`[build] ${__APP_VERSION__}`)

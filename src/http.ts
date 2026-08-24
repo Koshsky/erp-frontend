@@ -7,6 +7,9 @@ import { replayOutboxToCache } from './offline/outbox'
 import { isOffline } from './offline/state'
 import { isElectron } from './electron'
 import { getAccessToken } from './token'
+import { ensureDesktopAutoSyncSession } from './offline/sync'
+import { shouldAutoSync } from './settings'
+import { isLoggedOut } from './loggedOut'
 
 /** Пути, где 401 не означает «токен протух» — их не трогаем (защита от петли) */
 const AUTH_PATHS = ['/auth/login', '/auth/refresh', '/auth/logout']
@@ -145,7 +148,15 @@ export function setupHttp() {
         return Promise.reject(error)
       }
 
-      refreshing ??= auth.refreshSession().finally(() => {
+      // Свежая сессия перед повтором: web — refresh по HttpOnly-куке; desktop —
+      // тихий re-login по кредам автосинка (кука не работает кросс-сайт).
+      refreshing ??= (async () => {
+        if (isElectron && shouldAutoSync() && !isLoggedOut()) {
+          await ensureDesktopAutoSyncSession()
+          return auth.isAuthenticated && !auth.accessExpired
+        }
+        return auth.refreshSession()
+      })().finally(() => {
         refreshing = null
       })
 

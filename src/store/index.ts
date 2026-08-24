@@ -6,11 +6,14 @@ import type { DtoUserInfo, DtoProject, DtoResourceResponse, DtoResourceCalendar,
 import { apiErrorMessage, fullName } from '@/utils'
 import { getApiUrl } from '@/config'
 import { isOffline } from '@/offline/state'
-import { isElectron } from '@/electron'
+import { isElectron, setDesktopPassword } from '@/electron'
 import { scheduleWarmup } from '@/offline/warmup'
 import { enqueueMutation, isNetworkError, clearOutbox, type MutationEntity } from '@/offline/outbox'
 import { applyRangeSplit } from '@/offline/periodSplit'
 import { getAccessToken, setAccessToken } from '@/token'
+import { isLoggedOut, clearLoggedOut, setLoggedOut } from '@/loggedOut'
+import { getSavedLogin } from '@/syncCredentials'
+import { shouldAutoSync } from '@/settings'
 
 const USER_KEY = 'mvs_erp_user'
 
@@ -134,6 +137,8 @@ export const useAuthStore = defineStore('auth', () => {
   const user = ref<DtoUserInfo | null>(readStoredUser())
   const isAuthenticated = ref<boolean>(Boolean(readStoredUser()))
   const accessExpired = computed<boolean>(() => accessTokenExpired())
+  /** Режим сессии: online — реальная (с токеном), offline — локальная без токена */
+  const sessionMode = ref<'online' | 'offline'>('online')
   const loading = ref(false)
   const error = ref<string | null>(null)
 
@@ -145,9 +150,30 @@ export const useAuthStore = defineStore('auth', () => {
       user.value = data.user
     }
     isAuthenticated.value = Boolean(token)
+    sessionMode.value = 'online'
     scheduleProactiveRefresh()
     // Фоновая прогревка офлайн-кэша данными под роль пользователя
     scheduleWarmup()
+  }
+
+  /**
+   * Офлайн-вход (Desktop, кнопка на /login при isOffline): локальная сессия
+   * без токена — данные из кэша, мутации в очередь, сервер не опрашивается.
+   * Идентичность: сохранённый профиль (если совпадает с введённым логином
+   * или логин не введён), иначе минимальный профиль с введённым логином.
+   */
+  function enterOffline(username: string | null): boolean {
+    const stored = readStoredUser()
+    if (stored?.username && (!username || stored.username === username)) {
+      user.value = stored
+    } else {
+      user.value = { username: username ?? undefined } as DtoUserInfo
+    }
+    setAccessToken(null)
+    stopProactiveRefresh()
+    isAuthenticated.value = true
+    sessionMode.value = 'offline'
+    return true
   }
 
   async function login(username: string, password: string) {
@@ -160,6 +186,9 @@ export const useAuthStore = defineStore('auth', () => {
       const errBody = body?.error as { code?: unknown; message?: string } | undefined
       if (errBody && errBody.code != null) throw new Error(apiErrorMessage(errBody))
       applySession(body?.data)
+      // Ручной вход снимает флаг «вышел» — автосинк снова разрешён
+      clearLoggedOut()
+      sessionMode.value = 'online'
       return true
     } catch (e: any) {
       error.value = e.message || String(e)
@@ -181,6 +210,18 @@ export const useAuthStore = defineStore('auth', () => {
       const body = resp.data
       const errBody = body?.error as { code?: unknown; message?: string } | undefined
       if (errBody && errBody.code != null) throw new Error(apiErrorMessage(errBody))
+      // Сохранённый для автосинка пароль обновляем, чтобы автосинк не сломался
+      // после смены пароля: креды привязаны к последнему ручному входу (Desktop).
+      if (isElectron) {
+        const saved = getSavedLogin()
+        if (saved && user.value?.username && saved === user.value.username) {
+          try {
+            await setDesktopPassword(newPassword)
+          } catch {
+            // не критично: автосинк просто попросит ввести креды на логине
+          }
+        }
+      }
       return true
     } catch (e: any) {
       error.value = apiErrorMessage(e?.response?.data?.error, e?.message ?? String(e))
@@ -197,13 +238,17 @@ export const useAuthStore = defineStore('auth', () => {
   /** Проактивный refresh: таймер + возврат вкладки, чтобы access-токен не успевал протухнуть */
   function scheduleProactiveRefresh() {
     if (proactiveTimer != null) return
-    proactiveTimer = window.setInterval(() => {
-      if (accessTokenExpiring()) {
+    // Desktop + автосинк: продление сессии делает session-maintenance
+    // (тихий re-login по кредам автосинка) — refresh-кука не работает
+    // кросс-сайт, здесь пропускаем, чтобы не уйти в logout при 401.
+    const renew = () => {
+      if (accessTokenExpiring() && !(isElectron && shouldAutoSync())) {
         void refreshSession()
       }
-    }, REFRESH_INTERVAL_MS)
+    }
+    proactiveTimer = window.setInterval(renew, REFRESH_INTERVAL_MS)
     onVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && accessTokenExpiring()) {
+      if (document.visibilityState === 'visible' && accessTokenExpiring() && !(isElectron && shouldAutoSync())) {
         void refreshSession()
       }
     }
@@ -278,6 +323,9 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.removeItem(USER_KEY)
     user.value = null
     isAuthenticated.value = false
+    sessionMode.value = 'online'
+    // После явного выхода автосинк не входит до ручного входа (Desktop)
+    setLoggedOut()
   }
 
   /** Получает свежие данные пользователя по id через UsersApi.usersIdGet */
@@ -311,9 +359,11 @@ export const useAuthStore = defineStore('auth', () => {
     user,
     isAuthenticated,
     accessExpired,
+    sessionMode,
     loading,
     error,
     login,
+    enterOffline,
     changePassword,
     refreshSession,
     fetchProfile,

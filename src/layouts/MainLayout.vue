@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted } from 'vue'
 import AppHeader from '../components/common/AppHeader/AppHeader.vue'
+import { isOffline } from '../offline/state'
 
 /**
  * Глобальный перехват Ctrl/Cmd+P и Ctrl/Cmd+S: браузерные «Печать страницы»
@@ -29,6 +30,10 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onPrintHotkey, true)
 <template>
   <div class="ml">
     <AppHeader />
+    <!-- Глобальный индикатор офлайна (Desktop): данные из кэша, изменения копятся в очереди -->
+    <div v-if="isOffline" class="ml-offline" role="status">
+      Офлайн-режим: данные из кэша, изменения копятся в очереди
+    </div>
     <div class="ml-body">
       <main class="ml-main">
         <RouterView />
@@ -43,6 +48,16 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onPrintHotkey, true)
   display: flex;
   flex-direction: column;
   background: #f4f6f9;
+}
+
+.ml-offline {
+  padding: 8px 24px;
+  background: #fdecea;
+  color: #b23b2e;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+  border-bottom: 1px solid #f3c4c1;
 }
 
 .ml-body {

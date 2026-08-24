@@ -196,6 +196,12 @@
   font-size: 13px;
 }
 
+.lp-warn,
+.lp-offline-hint {
+  color: #b26a00;
+  font-size: 13px;
+}
+
 .lp-btn {
   margin-top: 4px;
   padding: 13px;

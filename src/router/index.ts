@@ -2,6 +2,9 @@ import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '../store'
 import { isOffline } from '../offline/state'
 import { isElectron } from '../electron'
+import { ensureDesktopAutoSyncSession } from '../offline/sync'
+import { shouldAutoSync } from '../settings'
+import { isLoggedOut } from '../loggedOut'
 import MainLayout from '../layouts/MainLayout.vue'
 import AuthLayout from '../layouts/AuthLayout.vue'
 
@@ -107,7 +110,9 @@ const router = createRouter({
 })
 
 // Глобальный guard: неавторизованных пользователей всегда отправляем на /login.
-// Если access-токен отсутствует или протух, но есть refresh — сначала тихо обновляем сессию.
+// Если access-токен отсутствует или протух, но есть refresh — сначала тихо
+// обновляем сессию: web — refresh по куке, desktop — тихий re-login по кредам
+// автосинка (refresh-кука не работает кросс-сайт). Офлайн — без попыток сети.
 router.beforeEach(async (to) => {
   const auth = useAuthStore()
 
@@ -116,7 +121,11 @@ router.beforeEach(async (to) => {
     (!auth.isAuthenticated || auth.accessExpired) &&
     !isOffline.value
   ) {
-    await auth.refreshSession()
+    if (isElectron && shouldAutoSync() && !isLoggedOut()) {
+      await ensureDesktopAutoSyncSession()
+    } else {
+      await auth.refreshSession()
+    }
   }
 
   // Страницы под главным layout требуют авторизации

@@ -2,17 +2,9 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../store'
-import { PasswordField } from '../components/common'
-import { getApiUrl, setApiUrl, hasApiUrlOverride } from '../config'
+import { getApiUrl, setApiUrl, hasApiUrlOverride, httpSchemeWarning } from '../config'
 import { autoSync, saveSyncSettings } from '../settings'
 import { isElectron } from '../electron'
-import {
-  getSavedLogin,
-  getSavedPassword,
-  saveSyncCredentials,
-  clearSyncCredentials,
-  passwordStorageLabel,
-} from '../syncCredentials'
 import { warmNow, warmupProgress, lastWarmedAt } from '../offline/warmup'
 import { syncNow, syncNotice, dismissSyncNotice, retryFailed, discardFailed } from '../offline/sync'
 import { pendingCount, refreshPendingCount, getFailedEntries, queueItems, type QueueViewItem } from '../offline/outbox'
@@ -26,15 +18,11 @@ const auth = useAuthStore()
 
 const apiUrl = ref('')
 
-// === Данные для автосинка (только настольная версия) ===
-const syncLogin = ref('')
-const syncPassword = ref('')
-const passwordSaved = ref(false)
-const credsBusy = ref(false)
-
 const busy = ref(false)
 const statusMsg = ref<string | null>(null)
 const statusOk = ref(false)
+/** Предупреждение про http-схему (Secure-кука refresh не работает) */
+const apiUrlWarn = ref<string | null>(null)
 
 const failedEntries = ref<Array<{ method: string; url: string; message: string }>>([])
 const cachedData = ref(0)
@@ -107,6 +95,7 @@ function formatTime(ts: number): string {
 
 /** Применяет URL из поля к runtime-конфигурации; false — невалидный URL */
 function applyApiUrl(): boolean {
+  apiUrlWarn.value = httpSchemeWarning(apiUrl.value)
   const applied = setApiUrl(apiUrl.value, true)
   if (!applied) {
     failMsg('Некорректный API_URL: ожидается http(s)://…')
@@ -120,48 +109,6 @@ function onSaveApiUrl(): boolean {
   if (!applyApiUrl()) return false
   okMsg('API_URL сохранён')
   return true
-}
-
-/** Подтягивает сохранённый логин/пароль в поля (для отображения в exe) */
-async function loadSyncCredentials() {
-  syncLogin.value = getSavedLogin() ?? ''
-  const pwd = await getSavedPassword()
-  passwordSaved.value = pwd != null && pwd.length > 0
-  syncPassword.value = ''
-}
-
-/** Сохраняет логин + пароль в safeStorage (Electron) / localStorage (логин) */
-async function onSaveCredentials() {
-  if (credsBusy.value) return
-  credsBusy.value = true
-  statusMsg.value = null
-  try {
-    const ok = await saveSyncCredentials(syncLogin.value, syncPassword.value)
-    if (ok) {
-      okMsg('Логин и пароль сохранены для автосинка')
-    } else if (isElectron) {
-      failMsg('Заполните логин и пароль')
-    } else {
-      failMsg('Пароль не хранится: безопасное хранение доступно только в настольной версии')
-    }
-    await loadSyncCredentials()
-  } finally {
-    credsBusy.value = false
-  }
-}
-
-/** Очищает сохранённые креденшелы */
-async function onClearCredentials() {
-  if (credsBusy.value) return
-  credsBusy.value = true
-  statusMsg.value = null
-  try {
-    await clearSyncCredentials()
-    okMsg('Сохранённые данные для автосинка удалены')
-    await loadSyncCredentials()
-  } finally {
-    credsBusy.value = false
-  }
 }
 
 /** Работа с синхронизацией возможна только с активной сессией — иначе на /login */
@@ -329,7 +276,6 @@ watch(autoSync, saveSyncSettings)
 
 onMounted(() => {
   apiUrl.value = getApiUrl() ?? ''
-  void loadSyncCredentials()
   void refreshStatus()
   refreshTimer = window.setInterval(refreshStatus, 5000)
 })
@@ -352,6 +298,7 @@ onBeforeUnmount(() => {
             <span>API_URL бэкенда</span>
             <input v-model="apiUrl" type="text" spellcheck="false" placeholder="https://host/api/v1" />
           </label>
+          <p v-if="apiUrlWarn" class="sp-msg warn">{{ apiUrlWarn }}</p>
           <div class="sp-actions sp-actions--tight">
             <button type="button" class="sp-btn sp-btn--sm" :disabled="busy" @click="onSaveApiUrl">
               Сохранить
@@ -366,34 +313,11 @@ onBeforeUnmount(() => {
           <div v-if="isElectron" class="sp-card-inner">
             <h4 class="sp-subtitle">Данные для автосинка</h4>
             <p class="sp-hint">
-              Настольная версия: логин и пароль сохраняются так, что пароль
-              шифруется хранилищем ОС (safeStorage). При запуске приложение
-              само восстановит сессию и выполнит синхронизацию.
+              Логин и пароль для автосинка сохраняются автоматически при входе
+              в систему (пароль шифруется хранилищем ОС — safeStorage). При
+              запуске приложение само восстановит сессию и выполнит
+              синхронизацию.
             </p>
-            <label class="sp-field">
-              <span>Логин</span>
-              <input v-model="syncLogin" type="text" spellcheck="false" autocomplete="username" />
-            </label>
-            <PasswordField
-              v-model="syncPassword"
-              label="Пароль"
-              :placeholder="passwordSaved ? '•••••••• (сохранён)' : ''"
-              autocomplete="current-password"
-            />
-            <p class="sp-hint-pwd">{{ passwordStorageLabel() }}</p>
-            <div class="sp-actions">
-              <button type="button" class="sp-btn" :disabled="credsBusy" @click="onSaveCredentials">
-                Сохранить
-              </button>
-              <button
-                type="button"
-                class="sp-btn ghost"
-                :disabled="credsBusy || (!getSavedLogin() && !passwordSaved)"
-                @click="onClearCredentials"
-              >
-                Очистить
-              </button>
-            </div>
           </div>
 
           <p v-if="statusMsg" class="sp-msg" :class="{ ok: statusOk }">{{ statusMsg }}</p>

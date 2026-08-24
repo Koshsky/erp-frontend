@@ -112,3 +112,18 @@ export function resetApiUrl(): void {
 export function hasApiUrlOverride(): boolean {
   return Boolean(override ?? readStored())
 }
+
+/** Предупреждение при http-схеме для не-loopback-хоста: Secure-кука refresh
+ *  не сохраняется/не уходит, вход и автосинк могут не работать. Для
+ *  localhost/127.0.0.1 — null (локальная разработка). */
+export function httpSchemeWarning(url: string): string | null {
+  try {
+    const u = new URL(url)
+    if (u.protocol !== 'http:') return null
+    const host = u.hostname
+    if (host === 'localhost' || host === '127.0.0.1' || host === '::1') return null
+    return 'Сервер по http: сессия и автосинк (refresh) могут не работать — используйте https'
+  } catch {
+    return null
+  }
+}
