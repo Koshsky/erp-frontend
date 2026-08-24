@@ -35,22 +35,44 @@ npm run dist:mac   # macOS (dmg + zip)
 npm run dist:linux # Linux (AppImage + deb)
 ```
 
-Готовые файлы — в `release/`.
+Готовые файлы — в `release/` (прямые `npm run dist` пишут в корень `release/`);
+скрипт `build-portable.sh` дополнительно раскладывает каждый релиз по
+**директории конкретной версии** `release/<версия>/`.
 
 ### Portable + единый файл — Windows и Linux
 
-Скрипт `build-portable.sh` собирает релиз с **версией** и артефактами:
+Скрипт `build-portable.sh` собирает релиз с **версией**. Все артефакты одной
+версии лежат в одной директории `release/<версия>/`, например:
 
-- Windows: `win-unpacked/` + `*-win-x64.zip` (portable) **и** единый
-  self-contained `*-win-x64.exe` (таргет `portable`, best-effort);
-- Linux: `linux-unpacked/` (portable) **и** единый файл `*-linux-x64.AppImage`.
+```
+release/1.0.2/
+├── MVS ERP-1.0.2-linux-x86_64.AppImage   # Linux единый файл
+├── MVS ERP-1.0.2-win-x64.exe             # Windows единый self-contained .exe
+├── MVS ERP-1.0.2-win-x64.zip             # Windows portable-архив
+├── linux-unpacked/                       # Linux portable-папка
+└── win-unpacked/                         # Windows portable-папка
+```
+
+Каждая из **4 частей** релиза включается своим флагом; **Linux по умолчанию
+включён, Windows — выключен**. Явные флаги добавляют части к Linux-дефолту:
+
+| Часть | Артефакты | Флаг | По умолчанию |
+|---|---|---|---|
+| Linux portable | `linux-unpacked/` | `--linux-portable` | вкл |
+| Linux единый | `*-linux-x86_64.AppImage` | `--linux-appimage` | вкл |
+| Windows portable | `win-unpacked/` + `*-win-x64.zip` | `--win-portable` | выкл |
+| Windows единый | `*-win-x64.exe` (best-effort) | `--win-exe` | выкл |
+
+Сокращения: `--win` = `--win-portable --win-exe`; `--linux` = оба Linux-флага.
 
 **Версия** берётся из `desktop/package.json` (semver) и по умолчанию
 **инкрементируется** на каждой сборке (patch):
 
 ```bash
-./build-portable.sh                 # обе ОС, версия = bump patch
-./build-portable.sh --win --linux   # то же явно
+./build-portable.sh                 # Linux (обе части), версия = bump patch
+./build-portable.sh --win           # Linux + обе Windows-части
+./build-portable.sh --win-portable  # Linux + Windows portable (zip + папка)
+./build-portable.sh --win-exe       # Linux + единый Windows .exe
 ./build-portable.sh --version 2.1.0 # собрать именно 2.1.0
 ./build-portable.sh --bump minor    # инкремент minor
 ./build-portable.sh --no-bump       # текущая версия без изменений
