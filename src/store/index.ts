@@ -1738,12 +1738,44 @@ export const usePlanningStore = defineStore('planning', () => {
     return undefined
   }
 
-  /** Назначает ресурс задаче: POST /assignment + тихий reload задач. */
+  /**
+   * Владельцы задачи (process/project) из загруженного планирования.
+   * Пустой список — данные неизвестны (холодный кэш): проверку пропускаем,
+   * финальное слово остаётся за сервером.
+   */
+  function taskOwnerIds(taskId: number): number[] {
+    const owners: number[] = []
+    const process = (taskPlanning.value?.processes ?? []).find((p: any) =>
+      (p.tasks ?? []).some((t: any) => t.id === taskId),
+    )
+    if (!process) return owners
+    if (process.owner_id != null) owners.push(process.owner_id)
+    const project =
+      projectPlanning.value?.projects?.find((pr: any) => pr.id === process.project_id) ??
+      useAppStore().projects.find((pr: any) => pr.id === process.project_id)
+    if (project?.owner_id != null) owners.push(project.owner_id)
+    return owners
+  }
+
+  /**
+   * Назначает ресурс задаче: POST /assignment + тихий reload задач.
+   * Для не-admin сверяем владельцев заранее (данные уже в кэше планирования):
+   * заведомо 403-назначение не уходит ни в онлайн-запрос, ни в офлайн-очередь.
+   */
   async function assignResource(
     taskId: number,
     resourceId: number,
     quantity: number,
   ): Promise<boolean> {
+    const auth = useAuthStore()
+    const owners = auth.user?.role === 'admin' ? [] : taskOwnerIds(taskId)
+    if (owners.length > 0) {
+      const res = useAppStore().resources.find((r: any) => r.id === resourceId)
+      if (res?.owner_id == null || !owners.includes(res.owner_id)) {
+        error.value = 'Назначить можно только ресурс, принадлежащий владельцу задачи'
+        return false
+      }
+    }
     const tempId = nextTempId()
     return runMutation({
       entity: 'assignment',
@@ -1906,6 +1938,7 @@ export const usePlanningStore = defineStore('planning', () => {
     deleteMilestone,
     assignResource,
     removeResource,
+    taskOwnerIds,
     reorderProjects,
   }
 })

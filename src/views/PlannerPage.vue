@@ -278,12 +278,20 @@ const assignedResources = computed<AssignedResource[]>(() => {
   }))
 })
 
-/** Справочник ресурсов для выбора в модалке (только с id) */
-const resourceOptions = computed(() =>
-  resources.value
-    .filter((r) => r.id != null)
-    .map((r) => ({ id: r.id as number, title: r.title, code: r.code })),
-)
+/**
+ * Справочник ресурсов для выбора в модалке (только с id). Для не-admin
+ * оставляем ресурсы владельцев задачи (process/project) — сервер всё равно
+ * отклонит чужой ресурс (403). admin видит все; при неизвестных владельцах
+ * (холодный кэш) список не фильтруем — сервер — финальный арбитр.
+ */
+const resourceOptions = computed(() => {
+  const opts = resources.value.filter((r) => r.id != null)
+  const owners = planning.taskOwnerIds(resourcesModalTaskId.value ?? 0)
+  const allowed = role.value === 'admin' || owners.length === 0 ? null : new Set(owners)
+  return opts
+    .filter((r) => allowed == null || (r.owner_id != null && allowed.has(r.owner_id)))
+    .map((r) => ({ id: r.id as number, title: r.title, code: r.code }))
+})
 
 function openResources(taskId: number) {
   resourcesModalTaskId.value = taskId

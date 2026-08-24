@@ -49,6 +49,8 @@ export interface OutboxEntry {
   entity: MutationEntity
   /** Временный (отрицательный) id для сущностей, созданных офлайн */
   tempId?: number
+  /** Аккаунт (username), под которым запись была создана (для защиты от автосинка под чужим токеном) */
+  creator?: string
   failed?: { message: string; at: number }
   /** Сколько раз сервер ответил ошибкой (для карантина) */
   attempts?: number
@@ -294,7 +296,7 @@ function normalizeBody(body: unknown): unknown {
 export async function enqueueMutation(
   entry: Omit<OutboxEntry, 'id' | 'ts' | 'failed'>,
 ): Promise<void> {
-  const rec: OutboxEntry = { ...entry, body: normalizeBody(entry.body), id: uid(), ts: Date.now() }
+  const rec: OutboxEntry = { ...entry, body: normalizeBody(entry.body), id: uid(), ts: Date.now(), creator: currentUsername() ?? undefined }
   // Дедупликация: повторный клик на ту же мутацию (метод+url+тело) не плодит
   // одинаковые записи — очередь остаётся чистой, а flush не шлёт пачки дублей.
   const bodyKey = rec.body != null ? JSON.stringify(rec.body) : ''
@@ -351,12 +353,50 @@ function isNetworkError(e: unknown): boolean {
 
 export { isNetworkError }
 
+/**
+ * Серверные sentinel-сообщения без деталей → человекочитаемый русский текст.
+ * Когда бэкенд присылает развёрнутое сообщение (например «ресурс не
+ * принадлежит владельцу задачи») — оно показывается как есть.
+ */
+const GENERIC_SERVER_MESSAGES: Record<string, string> = {
+  forbidden: 'Нет прав на операцию (403)',
+  unauthorized: 'Требуется авторизация (401)',
+  'not found': 'Объект не найден (404)',
+  'bad request': 'Некорректные данные (400)',
+  conflict: 'Конфликт: такой объект уже существует (409)',
+  'validation failed': 'Ошибка валидации (422)',
+}
+
 function errorMessage(e: unknown): string {
   const err = e as { response?: { data?: { error?: { message?: string } } }; message?: string }
-  return err?.response?.data?.error?.message ?? err?.message ?? String(e)
+  const server = err?.response?.data?.error?.message
+  if (server && GENERIC_SERVER_MESSAGES[server] != null) return GENERIC_SERVER_MESSAGES[server]
+  return server ?? err?.message ?? String(e)
 }
 
 export { errorMessage }
+
+/** Имя текущего пользователя из сохранённого профиля. Напрямую из localStorage,
+ *  без импорта стора (иначе цикл store ↔ outbox). */
+function currentUsername(): string | null {
+  try {
+    const raw = localStorage.getItem('mvs_erp_user')
+    if (!raw) return null
+    const u = JSON.parse(raw) as { username?: string }
+    return u.username ?? null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Детерминированные клиентские ошибки (4xx, кроме 429): повтор не исправит
+ * (нет прав, неверные данные, конфликт) — карантин сразу, без 5 попыток.
+ * 429 — «замедли темп»: остаётся на обычном backoff-ретрае.
+ */
+function isPermanentFailure(status: number): boolean {
+  return status >= 400 && status < 500 && status !== 429
+}
 
 /** Подробно логирует ошибку отправки записи очереди (для диагностики). */
 function logOutboxError(entry: OutboxEntry, url: string, e: unknown): void {
@@ -436,6 +476,20 @@ export async function flushOutbox(): Promise<FlushResult> {
       if (entry.failed && Date.now() - entry.failed.at < FAILED_BACKOFF_MS) continue
 
       result.entities.add(entry.entity)
+
+      // Очередь привязана к аккаунту создателя: не отправляем правки, сделанные
+      // под другим пользователем (автовход мог сменить аккаунт) — сервер
+      // отклонил бы их по RBAC, а правка осталась бы «зависшей».
+      const sender = currentUsername()
+      if (entry.creator && sender && entry.creator !== sender) {
+        const message = `Запись создана под аккаунтом «${entry.creator}», а синхронизация идёт как «${sender}»: переключите сохранённый аккаунт на экране «Синхронизация»`
+        await idbPut(OUTBOX_STORE, entry.id, { ...entry, quarantined: true, failed: { message, at: Date.now() } })
+        result.failed++
+        result.failedEntries.push({ method: entry.method, url: entry.url, message })
+        await pause()
+        continue
+      }
+
       const url = rewriteIds(rebasedUrl(entry.url), idMap)
       const body = entry.body != null ? rewriteIds(JSON.stringify(entry.body), idMap) : undefined
       try {
@@ -497,10 +551,11 @@ export async function flushOutbox(): Promise<FlushResult> {
             result.ok++
           } else {
             // Сервер реально ответил (400/403/409/422/500...) — настоящая ошибка.
-            // Считаем попытки; стабильно отвергнутые записи уходят в карантин.
+            // Детерминированные 4xx (кроме 429) уходят в карантин сразу — повтор
+            // не исправит; 5xx — считаем попытки с backoff.
             logOutboxError(entry, url, e)
             const attempts = (entry.attempts ?? 0) + 1
-            const quarantined = attempts >= MAX_FAILED_ATTEMPTS
+            const quarantined = isPermanentFailure(status) || attempts >= MAX_FAILED_ATTEMPTS
             const message = errorMessage(e)
             await idbPut(OUTBOX_STORE, entry.id, {
               ...entry,
