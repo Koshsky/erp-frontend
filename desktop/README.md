@@ -37,22 +37,37 @@ npm run dist:linux # Linux (AppImage + deb)
 
 Готовые файлы — в `release/`.
 
-### Portable (без установки) — Windows и Linux
+### Portable + единый файл — Windows и Linux
 
-Скрипт `build-portable.sh` собирает переносные версии (распакованные, не требуют
-установки): Windows — `win-unpacked/` + `*-win.zip`, Linux — `linux-unpacked/`:
+Скрипт `build-portable.sh` собирает релиз с **версией** и артефактами:
+
+- Windows: `win-unpacked/` + `*-win-x64.zip` (portable) **и** единый
+  self-contained `*-win-x64.exe` (таргет `portable`, best-effort);
+- Linux: `linux-unpacked/` (portable) **и** единый файл `*-linux-x64.AppImage`.
+
+**Версия** берётся из `desktop/package.json` (semver) и по умолчанию
+**инкрементируется** на каждой сборке (patch):
 
 ```bash
-./build-portable.sh            # и Windows, и Linux
-./build-portable.sh --win      # только Windows portable
-./build-portable.sh --linux    # только Linux portable
-./build-portable.sh --build-web  # принудительно пересобрать dist/ перед упаковкой
-./build-portable.sh --clean      # очистить release/ перед сборкой
+./build-portable.sh                 # обе ОС, версия = bump patch
+./build-portable.sh --win --linux   # то же явно
+./build-portable.sh --version 2.1.0 # собрать именно 2.1.0
+./build-portable.sh --bump minor    # инкремент minor
+./build-portable.sh --no-bump       # текущая версия без изменений
+./build-portable.sh --build-web     # принудительно пересобрать dist/
+./build-portable.sh --clean         # очистить release/ перед сборкой
 ```
 
-Portable не требует wine/NSIS: Windows собирается через таргет `zip`, Linux — через
-таргет `dir`. (NSIS `.exe`-установщик — НЕ portable, ему на Linux нужны wine +
-makensis; это отдельный `npm run dist:win`.)
+Версия прокидывается в веб-сборку (`APP_VERSION` → `__APP_VERSION__` и
+`precache-manifest.json`), поэтому «Версия приложения/сборки» на экране
+«Синхронизация» совпадает с версией артефактов. Скрипт версию не коммитит —
+инкремент фиксируйте отдельным коммитом (`chore(desktop): release vX.Y.Z`).
+
+Portable-таргеты не требуют wine: `zip`/`dir`/portable/AppImage собираются на
+Linux-хосте. Единый Windows-`.exe` (таргет `portable`) собирается отдельным
+вызовом; если среда не даёт его собрать, скрипт продолжает с zip и печатает
+предупреждение. (NSIS-`.exe`-установщик — НЕ portable, ему на Linux нужны wine
++ makensis; это отдельный `npm run dist:win`.)
 
 Запуск в dev (без упаковки):
 
@@ -67,12 +82,14 @@ npm start          # открывает Electron-окно с локально п
 renderer'у только через IPC (`window.erpDesktop.password.get/set/clear`).
 В обычном браузере (не Electron) пароль не хранится вовсе.
 
-На экране «Синхронизация» (только в настольной версии) есть блок «Данные
-для автосинка»: логин сохраняется в localStorage, пароль — в safeStorage.
-При запуске приложение автоматически восстанавливает сессию по сохранённым
-креденшелам (`ensureDesktopAutoSyncSession` в `src/offline/sync.ts`), если
-автосинк включён и сессия отсутствует, — и выполняет синхронизацию без
-ручного входа.
+Креды автосинка **сохраняются автоматически при входе** (на странице логина):
+логин — в localStorage, пароль — в safeStorage; отдельного ввода на экране
+«Синхронизация» нет. При запуске приложение автоматически восстанавливает
+сессию по сохранённым креденшелам (`ensureDesktopAutoSyncSession` в
+`src/offline/sync.ts`), если автосинк включён и сессия отсутствует, — и
+выполняет синхронизацию без ручного входа. После явного «Выйти» автосинк не
+входит до следующего ручного входа. Без сети страница логина предлагает
+«Войти офлайн» — локальную сессию с кэшем и очередью изменений.
 
 ## Требования
 

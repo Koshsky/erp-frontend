@@ -6,8 +6,15 @@ import { readdirSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { execSync } from 'node:child_process'
 
-/** Короткий git-хэш + время сборки — уникальная версия каждого релиза */
+/**
+ * Версия сборки: при заданной env APP_VERSION (билд-скрипт desktop передаёт
+ * версию из desktop/package.json) используется она — UI («Версия приложения»
+ * на SyncPage) совпадает с версией артефактов. Без env — короткий git-хэш +
+ * время сборки (уникальная версия каждого релиза, как раньше).
+ */
 function buildVersion(root: string): string {
+  const injected = process.env.APP_VERSION?.trim()
+  if (injected) return injected
   let hash = 'dev'
   try {
     hash = execSync('git rev-parse --short HEAD', { cwd: root }).toString().trim() || 'dev'
