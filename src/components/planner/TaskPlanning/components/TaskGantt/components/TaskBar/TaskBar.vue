@@ -5,6 +5,7 @@ import { BarTooltip } from '@/components/common'
 import { useDragPreview } from '@/composables/useDragPreview'
 import type { Task } from './types'
 import type { TimelineCtx } from '@/composables/timeline-context'
+import type { DtoCommentResponse, DtoUserInfo } from '@/api'
 
 const props = withDefaults(
   defineProps<{
@@ -15,12 +16,18 @@ const props = withDefaults(
     /** Границы процесса — ограничивают перетаскивание задачи */
     groupStartDate?: string | Date | number | null
     groupEndDate?: string | Date | number | null
+    /** Справочник пользователей — имена авторов комментариев в тултипе */
+    users?: DtoUserInfo[] | null
+    /** Кэш комментариев по задаче (для лога в тултипе) */
+    commentsByTask?: Record<number, DtoCommentResponse[]> | null
   }>(),
   {
     projectCode: '',
     draggable: true,
     groupStartDate: null,
     groupEndDate: null,
+    users: null,
+    commentsByTask: null,
   },
 )
 
@@ -29,6 +36,8 @@ const emit = defineEmits<{
   contextmenu: [payload: { clientX: number; clientY: number }]
   /** Одиночный клик по бару (без перетаскивания) — открыть комментарии задачи */
   'open-comments': [payload: number]
+  /** Тултип открылся у задачи с комментариями — лениво подгрузить их (кэш) */
+  'request-comments': [payload: number]
 }>()
 
 /** Строки тултипа: ответственный (если назначен) + диапазон дат */
@@ -38,6 +47,43 @@ const tooltipRows = (dateRange: string): string[] =>
 const taskOwnerLabel = computed<string>(() =>
   props.task.owner_name ? `Ответственный: ${props.task.owner_name}` : '',
 )
+
+/** У задачи есть комментарии — показываем бейдж и лог в тултипе */
+const hasComments = computed(() => (props.task.comments_count ?? 0) > 0)
+
+const userById = computed(() => new Map((props.users || []).map((u) => [u.id ?? 0, u])))
+
+const fmtDT = new Intl.DateTimeFormat('ru-RU', {
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+})
+
+function fmtShortDate(iso?: string): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  return Number.isNaN(d.getTime()) ? '' : fmtDT.format(d)
+}
+
+/** Лог комментариев для тултипа: имя автора (из users), короткая дата, текст */
+const tooltipComments = computed(() =>
+  (props.commentsByTask?.[props.task.id] ?? []).map((c) => ({
+    author:
+      c.author_id != null
+        ? userById.value.get(c.author_id)?.name ?? `Пользователь #${c.author_id}`
+        : undefined,
+    date: fmtShortDate(c.created_at),
+    text: c.content ?? '',
+  })),
+)
+
+/** Тултип открылся: если у задачи есть комментарии — лениво подгружаем их (кэш) */
+function onTooltipOpen() {
+  if (!hasComments.value) return
+  emit('request-comments', props.task.id)
+}
 
 /** Live-предпросмотр загрузки: публикуем перетаскиваемую задачу и её новые даты */
 const dragPreview = useDragPreview()
@@ -94,7 +140,9 @@ function updateStacked() {
   showProj.value = pw > 0 && available >= pw
   const ow = props.task.owner_short ? ownerWidth.value : 0
   showOwner.value = ow > 0 && available - (showProj.value ? pw : 0) >= ow
-  const availForRes = available - (showProj.value ? pw : 0) - (showOwner.value ? ow : 0)
+  // Бейдж комментариев резервирует место (как код проекта/ответственный)
+  const cw = hasComments.value ? 22 : 0
+  const availForRes = available - (showProj.value ? pw : 0) - (showOwner.value ? ow : 0) - cw
   stacked.value = badges.scrollWidth > availForRes
 }
 
@@ -138,6 +186,7 @@ watch(
     @dragmove="(d) => setDragPreview(d)"
     @dragend="() => setDragPreview(null)"
     @click="emit('open-comments', task.id)"
+    @tooltip-open="onTooltipOpen"
   >
     <span ref="contentRef" class="tb-content">
       <span ref="titleRef" class="tb-title">{{ task.title }}</span>
@@ -150,6 +199,22 @@ watch(
           class="tb-badge"
         >{{ badgeLabel(r) }}×{{ r.quantity }}</span>
       </span>
+      <span v-if="hasComments" class="tb-comments" :title="`Комментарии: ${task.comments_count}`">
+        <svg
+          width="11"
+          height="11"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.4"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+        </svg>
+        <span>{{ task.comments_count }}</span>
+      </span>
     </span>
     <template #tooltip="{ dateRange }">
       <BarTooltip
@@ -157,6 +222,7 @@ watch(
         :accent="'#34a853'"
         :rows="tooltipRows(dateRange)"
         :resources="(task.resources || []).map((r) => ({ label: r.title || r.code, quantity: r.quantity }))"
+        :comments="tooltipComments"
       />
     </template>
   </LabeledBar>
@@ -239,5 +305,22 @@ watch(
 }
 .tb-badges.is-stacked .tb-badge:first-child {
   margin-left: 0;
+}
+/* Бейдж комментариев: пузырь диалога + счётчик; не мешает перетаскиванию */
+.tb-comments {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.6;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.22);
+  border-radius: 10px;
+  padding: 0 7px;
+  white-space: nowrap;
+  pointer-events: none;
 }
 </style>

@@ -1982,8 +1982,12 @@ export const usePlanningStore = defineStore('planning', () => {
   }
 
   // === Комментарии задач ===
-  /** Загрузить комментарии задачи в кэш по task_id (online-only: офлайн — кэш). */
-  async function loadTaskComments(taskId: number): Promise<void> {
+  /** Загрузить комментарии задачи в кэш по task_id.
+   *  - fresh (default) — всегда запрашивать онлайн (открытие модалки);
+   *  - fresh:false — отдать кэш, если он уже есть (ховер тултипа задачи);
+   *  - офлайн — только кэш (online-only). */
+  async function loadTaskComments(taskId: number, opts?: { fresh?: boolean }): Promise<void> {
+    if (commentsByTask.value[taskId] != null && !opts?.fresh) return
     if (isOffline.value && commentsByTask.value[taskId] != null) return
     commentsLoading.value = true
     commentsError.value = null

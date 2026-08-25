@@ -6,6 +6,11 @@ const props = withDefaults(defineProps<TooltipCellProps>(), {
   multiline: false,
 })
 
+const emit = defineEmits<{
+  /** Поповер стал видимым (после задержки наведения) — для ленивой подгрузки контента */
+  open: []
+}>()
+
 const visible = ref(false)
 const x = ref(0)
 const y = ref(0)
@@ -32,7 +37,10 @@ function positionAt(e: MouseEvent) {
 
 function onMouseEnter(e: MouseEvent) {
   positionAt(e)
-  showTimer = setTimeout(() => { visible.value = true }, 400)
+  showTimer = setTimeout(() => {
+    visible.value = true
+    emit('open')
+  }, 400)
 }
 
 function onMouseMove(e: MouseEvent) {

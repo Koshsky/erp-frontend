@@ -34,6 +34,8 @@ const emit = defineEmits<{
   dragmove: [payload: { start_date: string; end_date: string }]
   /** Драг закончен (любым образом) — превью сбросить */
   dragend: []
+  /** Тултип бара стал видимым — для ленивой подгрузки связанных данных */
+  'tooltip-open': []
 }>()
 
 // === Разграничение одиночного клика и даблклика ===
@@ -161,7 +163,7 @@ function onContextMenu(e: MouseEvent) {
     @dblclick="onDblClick"
     @contextmenu.prevent.stop="onContextMenu"
   >
-    <TooltipCell v-if="hasTooltip" :text="tooltip ?? ''" :multiline="true">
+    <TooltipCell v-if="hasTooltip" :text="tooltip ?? ''" :multiline="true" @open="emit('tooltip-open')">
       <slot>
         <span class="lb-title">{{ title }}</span>
         <span v-if="projectCode" class="lb-code">{{ projectCode }}</span>

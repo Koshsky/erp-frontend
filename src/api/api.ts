@@ -197,6 +197,10 @@ export interface DtoDetailedProject {
     'start_date'?: string;
 }
 export interface DtoDetailedTask {
+    /**
+     * Количество активных комментариев задачи (для бейджа на диаграмме).
+     */
+    'comments_count'?: number;
     'end_date'?: string;
     'id'?: number;
     'owner_id'?: number;

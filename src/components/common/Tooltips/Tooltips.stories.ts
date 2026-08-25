@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/vue3-vite'
+import { expect } from 'vitest'
 import BarTooltip from './BarTooltip.vue'
 import UsageTooltip from './UsageTooltip.vue'
 import InfoTooltip from './InfoTooltip.vue'
@@ -62,4 +63,60 @@ export const InfoVariants: Story = {
       </div>
     `,
   }),
+}
+
+/** Тултип задачи с логом комментариев (до 4 записей + «…и ещё N») */
+const commentLog = [
+  { author: 'Иванов Иван', date: '01.02.2026, 10:00', text: 'Перенести сроки?' },
+  { author: 'Петров Пётр', date: '01.02.2026, 11:30', text: 'Нет, сроки фиксированы.' },
+  { author: 'Сидоров Сидор', date: '01.02.2026, 12:05', text: 'Тогда уточните состав работ.' },
+  { author: 'Петров Пётр', date: '02.02.2026, 09:15', text: 'Состав согласован вчера.' },
+  { author: 'Иванов Иван', date: '03.02.2026, 08:00', text: 'Ок, фиксируем.' },
+]
+
+/** Полный лог в пределах лимита (4 записи) */
+export const CommentsLog: Story = {
+  render: () => ({
+    components: { BarTooltip },
+    template: `
+      <div style="font-family:sans-serif;width:260px;">
+        <BarTooltip
+          title="Монтаж конструкций"
+          :accent="'#34a853'"
+          :rows="['18.07.2026 — 07.08.2026']"
+          :comments="commentLog"
+        />
+      </div>
+    `,
+    data: () => ({ commentLog }),
+  }),
+}
+
+/** Лог больше лимита — свёрнут с «…и ещё N» */
+export const CommentsLogCollapsed: Story = {
+  tags: ['vitest'],
+  render: () => ({
+    components: { BarTooltip },
+    template: `
+      <div style="font-family:sans-serif;width:260px;">
+        <BarTooltip title="Задача с обсуждением" :accent="'#34a853'" :comments="ten" />
+      </div>
+    `,
+    data: () => ({
+      ten: Array.from({ length: 10 }, (_, i) => ({
+        author: `Автор ${i + 1}`,
+        text: `Комментарий номер ${i + 1}`,
+      })),
+    }),
+  }),
+  play: async () => {
+    await new Promise((r) => setTimeout(r, 50))
+    const root = document.body
+    expect(root.textContent).toContain('Комментарии (10)')
+    expect(root.textContent).toContain('Комментарий номер 1')
+    expect(root.textContent).toContain('…и ещё 6')
+    // В логе только 4 карточки
+    const cards = [...document.querySelectorAll('.bt-comment')]
+    expect(cards.length).toBe(4)
+  },
 }

@@ -1,3 +1,12 @@
+/** Одна запись лога комментариев в тултипе задачи */
+export interface BarTooltipComment {
+  /** Имя автора (резолвится на фронте из author_id) */
+  author?: string
+  /** Короткая дата-время */
+  date?: string
+  text: string
+}
+
 /** Общий тултип объекта диаграммы: заголовок + строки + ресурсы (задача/проект/процесс/веха) */
 export interface BarTooltipProps {
   title: string
@@ -5,6 +14,8 @@ export interface BarTooltipProps {
   rows?: string[]
   /** Список ресурсов с количеством — отдельным блоком с разделителем */
   resources?: { label: string; quantity?: number }[]
+  /** Лог комментариев задачи (показывается до 4 записей + «…и ещё N») */
+  comments?: BarTooltipComment[]
   /** Акцентный цвет заголовка (задача=зелёный, проект/процесс=синий, веха=янтарный) */
   accent?: string
 }

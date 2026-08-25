@@ -468,6 +468,7 @@ const taskGroups = computed<PdfGanttGroup[]>(() =>
       :can-manage="canManageTasks"
       :focus-date="focusDate"
       :focus-group-id="focusGroupId"
+      :comments-by-task="planning.commentsByTask"
       @change="(p) => planning.updateTaskDates(p.id, p.start_date, p.end_date)"
       @milestone-change="(p) => planning.updateMilestoneDate(p.id, p.date)"
       @contextmenu="onContextMenu"
@@ -475,6 +476,7 @@ const taskGroups = computed<PdfGanttGroup[]>(() =>
       @milestone-edit="openMilestoneEdit"
       @visible-range="onVisibleRange"
       @open-comments="openComments"
+      @request-comments="(id) => planning.loadTaskComments(id, { fresh: false })"
     />
 
     <ContextMenu v-bind="menuBind" @select="select" @close="closeMenu" />

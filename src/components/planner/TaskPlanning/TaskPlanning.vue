@@ -7,7 +7,7 @@ import ResourceHeader from '@/components/common/ResourceHeader/ResourceHeader.vu
 import TaskGantt from './components/TaskGantt/TaskGantt.vue'
 import { provideDragPreview } from '@/composables/useDragPreview'
 import type { DragPreviewState } from '@/composables/useDragPreview'
-import type { DtoDetailedProcess, DtoResource, DtoResourceResponse, DtoResourceCalendar, DtoResourceAbsenceResponse, DtoAvailabilityPeriod, DtoUserInfo } from '@/api'
+import type { DtoDetailedProcess, DtoResource, DtoResourceResponse, DtoResourceCalendar, DtoResourceAbsenceResponse, DtoAvailabilityPeriod, DtoUserInfo, DtoCommentResponse } from '@/api'
 import type { Resource } from '@/components/common/ResourceHeader/types'
 import type { Process } from './types'
 import type { PlanningUnit } from '../calendar'
@@ -35,6 +35,8 @@ const props = withDefaults(defineProps<{
   focusDate?: string | null
   /** При открытии прокрутить по вертикали к группе (строке) процесса */
   focusGroupId?: string | number | null
+  /** Кэш комментариев по задаче (для бейджа и лога в тултипе задач) */
+  commentsByTask?: Record<number, DtoCommentResponse[]> | null
 }>(), {
   processes: null,
   resources: null,
@@ -48,6 +50,7 @@ const props = withDefaults(defineProps<{
   users: null,
   focusDate: null,
   focusGroupId: null,
+  commentsByTask: null,
 })
 
 const emit = defineEmits<{
@@ -60,6 +63,8 @@ const emit = defineEmits<{
   'visible-range': [payload: { from: string; to: string; cellWidthPx: number; scale: number }]
   /** Клик по бару задачи — открыть её комментарии */
   'open-comments': [payload: number]
+  /** Тултип задачи открылся — лениво подгрузить комментарии (кэш) */
+  'request-comments': [payload: number]
 }>()
 
 /** Активный драг задачи — для live-предпросмотра загрузки ресурсов (пишется из TaskBar) */
@@ -88,6 +93,7 @@ const displayProcesses = computed<Process[]>(() =>
           owner_id: t.owner_id ?? null,
           owner_name: owner?.name,
           owner_short: owner ? shortName(owner) : undefined,
+          comments_count: t.comments_count ?? 0,
           resources: (t.resources || []).map((r) => ({
             resource_id: r.id ?? 0,
             assignment_id: r.assignment_id ?? 0,
@@ -212,11 +218,14 @@ function onGridCtx(p: { clientX: number; clientY: number; date: string | null; r
           :groupStartDate="proc.start_date"
           :groupEndDate="proc.end_date"
           :can-manage="canManage"
+          :users="users"
+          :comments-by-task="commentsByTask"
           @change="(p) => emit('change', p)"
           @milestone-change="(p) => emit('milestone-change', p)"
           @contextmenu="(p) => emit('contextmenu', p)"
           @milestone-edit="(id) => emit('milestone-edit', id)"
           @open-comments="(id) => emit('open-comments', id)"
+          @request-comments="(id) => emit('request-comments', id)"
         />
       </template>
     </TimelineGrid>
