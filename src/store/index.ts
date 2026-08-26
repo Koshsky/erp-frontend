@@ -2130,6 +2130,17 @@ export const useRbacStore = defineStore('rbac', () => {
     }
   }
 
+  /** Легковесная загрузка каталога ролей (для select'ов без полного loadRbac). */
+  async function ensureRoles(): Promise<void> {
+    if (roles.value.length) return
+    try {
+      const rolesR = await new RBACApi(apiConfig()).rbacRolesGet()
+      roles.value = rolesR.data?.data ?? []
+    } catch {
+      // каталог недоступен — UI работает на статическом списке ролей
+    }
+  }
+
   /** Перечитывает правила и матрицу после изменения (эффект «сейчас»). */
   async function reloadRules(): Promise<boolean> {
     try {
@@ -2188,6 +2199,7 @@ export const useRbacStore = defineStore('rbac', () => {
     saving,
     error,
     loadRbac,
+    ensureRoles,
     reloadRules,
     upsertRule,
     deleteRule,

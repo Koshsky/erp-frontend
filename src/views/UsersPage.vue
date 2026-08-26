@@ -3,11 +3,12 @@ import { computed, onMounted, ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import { ModalForm, CopyField } from '../components/common'
 import type { ModalField } from '../components/common/ModalForm'
-import { useAppStore } from '../store'
+import { useAppStore, useRbacStore } from '../store'
 import { compareByName } from '../utils'
 import type { DtoAdminUserResponse, DtoCreateUserRequest, DtoUpdateUserRequest } from '@/api'
 
 const app = useAppStore()
+const rbac = useRbacStore()
 const { adminUsers, adminUsersLoading, adminUsersError, users } = storeToRefs(app)
 
 /** Пользователи, отсортированные по ФИО */
@@ -21,7 +22,14 @@ const ROLE_LABELS: Record<string, string> = {
   worker: 'Работник',
 }
 
-const ROLE_OPTIONS = Object.entries(ROLE_LABELS).map(([value, label]) => ({ value, label }))
+const STATIC_ROLE_OPTIONS = Object.entries(ROLE_LABELS).map(([value, label]) => ({ value, label }))
+
+/** Роли из каталога /rbac/roles; fallback — статический список. */
+const roleOptions = computed(() =>
+  rbac.roles.length
+    ? rbac.roles.map((r) => ({ value: r.name ?? '', label: ROLE_LABELS[r.name ?? ''] ?? r.name ?? '' }))
+    : STATIC_ROLE_OPTIONS,
+)
 
 function fmtDate(iso?: string): string {
   if (!iso) return '—'
@@ -42,7 +50,7 @@ const createFields = computed<ModalField[]>(() => [
   { key: 'lastName', label: 'Фамилия', type: 'text', value: '', required: true },
   { key: 'firstName', label: 'Имя', type: 'text', value: '', required: true },
   { key: 'middleName', label: 'Отчество', type: 'text', value: '' },
-  { key: 'role', label: 'Роль', type: 'select', value: 'worker', options: ROLE_OPTIONS, required: true },
+  { key: 'role', label: 'Роль', type: 'select', value: 'worker', options: roleOptions.value, required: true },
   { key: 'position', label: 'Должность', type: 'text', value: '', placeholder: 'Свободный текст, например «Ведущий инженер»' },
   { key: 'hireDate', label: 'Дата приёма', type: 'date', value: '' },
   { key: 'terminationDate', label: 'Дата увольнения', type: 'date', value: '' },
@@ -108,6 +116,7 @@ function managerLabel(user: DtoAdminUserResponse): string {
 onMounted(() => {
   void app.loadAdminUsers(true)
   if (!users.value.length) void app.loadUsers()
+  void rbac.ensureRoles()
 })
 </script>
 
@@ -136,7 +145,7 @@ onMounted(() => {
         <div class="mono hash" :title="u.password_hash">{{ u.password_hash || '—' }}</div>
         <div>
           <select class="up-role" :value="u.role" :disabled="roleChanging" @change="onChangeRole(u, $event)">
-            <option v-for="opt in ROLE_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+            <option v-for="opt in roleOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
           </select>
         </div>
         <div>{{ managerLabel(u) }}</div>
