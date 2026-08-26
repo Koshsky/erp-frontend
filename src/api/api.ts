@@ -53,6 +53,11 @@ export interface AutoCreateConfigGet200Response {
     'data'?: DtoAutoCreateConfig;
     'error'?: object;
 }
+export interface DomainRole {
+    'description'?: string;
+    'id'?: number;
+    'name'?: string;
+}
 export interface DtoAddMemberRequest {
     'user_id'?: number;
 }
@@ -209,9 +214,19 @@ export interface DtoDetailedTask {
     'start_date'?: string;
     'title'?: string;
 }
+export interface DtoExplainResult {
+    'allowed'?: boolean;
+    'scope'?: string;
+}
 export interface DtoLoginRequest {
     'password'?: string;
     'username'?: string;
+}
+export interface DtoMatrixCell {
+    'action'?: string;
+    'resource'?: string;
+    'role'?: string;
+    'scope'?: string;
 }
 export interface DtoMilestone {
     'content'?: string;
@@ -315,6 +330,35 @@ export interface DtoResourceResponse {
     'id'?: number;
     'owner_id'?: number;
     'title'?: string;
+}
+export interface DtoRoutePolicyInput {
+    'active'?: boolean;
+    'kind': string;
+    'name': string;
+    'params'?: { [key: string]: object; };
+}
+export interface DtoRoutePolicyView {
+    'active'?: boolean;
+    'kind'?: string;
+    'name'?: string;
+    'params'?: { [key: string]: object; };
+    'updated_at'?: string;
+    'updated_by'?: number;
+}
+export interface DtoRuleInput {
+    'action': string;
+    'resource': string;
+    'role': string;
+    'scope': string;
+}
+export interface DtoRuleView {
+    'action'?: string;
+    'id'?: number;
+    'resource'?: string;
+    'role'?: string;
+    'scope'?: string;
+    'updated_at'?: string;
+    'updated_by'?: number;
 }
 export interface DtoSetDaysRequest {
     'end_date'?: string;
@@ -463,6 +507,15 @@ export interface PlanningTasksGet200Response {
     'data'?: DtoTaskPlanning;
     'error'?: object;
 }
+export interface PoliciesKindInfo {
+    'name'?: string;
+    'params'?: Array<PoliciesParamInfo>;
+}
+export interface PoliciesParamInfo {
+    'key'?: string;
+    'required'?: boolean;
+    'type'?: string;
+}
 export interface ProcessGet200Response {
     'data'?: ProcessGet200ResponseAllOfData;
     'error'?: object;
@@ -489,6 +542,38 @@ export interface ProjectGet200ResponseAllOfData {
 }
 export interface ProjectPost201Response {
     'data'?: DtoProjectResponse;
+    'error'?: object;
+}
+export interface RbacExplainGet200Response {
+    'data'?: DtoExplainResult;
+    'error'?: object;
+}
+export interface RbacKindsGet200Response {
+    'data'?: Array<PoliciesKindInfo>;
+    'error'?: object;
+}
+export interface RbacMatrixGet200Response {
+    'data'?: Array<DtoMatrixCell>;
+    'error'?: object;
+}
+export interface RbacPoliciesGet200Response {
+    'data'?: Array<DtoRoutePolicyView>;
+    'error'?: object;
+}
+export interface RbacPoliciesPut200Response {
+    'data'?: DtoRoutePolicyView;
+    'error'?: object;
+}
+export interface RbacRolesGet200Response {
+    'data'?: Array<DomainRole>;
+    'error'?: object;
+}
+export interface RbacRulesGet200Response {
+    'data'?: Array<DtoRuleView>;
+    'error'?: object;
+}
+export interface RbacRulesPut200Response {
+    'data'?: DtoRuleView;
     'error'?: object;
 }
 export interface ResourcesGet200Response {
@@ -2865,6 +2950,832 @@ export class ProjectsApi extends BaseAPI {
      */
     public projectPost(project: DtoCreateProjectRequest, options?: RawAxiosRequestConfig) {
         return ProjectsApiFp(this.configuration).projectPost(project, options).then((request) => request(this.axios, this.basePath));
+    }
+}
+
+
+
+/**
+ * RBACApi - axios parameter creator
+ */
+export const RBACApiAxiosParamCreator = function (configuration?: Configuration) {
+    return {
+        /**
+         * 
+         * @summary Explain a decision
+         * @param {string} role Role
+         * @param {string} resource Resource
+         * @param {string} action Action
+         * @param {number} [userId] User ID
+         * @param {number} [projectOwner] Project owner ID
+         * @param {number} [processOwner] Process owner ID
+         * @param {number} [owner] Row owner ID
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        rbacExplainGet: async (role: string, resource: string, action: string, userId?: number, projectOwner?: number, processOwner?: number, owner?: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'role' is not null or undefined
+            assertParamExists('rbacExplainGet', 'role', role)
+            // verify required parameter 'resource' is not null or undefined
+            assertParamExists('rbacExplainGet', 'resource', resource)
+            // verify required parameter 'action' is not null or undefined
+            assertParamExists('rbacExplainGet', 'action', action)
+            const localVarPath = `/rbac/explain`;
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'GET', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication ApiKeyAuth required
+            await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
+
+            if (role !== undefined) {
+                localVarQueryParameter['role'] = role;
+            }
+
+            if (resource !== undefined) {
+                localVarQueryParameter['resource'] = resource;
+            }
+
+            if (action !== undefined) {
+                localVarQueryParameter['action'] = action;
+            }
+
+            if (userId !== undefined) {
+                localVarQueryParameter['user_id'] = userId;
+            }
+
+            if (projectOwner !== undefined) {
+                localVarQueryParameter['project_owner'] = projectOwner;
+            }
+
+            if (processOwner !== undefined) {
+                localVarQueryParameter['process_owner'] = processOwner;
+            }
+
+            if (owner !== undefined) {
+                localVarQueryParameter['owner'] = owner;
+            }
+
+            localVarHeaderParameter['Accept'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * 
+         * @summary List check kinds
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        rbacKindsGet: async (options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            const localVarPath = `/rbac/kinds`;
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'GET', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication ApiKeyAuth required
+            await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
+
+            localVarHeaderParameter['Accept'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * 
+         * @summary Effective permission matrix
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        rbacMatrixGet: async (options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            const localVarPath = `/rbac/matrix`;
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'GET', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication ApiKeyAuth required
+            await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
+
+            localVarHeaderParameter['Accept'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * 
+         * @summary List route policies
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        rbacPoliciesGet: async (options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            const localVarPath = `/rbac/policies`;
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'GET', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication ApiKeyAuth required
+            await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
+
+            localVarHeaderParameter['Accept'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * 
+         * @summary Delete a route policy
+         * @param {string} name Policy name
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        rbacPoliciesNameDelete: async (name: string, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'name' is not null or undefined
+            assertParamExists('rbacPoliciesNameDelete', 'name', name)
+            const localVarPath = `/rbac/policies/{name}`
+                .replace('{name}', encodeURIComponent(String(name)));
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'DELETE', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication ApiKeyAuth required
+            await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
+
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * 
+         * @summary Upsert a route policy
+         * @param {DtoRoutePolicyInput} policy Route policy
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        rbacPoliciesPut: async (policy: DtoRoutePolicyInput, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'policy' is not null or undefined
+            assertParamExists('rbacPoliciesPut', 'policy', policy)
+            const localVarPath = `/rbac/policies`;
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'PUT', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication ApiKeyAuth required
+            await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
+
+            localVarHeaderParameter['Content-Type'] = 'application/json';
+            localVarHeaderParameter['Accept'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+            localVarRequestOptions.data = serializeDataIfNeeded(policy, localVarRequestOptions, configuration)
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * 
+         * @summary Reset policies to defaults
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        rbacResetPost: async (options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            const localVarPath = `/rbac/reset`;
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'POST', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication ApiKeyAuth required
+            await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
+
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * 
+         * @summary List roles
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        rbacRolesGet: async (options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            const localVarPath = `/rbac/roles`;
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'GET', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication ApiKeyAuth required
+            await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
+
+            localVarHeaderParameter['Accept'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * 
+         * @summary List matrix rules
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        rbacRulesGet: async (options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            const localVarPath = `/rbac/rules`;
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'GET', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication ApiKeyAuth required
+            await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
+
+            localVarHeaderParameter['Accept'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * 
+         * @summary Delete a matrix rule
+         * @param {number} id Rule ID
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        rbacRulesIdDelete: async (id: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'id' is not null or undefined
+            assertParamExists('rbacRulesIdDelete', 'id', id)
+            const localVarPath = `/rbac/rules/{id}`
+                .replace('{id}', encodeURIComponent(String(id)));
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'DELETE', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication ApiKeyAuth required
+            await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
+
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * 
+         * @summary Upsert a matrix rule
+         * @param {DtoRuleInput} rule Matrix rule
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        rbacRulesPut: async (rule: DtoRuleInput, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'rule' is not null or undefined
+            assertParamExists('rbacRulesPut', 'rule', rule)
+            const localVarPath = `/rbac/rules`;
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'PUT', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication ApiKeyAuth required
+            await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
+
+            localVarHeaderParameter['Content-Type'] = 'application/json';
+            localVarHeaderParameter['Accept'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+            localVarRequestOptions.data = serializeDataIfNeeded(rule, localVarRequestOptions, configuration)
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+    }
+};
+
+/**
+ * RBACApi - functional programming interface
+ */
+export const RBACApiFp = function(configuration?: Configuration) {
+    const localVarAxiosParamCreator = RBACApiAxiosParamCreator(configuration)
+    return {
+        /**
+         * 
+         * @summary Explain a decision
+         * @param {string} role Role
+         * @param {string} resource Resource
+         * @param {string} action Action
+         * @param {number} [userId] User ID
+         * @param {number} [projectOwner] Project owner ID
+         * @param {number} [processOwner] Process owner ID
+         * @param {number} [owner] Row owner ID
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async rbacExplainGet(role: string, resource: string, action: string, userId?: number, projectOwner?: number, processOwner?: number, owner?: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<RbacExplainGet200Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.rbacExplainGet(role, resource, action, userId, projectOwner, processOwner, owner, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['RBACApi.rbacExplainGet']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
+         * 
+         * @summary List check kinds
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async rbacKindsGet(options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<RbacKindsGet200Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.rbacKindsGet(options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['RBACApi.rbacKindsGet']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
+         * 
+         * @summary Effective permission matrix
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async rbacMatrixGet(options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<RbacMatrixGet200Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.rbacMatrixGet(options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['RBACApi.rbacMatrixGet']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
+         * 
+         * @summary List route policies
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async rbacPoliciesGet(options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<RbacPoliciesGet200Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.rbacPoliciesGet(options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['RBACApi.rbacPoliciesGet']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
+         * 
+         * @summary Delete a route policy
+         * @param {string} name Policy name
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async rbacPoliciesNameDelete(name: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<void>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.rbacPoliciesNameDelete(name, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['RBACApi.rbacPoliciesNameDelete']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
+         * 
+         * @summary Upsert a route policy
+         * @param {DtoRoutePolicyInput} policy Route policy
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async rbacPoliciesPut(policy: DtoRoutePolicyInput, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<RbacPoliciesPut200Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.rbacPoliciesPut(policy, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['RBACApi.rbacPoliciesPut']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
+         * 
+         * @summary Reset policies to defaults
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async rbacResetPost(options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<void>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.rbacResetPost(options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['RBACApi.rbacResetPost']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
+         * 
+         * @summary List roles
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async rbacRolesGet(options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<RbacRolesGet200Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.rbacRolesGet(options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['RBACApi.rbacRolesGet']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
+         * 
+         * @summary List matrix rules
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async rbacRulesGet(options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<RbacRulesGet200Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.rbacRulesGet(options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['RBACApi.rbacRulesGet']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
+         * 
+         * @summary Delete a matrix rule
+         * @param {number} id Rule ID
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async rbacRulesIdDelete(id: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<void>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.rbacRulesIdDelete(id, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['RBACApi.rbacRulesIdDelete']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
+         * 
+         * @summary Upsert a matrix rule
+         * @param {DtoRuleInput} rule Matrix rule
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async rbacRulesPut(rule: DtoRuleInput, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<RbacRulesPut200Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.rbacRulesPut(rule, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['RBACApi.rbacRulesPut']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+    }
+};
+
+/**
+ * RBACApi - factory interface
+ */
+export const RBACApiFactory = function (configuration?: Configuration, basePath?: string, axios?: AxiosInstance) {
+    const localVarFp = RBACApiFp(configuration)
+    return {
+        /**
+         * 
+         * @summary Explain a decision
+         * @param {string} role Role
+         * @param {string} resource Resource
+         * @param {string} action Action
+         * @param {number} [userId] User ID
+         * @param {number} [projectOwner] Project owner ID
+         * @param {number} [processOwner] Process owner ID
+         * @param {number} [owner] Row owner ID
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        rbacExplainGet(role: string, resource: string, action: string, userId?: number, projectOwner?: number, processOwner?: number, owner?: number, options?: RawAxiosRequestConfig): AxiosPromise<RbacExplainGet200Response> {
+            return localVarFp.rbacExplainGet(role, resource, action, userId, projectOwner, processOwner, owner, options).then((request) => request(axios, basePath));
+        },
+        /**
+         * 
+         * @summary List check kinds
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        rbacKindsGet(options?: RawAxiosRequestConfig): AxiosPromise<RbacKindsGet200Response> {
+            return localVarFp.rbacKindsGet(options).then((request) => request(axios, basePath));
+        },
+        /**
+         * 
+         * @summary Effective permission matrix
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        rbacMatrixGet(options?: RawAxiosRequestConfig): AxiosPromise<RbacMatrixGet200Response> {
+            return localVarFp.rbacMatrixGet(options).then((request) => request(axios, basePath));
+        },
+        /**
+         * 
+         * @summary List route policies
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        rbacPoliciesGet(options?: RawAxiosRequestConfig): AxiosPromise<RbacPoliciesGet200Response> {
+            return localVarFp.rbacPoliciesGet(options).then((request) => request(axios, basePath));
+        },
+        /**
+         * 
+         * @summary Delete a route policy
+         * @param {string} name Policy name
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        rbacPoliciesNameDelete(name: string, options?: RawAxiosRequestConfig): AxiosPromise<void> {
+            return localVarFp.rbacPoliciesNameDelete(name, options).then((request) => request(axios, basePath));
+        },
+        /**
+         * 
+         * @summary Upsert a route policy
+         * @param {DtoRoutePolicyInput} policy Route policy
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        rbacPoliciesPut(policy: DtoRoutePolicyInput, options?: RawAxiosRequestConfig): AxiosPromise<RbacPoliciesPut200Response> {
+            return localVarFp.rbacPoliciesPut(policy, options).then((request) => request(axios, basePath));
+        },
+        /**
+         * 
+         * @summary Reset policies to defaults
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        rbacResetPost(options?: RawAxiosRequestConfig): AxiosPromise<void> {
+            return localVarFp.rbacResetPost(options).then((request) => request(axios, basePath));
+        },
+        /**
+         * 
+         * @summary List roles
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        rbacRolesGet(options?: RawAxiosRequestConfig): AxiosPromise<RbacRolesGet200Response> {
+            return localVarFp.rbacRolesGet(options).then((request) => request(axios, basePath));
+        },
+        /**
+         * 
+         * @summary List matrix rules
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        rbacRulesGet(options?: RawAxiosRequestConfig): AxiosPromise<RbacRulesGet200Response> {
+            return localVarFp.rbacRulesGet(options).then((request) => request(axios, basePath));
+        },
+        /**
+         * 
+         * @summary Delete a matrix rule
+         * @param {number} id Rule ID
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        rbacRulesIdDelete(id: number, options?: RawAxiosRequestConfig): AxiosPromise<void> {
+            return localVarFp.rbacRulesIdDelete(id, options).then((request) => request(axios, basePath));
+        },
+        /**
+         * 
+         * @summary Upsert a matrix rule
+         * @param {DtoRuleInput} rule Matrix rule
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        rbacRulesPut(rule: DtoRuleInput, options?: RawAxiosRequestConfig): AxiosPromise<RbacRulesPut200Response> {
+            return localVarFp.rbacRulesPut(rule, options).then((request) => request(axios, basePath));
+        },
+    };
+};
+
+/**
+ * RBACApi - object-oriented interface
+ */
+export class RBACApi extends BaseAPI {
+    /**
+     * 
+     * @summary Explain a decision
+     * @param {string} role Role
+     * @param {string} resource Resource
+     * @param {string} action Action
+     * @param {number} [userId] User ID
+     * @param {number} [projectOwner] Project owner ID
+     * @param {number} [processOwner] Process owner ID
+     * @param {number} [owner] Row owner ID
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    public rbacExplainGet(role: string, resource: string, action: string, userId?: number, projectOwner?: number, processOwner?: number, owner?: number, options?: RawAxiosRequestConfig) {
+        return RBACApiFp(this.configuration).rbacExplainGet(role, resource, action, userId, projectOwner, processOwner, owner, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * 
+     * @summary List check kinds
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    public rbacKindsGet(options?: RawAxiosRequestConfig) {
+        return RBACApiFp(this.configuration).rbacKindsGet(options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * 
+     * @summary Effective permission matrix
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    public rbacMatrixGet(options?: RawAxiosRequestConfig) {
+        return RBACApiFp(this.configuration).rbacMatrixGet(options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * 
+     * @summary List route policies
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    public rbacPoliciesGet(options?: RawAxiosRequestConfig) {
+        return RBACApiFp(this.configuration).rbacPoliciesGet(options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * 
+     * @summary Delete a route policy
+     * @param {string} name Policy name
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    public rbacPoliciesNameDelete(name: string, options?: RawAxiosRequestConfig) {
+        return RBACApiFp(this.configuration).rbacPoliciesNameDelete(name, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * 
+     * @summary Upsert a route policy
+     * @param {DtoRoutePolicyInput} policy Route policy
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    public rbacPoliciesPut(policy: DtoRoutePolicyInput, options?: RawAxiosRequestConfig) {
+        return RBACApiFp(this.configuration).rbacPoliciesPut(policy, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * 
+     * @summary Reset policies to defaults
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    public rbacResetPost(options?: RawAxiosRequestConfig) {
+        return RBACApiFp(this.configuration).rbacResetPost(options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * 
+     * @summary List roles
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    public rbacRolesGet(options?: RawAxiosRequestConfig) {
+        return RBACApiFp(this.configuration).rbacRolesGet(options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * 
+     * @summary List matrix rules
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    public rbacRulesGet(options?: RawAxiosRequestConfig) {
+        return RBACApiFp(this.configuration).rbacRulesGet(options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * 
+     * @summary Delete a matrix rule
+     * @param {number} id Rule ID
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    public rbacRulesIdDelete(id: number, options?: RawAxiosRequestConfig) {
+        return RBACApiFp(this.configuration).rbacRulesIdDelete(id, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * 
+     * @summary Upsert a matrix rule
+     * @param {DtoRuleInput} rule Matrix rule
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    public rbacRulesPut(rule: DtoRuleInput, options?: RawAxiosRequestConfig) {
+        return RBACApiFp(this.configuration).rbacRulesPut(rule, options).then((request) => request(this.axios, this.basePath));
     }
 }
 

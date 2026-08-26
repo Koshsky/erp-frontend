@@ -1,8 +1,8 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import axios, { type AxiosError, type Method } from 'axios'
-import { AuthApi, ProjectsApi, ProcessesApi, TasksApi, TimesheetResourcesApi, TimesheetCalendarApi, TimesheetStatesApi, PlanningApi, MilestonesApi, UsersApi, AssignmentsApi, AutoCreateApi, Configuration } from '@/api'
-import type { DtoUserInfo, DtoProject, DtoResourceResponse, DtoResourceCalendar, DtoResourceMemberResponse, DtoResourceAbsenceResponse, DtoUserResponse, DtoUserStateResponse, DtoStateResponse, DtoCreateResourceRequest, DtoUpdateResourceRequest, DtoCreateUserRequest, DtoUpdateUserRequest, DtoSetDaysRequest, DtoAdminUserResponse, DtoCreateUserResult, DtoResetPasswordResponse, DtoAutoCreateConfig, DtoCommentResponse } from '@/api'
+import { AuthApi, ProjectsApi, ProcessesApi, TasksApi, TimesheetResourcesApi, TimesheetCalendarApi, TimesheetStatesApi, PlanningApi, MilestonesApi, UsersApi, AssignmentsApi, AutoCreateApi, RBACApi, Configuration } from '@/api'
+import type { DtoUserInfo, DtoProject, DtoResourceResponse, DtoResourceCalendar, DtoResourceMemberResponse, DtoResourceAbsenceResponse, DtoUserResponse, DtoUserStateResponse, DtoStateResponse, DtoCreateResourceRequest, DtoUpdateResourceRequest, DtoCreateUserRequest, DtoUpdateUserRequest, DtoSetDaysRequest, DtoAdminUserResponse, DtoCreateUserResult, DtoResetPasswordResponse, DtoAutoCreateConfig, DtoCommentResponse, DomainRole, DtoRuleInput, DtoRuleView, DtoMatrixCell, DtoRoutePolicyView, PoliciesKindInfo } from '@/api'
 import { apiErrorMessage, fullName } from '@/utils'
 import { getApiUrl } from '@/config'
 import { isOffline } from '@/offline/state'
@@ -2077,5 +2077,120 @@ export const usePlanningStore = defineStore('planning', () => {
     loadTaskComments,
     createTaskComment,
     deleteTaskComment,
+  }
+})
+
+// =============================================================
+// RBAC-политики (матрица прав) — админ-редактор.
+// Все операции online-only (поддержка outbox/офлайна не нужна).
+// =============================================================
+export const useRbacStore = defineStore('rbac', () => {
+  const roles = ref<DomainRole[]>([])
+  /** Активные правила матрицы (с id — нужны для удаления «нет доступа»). */
+  const rules = ref<DtoRuleView[]>([])
+  /** Эффективная матрица (с admin-байпасом) — источник отображения. */
+  const matrix = ref<DtoMatrixCell[]>([])
+  /** Маршрутные проверки (read-only справочник). */
+  const routePolicies = ref<DtoRoutePolicyView[]>([])
+  /** Справочник kind'ов маршрутных проверок. */
+  const kinds = ref<PoliciesKindInfo[]>([])
+  const loading = ref(false)
+  const saving = ref(false)
+  const error = ref<string | null>(null)
+
+  function setError(e: unknown) {
+    error.value = e instanceof Error ? e.message : String(e)
+  }
+
+  /** Загружает весь справочник RBAC одним проходом. */
+  async function loadRbac(): Promise<boolean> {
+    if (loading.value) return false
+    loading.value = true
+    error.value = null
+    try {
+      const api = new RBACApi(apiConfig())
+      const [rolesR, rulesR, matrixR, routesR, kindsR] = await Promise.all([
+        api.rbacRolesGet(),
+        api.rbacRulesGet(),
+        api.rbacMatrixGet(),
+        api.rbacPoliciesGet(),
+        api.rbacKindsGet(),
+      ])
+      roles.value = rolesR.data?.data ?? []
+      rules.value = rulesR.data?.data ?? []
+      matrix.value = matrixR.data?.data ?? []
+      routePolicies.value = routesR.data?.data ?? []
+      kinds.value = kindsR.data?.data ?? []
+      return true
+    } catch (e) {
+      setError(e)
+      return false
+    } finally {
+      loading.value = false
+    }
+  }
+
+  /** Перечитывает правила и матрицу после изменения (эффект «сейчас»). */
+  async function reloadRules(): Promise<boolean> {
+    try {
+      const api = new RBACApi(apiConfig())
+      const [rulesR, matrixR] = await Promise.all([api.rbacRulesGet(), api.rbacMatrixGet()])
+      rules.value = rulesR.data?.data ?? []
+      matrix.value = matrixR.data?.data ?? []
+      return true
+    } catch (e) {
+      setError(e)
+      return false
+    }
+  }
+
+  /** Записывает правило (upsert по role+resource+action). */
+  async function upsertRule(input: DtoRuleInput): Promise<boolean> {
+    try {
+      await new RBACApi(apiConfig()).rbacRulesPut(input)
+      return true
+    } catch (e) {
+      setError(e)
+      return false
+    }
+  }
+
+  /** Мягкое удаление правила (зона «нет доступа»). */
+  async function deleteRule(id: number): Promise<boolean> {
+    try {
+      await new RBACApi(apiConfig()).rbacRulesIdDelete(id)
+      return true
+    } catch (e) {
+      setError(e)
+      return false
+    }
+  }
+
+  /** Сбрасывает правила и маршрутные проверки к дефолтам бэкенда. */
+  async function resetRbac(): Promise<boolean> {
+    try {
+      await new RBACApi(apiConfig()).rbacResetPost()
+      await reloadRules()
+      return true
+    } catch (e) {
+      setError(e)
+      return false
+    }
+  }
+
+  return {
+    roles,
+    rules,
+    matrix,
+    routePolicies,
+    kinds,
+    loading,
+    saving,
+    error,
+    loadRbac,
+    reloadRules,
+    upsertRule,
+    deleteRule,
+    resetRbac,
   }
 })
