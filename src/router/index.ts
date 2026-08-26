@@ -141,7 +141,9 @@ router.beforeEach(async (to) => {
   // Права для навигации: загружаем один раз на сессию (кроме офлайна — кеш).
   const rbac = useRbacStore()
   if (auth.isAuthenticated && !rbac.permsLoaded && !isOffline.value) {
-    await rbac.loadMyPermissions()
+    // Не блокируем навигацию сетью: права подгружаются асинхронно
+    // (кнопки появятся по мере загрузки; поллинг обновляет дальше).
+    void rbac.loadMyPermissions()
   }
 
   // Действия/страницы показываем по правам из матрицы, а не по ролям.
