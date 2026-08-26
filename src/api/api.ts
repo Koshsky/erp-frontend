@@ -242,6 +242,11 @@ export interface DtoMilestoneResponse {
     'process_id'?: number;
     'title'?: string;
 }
+export interface DtoPermission {
+    'action'?: string;
+    'resource'?: string;
+    'scope'?: string;
+}
 export interface DtoProcess {
     'end_date'?: string;
     'id'?: number;
@@ -493,6 +498,10 @@ export interface MilestoneGet200ResponseAllOfData {
 }
 export interface MilestonePost201Response {
     'data'?: DtoMilestoneResponse;
+    'error'?: object;
+}
+export interface PermissionsMeGet200Response {
+    'data'?: Array<DtoPermission>;
     'error'?: object;
 }
 export interface PlanningProcessesGet200Response {
@@ -1897,6 +1906,103 @@ export class MilestonesApi extends BaseAPI {
      */
     public milestonePost(request: DtoCreateMilestoneRequest, options?: RawAxiosRequestConfig) {
         return MilestonesApiFp(this.configuration).milestonePost(request, options).then((request) => request(this.axios, this.basePath));
+    }
+}
+
+
+
+/**
+ * PermissionsApi - axios parameter creator
+ */
+export const PermissionsApiAxiosParamCreator = function (configuration?: Configuration) {
+    return {
+        /**
+         * 
+         * @summary My RBAC permissions
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        permissionsMeGet: async (options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            const localVarPath = `/permissions/me`;
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'GET', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication ApiKeyAuth required
+            await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
+
+            localVarHeaderParameter['Accept'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+    }
+};
+
+/**
+ * PermissionsApi - functional programming interface
+ */
+export const PermissionsApiFp = function(configuration?: Configuration) {
+    const localVarAxiosParamCreator = PermissionsApiAxiosParamCreator(configuration)
+    return {
+        /**
+         * 
+         * @summary My RBAC permissions
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async permissionsMeGet(options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<PermissionsMeGet200Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.permissionsMeGet(options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['PermissionsApi.permissionsMeGet']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+    }
+};
+
+/**
+ * PermissionsApi - factory interface
+ */
+export const PermissionsApiFactory = function (configuration?: Configuration, basePath?: string, axios?: AxiosInstance) {
+    const localVarFp = PermissionsApiFp(configuration)
+    return {
+        /**
+         * 
+         * @summary My RBAC permissions
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        permissionsMeGet(options?: RawAxiosRequestConfig): AxiosPromise<PermissionsMeGet200Response> {
+            return localVarFp.permissionsMeGet(options).then((request) => request(axios, basePath));
+        },
+    };
+};
+
+/**
+ * PermissionsApi - object-oriented interface
+ */
+export class PermissionsApi extends BaseAPI {
+    /**
+     * 
+     * @summary My RBAC permissions
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    public permissionsMeGet(options?: RawAxiosRequestConfig) {
+        return PermissionsApiFp(this.configuration).permissionsMeGet(options).then((request) => request(this.axios, this.basePath));
     }
 }
 

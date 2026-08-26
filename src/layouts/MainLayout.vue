@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted } from 'vue'
 import AppHeader from '../components/common/AppHeader/AppHeader.vue'
+import { useRbacStore } from '../store'
 import { isOffline } from '../offline/state'
 
 // Локальный computed поверх импортированного ref — гарантированная реактивность в шаблоне
@@ -26,8 +27,17 @@ function onPrintHotkey(e: KeyboardEvent) {
   }
 }
 
-onMounted(() => window.addEventListener('keydown', onPrintHotkey, true))
-onBeforeUnmount(() => window.removeEventListener('keydown', onPrintHotkey, true))
+const rbac = useRbacStore()
+let stopPermissionSync: (() => void) | undefined
+
+onMounted(() => {
+  window.addEventListener('keydown', onPrintHotkey, true)
+  stopPermissionSync = rbac.startPermissionSync()
+})
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onPrintHotkey, true)
+  stopPermissionSync?.()
+})
 </script>
 
 <template>

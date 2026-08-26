@@ -1,5 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import { useAuthStore } from '../store'
+import { useAuthStore, useRbacStore } from '../store'
 import { isOffline } from '../offline/state'
 import { isElectron } from '../electron'
 import { ensureDesktopAutoSyncSession } from '../offline/sync'
@@ -138,25 +138,49 @@ router.beforeEach(async (to) => {
     return { name: auth.user?.role === 'worker' ? 'profile' : 'dashboard' }
   }
 
-  // worker видит только свой профиль: любые другие страницы — на profile
-  if (auth.user?.role === 'worker' && to.name !== 'profile') {
-    return { name: 'profile' }
+  // Права для навигации: загружаем один раз на сессию (кроме офлайна — кеш).
+  const rbac = useRbacStore()
+  if (auth.isAuthenticated && !rbac.permsLoaded && !isOffline.value) {
+    await rbac.loadMyPermissions()
   }
 
-  // Табель и Сотрудники доступны только vp и admin
-  if (
-    (to.name === 'timesheet' || to.name === 'employees') &&
-    !['vp', 'admin'].includes(auth.user?.role ?? '')
-  ) {
-    return { name: 'dashboard' }
+  // Действия/страницы показываем по правам из матрицы, а не по ролям.
+  // Бизнес-страницы — по праву view; админ-разделы — временный fallback
+  // на роль (TODO: виртуальные ресурсы-разделы).
+  const pagePerm: Record<string, [string, string] | 'admin'> = {
+    timesheet: ['worker', 'view'],
+    employees: ['worker', 'view'],
+    projects: ['project', 'view'],
+    processes: ['process', 'view'],
+    planner: ['task', 'view'],
+    resources: ['resource', 'view'],
+    statuses: 'admin',
+    users: 'admin',
+    structure: 'admin',
+    'auto-create': 'admin',
+    permissions: 'admin',
+  }
+  const needed = pagePerm[to.name as string]
+  if (needed && to.meta.requiresAuth) {
+    const ok = needed === 'admin' ? auth.user?.role === 'admin' : rbac.can(needed[0], needed[1])
+    if (!ok) return { name: 'dashboard' }
   }
 
-  // Статусы, Права, Пользователи, Структура, Автосоздание — только admin
+  // Пользователь без прав ни на одну бизнес-страницу — только профиль
+  // (сотрудник без назначенных прав; админ и роли с правами ходят дальше).
   if (
-    (to.name === 'statuses' || to.name === 'permissions' || to.name === 'users' || to.name === 'structure' || to.name === 'auto-create') &&
+    to.name !== 'profile' &&
+    to.name !== 'dashboard' &&
+    to.name !== 'sync' &&
+    !pagePerm[to.name as string] &&
+    !rbac.can('project', 'view') &&
+    !rbac.can('process', 'view') &&
+    !rbac.can('task', 'view') &&
+    !rbac.can('resource', 'view') &&
+    !rbac.can('worker', 'view') &&
     auth.user?.role !== 'admin'
   ) {
-    return { name: 'dashboard' }
+    return { name: 'profile' }
   }
 
   // Синхронизация (офлайн-настройки) — доступна только в настольной (Electron)

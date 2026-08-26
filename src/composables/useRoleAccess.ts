@@ -1,71 +1,63 @@
 import { computed } from 'vue'
-import { useAuthStore, usePlanningStore } from '../store'
+import { useAuthStore, usePlanningStore, useRbacStore } from '../store'
 
-/** Права доступа по роли пользователя (dp/rp/vp/admin/worker) */
+/**
+ * Возможности определяются правами из матрицы RBAC (/permissions/me),
+ * а не хардкод-списком ролей: фронт показывает действие, если есть право
+ * (и владение объектом там, где скоуп не «все»).
+ */
 export function useRoleAccess() {
   const auth = useAuthStore()
   const planning = usePlanningStore()
+  const rbac = useRbacStore()
 
   const role = computed(() => auth.user?.role)
   const userId = computed(() => auth.user?.id)
 
-  /** Просмотр/листинг проектов: admin/dp — все, rp — свои; vp и worker проекты не видят */
-  const canViewProjects = computed(() => {
-    return role.value === 'admin' || role.value === 'dp' || role.value === 'rp'
-  })
+  /** Просмотр/листинг проектов: по праву project.view */
+  const canViewProjects = computed(() => rbac.can('project', 'view'))
 
-  /** CRUD ресурсов табеля: admin и vp (vp — свои) */
-  const canManageResources = computed(() => role.value === 'admin' || role.value === 'vp')
+  /** CRUD ресурсов табеля: по правам resource.create/update */
+  const canManageResources = computed(() => rbac.can('resource', 'create') || rbac.can('resource', 'update'))
 
-  /** Процессы (страница процессов): admin и rp — в своих проектах (список уже отфильтрован) */
-  const canManageProcesses = computed(() => role.value === 'admin' || role.value === 'rp')
+  /** Процессы (страница и управление): по правам process.create/update */
+  const canManageProcesses = computed(() => rbac.can('process', 'create') || rbac.can('process', 'update'))
 
-  /** Задачи/вехи/назначения (страница задач): admin и vp — в своих процессах; rp — view only */
-  const canManageTasks = computed(() => role.value === 'admin' || role.value === 'vp')
+  /** Задачи/вехи/назначения: управление по task.create/update */
+  const canManageTasks = computed(() => rbac.can('task', 'create') || rbac.can('task', 'update'))
 
-  /** Просмотр задач и участие в обсуждениях (комментарии): роли, чьи задачи видны на диаграмме */
-  const canViewTasks = computed(() =>
-    role.value === 'admin' || role.value === 'dp' || role.value === 'rp' || role.value === 'vp',
-  )
+  /** Просмотр задач (диаграмма и комментарии): task.view */
+  const canViewTasks = computed(() => rbac.can('task', 'view'))
 
-  /** Создание проекта: admin и rp (rp становится владельцем) */
-  const canCreateProject = computed(() => role.value === 'admin' || role.value === 'rp')
+  /** Создание проекта: project.create */
+  const canCreateProject = computed(() => rbac.can('project', 'create'))
 
-  /** Переупорядочивание проектов (смена приоритетов): admin/dp — все, rp — свои
-   *  (список rp уже отфильтрован бэкендом до его проектов) */
-  const canReorderProjects = computed(() =>
-    role.value === 'admin' || role.value === 'dp' || role.value === 'rp',
-  )
+  /** Смена приоритетов проектов: project.update */
+  const canReorderProjects = computed(() => rbac.can('project', 'update'))
 
-  /** Редактирование проекта: admin — любой, dp — все, rp — только свой */
+  /** Редактирование проекта: право project.update + владение (own) */
   function canManageProject(projectId: number): boolean {
-    if (role.value === 'admin' || role.value === 'dp') return true
-    if (role.value !== 'rp') return false
     const project = planning.projectPlanning?.projects?.find((p: any) => p.id === projectId)
-    return project?.owner_id != null && project.owner_id === userId.value
+    return rbac.canOwn('project', 'update', { projectOwner: project?.owner_id ?? null })
   }
 
-  /** Удаление проекта: admin — любой, rp — только свой; dp не удаляет */
+  /** Удаление проекта: право project.delete + владение (own) */
   function canDeleteProject(projectId: number): boolean {
-    if (role.value === 'admin') return true
-    if (role.value !== 'rp') return false
     const project = planning.projectPlanning?.projects?.find((p: any) => p.id === projectId)
-    return project?.owner_id != null && project.owner_id === userId.value
+    return rbac.canOwn('project', 'delete', { projectOwner: project?.owner_id ?? null })
   }
 
-  /** Вкладка «Сотрудники»: vp (свои подчинённые) и admin (все) */
-  const canManageEmployees = computed(() => role.value === 'vp' || role.value === 'admin')
+  /** Вкладка «Сотрудники»: worker.view */
+  const canManageEmployees = computed(() => rbac.can('worker', 'view'))
 
-  /** Страница «Статусы»: только admin */
-  const canManageStates = computed(() => role.value === 'admin')
+  /** Страница «Статусы» (управление): state.create/update */
+  const canManageStates = computed(() => rbac.can('state', 'create') || rbac.can('state', 'update'))
 
-  /** Право изменить сотрудника: admin — любого, остальные — только подчинённых */
+  /** Право изменить сотрудника: worker.update + владение (own: manager_id) */
   function canEditEmployee(emp: { manager_id?: number | null }): boolean {
-    if (role.value === 'admin') return true
-    return emp.manager_id != null && emp.manager_id === userId.value
+    return rbac.canOwn('worker', 'update', { owner: emp.manager_id ?? null })
   }
 
-  /** Право удалить сотрудника: то же правило, что и на редактирование */
   const canDeleteEmployee = canEditEmployee
 
   return {

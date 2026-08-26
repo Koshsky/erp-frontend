@@ -1,8 +1,8 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import axios, { type AxiosError, type Method } from 'axios'
-import { AuthApi, ProjectsApi, ProcessesApi, TasksApi, TimesheetResourcesApi, TimesheetCalendarApi, TimesheetStatesApi, PlanningApi, MilestonesApi, UsersApi, AssignmentsApi, AutoCreateApi, RBACApi, Configuration } from '@/api'
-import type { DtoUserInfo, DtoProject, DtoResourceResponse, DtoResourceCalendar, DtoResourceMemberResponse, DtoResourceAbsenceResponse, DtoUserResponse, DtoUserStateResponse, DtoStateResponse, DtoCreateResourceRequest, DtoUpdateResourceRequest, DtoCreateUserRequest, DtoUpdateUserRequest, DtoSetDaysRequest, DtoAdminUserResponse, DtoCreateUserResult, DtoResetPasswordResponse, DtoAutoCreateConfig, DtoCommentResponse, DomainRole, DtoRuleInput, DtoRuleView, DtoMatrixCell, DtoRoutePolicyView, PoliciesKindInfo } from '@/api'
+import { AuthApi, ProjectsApi, ProcessesApi, TasksApi, TimesheetResourcesApi, TimesheetCalendarApi, TimesheetStatesApi, PlanningApi, MilestonesApi, UsersApi, AssignmentsApi, AutoCreateApi, RBACApi, PermissionsApi, Configuration } from '@/api'
+import type { DtoUserInfo, DtoProject, DtoResourceResponse, DtoResourceCalendar, DtoResourceMemberResponse, DtoResourceAbsenceResponse, DtoUserResponse, DtoUserStateResponse, DtoStateResponse, DtoCreateResourceRequest, DtoUpdateResourceRequest, DtoCreateUserRequest, DtoUpdateUserRequest, DtoSetDaysRequest, DtoAdminUserResponse, DtoCreateUserResult, DtoResetPasswordResponse, DtoAutoCreateConfig, DtoCommentResponse, DomainRole, DtoRuleInput, DtoRuleView, DtoMatrixCell, DtoRoutePolicyView, PoliciesKindInfo, DtoPermission } from '@/api'
 import { apiErrorMessage, fullName } from '@/utils'
 import { getApiUrl } from '@/config'
 import { isOffline } from '@/offline/state'
@@ -17,6 +17,8 @@ import { getSavedLogin } from '@/syncCredentials'
 import { shouldAutoSync } from '@/settings'
 
 const USER_KEY = 'mvs_erp_user'
+/** Кеш моих RBAC-прав для офлайн-режима. */
+const PERMS_KEY = 'mvs_erp_perms'
 
 /** Сколько времени до истечения токена, когда начинаем проактивный refresh */
 const REFRESH_MARGIN_MS = 60 * 1000
@@ -2130,6 +2132,125 @@ export const useRbacStore = defineStore('rbac', () => {
     }
   }
 
+  /** Мои права (по матрице) — источник возможностей UI вместо ролей. */
+  const myPermissions = ref<DtoPermission[]>([])
+  const permsLoaded = ref(false)
+
+  /** Владение скоупа по ресурсу — зеркало policies.go (own/parent/ancestor). */
+  function scopeSatisfied(scope: string, resource: string, uid: number, o: { owner?: number | null; projectOwner?: number | null; processOwner?: number | null }): boolean {
+    if (scope === 'all') return true
+    if (uid <= 0) return false
+    switch (scope) {
+      case 'own':
+        switch (resource) {
+          case 'project': return o.projectOwner === uid
+          case 'process': return o.processOwner === uid
+          case 'task':
+          case 'resource':
+          case 'worker':
+            return o.owner === uid
+          default:
+            return false
+        }
+      case 'parent':
+        switch (resource) {
+          case 'process': return o.projectOwner === uid
+          case 'task':
+          case 'milestone':
+          case 'assignment':
+            return o.processOwner === uid
+          default:
+            return false
+        }
+      case 'ancestor':
+        switch (resource) {
+          case 'task':
+          case 'milestone':
+          case 'assignment':
+          case 'process':
+            return o.owner === uid || o.processOwner === uid || o.projectOwner === uid
+          default:
+            return false
+        }
+      default:
+        return false
+    }
+  }
+
+  /** Есть ли у текущей роли право на действие в принципе. */
+  function can(resource: string, action: string): boolean {
+    return myPermissions.value.some((p) => p.resource === resource && p.action === action)
+  }
+
+  /** Скоуп права ('' — права нет). */
+  function perm(resource: string, action: string): string {
+    return myPermissions.value.find((p) => p.resource === resource && p.action === action)?.scope ?? ''
+  }
+
+  /** Право + владение объектом по скоупу (owners — из данных карточки). */
+  function canOwn(
+    resource: string,
+    action: string,
+    owners: { owner?: number | null; projectOwner?: number | null; processOwner?: number | null },
+  ): boolean {
+    const scope = perm(resource, action)
+    if (!scope) return false
+    const auth = useAuthStore()
+    return scopeSatisfied(scope, resource, auth.user?.id ?? 0, owners)
+  }
+
+  /** Загружает мои права с сервера; офлайн — из localStorage-кеша. */
+  async function loadMyPermissions(): Promise<boolean> {
+    if (isOffline.value) {
+      try {
+        const cached = localStorage.getItem(PERMS_KEY)
+        if (cached) myPermissions.value = JSON.parse(cached)
+      } catch {
+        /* кеш не читается — прав нет */
+      }
+      permsLoaded.value = true
+      return true
+    }
+    try {
+      const resp = await new PermissionsApi(apiConfig()).permissionsMeGet()
+      myPermissions.value = resp.data?.data ?? []
+      permsLoaded.value = true
+      try {
+        localStorage.setItem(PERMS_KEY, JSON.stringify(myPermissions.value))
+      } catch {
+        /* localStorage может быть недоступен */
+      }
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  /** Периодическая синхронизация прав (TTL поллинг вслед за бэком). */
+  function startPermissionSync(ms = 30000): () => void {
+    let timer: number | undefined
+    let stopVisibility: (() => void) | undefined
+    const tick = () => {
+      if (!document.hidden) void loadMyPermissions()
+    }
+    const onVisibility = () => {
+      if (document.hidden && timer != null) {
+        window.clearInterval(timer)
+        timer = undefined
+      } else if (!document.hidden && timer == null) {
+        timer = window.setInterval(tick, ms)
+        void loadMyPermissions()
+      }
+    }
+    stopVisibility = () => document.removeEventListener('visibilitychange', onVisibility)
+    document.addEventListener('visibilitychange', onVisibility)
+    onVisibility()
+    return () => {
+      if (timer != null) window.clearInterval(timer)
+      if (stopVisibility) stopVisibility()
+    }
+  }
+
   /** Легковесная загрузка каталога ролей (для select'ов без полного loadRbac). */
   async function ensureRoles(): Promise<void> {
     if (roles.value.length) return
@@ -2200,6 +2321,13 @@ export const useRbacStore = defineStore('rbac', () => {
     error,
     loadRbac,
     ensureRoles,
+    myPermissions,
+    permsLoaded,
+    can,
+    perm,
+    canOwn,
+    loadMyPermissions,
+    startPermissionSync,
     reloadRules,
     upsertRule,
     deleteRule,
