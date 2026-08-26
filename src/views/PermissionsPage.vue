@@ -232,6 +232,47 @@ function cancelDirty() {
 
 // Сброс к дефолтам.
 const { confirm: confirmDialog, ask, proceed, cancel } = useConfirm()
+
+// === Управление ролями (каталог) ===
+const newRoleName = ref('')
+const newRoleDesc = ref('')
+const roleMsg = ref<{ ok: boolean; text: string } | null>(null)
+
+async function onCreateRole() {
+  const name = newRoleName.value.trim()
+  if (!name) {
+    roleMsg.value = { ok: false, text: 'Укажите имя роли (латиница, цифры, «-», «_»)' }
+    return
+  }
+  const ok = await rbac.createRole({ name, description: newRoleDesc.value.trim() })
+  roleMsg.value = ok ? { ok: true, text: 'Роль создана' } : { ok: false, text: error.value ?? 'Не удалось создать роль' }
+  if (ok) {
+    newRoleName.value = ''
+    newRoleDesc.value = ''
+  }
+}
+
+async function onUpdateRoleDesc(roleName: string) {
+  const desc = window.prompt('Новое описание роли', rbac.roles.find((r) => r.name === roleName)?.description ?? '')
+  if (desc == null) return
+  const ok = await rbac.updateRole(roleName, desc.trim())
+  roleMsg.value = ok ? { ok: true, text: 'Описание обновлено' } : { ok: false, text: 'Не удалось обновить описание' }
+}
+
+function onDeleteRole(roleName: string) {
+  if (roleName === 'admin') return
+  ask(
+    'Удалить роль «' + roleName + '»? Назначенные пользователи сохранятся, но потеряют права этой роли; правила роли будут удалены.',
+    () => {
+      void (async () => {
+        const ok = await rbac.deleteRole(roleName)
+        roleMsg.value = ok ? null : { ok: false, text: 'Не удалось удалить роль' }
+      })()
+    },
+    'Удалить роль',
+  )
+}
+
 function onReset() {
   ask('Вернуть все права и маршрутные проверки к значениям по умолчанию?', () => {
     void (async () => {
@@ -319,6 +360,32 @@ onMounted(() => {
             </p>
           </div>
         </template>
+
+        <h3 class="pm-section-title">Роли</h3>
+        <p class="pm-hint">
+          Каталог ролей: создание даёт право назначать роль пользователям; удаление снимает
+          правила роли и права назначенных пользователей (роль «admin» защищена инвариантом).
+        </p>
+        <div class="pm-roles-editor">
+          <div class="pm-role-create">
+            <input v-model="newRoleName" class="pm-input" maxlength="32" placeholder="имя роли, напр. auditor" />
+            <input v-model="newRoleDesc" class="pm-input" maxlength="80" placeholder="описание" />
+            <button type="button" class="pm-btn primary" @click="onCreateRole">Создать роль</button>
+          </div>
+          <p v-if="roleMsg" class="pm-save-msg" :class="{ er: !roleMsg.ok }">{{ roleMsg.text }}</p>
+          <div class="pm-role-list">
+            <div v-for="r in roles" :key="r.name" class="pm-role-editable">
+              <div class="pm-role-editable-main">
+                <span class="pm-role-code">{{ r.name }}</span>
+                <span class="pm-role-editable-desc">{{ r.description || '—' }}</span>
+              </div>
+              <div class="pm-role-editable-actions">
+                <button type="button" class="pm-btn" @click="onUpdateRoleDesc(r.name ?? '')">Описание</button>
+                <button type="button" class="pm-btn danger" :disabled="r.name === 'admin'" @click="onDeleteRole(r.name ?? '')" title="админ — инвариант в коде">Удалить</button>
+              </div>
+            </div>
+          </div>
+        </div>
 
         <!-- Служебное -->
         <details class="pm-inspect">
@@ -607,4 +674,13 @@ onMounted(() => {
 .pm-save-msg.er {
   color: #c0392b;
 }
+.pm-section-title { font-size: 18px; font-weight: 700; color: #1a3a6b; margin: 18px 0 8px; }
+.pm-roles-editor { margin-bottom: 14px; }
+.pm-role-create { display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+.pm-input { font-size: 13px; padding: 6px 10px; border: 1px solid #cdd5e1; border-radius: 6px; flex: 1; min-width: 180px; }
+.pm-role-list { display: flex; flex-direction: column; gap: 6px; }
+.pm-role-editable { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px; background: #fff; border: 1px solid #eef1f6; border-radius: 8px; }
+.pm-role-editable-main { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.pm-role-editable-desc { color: #666; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pm-role-editable-actions { display: flex; gap: 6px; flex-shrink: 0; }
 </style>

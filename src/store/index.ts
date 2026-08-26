@@ -2298,6 +2298,41 @@ export const useRbacStore = defineStore('rbac', () => {
     }
   }
 
+  /** Создаёт (или оживляет) роль и обновляет локальный каталог. */
+  async function createRole(input: { name: string; description?: string }): Promise<boolean> {
+    try {
+      const resp = await new RBACApi(apiConfig()).rbacRolesPost({ name: input.name, description: input.description ?? '' })
+      if (resp.data?.data) {
+        roles.value = [...roles.value.filter((r) => r.name !== resp.data?.data?.name), resp.data.data]
+      }
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  /** Обновляет описание роли. */
+  async function updateRole(name: string, description: string): Promise<boolean> {
+    try {
+      await new RBACApi(apiConfig()).rbacRolesNamePut(name, { description })
+      roles.value = roles.value.map((r) => (r.name === name ? { ...r, description } : r))
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  /** Мягко удаляет роль (и её правила) и убирает из локального каталога. */
+  async function deleteRole(name: string): Promise<boolean> {
+    try {
+      await new RBACApi(apiConfig()).rbacRolesNameDelete(name)
+      roles.value = roles.value.filter((r) => r.name !== name)
+      return true
+    } catch {
+      return false
+    }
+  }
+
   /** Сбрасывает правила и маршрутные проверки к дефолтам бэкенда. */
   async function resetRbac(): Promise<boolean> {
     try {
@@ -2321,6 +2356,9 @@ export const useRbacStore = defineStore('rbac', () => {
     error,
     loadRbac,
     ensureRoles,
+    createRole,
+    updateRole,
+    deleteRole,
     myPermissions,
     permsLoaded,
     can,

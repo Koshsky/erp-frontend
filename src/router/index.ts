@@ -147,23 +147,22 @@ router.beforeEach(async (to) => {
   // Действия/страницы показываем по правам из матрицы, а не по ролям.
   // Бизнес-страницы — по праву view; админ-разделы — временный fallback
   // на роль (TODO: виртуальные ресурсы-разделы).
-  const pagePerm: Record<string, [string, string] | 'admin'> = {
+  const pagePerm: Record<string, [string, string]> = {
     timesheet: ['worker', 'view'],
     employees: ['worker', 'view'],
     projects: ['project', 'view'],
     processes: ['process', 'view'],
     planner: ['task', 'view'],
     resources: ['resource', 'view'],
-    statuses: 'admin',
-    users: 'admin',
-    structure: 'admin',
-    'auto-create': 'admin',
-    permissions: 'admin',
+    statuses: ['state_admin', 'view'],
+    users: ['user_admin', 'view'],
+    structure: ['org_structure', 'view'],
+    'auto-create': ['rbac_config', 'view'],
+    permissions: ['rbac_config', 'view'],
   }
   const needed = pagePerm[to.name as string]
-  if (needed && to.meta.requiresAuth) {
-    const ok = needed === 'admin' ? auth.user?.role === 'admin' : rbac.can(needed[0], needed[1])
-    if (!ok) return { name: 'dashboard' }
+  if (needed && to.meta.requiresAuth && !rbac.can(needed[0], needed[1])) {
+    return { name: 'dashboard' }
   }
 
   // Пользователь без прав ни на одну бизнес-страницу — только профиль
