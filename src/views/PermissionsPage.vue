@@ -1,50 +1,25 @@
 <script setup lang="ts">
 /**
- * Права доступа — редактор матрицы ролей.
- * Источник истины — бэкенд (/api/v1/rbac/*): матрица грузится с сервера,
- * правки пишутся сразу (upsert правил; «нет доступа» = мягкое удаление).
- * Операции online-only (админ-страница, outbox не используется).
+ * Права доступа — роль-центричный редактор.
+ * Слева — роли, справа — возможности выбранной роли по разделам.
+ * Зоны переведены в человеческий язык в контексте ресурса
+ * («в своих процессах», «в своих проектах», «только свои», «все»).
+ * Источник истины — матрица на бэкенде (/api/v1/rbac/*), правки
+ * применяются сразу (upsert; «нет доступа» = мягкое удаление).
  */
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { ConfirmDialog } from '../components/common'
 import { useRbacStore } from '../store'
 import { useConfirm } from '../composables/useConfirm'
 
 const rbac = useRbacStore()
-const { roles, rules, matrix, routePolicies, loading, error } = storeToRefs(rbac)
+const { roles, rules, matrix, routePolicies, loading, error, saving } = storeToRefs(rbac)
 
-/** Коды ресурсов и действий в порядке отображения (зеркалит кодеки бэкенда). */
-const RESOURCE_ORDER = [
-  'project',
-  'process',
-  'task',
-  'milestone',
-  'assignment',
-  'comment',
-  'state',
-  'resource',
-  'worker',
-  'user_catalog',
-  'rbac_config',
-] as const
+/** Выбранная роль (по умолчанию — первая из каталога, не admin). */
+const selected = ref('')
 
-const RESOURCE_LABELS: Record<string, string> = {
-  project: 'Проекты',
-  process: 'Процессы',
-  task: 'Задачи',
-  milestone: 'Вехи',
-  assignment: 'Назначения ресурсов',
-  comment: 'Комментарии к задачам',
-  state: 'Статусы',
-  resource: 'Ресурсы табеля',
-  worker: 'Сотрудники',
-  user_catalog: 'Каталог пользователей (пикеры)',
-  rbac_config: 'Администрирование (RBAC / автосоздание)',
-}
-
-const ACTION_ORDER = ['view', 'create', 'update', 'delete'] as const
-
+/** Коды ресурсов и действий (зеркалит кодеки бэкенда). */
 const ACTION_LABELS: Record<string, string> = {
   view: 'Просмотр',
   create: 'Создание',
@@ -52,38 +27,89 @@ const ACTION_LABELS: Record<string, string> = {
   delete: 'Удаление',
 }
 
-/** Зоны доступа: заглушка «нет доступа» не хранится (отсутствие строки = нет). */
-const SCOPE_LABELS: Record<string, string> = {
-  all: 'все',
-  own: 'свои',
-  parent: 'родитель',
-  ancestor: 'предок',
-  none: 'нет доступа',
+// Ресурс → человекопонятное имя (родительный падеж для фраз «Просмотр …»).
+const RESOURCE_LABELS: Record<string, string> = {
+  project: 'проектов',
+  process: 'процессов',
+  task: 'задач',
+  milestone: 'вех',
+  assignment: 'назначений ресурсов',
+  state: 'статусов',
+  resource: 'ресурсов табеля',
+  worker: 'сотрудников',
+  user_catalog: 'каталога пользователей',
+  rbac_config: 'настроек администрирования',
 }
 
 /**
- * Применимость зон по ресурсу — зеркало policies.ScopeApplicable на бэкенде
- * (backend/policies/policies.go). Дублируется для UX: недоступные варианты
- * не показываем в селекте; бэкенд всё равно валидирует (400 на записи).
+ * Доступные зоны с человеческими подписями в контексте ресурса.
+ * Набор зон — зеркало policies.ScopeApplicable на бэкенде; сами формулировки
+ * объясняют владельца («в своих процессах» = владелец процесса и т.п.).
  */
-const OWN_APPLICABLE = ['project', 'process', 'resource', 'worker']
-const PARENT_APPLICABLE = ['process', 'task', 'milestone', 'assignment']
-const ANCESTOR_APPLICABLE = ['task', 'milestone', 'assignment']
-
-function applicableScopes(resource: string): string[] {
-  const out = ['none', 'all']
-  if (OWN_APPLICABLE.includes(resource)) out.push('own')
-  if (PARENT_APPLICABLE.includes(resource)) out.push('parent')
-  if (ANCESTOR_APPLICABLE.includes(resource)) out.push('ancestor')
-  return out
+const SCOPE_OPTIONS: Record<string, { value: string; label: string }[]> = {
+  project: [
+    { value: 'none', label: 'Нет доступа' },
+    { value: 'own', label: 'Только свои' },
+    { value: 'all', label: 'Все' },
+  ],
+  process: [
+    { value: 'none', label: 'Нет доступа' },
+    { value: 'parent', label: 'В своих проектах' },
+    { value: 'own', label: 'Свои' },
+    { value: 'all', label: 'Все' },
+  ],
+  task: [
+    { value: 'none', label: 'Нет доступа' },
+    { value: 'parent', label: 'В своих процессах' },
+    { value: 'ancestor', label: 'В своих проектах' },
+    { value: 'all', label: 'Все' },
+  ],
+  milestone: [
+    { value: 'none', label: 'Нет доступа' },
+    { value: 'parent', label: 'В своих процессах' },
+    { value: 'ancestor', label: 'В своих проектах' },
+    { value: 'all', label: 'Все' },
+  ],
+  assignment: [
+    { value: 'none', label: 'Нет доступа' },
+    { value: 'parent', label: 'В своих процессах' },
+    { value: 'ancestor', label: 'В своих проектах' },
+    { value: 'all', label: 'Все' },
+  ],
+  state: [
+    { value: 'none', label: 'Нет доступа' },
+    { value: 'all', label: 'Всё' },
+  ],
+  resource: [
+    { value: 'none', label: 'Нет доступа' },
+    { value: 'own', label: 'Только свои' },
+    { value: 'all', label: 'Все' },
+  ],
+  worker: [
+    { value: 'none', label: 'Нет доступа' },
+    { value: 'own', label: 'Только свои (подчинённые)' },
+    { value: 'all', label: 'Все' },
+  ],
+  user_catalog: [
+    { value: 'none', label: 'Нет доступа' },
+    { value: 'all', label: 'Доступен' },
+  ],
+  rbac_config: [
+    { value: 'none', label: 'Нет доступа' },
+    { value: 'all', label: 'Доступен' },
+  ],
 }
 
-/** Ключ ячейки: роль | ресурс | действие. */
-function cellKey(role: string, resource: string, action: string): string {
-  return `${role}|${resource}|${action}`
-}
+/** Разделы страницы. */
+const GROUPS = [
+  { key: 'planning', title: 'Планирование', resources: ['project', 'process', 'task', 'milestone', 'assignment'] },
+  { key: 'timesheet', title: 'Табель', resources: ['state', 'resource', 'worker'] },
+  { key: 'advanced', title: 'Дополнительные ресурсы', resources: ['user_catalog', 'rbac_config'] },
+] as const
 
-/** Эффективная зона ячейки из матрицы (''/не найдено = нет доступа). */
+const ACTIONS = ['view', 'create', 'update', 'delete'] as const
+
+/** Эффективная зона ячейки из матрицы (нет правила = «нет доступа»). */
 const effective = computed<Record<string, string>>(() => {
   const map: Record<string, string> = {}
   for (const cell of matrix.value) {
@@ -93,7 +119,7 @@ const effective = computed<Record<string, string>>(() => {
   return map
 })
 
-/** id правила для удаления (зона «нет доступа»). */
+/** id правила для удаления. */
 const ruleIdByCell = computed<Record<string, number>>(() => {
   const map: Record<string, number> = {}
   for (const rule of rules.value) {
@@ -103,29 +129,49 @@ const ruleIdByCell = computed<Record<string, number>>(() => {
   return map
 })
 
-/** Колонки ролей: admin (инвариант, не редактируется) + роли из каталога. */
-const roleColumns = computed<{ key: string; label: string }[]>(() => {
-  const cols: { key: string; label: string }[] = [{ key: 'admin', label: 'Админ' }]
+function cellKey(role: string, resource: string, action: string): string {
+  return `${role}|${resource}|${action}`
+}
+
+function cellValue(role: string, resource: string, action: string): string {
+  return staged[cellKey(role, resource, action)] ?? effective.value[cellKey(role, resource, action)] ?? 'none'
+}
+
+/** Человеческая подпись зоны в контексте ресурса. */
+function scopeLabel(resource: string, scope: string): string {
+  const opt = SCOPE_OPTIONS[resource]?.find((o) => o.value === scope)
+  return opt?.label ?? 'Нет доступа'
+}
+
+/** Список ролей: admin + каталог (без дублей). */
+const roleList = computed(() => {
+  const names = ['admin']
   for (const r of roles.value) {
-    if (r.name === 'admin') continue
-    cols.push({ key: r.name ?? '', label: r.name ?? '' })
+    if (r.name && !names.includes(r.name)) names.push(r.name)
   }
-  return cols
+  return names
 })
 
-/** Изменённые ячейки (staged кеширует выбор до сохранения). */
+const isAdminSelected = computed(() => selected.value === 'admin')
+
+/** Изменённые ячейки. */
 const staged = reactive<Record<string, string>>({})
 const dirtyKeys = computed<string[]>(() =>
   Object.keys(staged).filter((key) => staged[key] !== (effective.value[key] ?? 'none')),
 )
 
-function cellValue(role: string, resource: string, action: string): string {
-  const key = cellKey(role, resource, action)
-  return staged[key] ?? effective.value[key] ?? 'none'
-}
+/** Описания изменений для панели сохранения. */
+const dirtyChanges = computed(() =>
+  dirtyKeys.value.map((key) => {
+    const [role, resource, action] = key.split('|')
+    const from = effective.value[key] ?? 'none'
+    const to = staged[key]
+    return `${ACTION_LABELS[action] ?? action} ${RESOURCE_LABELS[resource] ?? resource}: ${scopeLabel(resource, to)}${from !== 'none' ? ` (было: ${scopeLabel(resource, from)})` : ''}`
+  }),
+)
 
-function onCellChange(role: string, resource: string, action: string, value: string) {
-  staged[cellKey(role, resource, action)] = value
+function onCellChange(resource: string, action: string, value: string) {
+  staged[cellKey(selected.value, resource, action)] = value
 }
 
 interface SaveMsg {
@@ -134,11 +180,10 @@ interface SaveMsg {
 }
 const saveMsg = ref<SaveMsg | null>(null)
 
-/** Сохраняет изменённые ячейки: 'все/свои/родитель/предок' → upsert, 'нет' → delete. */
 async function save() {
   const keys = dirtyKeys.value
-  if (!keys.length || rbac.saving) return
-  rbac.saving = true
+  if (!keys.length || saving.value) return
+  saving.value = true
   saveMsg.value = null
   const failures: string[] = []
   for (const key of keys) {
@@ -152,11 +197,11 @@ async function save() {
       ok = await rbac.upsertRule({ role, resource, action, scope })
     }
     if (!ok) {
-      failures.push(`${role} · ${RESOURCE_LABELS[resource] ?? resource} · ${ACTION_LABELS[action] ?? action}`)
+      failures.push(`${role} · ${ACTION_LABELS[action] ?? action} ${RESOURCE_LABELS[resource] ?? resource}`)
     }
   }
   await rbac.reloadRules()
-  rbac.saving = false
+  saving.value = false
   if (failures.length) {
     saveMsg.value = { ok: false, text: `Не сохранилось: ${failures.join('; ')}` }
     return
@@ -165,16 +210,15 @@ async function save() {
   saveMsg.value = { ok: true, text: 'Права обновлены и применены' }
 }
 
-/** Отмена всех несохранённых изменений. */
 function cancelDirty() {
   for (const key of dirtyKeys.value) delete staged[key]
   saveMsg.value = null
 }
 
-// Сброс к дефолтам бэкенда.
+// Сброс к дефолтам.
 const { confirm: confirmDialog, ask, proceed, cancel } = useConfirm()
 function onReset() {
-  ask('Вернуть все правила и маршрутные проверки к значениям по умолчанию?', () => {
+  ask('Вернуть все права и маршрутные проверки к значениям по умолчанию?', () => {
     void (async () => {
       saveMsg.value = (await rbac.resetRbac())
         ? { ok: true, text: 'Права сброшены к значениям по умолчанию' }
@@ -183,37 +227,11 @@ function onReset() {
   }, 'Сбросить')
 }
 
-/** Генерация сводки по ролям из живой матрицы (всегда актуальна после правок). */
-interface RoleSummaryEntry {
-  resource: string
-  action: string
-  scope: string
-}
-interface RoleSummary {
-  key: string
-  label: string
-  entries: RoleSummaryEntry[]
-}
-const roleSummaries = computed<RoleSummary[]>(() => {
-  const byRole = new Map<string, RoleSummaryEntry[]>()
-  for (const cell of matrix.value) {
-    if (!cell.role || !cell.resource || !cell.action || !cell.scope) continue
-    const list = byRole.get(cell.role) ?? []
-    list.push({ resource: cell.resource, action: cell.action, scope: cell.scope })
-    byRole.set(cell.role, list)
+/** Выбор роли по умолчанию после загрузки каталога. */
+watch(roleList, (list) => {
+  if ((!selected.value || !list.includes(selected.value)) && list.length) {
+    selected.value = list[0] === 'admin' ? (list[1] ?? 'admin') : list[0]
   }
-  const sortEntries = (a: RoleSummaryEntry, b: RoleSummaryEntry) =>
-    RESOURCE_ORDER.indexOf(a.resource as (typeof RESOURCE_ORDER)[number]) -
-      RESOURCE_ORDER.indexOf(b.resource as (typeof RESOURCE_ORDER)[number]) ||
-    ACTION_ORDER.indexOf(a.action as (typeof ACTION_ORDER)[number]) -
-      ACTION_ORDER.indexOf(b.action as (typeof ACTION_ORDER)[number])
-
-  const out: RoleSummary[] = [{ key: 'admin', label: 'Админ', entries: [] }]
-  for (const r of roles.value) {
-    if (r.name === 'admin') continue
-    out.push({ key: r.name ?? '', label: r.name ?? '', entries: (byRole.get(r.name ?? '') ?? []).sort(sortEntries) })
-  }
-  return out
 })
 
 onMounted(() => {
@@ -228,8 +246,7 @@ onMounted(() => {
     <div class="pm-head">
       <h2 class="pm-title">Права доступа</h2>
       <p class="pm-note">
-        Матрица хранится на бэкенде и применяется ко всем операциям, включая листинги
-        (зоны «все / свои / родитель / предок»). Изменения применяются сразу; на других
+        Выберите роль — ниже показано, что она умеет. Правки применяются сразу; на других
         сессиях — в пределах TTL (до 30 секунд).
       </p>
     </div>
@@ -237,89 +254,82 @@ onMounted(() => {
     <p v-if="loading && !rules.length" class="pm-load">Загрузка...</p>
     <p v-if="error && !rules.length" class="pm-load er">{{ error }}</p>
 
-    <div v-if="rules.length" class="pm-body">
-      <div class="pm-toolbar">
-        <span v-if="dirtyKeys.length" class="pm-dirty">Изменено ячеек: {{ dirtyKeys.length }}</span>
-        <button type="button" class="pm-btn primary" :disabled="!dirtyKeys.length || rbac.saving" @click="save">
-          {{ rbac.saving ? 'Сохранение...' : 'Сохранить изменения' }}
+    <div v-if="rules.length && roleList.length" class="pm-layout">
+      <!-- Роли -->
+      <nav class="pm-roles">
+        <button
+          v-for="role in roleList"
+          :key="role"
+          type="button"
+          class="pm-role-btn"
+          :class="{ active: role === selected }"
+          @click="selected = role"
+        >
+          <span class="pm-role-code">{{ role }}</span>
+          <span class="pm-role-name">
+            {{ role === 'admin' ? 'Администратор' : role }}
+          </span>
+          <span v-if="role === 'admin'" class="pm-role-lock" title="Полный доступ — инвариант в коде, не редактируется">заблокировано</span>
         </button>
-        <button type="button" class="pm-btn" :disabled="!dirtyKeys.length || rbac.saving" @click="cancelDirty">Отменить</button>
-        <span class="pm-spacer" />
-        <button type="button" class="pm-btn danger" :disabled="rbac.saving" @click="onReset">Сбросить к дефолтам</button>
-      </div>
-      <p v-if="saveMsg" class="pm-save-msg" :class="{ er: !saveMsg.ok }">{{ saveMsg.text }}</p>
+      </nav>
 
-      <h3 class="pm-section-title">Матрица операций</h3>
-      <p class="pm-hint">
-        «Админ» — полный доступ (инвариант в коде) и не редактируется. Виртуальные ресурсы:
-        «Каталог пользователей» — доступ к пикерам имён, «Администрирование» — к разделам RBAC/автосоздания.
-      </p>
-      <div v-for="resource in RESOURCE_ORDER" :key="resource" class="pm-block">
-        <h4 class="pm-entity">{{ RESOURCE_LABELS[resource] }}</h4>
-        <div class="table" :style="{ gridTemplateColumns: `220px repeat(${roleColumns.length}, 1fr)` }">
-          <div class="tr th">
-            <div class="pm-action">Действие</div>
-            <div v-for="col in roleColumns" :key="col.key" class="pm-role" :title="col.label">{{ col.label }}</div>
-          </div>
-          <div v-for="action in ACTION_ORDER" :key="action" class="tr">
-            <div class="pm-action">{{ ACTION_LABELS[action] }}</div>
-            <div v-for="col in roleColumns" :key="col.key" class="pm-cell">
-              <span v-if="col.key === 'admin'" class="pm-fixed">все</span>
-              <select
-                v-else
-                class="pm-select"
-                :value="cellValue(col.key, resource, action)"
-                :class="{ dirty: staged[cellKey(col.key, resource, action)] && staged[cellKey(col.key, resource, action)] !== (effective[cellKey(col.key, resource, action)] ?? 'none') }"
-                @change="onCellChange(col.key, resource, action, ($event.target as HTMLSelectElement).value)"
-              >
-                <option v-for="s in applicableScopes(resource)" :key="s" :value="s">{{ SCOPE_LABELS[s] }}</option>
-              </select>
+      <!-- Редактор выбранной роли -->
+      <div class="pm-editor">
+        <div v-if="isAdminSelected" class="pm-admin-note">
+          Администратор имеет полный доступ ко всем операциям и листингам — это защитный
+          инвариант в коде, значения не редактируются.
+        </div>
+
+        <template v-if="!isAdminSelected">
+          <div v-for="group in GROUPS" :key="group.key" class="pm-group">
+            <h3 class="pm-group-title">{{ group.title }}</h3>
+            <div v-for="resource in group.resources" :key="resource" class="pm-block">
+              <h4 class="pm-entity">Просмотр — удаление · {{ RESOURCE_LABELS[resource] }}</h4>
+              <div v-for="action in ACTIONS" :key="action" class="pm-row" :class="{ dirty: staged[cellKey(selected, resource, action)] }">
+                <div class="pm-row-label">{{ ACTION_LABELS[action] }} {{ RESOURCE_LABELS[resource] }}</div>
+                <select
+                  class="pm-select"
+                  :value="cellValue(selected, resource, action)"
+                  @change="onCellChange(resource, action, ($event.target as HTMLSelectElement).value)"
+                >
+                  <option v-for="opt in SCOPE_OPTIONS[resource]" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+                </select>
+              </div>
             </div>
+            <p v-if="group.key === 'planning'" class="pm-comment">
+              Комментарии к задачам: права определяются правами на задачу — видят и добавляют их те же, кому видна задача.
+            </p>
           </div>
-        </div>
-      </div>
+        </template>
 
-      <details class="pm-routes">
-        <summary class="pm-routes-summary">
-          Маршрутные проверки (read-only: name → kind и параметры)
-        </summary>
-        <div class="table">
-          <div class="tr th" :style="{ gridTemplateColumns: '200px 110px 1fr' }">
-            <div>Имя</div>
-            <div>Kind</div>
-            <div>Параметры</div>
+        <!-- Служебное -->
+        <details class="pm-inspect">
+          <summary class="pm-inspect-summary">Служебное: маршрутные проверки (name → kind и параметры)</summary>
+          <div v-for="p in routePolicies" :key="p.name" class="pm-route">
+            <code class="pm-route-name">{{ p.name }}</code>
+            <span class="pm-route-kind">{{ p.kind }}</span>
+            <span class="pm-route-params">{{ JSON.stringify(p.params ?? {}) }}</span>
           </div>
-          <div v-for="p in routePolicies" :key="p.name" class="tr" :style="{ gridTemplateColumns: '200px 110px 1fr' }">
-            <div class="pm-route-name">{{ p.name }}</div>
-            <div class="pm-route-kind">{{ p.kind }}</div>
-            <div class="pm-route-params">{{ JSON.stringify(p.params ?? {}) }}</div>
-          </div>
-        </div>
-      </details>
-
-      <h3 class="pm-section-title">Сводка по ролям</h3>
-      <p class="pm-hint">Сформирована из текущей матрицы — после правок обновляется автоматически.</p>
-      <div class="pm-roles">
-        <div v-for="role in roleSummaries" :key="role.key" class="pm-role-card">
-          <div class="pm-role-head">
-            <span class="pm-role-name">{{ role.label }}</span>
-            <span class="pm-role-key">{{ role.key }}</span>
-          </div>
-          <p v-if="role.key === 'admin'" class="pm-role-desc">
-            Полный доступ ко всем операциям и листингам — защитный инвариант в коде, не редактируется.
-          </p>
-          <ul v-else class="pm-role-list">
-            <li v-for="e in role.entries" :key="`${e.resource}-${e.action}`" class="pm-role-item">
-              <span class="pm-role-item-title">{{ RESOURCE_LABELS[e.resource] ?? e.resource }} — {{ ACTION_LABELS[e.action] ?? e.action }}</span>
-              <span class="pm-role-item-desc">{{ SCOPE_LABELS[e.scope] ?? e.scope }}</span>
-            </li>
-            <li v-if="!role.entries.length" class="pm-role-item">
-              <span class="pm-role-item-desc">нет доступа</span>
-            </li>
-          </ul>
-        </div>
+        </details>
       </div>
     </div>
+
+    <!-- Панель сохранения -->
+    <div v-if="dirtyKeys.length" class="pm-savebar">
+      <div class="pm-savebar-info">
+        <strong>Изменения ({{ dirtyKeys.length }}):</strong>
+        <ul>
+          <li v-for="c in dirtyChanges" :key="c">{{ c }}</li>
+        </ul>
+      </div>
+      <div class="pm-savebar-actions">
+        <button type="button" class="pm-btn primary" :disabled="saving" @click="save">{{ saving ? 'Сохранение...' : 'Сохранить' }}</button>
+        <button type="button" class="pm-btn" :disabled="saving" @click="cancelDirty">Отменить</button>
+        <button type="button" class="pm-btn danger" :disabled="saving" @click="onReset">Сбросить всё к дефолтам</button>
+      </div>
+    </div>
+
+    <p v-if="saveMsg && !dirtyKeys.length" class="pm-save-msg" :class="{ er: !saveMsg.ok }">{{ saveMsg.text }}</p>
 
     <ConfirmDialog
       :open="!!confirmDialog"
@@ -355,27 +365,198 @@ onMounted(() => {
 .pm-load.er {
   color: #c0392b;
 }
-.pm-body {
+.pm-layout {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  gap: 20px;
+  align-items: start;
+}
+.pm-roles {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
+  position: sticky;
+  top: 16px;
 }
-.pm-toolbar {
+.pm-role-btn {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-bottom: 6px;
+  text-align: left;
+  padding: 11px 14px;
+  border: 1px solid #dfe4ec;
+  border-radius: 10px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 14px;
 }
-.pm-dirty {
-  font-size: 12.5px;
-  color: #8a6d1a;
-  background: #fdf6e3;
-  border: 1px solid #ead9a8;
+.pm-role-btn:hover {
+  border-color: #b7c3d6;
+}
+.pm-role-btn.active {
+  border-color: #1a3a6b;
+  background: #1a3a6b;
+  color: #fff;
+}
+.pm-role-btn.active .pm-role-code {
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+}
+.pm-role-code {
+  font-size: 11px;
+  font-weight: 700;
+  background: #eef2f8;
+  color: #1a3a6b;
   border-radius: 999px;
-  padding: 3px 12px;
+  padding: 2px 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  min-width: 42px;
+  text-align: center;
 }
-.pm-spacer {
+.pm-role-name {
+  font-weight: 600;
+}
+.pm-role-lock {
+  margin-left: auto;
+  font-size: 11px;
+  color: #999;
+  font-weight: 500;
+}
+.pm-editor {
+  min-width: 0;
+}
+.pm-admin-note {
+  background: #f2f5fa;
+  border: 1px solid #e0e6f0;
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-size: 13.5px;
+  color: #4a5a72;
+  line-height: 1.5;
+}
+.pm-group {
+  margin-bottom: 22px;
+}
+.pm-group-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #7a8699;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 0 0 10px;
+}
+.pm-block {
+  margin-bottom: 14px;
+}
+.pm-entity {
+  font-size: 12px;
+  font-weight: 600;
+  color: #8a96a8;
+  margin: 0 0 6px;
+}
+.pm-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 14px;
+  background: #fff;
+  border: 1px solid #eef1f6;
+  border-radius: 8px;
+  margin-bottom: 4px;
+  font-size: 14px;
+}
+.pm-row:hover {
+  border-color: #d4dce8;
+}
+.pm-row.dirty {
+  border-color: #e8b10a;
+  background: #fffbe6;
+}
+.pm-row-label {
+  color: #2c3e50;
+}
+.pm-select {
+  font-size: 13.5px;
+  padding: 5px 8px;
+  border: 1px solid #cdd5e1;
+  border-radius: 6px;
+  background: #fff;
+  color: #2c3e50;
+  cursor: pointer;
+  min-width: 210px;
+}
+.pm-comment {
+  font-size: 12.5px;
+  color: #78849a;
+  padding: 8px 0 8px 2px;
+}
+.pm-inspect {
+  margin-top: 18px;
+  border: 1px solid #e4e8ef;
+  border-radius: 10px;
+  background: #fbfcfe;
+  padding: 10px 14px;
+}
+.pm-inspect-summary {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1a3a6b;
+  cursor: pointer;
+}
+.pm-route {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  font-size: 12.5px;
+  padding: 4px 0;
+  border-top: 1px solid #eef1f6;
+  margin-top: 4px;
+}
+.pm-route-name {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  min-width: 190px;
+}
+.pm-route-kind {
+  color: #555;
+  min-width: 90px;
+}
+.pm-route-params {
+  color: #666;
+  word-break: break-all;
+}
+.pm-savebar {
+  position: sticky;
+  bottom: 12px;
+  margin-top: 18px;
+  background: #fff;
+  border: 1px solid #e8b10a;
+  border-radius: 12px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+  padding: 12px 16px;
+  display: flex;
+  gap: 18px;
+  align-items: flex-start;
+  z-index: 10;
+}
+.pm-savebar-info {
   flex: 1;
+  font-size: 13px;
+  color: #333;
+}
+.pm-savebar-info ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.pm-savebar-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-shrink: 0;
 }
 .pm-btn {
   font-size: 13px;
@@ -403,182 +584,9 @@ onMounted(() => {
 .pm-save-msg {
   font-size: 13px;
   color: #1d6b2f;
-  margin: 2px 0 8px;
+  margin: 12px 0;
 }
 .pm-save-msg.er {
   color: #c0392b;
-}
-.pm-section-title {
-  font-size: 18px;
-  font-weight: 700;
-  color: #1a3a6b;
-  margin: 18px 0 8px;
-}
-.pm-hint {
-  font-size: 12.5px;
-  color: #777;
-  margin: 0 0 10px;
-  max-width: 900px;
-  line-height: 1.5;
-}
-.pm-block {
-  margin-bottom: 18px;
-}
-.pm-entity {
-  font-size: 15px;
-  font-weight: 700;
-  color: #1a3a6b;
-  margin: 0 0 8px;
-}
-.table {
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.08);
-  overflow: hidden;
-  display: block;
-}
-.tr {
-  display: grid;
-  gap: 8px;
-  padding: 8px 16px;
-  border-bottom: 1px solid #f0f0f0;
-  font-size: 13.5px;
-  align-items: center;
-}
-.tr:last-child {
-  border-bottom: none;
-}
-.tr:not(.th):hover {
-  background: #f6f8fa;
-}
-.th {
-  background: #f8f9fa;
-  font-weight: 600;
-  color: #555;
-}
-.pm-action {
-  font-weight: 500;
-  color: #2c3e50;
-}
-.pm-role {
-  text-align: center;
-  color: #444;
-  font-size: 12.5px;
-}
-.pm-cell {
-  text-align: center;
-}
-.pm-fixed {
-  color: #999;
-  font-size: 13px;
-}
-.pm-select {
-  width: 100%;
-  max-width: 170px;
-  font-size: 13px;
-  padding: 4px 6px;
-  border: 1px solid #cdd5e1;
-  border-radius: 6px;
-  background: #fff;
-  color: #2c3e50;
-  cursor: pointer;
-}
-.pm-select.dirty {
-  border-color: #e8b10a;
-  background: #fffbe6;
-}
-.pm-routes {
-  margin: 10px 0 4px;
-  border: 1px solid #e4e8ef;
-  border-radius: 10px;
-  background: #fbfcfe;
-  padding: 10px 14px;
-}
-.pm-routes-summary {
-  font-size: 13.5px;
-  font-weight: 600;
-  color: #1a3a6b;
-  cursor: pointer;
-}
-.pm-route-name {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 12.5px;
-}
-.pm-route-kind {
-  font-size: 12.5px;
-  color: #555;
-}
-.pm-route-params {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 12px;
-  color: #666;
-  word-break: break-all;
-}
-.pm-roles {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-  gap: 16px;
-  margin-bottom: 32px;
-}
-.pm-role-card {
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.08);
-  padding: 16px 18px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.pm-role-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-.pm-role-name {
-  font-size: 16px;
-  font-weight: 700;
-  color: #2c3e50;
-}
-.pm-role-key {
-  font-size: 11px;
-  font-weight: 600;
-  color: #7a8699;
-  background: #f1f4f9;
-  border-radius: 999px;
-  padding: 2px 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.4px;
-}
-.pm-role-desc {
-  margin: 0;
-  font-size: 13px;
-  color: #555;
-  line-height: 1.45;
-}
-.pm-role-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.pm-role-item {
-  border-top: 1px solid #f0f0f0;
-  padding-top: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.pm-role-item-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: #1a3a6b;
-}
-.pm-role-item-desc {
-  font-size: 12.5px;
-  color: #666;
-  line-height: 1.4;
 }
 </style>
