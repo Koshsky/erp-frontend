@@ -54,27 +54,28 @@ const SCOPE_OPTIONS: Record<string, { value: string; label: string }[]> = {
   ],
   process: [
     { value: 'none', label: 'Нет доступа' },
+    { value: 'own', label: 'Только своё' },
     { value: 'parent', label: 'В своих проектах' },
-    { value: 'ancestor', label: 'Любой из владельцев вверх' },
-    { value: 'own', label: 'Свои' },
+    { value: 'ancestor', label: 'Свои и в своих проектах' },
     { value: 'all', label: 'Все' },
   ],
   task: [
     { value: 'none', label: 'Нет доступа' },
+    { value: 'own', label: 'Только своё' },
     { value: 'parent', label: 'В своих процессах' },
-    { value: 'ancestor', label: 'В своих процессах или проектах' },
+    { value: 'ancestor', label: 'Свои и в своих процессах/проектах' },
     { value: 'all', label: 'Все' },
   ],
   milestone: [
     { value: 'none', label: 'Нет доступа' },
     { value: 'parent', label: 'В своих процессах' },
-    { value: 'ancestor', label: 'В своих процессах или проектах' },
+    { value: 'ancestor', label: 'Свои и в своих процессах/проектах' },
     { value: 'all', label: 'Все' },
   ],
   assignment: [
     { value: 'none', label: 'Нет доступа' },
     { value: 'parent', label: 'В своих процессах' },
-    { value: 'ancestor', label: 'В своих процессах или проектах' },
+    { value: 'ancestor', label: 'Свои и в своих процессах/проектах' },
     { value: 'all', label: 'Все' },
   ],
   state: [
@@ -261,9 +262,10 @@ onMounted(() => {
       <h2 class="pm-title">Права доступа</h2>
       <p class="pm-note">
         Выберите роль — ниже показано, что она умеет. Правки применяются сразу; на других
-        сессиях — в пределах TTL (до 30 секунд). «Любой из владельцев вверх» — видно всё,
-        чем владеет сам пользователь или кто-то выше по цепочке (для задач — владелец
-        процесса или проекта).
+        сессиях — в пределах TTL (до 30 секунд). «Только своё» — записи, владельцем
+        которых является сам пользователь; «Свои и в своих…» — владелец записи или
+        любой из вышестоящих по цепочке (для задач — владелец задачи, процесса или
+        проекта).
       </p>
     </div>
 
