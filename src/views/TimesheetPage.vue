@@ -8,7 +8,7 @@ import { TimesheetGrid, stateBackground } from '../components/timesheet'
 import type { AssignPayload, ClearPayload } from '../components/timesheet'
 import { toDate } from '../components/planner/calendar'
 import type { PlanningUnit } from '../components/planner/calendar'
-import { useAuthStore, useTimesheetStore } from '../store'
+import { useAuthStore, useRbacStore, useTimesheetStore } from '../store'
 
 const ts = useTimesheetStore()
 const auth = useAuthStore()
@@ -17,7 +17,9 @@ const { timesheetRows, states, loading, busy, error } = storeToRefs(ts)
 const unit = ref<PlanningUnit>('day')
 const origin = ref(toDate(new Date()))
 
-const isAdmin = computed(() => auth.user?.role === 'admin')
+const rbac = useRbacStore()
+/** «Все сотрудники» — когда видимость работников не ограничена (scope all). */
+const seesAllEmployees = computed(() => rbac.perm('worker', 'view') === 'all')
 
 onMounted(async () => {
   await ts.loadStates()
@@ -56,7 +58,7 @@ async function onClear(p: ClearPayload) {
           {{ st.name }}
         </span>
       </div>
-      <span v-if="isAdmin" class="tp-note">Все сотрудники</span>
+      <span v-if="seesAllEmployees" class="tp-note">Все сотрудники</span>
     </div>
 
     <PlannerStates :loading="loading" :error="null" :has-data="timesheetRows.length > 0">

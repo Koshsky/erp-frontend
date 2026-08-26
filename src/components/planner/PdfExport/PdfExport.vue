@@ -11,7 +11,6 @@ const props = withDefaults(defineProps<PdfExportProps>(), {
   unit: 'day',
   pageTitle: 'Диаграмма задач',
   ownerId: null,
-  role: null,
   scope: 'tasks',
   rowHeight: null,
   periodFrom: '',
@@ -108,8 +107,14 @@ const projects = computed(() => {
 const nameFilterLabel = 'Процессы'
 
 /** Скоуп-зависимая конфигурация модалки печати.
- *  Фильтр «Процессы» скрыт на проектах и у vp (ему достаточно «Только мои процессы»). */
-const showNameFilter = computed(() => props.scope !== 'projects' && props.role !== 'vp')
+ *  Печать не зависит от RBAC-прав: опции выводятся из данных.
+ *  «Только мои процессы» актуален, когда среди печатаемых есть чужие
+ *  процессы (owner_id != текущий пользователь); при включённом «только
+ *  мои» фильтр по именам не нужен. */
+const hasForeignProcesses = computed(() =>
+  (props.groups ?? []).some((g) => g.owner_id != null && g.owner_id !== props.ownerId),
+)
+const showNameFilter = computed(() => props.scope !== 'projects' && !settings.value.onlyMine)
 const showMilestonesOption = computed(() => props.scope === 'tasks')
 const showResourcesOption = computed(() => props.scope === 'tasks')
 /** Уровень фильтрации имён/проекта: задачи — группы, процессы/проекты — строки */
@@ -518,7 +523,7 @@ onBeforeUnmount(() => {
                 </div>
               </div>
 
-              <label v-if="role === 'vp'" class="pe-field">
+              <label v-if="hasForeignProcesses" class="pe-field">
                 <span class="pe-toggle">
                   <input v-model="settings.onlyMine" type="checkbox" class="pe-checkbox" />
                   <span class="pe-label">Только мои процессы</span>

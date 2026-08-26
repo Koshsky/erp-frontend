@@ -444,7 +444,7 @@ const taskGroups = computed<PdfGanttGroup[]>(() =>
         :origin="origin"
         :unit="unit"
         :owner-id="userId"
-        :role="role"
+
         scope="tasks"
         :period-from="viewRange.from"
         :period-to="viewRange.to"
