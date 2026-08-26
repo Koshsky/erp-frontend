@@ -143,6 +143,19 @@ function scopeLabel(resource: string, scope: string): string {
   return opt?.label ?? 'Нет доступа'
 }
 
+/** Человеческие имена известных ролей (каталог из БД держит описания на английском). */
+const ROLE_TITLES: Record<string, string> = {
+  admin: 'Администратор',
+  dp: 'Директор проектов',
+  rp: 'Руководитель проекта',
+  vp: 'Владелец процесса',
+  worker: 'Работник',
+}
+
+function roleTitle(code: string): string {
+  return ROLE_TITLES[code] ?? code
+}
+
 /** Список ролей: admin + каталог (без дублей). */
 const roleList = computed(() => {
   const names = ['admin']
@@ -267,7 +280,7 @@ onMounted(() => {
         >
           <span class="pm-role-code">{{ role }}</span>
           <span class="pm-role-name">
-            {{ role === 'admin' ? 'Администратор' : role }}
+            {{ roleTitle(role) }}
           </span>
           <span v-if="role === 'admin'" class="pm-role-lock" title="Полный доступ — инвариант в коде, не редактируется">заблокировано</span>
         </button>
