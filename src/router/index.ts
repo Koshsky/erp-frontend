@@ -170,6 +170,7 @@ router.beforeEach(async (to) => {
   // Пользователь без прав ни на одну бизнес-страницу — только профиль
   // (сотрудник без назначенных прав; админ и роли с правами ходят дальше).
   if (
+    to.meta.requiresAuth &&
     to.name !== 'profile' &&
     to.name !== 'dashboard' &&
     to.name !== 'sync' &&
