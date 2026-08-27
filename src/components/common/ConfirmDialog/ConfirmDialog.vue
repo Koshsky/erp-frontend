@@ -50,7 +50,8 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
 .cd-overlay {
   position: fixed;
   inset: 0;
-  z-index: 40000;
+  /* Подтверждение — поверх всех оверлеев страницы (модалки, меню) */
+  z-index: 50000;
   display: flex;
   align-items: center;
   justify-content: center;

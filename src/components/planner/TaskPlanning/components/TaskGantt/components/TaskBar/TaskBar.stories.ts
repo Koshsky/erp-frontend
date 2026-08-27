@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/vue3-vite'
+import { expect } from 'vitest'
 import TaskBar from './TaskBar.vue'
 import { makeDemoTimeline } from '@/components/planner/plannerStoryHelpers'
 
@@ -70,4 +71,96 @@ export const StackedBadges: Story = {
       { resource_id: 4, assignment_id: 4, quantity: 3, code: 'С' },
     ],
   }, 'КО_505', 600),
+}
+
+/** У задачи есть комментарии — на баре значок-пузырь со счётчиком */
+export const WithComments: Story = {
+  render: withTask({
+    id: 1,
+    title: 'Монтаж конструкций',
+    start_date: iso(day(1, 6)),
+    end_date: iso(day(1, 18)),
+    resources: [],
+    comments_count: 5,
+  }),
+}
+
+/** Витрина тултипа задачи с логом комментариев (имя автора + дата + текст) */
+export const TooltipComments: Story = {
+  render: () => ({
+    components: { TaskBar },
+    data: () => ({
+      timeline: makeDemoTimeline(iso(day(1, 1)), 'day'),
+      task: {
+        id: 1,
+        title: 'Монтаж конструкций',
+        start_date: iso(day(1, 6)),
+        end_date: iso(day(1, 18)),
+        resources: [],
+        comments_count: 2,
+      },
+      projectCode: 'КО_505',
+      users: [
+        { id: 1, name: 'Иванов Иван', last_name: 'Иванов', first_name: 'Иван', username: 'ivanov', role: 'vp' },
+        { id: 2, name: 'Петров Пётр', last_name: 'Петров', first_name: 'Пётр', username: 'petrov', role: 'rp' },
+      ],
+      commentsByTask: {
+        1: [
+          { id: 1, task_id: 1, author_id: 1, content: 'Перенести сроки?', created_at: '2026-02-01T10:00:00Z' },
+          { id: 2, task_id: 1, author_id: 2, parent_id: 1, content: 'Нет, сроки фиксированы.', created_at: '2026-02-01T11:30:00Z' },
+        ],
+      },
+    }),
+    template: `
+      <div style="max-width:800px;margin:0 auto;font-family:sans-serif;overflow-x:auto;">
+        <div style="position:relative;width:3000px;height:40px;background:#f0f0f0;border-radius:6px;">
+          <TaskBar :timeline="timeline" :task="task" :projectCode="projectCode"
+                   :users="users" :comments-by-task="commentsByTask" />
+        </div>
+      </div>
+    `,
+  }),
+}
+
+/** Тест: бейдж со счётчиком виден; без комментариев — бейджа нет */
+export const BadgeVisibility: Story = {
+  tags: ['vitest'],
+  render: () => ({
+    components: { TaskBar },
+    data: () => ({
+      timeline: makeDemoTimeline(iso(day(1, 1)), 'day'),
+      taskWith: {
+        id: 1,
+        title: 'С обсуждением',
+        start_date: iso(day(1, 6)),
+        end_date: iso(day(1, 18)),
+        resources: [],
+        comments_count: 3,
+      },
+      taskWithout: {
+        id: 2,
+        title: 'Без комментариев',
+        start_date: iso(day(1, 6)),
+        end_date: iso(day(1, 18)),
+        resources: [],
+        comments_count: 0,
+      },
+    }),
+    template: `
+      <div style="max-width:800px;margin:0 auto;font-family:sans-serif;overflow-x:auto;">
+        <div style="position:relative;width:3000px;height:40px;background:#f0f0f0;border-radius:6px;margin-bottom:8px;">
+          <TaskBar :timeline="timeline" :task="taskWith" />
+        </div>
+        <div style="position:relative;width:3000px;height:40px;background:#f0f0f0;border-radius:6px;">
+          <TaskBar :timeline="timeline" :task="taskWithout" />
+        </div>
+      </div>
+    `,
+  }),
+  play: async () => {
+    await new Promise((r) => setTimeout(r, 50))
+    const badges = [...document.querySelectorAll('.tb-comments')]
+    expect(badges.length).toBe(1)
+    expect(badges[0].textContent).toContain('3')
+  },
 }

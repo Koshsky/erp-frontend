@@ -3,6 +3,8 @@ import { useAppStore, useAuthStore, usePlanningStore, useTimesheetStore } from '
 import { shouldAutoSync } from '@/settings'
 import { isElectron } from '@/electron'
 import { getSyncCredentials } from '@/syncCredentials'
+import { isLoggedOut } from '@/loggedOut'
+import { warmNow } from './warmup'
 import {
   flushOutbox,
   pendingCount,
@@ -34,6 +36,30 @@ export const syncNotice = ref<SyncNoticeData | null>(null)
 
 export function dismissSyncNotice(): void {
   syncNotice.value = null
+}
+
+const LAST_PUSH_KEY = 'mvs_erp_last_push_at'
+
+function readLastPush(): number | null {
+  try {
+    const raw = localStorage.getItem(LAST_PUSH_KEY)
+    const n = raw ? Number(raw) : NaN
+    return Number.isFinite(n) && n > 0 ? n : null
+  } catch {
+    return null
+  }
+}
+
+/** Время последней удачной отправки очереди (для UI; переживает перезагрузки) */
+export const lastPushAt = ref<number | null>(readLastPush())
+
+function noteLastPush(): void {
+  lastPushAt.value = Date.now()
+  try {
+    localStorage.setItem(LAST_PUSH_KEY, String(lastPushAt.value))
+  } catch {
+    // метка не критична — при следующем прогоне обновится
+  }
 }
 
 let reconciling = false
@@ -103,6 +129,7 @@ async function runSync(): Promise<void> {
   try {
     const res = await flushOutbox()
     if (res.ok > 0 || res.failed > 0 || res.interrupted) {
+      if (res.ok > 0) noteLastPush()
       await reconcile(res.entities)
       syncNotice.value = {
         ok: res.ok,
@@ -124,6 +151,26 @@ export function syncNow(): Promise<void> {
   return runSync()
 }
 
+/**
+ * Кнопка «Синхронизировать всё»: PUSH (отправка очереди) затем, если сеть
+ * жива, PULL (прогревка офлайн-кэша). Части независимы: упавшая не роняет
+ * вторую. Возвращает, что реально выполнилось (для сообщения в UI).
+ */
+export async function syncAll(): Promise<{ pushed: boolean; pulled: boolean }> {
+  try {
+    await runSync()
+    const n = syncNotice.value
+    const pushed = n != null && (n.ok > 0 || n.failed > 0 || n.interrupted)
+    let pulled = false
+    if (!isOffline.value) {
+      pulled = await warmNow()
+    }
+    return { pushed, pulled }
+  } finally {
+    // runSync/warmNow сами сбрасывают свои блокировки и прогресс
+  }
+}
+
 /** Кнопка «Повторить»: снимаем карантин и пробуем отправить снова */
 export async function retryFailed(): Promise<void> {
   await resetFailedRetries()
@@ -143,18 +190,19 @@ export async function initOfflineSync(): Promise<void> {
   await replayOutboxToCache()
   void refreshPendingCount()
   watch(isOffline, (offline) => {
-    if (!offline && shouldAutoSync()) void runSync()
+    // После явного выхода (logout) автосинк не запускаем до ручного входа
+    if (!offline && shouldAutoSync() && !isLoggedOut()) void runSync()
   })
   if (!isOffline.value) {
     void refreshPendingCount().then(() => {
-      if (shouldAutoSync() && pendingCount.value > 0) void runSync()
+      if (shouldAutoSync() && !isLoggedOut() && pendingCount.value > 0) void runSync()
     })
   }
   // Интернет может вернуться без события online (интерфейс всё время «up»).
   // runSync сам проверит доступность сервера (probe в flushOutbox), так что
   // поллинг безопасен и дешёв — работает только пока есть очередь.
   window.setInterval(() => {
-    if (shouldAutoSync() && pendingCount.value > 0 && !isOffline.value) void runSync()
+    if (shouldAutoSync() && !isLoggedOut() && pendingCount.value > 0 && !isOffline.value) void runSync()
   }, SYNC_POLL_MS)
 }
 
@@ -163,9 +211,11 @@ export async function initOfflineSync(): Promise<void> {
  * Если автосинк включён, сессии нет (токены протухли/отсутствуют) и в
  * safeStorage сохранены логин+пароль — тихо входим, чтобы автосинк мог
  * работать без ручного ввода. В браузере (нет safeStorage) ничего не делает.
+ * После явного выхода (флаг mvs_erp_logged_out) не входит до ручного входа.
  */
 export async function ensureDesktopAutoSyncSession(): Promise<void> {
   if (!isElectron || !shouldAutoSync()) return
+  if (isLoggedOut()) return
   const auth = useAuthStore()
   // Сессия уже жива — не трогаем.
   if (auth.isAuthenticated && !auth.accessExpired) return
@@ -173,4 +223,23 @@ export async function ensureDesktopAutoSyncSession(): Promise<void> {
   const creds = await getSyncCredentials()
   if (!creds?.login || !creds.password) return
   await auth.login(creds.login, creds.password)
+}
+
+/** Период фоновой поддержки сессии (продление access-токена тихим входом) */
+const SESSION_MAINTENANCE_MS = 30 * 1000
+
+let maintenanceTimer: number | null = null
+
+/**
+ * Фоновая поддержка сессии в Desktop: каждые 30 с тихо обновляем access-токен
+ * по кредам автосинка, когда он на исходе (refresh-кука не работает
+ * кросс-сайт, поэтому продлеваем входом). Идемпотентна: ensure... сам
+ * отсекает свежую сессию, офлайн и флаг «после выхода». Офлайн-сессия
+ * (вход без сети) автоматически становится реальной при возврате сети.
+ */
+export function startSessionMaintenance(): void {
+  if (!isElectron || maintenanceTimer != null) return
+  maintenanceTimer = window.setInterval(() => {
+    void ensureDesktopAutoSyncSession()
+  }, SESSION_MAINTENANCE_MS)
 }

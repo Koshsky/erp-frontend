@@ -4,11 +4,13 @@ import { useRoute } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import TaskPlanning from '../components/planner/TaskPlanning/TaskPlanning.vue'
 import { PdfExport } from '../components/planner'
-import { ResourceManagerModal } from '../components/planner'
+import { ResourceManagerModal, TaskComments } from '../components/planner'
 import type { AssignedResource, AddResourcePayload } from '../components/planner/ResourceManagerModal'
+import type { SendCommentPayload, DeleteCommentPayload } from '../components/planner/TaskComments'
 import { ContextMenu, ModalForm, ConfirmDialog } from '../components/common'
 import type { ContextMenuItem } from '../components/common/ContextMenu'
 import type { ModalField } from '../components/common/ModalForm'
+import { isOffline } from '../offline/state'
 import { useConfirm } from '../composables/useConfirm'
 import { useContextMenu } from '../composables/useContextMenu'
 import { useEditModal } from '../composables/useEditModal'
@@ -77,7 +79,7 @@ const focusGroupId = computed(() => {
 
 // vp владеет задачами/вехами/назначениями своих процессов; rp — view only
 // (список задач для него уже отфильтрован бэкендом), dp — read-only.
-const { canManageTasks, canViewProjects, role, userId } = useRoleAccess()
+const { canManageTasks, canViewTasks, canViewProjects, role, userId } = useRoleAccess()
 
 const { findTask, findMilestone } = useFindPlanningItem()
 
@@ -99,18 +101,27 @@ const menu = ref<MenuState | null>(null)
 const { confirm: confirmDialog, ask, proceed, cancel } = useConfirm()
 
 const menuItems = computed<ContextMenuItem[]>(() => {
-  if (!canManageTasks.value) return []
-  if (menu.value?.taskId != null)
-    return [
-      { id: 'edit-task', label: 'Редактировать' },
-      { id: 'manage-resources', label: 'Управление ресурсами' },
-      { id: 'delete-task', label: 'Удалить задачу' },
-    ]
-  if (menu.value?.milestoneId != null)
+  if (!canViewTasks.value) return []
+  // Задача: «Комментарии» доступны всем, кто видит задачу; остальное — управляющим ролям.
+  if (menu.value?.taskId != null) {
+    const items: ContextMenuItem[] = [{ id: 'comments', label: 'Комментарии' }]
+    if (canManageTasks.value) {
+      items.push(
+        { id: 'edit-task', label: 'Редактировать' },
+        { id: 'manage-resources', label: 'Управление ресурсами' },
+        { id: 'delete-task', label: 'Удалить задачу' },
+      )
+    }
+    return items
+  }
+  if (menu.value?.milestoneId != null) {
+    if (!canManageTasks.value) return []
     return [
       { id: 'edit-milestone', label: 'Редактировать' },
       { id: 'delete-milestone', label: 'Удалить веху' },
     ]
+  }
+  if (!canManageTasks.value) return []
   return [
     { id: 'create-task', label: 'Создать задачу' },
     { id: 'create-milestone', label: 'Создать веху' },
@@ -175,7 +186,9 @@ const { open: openEdit, close: closeEdit, submit: submitEdit, bind: editBind } =
 )
 
 function onContextMenu(p: { clientX: number; clientY: number; date: string | null; rowIndex: number; processId?: number; taskId?: number; milestoneId?: number }) {
-  if (!canManageTasks.value) return
+  if (!canViewTasks.value) return
+  // Пустое место группы: создание задач/вех — только управляющим ролям.
+  if (p.taskId == null && p.milestoneId == null && !canManageTasks.value) return
   // Пустое место группы: создание требует процесс-родитель и известную дату
   if (p.taskId == null && p.milestoneId == null && (p.processId == null || p.date == null)) return
   openMenu({ x: p.clientX, y: p.clientY, date: p.date, rowIndex: p.rowIndex, processId: p.processId, taskId: p.taskId, milestoneId: p.milestoneId })
@@ -239,6 +252,8 @@ async function handleSelect(id: string) {
     })
   } else if (id === 'edit-task' && taskId != null) {
     openTaskEdit(taskId)
+  } else if (id === 'comments' && taskId != null) {
+    openComments(taskId)
   } else if (id === 'manage-resources' && taskId != null) {
     openResources(taskId)
   } else if (id === 'edit-milestone' && milestoneId != null) {
@@ -278,12 +293,20 @@ const assignedResources = computed<AssignedResource[]>(() => {
   }))
 })
 
-/** Справочник ресурсов для выбора в модалке (только с id) */
-const resourceOptions = computed(() =>
-  resources.value
-    .filter((r) => r.id != null)
-    .map((r) => ({ id: r.id as number, title: r.title, code: r.code })),
-)
+/**
+ * Справочник ресурсов для выбора в модалке (только с id). Для не-admin
+ * оставляем ресурсы владельцев задачи (process/project) — сервер всё равно
+ * отклонит чужой ресурс (403). admin видит все; при неизвестных владельцах
+ * (холодный кэш) список не фильтруем — сервер — финальный арбитр.
+ */
+const resourceOptions = computed(() => {
+  const opts = resources.value.filter((r) => r.id != null)
+  const owners = planning.taskOwnerIds(resourcesModalTaskId.value ?? 0)
+  const allowed = role.value === 'admin' || owners.length === 0 ? null : new Set(owners)
+  return opts
+    .filter((r) => allowed == null || (r.owner_id != null && allowed.has(r.owner_id)))
+    .map((r) => ({ id: r.id as number, title: r.title, code: r.code }))
+})
 
 function openResources(taskId: number) {
   resourcesModalTaskId.value = taskId
@@ -313,6 +336,39 @@ async function onRemoveResource(payload: { resource_id: number }) {
   )
   resourcesBusy.value = false
   if (!ok) resourcesError.value = planning.error
+}
+
+// Модалка «Комментарии» задачи: открывается кликом по бару или из ПКМ-меню
+// (доступна всем, кто видит задачу; в офлайне — просмотр кэша без отправки).
+const commentsTaskId = ref<number | null>(null)
+
+/** Название задачи для заголовка модалки */
+const commentsTaskTitle = computed(() => {
+  if (commentsTaskId.value == null) return ''
+  return findTask(commentsTaskId.value)?.title ?? ''
+})
+
+/** Комментарии задачи из кэша стора (плоский список; дерево строит компонент) */
+const taskComments = computed(() => {
+  if (commentsTaskId.value == null) return []
+  return planning.commentsByTask[commentsTaskId.value] ?? []
+})
+
+function openComments(taskId: number) {
+  commentsTaskId.value = taskId
+  void planning.loadTaskComments(taskId)
+}
+
+async function onSendComment(payload: SendCommentPayload) {
+  if (commentsTaskId.value == null) return
+  await planning.createTaskComment(commentsTaskId.value, payload.content, payload.parent_id)
+}
+
+function onDeleteComment(payload: DeleteCommentPayload) {
+  if (commentsTaskId.value == null) return
+  ask('Удалить комментарий? Ответы останутся.', () => {
+    void planning.deleteTaskComment(commentsTaskId.value ?? 0, payload.comment_id)
+  })
 }
 
 onMounted(async () => {
@@ -388,7 +444,7 @@ const taskGroups = computed<PdfGanttGroup[]>(() =>
         :origin="origin"
         :unit="unit"
         :owner-id="userId"
-        :role="role"
+
         scope="tasks"
         :period-from="viewRange.from"
         :period-to="viewRange.to"
@@ -412,12 +468,15 @@ const taskGroups = computed<PdfGanttGroup[]>(() =>
       :can-manage="canManageTasks"
       :focus-date="focusDate"
       :focus-group-id="focusGroupId"
+      :comments-by-task="planning.commentsByTask"
       @change="(p) => planning.updateTaskDates(p.id, p.start_date, p.end_date)"
       @milestone-change="(p) => planning.updateMilestoneDate(p.id, p.date)"
       @contextmenu="onContextMenu"
       @header-ctxmenu="onHeaderCtx"
       @milestone-edit="openMilestoneEdit"
       @visible-range="onVisibleRange"
+      @open-comments="openComments"
+      @request-comments="(id) => planning.loadTaskComments(id, { fresh: false })"
     />
 
     <ContextMenu v-bind="menuBind" @select="select" @close="closeMenu" />
@@ -445,6 +504,22 @@ const taskGroups = computed<PdfGanttGroup[]>(() =>
       @add="onAddResource"
       @remove="onRemoveResource"
       @close="resourcesModalTaskId = null"
+    />
+
+    <TaskComments
+      :open="commentsTaskId != null"
+      :task-id="commentsTaskId ?? 0"
+      :task-title="commentsTaskTitle"
+      :comments="taskComments"
+      :users="app.users"
+      :busy="planning.commentsLoading"
+      :error="planning.commentsError"
+      :disabled-reason="isOffline ? 'Недоступно в офлайне' : null"
+      :can-manage="canManageTasks"
+      :user-id="userId"
+      @send="onSendComment"
+      @delete="onDeleteComment"
+      @close="commentsTaskId = null"
     />
   </section>
 </template>

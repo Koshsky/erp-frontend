@@ -1,16 +1,25 @@
 <script setup lang="ts">
-import { onBeforeUnmount, ref, shallowRef, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../../../store'
 import { useNavigation } from '../../../composables/useNavigation'
 import type { NavCategory } from '../../../composables/useNavigation'
 import { isElectron } from '../../../electron'
+import { isOffline } from '../../../offline/state'
+import { pendingCount } from '../../../offline/outbox'
 
 const props = withDefaults(defineProps<{ brand?: string }>(), { brand: 'MVS ERP' })
 
 const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
+
+// Локальный computed поверх импортированного ref — гарантированная реактивность
+// в шаблоне (импортированные ref привязываются без автораспаковки).
+const offline = computed(() => isOffline.value)
+
+// Ожидающие отправки изменения (бейдж у «Синхронизация»)
+const pending = computed(() => pendingCount.value)
 
 // Шапка — список категорий; подкатегории открываются выпадающим меню.
 const { visibleCategories, activeCategory, standalone } = useNavigation()
@@ -29,6 +38,9 @@ function closeCategory() {
 }
 
 function onLogout() {
+  // Страховка на уровне обработчика: офлайн выход не выполняется (logout
+  // чистит очередь изменений), даже если атрибут disabled не сработал.
+  if (offline.value) return
   authStore.logout()
   router.push('/login')
 }
@@ -97,8 +109,23 @@ onBeforeUnmount(() => {
     <div class="ah-spacer"></div>
     <div class="ah-actions">
       <RouterLink to="/profile" class="ah-link" :class="{ active: route.name === 'profile' }">Профиль</RouterLink>
-      <RouterLink v-if="isElectron" to="/sync" class="ah-link" :class="{ active: route.name === 'sync' }">Синхронизация</RouterLink>
-      <button type="button" class="ah-logout" @click="onLogout">Выйти</button>
+      <RouterLink v-if="isElectron" to="/sync" class="ah-link" :class="{ active: route.name === 'sync' }">
+        Синхронизация
+        <span v-if="pending > 0" class="ah-sync-badge" :title="`Ожидают отправки: ${pending}`">
+          {{ pending }}
+        </span>
+      </RouterLink>
+      <!-- Выход офлайн недоступен: logout чистит очередь изменений, а её нужно сохранить до возврата сети -->
+      <button
+        type="button"
+        class="ah-logout"
+        :class="{ 'ah-logout--off': offline }"
+        :disabled="offline"
+        :title="offline ? 'Выход недоступен офлайн: очередь изменений сохранится до возврата сети' : undefined"
+        @click="onLogout"
+      >
+        Выйти
+      </button>
     </div>
   </header>
 </template>
@@ -168,6 +195,21 @@ onBeforeUnmount(() => {
   opacity: 0.8;
 }
 
+.ah-sync-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: #f39c12;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+}
+
 .ah-cat-wrap {
   position: relative;
 }
@@ -230,9 +272,16 @@ onBeforeUnmount(() => {
   transition: background 0.15s, color 0.15s;
 }
 
-.ah-logout:hover {
+.ah-logout:hover:not(:disabled) {
   background: rgba(255, 255, 255, 0.28);
   color: #fff;
+}
+
+.ah-logout:disabled,
+.ah-logout--off {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
 }
 
 @media (max-width: 720px) {

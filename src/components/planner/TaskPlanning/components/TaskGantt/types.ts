@@ -1,4 +1,5 @@
 import type { TimelineCtx } from '@/composables/timeline-context'
+import type { DtoCommentResponse, DtoUserInfo } from '@/api'
 import type { Task } from './components/TaskBar/types'
 
 /** Веха процесса — одна точка на шкале с заголовком и описанием */
@@ -23,4 +24,8 @@ export interface TaskGanttProps {
   groupEndDate?: string | Date | number | null
   /** Разрешает изменение задач и вех: перенос дат, редактирование, удаление */
   canManage?: boolean
+  /** Справочник пользователей — имена авторов комментариев в тултипе задач */
+  users?: DtoUserInfo[] | null
+  /** Кэш комментариев по задаче (для лога в тултипе) */
+  commentsByTask?: Record<number, DtoCommentResponse[]> | null
 }

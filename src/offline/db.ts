@@ -2,13 +2,17 @@
  * Минимальная promise-обёртка над IndexedDB (без внешних зависимостей).
  * Одна БД `erp-offline` со стораджами:
  *  - `cache`  — кэш ответов API (GET);
- *  - `outbox` — очередь мутаций для офлайн-записи (создание/изменение/удаление).
+ *  - `outbox` — очередь мутаций для офлайн-записи (создание/изменение/удаление);
+ *  - `idmap`  — персистентный маппинг временных (отрицательных) id созданных
+ *    офлайн сущностей на реальные id, чтобы записи-зависимости после
+ *    прерываний синхронизации отправлялись с настоящим id, а не фейковым.
  */
 
 const DB_NAME = 'erp-offline'
-const DB_VERSION = 2
+const DB_VERSION = 3
 const CACHE_STORE = 'cache'
 const OUTBOX_STORE = 'outbox'
+const IDMAP_STORE = 'idmap'
 
 let dbPromise: Promise<IDBDatabase> | null = null
 
@@ -26,6 +30,9 @@ function openDb(): Promise<IDBDatabase> {
       }
       if (!db.objectStoreNames.contains(OUTBOX_STORE)) {
         db.createObjectStore(OUTBOX_STORE)
+      }
+      if (!db.objectStoreNames.contains(IDMAP_STORE)) {
+        db.createObjectStore(IDMAP_STORE)
       }
     }
     req.onsuccess = () => resolve(req.result)
@@ -88,4 +95,12 @@ export async function idbKeys(store: string): Promise<string[]> {
 export async function idbCount(store: string): Promise<number> {
   const result = await txAll(store, 'readonly', (s) => s.count())
   return typeof result === 'number' ? result : 0
+}
+
+export const IDMAP_STORE_NAME = IDMAP_STORE
+
+/** Запись маппинга временного (отрицательного) id офлайн-создания на реальный id сервера */
+export interface IdMapEntry {
+  temp: number
+  real: number
 }

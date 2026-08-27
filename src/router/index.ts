@@ -1,7 +1,10 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import { useAuthStore } from '../store'
+import { useAuthStore, useRbacStore } from '../store'
 import { isOffline } from '../offline/state'
 import { isElectron } from '../electron'
+import { ensureDesktopAutoSyncSession } from '../offline/sync'
+import { shouldAutoSync } from '../settings'
+import { isLoggedOut } from '../loggedOut'
 import MainLayout from '../layouts/MainLayout.vue'
 import AuthLayout from '../layouts/AuthLayout.vue'
 
@@ -107,7 +110,9 @@ const router = createRouter({
 })
 
 // Глобальный guard: неавторизованных пользователей всегда отправляем на /login.
-// Если access-токен отсутствует или протух, но есть refresh — сначала тихо обновляем сессию.
+// Если access-токен отсутствует или протух, но есть refresh — сначала тихо
+// обновляем сессию: web — refresh по куке, desktop — тихий re-login по кредам
+// автосинка (refresh-кука не работает кросс-сайт). Офлайн — без попыток сети.
 router.beforeEach(async (to) => {
   const auth = useAuthStore()
 
@@ -116,7 +121,11 @@ router.beforeEach(async (to) => {
     (!auth.isAuthenticated || auth.accessExpired) &&
     !isOffline.value
   ) {
-    await auth.refreshSession()
+    if (isElectron && shouldAutoSync() && !isLoggedOut()) {
+      await ensureDesktopAutoSyncSession()
+    } else {
+      await auth.refreshSession()
+    }
   }
 
   // Страницы под главным layout требуют авторизации
@@ -129,25 +138,51 @@ router.beforeEach(async (to) => {
     return { name: auth.user?.role === 'worker' ? 'profile' : 'dashboard' }
   }
 
-  // worker видит только свой профиль: любые другие страницы — на profile
-  if (auth.user?.role === 'worker' && to.name !== 'profile') {
-    return { name: 'profile' }
+  // Права для навигации: загружаем один раз на сессию (кроме офлайна — кеш).
+  const rbac = useRbacStore()
+  if (auth.isAuthenticated && !rbac.permsLoaded && !isOffline.value) {
+    // Не блокируем навигацию сетью: права подгружаются асинхронно
+    // (кнопки появятся по мере загрузки; поллинг обновляет дальше).
+    void rbac.loadMyPermissions()
   }
 
-  // Табель и Сотрудники доступны только vp и admin
-  if (
-    (to.name === 'timesheet' || to.name === 'employees') &&
-    !['vp', 'admin'].includes(auth.user?.role ?? '')
-  ) {
+  // Действия/страницы показываем по правам из матрицы, а не по ролям.
+  // Бизнес-страницы — по праву view; админ-разделы — временный fallback
+  // на роль (TODO: виртуальные ресурсы-разделы).
+  const pagePerm: Record<string, [string, string]> = {
+    timesheet: ['worker', 'view'],
+    employees: ['worker', 'view'],
+    projects: ['project', 'view'],
+    processes: ['process', 'view'],
+    planner: ['task', 'view'],
+    resources: ['resource', 'view'],
+    statuses: ['state_admin', 'view'],
+    users: ['user_admin', 'view'],
+    structure: ['org_structure', 'view'],
+    'auto-create': ['rbac_config', 'view'],
+    permissions: ['rbac_config', 'view'],
+  }
+  const needed = pagePerm[to.name as string]
+  if (needed && to.meta.requiresAuth && !rbac.can(needed[0], needed[1])) {
     return { name: 'dashboard' }
   }
 
-  // Статусы, Права, Пользователи, Структура, Автосоздание — только admin
+  // Пользователь без прав ни на одну бизнес-страницу — только профиль
+  // (сотрудник без назначенных прав; админ и роли с правами ходят дальше).
   if (
-    (to.name === 'statuses' || to.name === 'permissions' || to.name === 'users' || to.name === 'structure' || to.name === 'auto-create') &&
+    to.meta.requiresAuth &&
+    to.name !== 'profile' &&
+    to.name !== 'dashboard' &&
+    to.name !== 'sync' &&
+    !pagePerm[to.name as string] &&
+    !rbac.can('project', 'view') &&
+    !rbac.can('process', 'view') &&
+    !rbac.can('task', 'view') &&
+    !rbac.can('resource', 'view') &&
+    !rbac.can('worker', 'view') &&
     auth.user?.role !== 'admin'
   ) {
-    return { name: 'dashboard' }
+    return { name: 'profile' }
   }
 
   // Синхронизация (офлайн-настройки) — доступна только в настольной (Electron)

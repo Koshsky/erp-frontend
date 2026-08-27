@@ -1,21 +1,27 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import axios, { type AxiosError, type Method } from 'axios'
-import { AuthApi, ProjectsApi, ProcessesApi, TasksApi, TimesheetResourcesApi, TimesheetCalendarApi, TimesheetStatesApi, PlanningApi, MilestonesApi, UsersApi, AssignmentsApi, AutoCreateApi, Configuration } from '@/api'
-import type { DtoUserInfo, DtoProject, DtoResourceResponse, DtoResourceCalendar, DtoResourceMemberResponse, DtoResourceAbsenceResponse, DtoUserResponse, DtoUserStateResponse, DtoStateResponse, DtoCreateResourceRequest, DtoUpdateResourceRequest, DtoCreateUserRequest, DtoUpdateUserRequest, DtoSetDaysRequest, DtoAdminUserResponse, DtoCreateUserResult, DtoResetPasswordResponse, DtoAutoCreateConfig } from '@/api'
+import { AuthApi, ProjectsApi, ProcessesApi, TasksApi, TimesheetResourcesApi, TimesheetCalendarApi, TimesheetStatesApi, PlanningApi, MilestonesApi, UsersApi, AssignmentsApi, AutoCreateApi, RBACApi, PermissionsApi, Configuration } from '@/api'
+import type { DtoUserInfo, DtoProject, DtoResourceResponse, DtoResourceCalendar, DtoResourceMemberResponse, DtoResourceAbsenceResponse, DtoUserResponse, DtoUserStateResponse, DtoStateResponse, DtoCreateResourceRequest, DtoUpdateResourceRequest, DtoCreateUserRequest, DtoUpdateUserRequest, DtoSetDaysRequest, DtoAdminUserResponse, DtoCreateUserResult, DtoResetPasswordResponse, DtoAutoCreateConfig, DtoCommentResponse, DomainRole, DtoRuleInput, DtoRuleView, DtoMatrixCell, DtoRoutePolicyView, PoliciesKindInfo, DtoPermission } from '@/api'
 import { apiErrorMessage, fullName } from '@/utils'
 import { getApiUrl } from '@/config'
 import { isOffline } from '@/offline/state'
-import { isElectron } from '@/electron'
+import { isElectron, setDesktopPassword } from '@/electron'
+import { offlineFailFastAdapter } from '@/offline/failFast'
 import { scheduleWarmup } from '@/offline/warmup'
 import { enqueueMutation, isNetworkError, clearOutbox, type MutationEntity } from '@/offline/outbox'
 import { applyRangeSplit } from '@/offline/periodSplit'
 import { getAccessToken, setAccessToken } from '@/token'
+import { isLoggedOut, clearLoggedOut, setLoggedOut } from '@/loggedOut'
+import { getSavedLogin } from '@/syncCredentials'
+import { shouldAutoSync } from '@/settings'
 
 const USER_KEY = 'mvs_erp_user'
+/** Кеш моих RBAC-прав для офлайн-режима. */
+const PERMS_KEY = 'mvs_erp_perms'
 
 /** Сколько времени до истечения токена, когда начинаем проактивный refresh */
-const REFRESH_MARGIN_MS = 60 * 1000
+const REFRESH_MARGIN_MS = 120 * 1000
 const REFRESH_INTERVAL_MS = 30 * 1000
 
 /** Размер страницы листингов (совпадает с дефолтом бэкенда). */
@@ -78,7 +84,15 @@ async function runMutation(opts: MutationOptions): Promise<boolean> {
 function apiConfig(): Configuration {
   return new Configuration({
     basePath: getApiUrl(),
-    baseOptions: { headers: { 'Content-Type': 'application/json' } },
+    baseOptions: {
+      headers: { 'Content-Type': 'application/json' },
+      // Fail-fast при известном оффлайне (баннер висит): запрос не уходит в
+      // сеть и не ждёт таймаута — мутации мгновенно попадают в очередь outbox,
+      // GET отдаются из кэша. Адаптер стоит только здесь (клиенты стора), чтобы
+      // служебная отправка очереди (flushOutbox, сырой axios) ходила в сеть как
+      // обычно: иначе при уже вернувшейся сети записи падали бы с Network Error.
+      ...(isElectron && isOffline.value ? { adapter: offlineFailFastAdapter } : {}),
+    },
     apiKey: () => `Bearer ${getAccessToken()}`,
   })
 }
@@ -134,6 +148,8 @@ export const useAuthStore = defineStore('auth', () => {
   const user = ref<DtoUserInfo | null>(readStoredUser())
   const isAuthenticated = ref<boolean>(Boolean(readStoredUser()))
   const accessExpired = computed<boolean>(() => accessTokenExpired())
+  /** Режим сессии: online — реальная (с токеном), offline — локальная без токена */
+  const sessionMode = ref<'online' | 'offline'>('online')
   const loading = ref(false)
   const error = ref<string | null>(null)
 
@@ -145,9 +161,30 @@ export const useAuthStore = defineStore('auth', () => {
       user.value = data.user
     }
     isAuthenticated.value = Boolean(token)
+    sessionMode.value = 'online'
     scheduleProactiveRefresh()
     // Фоновая прогревка офлайн-кэша данными под роль пользователя
     scheduleWarmup()
+  }
+
+  /**
+   * Офлайн-вход (Desktop, кнопка на /login при isOffline): локальная сессия
+   * без токена — данные из кэша, мутации в очередь, сервер не опрашивается.
+   * Идентичность: сохранённый профиль (если совпадает с введённым логином
+   * или логин не введён), иначе минимальный профиль с введённым логином.
+   */
+  function enterOffline(username: string | null): boolean {
+    const stored = readStoredUser()
+    if (stored?.username && (!username || stored.username === username)) {
+      user.value = stored
+    } else {
+      user.value = { username: username ?? undefined } as DtoUserInfo
+    }
+    setAccessToken(null)
+    stopProactiveRefresh()
+    isAuthenticated.value = true
+    sessionMode.value = 'offline'
+    return true
   }
 
   async function login(username: string, password: string) {
@@ -160,6 +197,9 @@ export const useAuthStore = defineStore('auth', () => {
       const errBody = body?.error as { code?: unknown; message?: string } | undefined
       if (errBody && errBody.code != null) throw new Error(apiErrorMessage(errBody))
       applySession(body?.data)
+      // Ручной вход снимает флаг «вышел» — автосинк снова разрешён
+      clearLoggedOut()
+      sessionMode.value = 'online'
       return true
     } catch (e: any) {
       error.value = e.message || String(e)
@@ -181,6 +221,18 @@ export const useAuthStore = defineStore('auth', () => {
       const body = resp.data
       const errBody = body?.error as { code?: unknown; message?: string } | undefined
       if (errBody && errBody.code != null) throw new Error(apiErrorMessage(errBody))
+      // Сохранённый для автосинка пароль обновляем, чтобы автосинк не сломался
+      // после смены пароля: креды привязаны к последнему ручному входу (Desktop).
+      if (isElectron) {
+        const saved = getSavedLogin()
+        if (saved && user.value?.username && saved === user.value.username) {
+          try {
+            await setDesktopPassword(newPassword)
+          } catch {
+            // не критично: автосинк просто попросит ввести креды на логине
+          }
+        }
+      }
       return true
     } catch (e: any) {
       error.value = apiErrorMessage(e?.response?.data?.error, e?.message ?? String(e))
@@ -197,13 +249,17 @@ export const useAuthStore = defineStore('auth', () => {
   /** Проактивный refresh: таймер + возврат вкладки, чтобы access-токен не успевал протухнуть */
   function scheduleProactiveRefresh() {
     if (proactiveTimer != null) return
-    proactiveTimer = window.setInterval(() => {
-      if (accessTokenExpiring()) {
+    // Desktop + автосинк: продление сессии делает session-maintenance
+    // (тихий re-login по кредам автосинка) — refresh-кука не работает
+    // кросс-сайт, здесь пропускаем, чтобы не уйти в logout при 401.
+    const renew = () => {
+      if (accessTokenExpiring() && !(isElectron && shouldAutoSync())) {
         void refreshSession()
       }
-    }, REFRESH_INTERVAL_MS)
+    }
+    proactiveTimer = window.setInterval(renew, REFRESH_INTERVAL_MS)
     onVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && accessTokenExpiring()) {
+      if (document.visibilityState === 'visible' && accessTokenExpiring() && !(isElectron && shouldAutoSync())) {
         void refreshSession()
       }
     }
@@ -237,6 +293,11 @@ export const useAuthStore = defineStore('auth', () => {
     // Refresh-токен живёт в HttpOnly-куке (AD-05): тело не шлём, кука приложится сама.
     // Офлайн refresh не выполнить: не разлогиниваем, сессия живёт до возврата сети.
     if (isOffline.value) return true
+    // После явного выхода (logout) не дёргаем /auth/refresh: кука уже отозвана,
+    // запрос вернёт 401 и покажет ложное «Сессия истекла», а на сервере повторное
+    // использование отозванного токена сработает как reuse-детект (отзыв всех
+    // сессий пользователя). Возвращаем false без сети — вызывающий разлогинен.
+    if (isLoggedOut()) return false
     loading.value = true
     error.value = null
     try {
@@ -278,6 +339,9 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.removeItem(USER_KEY)
     user.value = null
     isAuthenticated.value = false
+    sessionMode.value = 'online'
+    // После явного выхода автосинк не входит до ручного входа (Desktop)
+    setLoggedOut()
   }
 
   /** Получает свежие данные пользователя по id через UsersApi.usersIdGet */
@@ -311,9 +375,11 @@ export const useAuthStore = defineStore('auth', () => {
     user,
     isAuthenticated,
     accessExpired,
+    sessionMode,
     loading,
     error,
     login,
+    enterOffline,
     changePassword,
     refreshSession,
     fetchProfile,
@@ -512,6 +578,57 @@ export const useAppStore = defineStore('app', () => {
         resourcesError.value = m
       },
     })
+  }
+
+  /** Обратная карта «пользователь → его ресурс» (членство уникально: UNIQUE(user_id)) */
+  const resourceByUser = computed<Record<number, DtoResourceResponse>>(() => {
+    const map: Record<number, DtoResourceResponse> = {}
+    for (const res of resources.value) {
+      if (res.id == null) continue
+      for (const m of resourceMembers.value[res.id] ?? []) {
+        if (m.id != null) map[m.id] = res
+      }
+    }
+    return map
+  })
+
+  /**
+   * Гарантирует загрузку ресурсов и их участников — для бейджей ресурса и
+   * фильтра на странице «Сотрудники». При force=true участники перезагружаются
+   * всегда (чтобы бейджи отражали актуальное членство после изменений на
+   * странице «Ресурсы»), иначе — только недостающие.
+   */
+  async function ensureResourceMembers(force = false) {
+    if (isOffline.value && resources.value.length) return
+    if (!resources.value.length) await loadResources()
+    for (const res of resources.value) {
+      if (res.id == null) continue
+      if (force || resourceMembers.value[res.id] == null) {
+        await loadResourceMembers(res.id)
+      }
+    }
+  }
+
+  /**
+   * Меняет ресурс сотрудника: открепление от fromResourceId, прикрепление к
+   * toResourceId (null — сотрудник без ресурса). Возвращает false и кладёт
+   * сообщение в resourcesError при отказе (например, 403 на чужой ресурс).
+   */
+  async function changeEmployeeResource(
+    userId: number,
+    fromResourceId: number | null,
+    toResourceId: number | null,
+  ): Promise<boolean> {
+    if (fromResourceId === toResourceId) return true
+    if (fromResourceId != null) {
+      const ok = await removeResourceMember(fromResourceId, userId)
+      if (!ok) return false
+    }
+    if (toResourceId != null) {
+      const ok = await addResourceMember(toResourceId, userId)
+      if (!ok) return false
+    }
+    return true
   }
 
   // === Календарь доступности ресурсов (/timesheet/calendar) ===
@@ -757,6 +874,9 @@ export const useAppStore = defineStore('app', () => {
     loadResourceMembers,
     addResourceMember,
     removeResourceMember,
+    resourceByUser,
+    ensureResourceMembers,
+    changeEmployeeResource,
   }
 })
 
@@ -1235,6 +1355,12 @@ export const usePlanningStore = defineStore('planning', () => {
   const taskPlanning = ref<any>(null)
   const loading = ref(false)
   const error = ref<string | null>(null)
+
+  // === Комментарии задач (цепочки обсуждений) ===
+  // Кэш по задаче; в офлайне отдаётся последний загруженный список (online-only).
+  const commentsByTask = ref<Record<number, DtoCommentResponse[]>>({})
+  const commentsLoading = ref(false)
+  const commentsError = ref<string | null>(null)
 
   /** Общий путь загрузки планирования: silent-режим не трогает loading/error,
    *  чтобы фоновый reload после мутации не сбрасывал видимую ошибку и не показывал спиннер. */
@@ -1738,12 +1864,44 @@ export const usePlanningStore = defineStore('planning', () => {
     return undefined
   }
 
-  /** Назначает ресурс задаче: POST /assignment + тихий reload задач. */
+  /**
+   * Владельцы задачи (process/project) из загруженного планирования.
+   * Пустой список — данные неизвестны (холодный кэш): проверку пропускаем,
+   * финальное слово остаётся за сервером.
+   */
+  function taskOwnerIds(taskId: number): number[] {
+    const owners: number[] = []
+    const process = (taskPlanning.value?.processes ?? []).find((p: any) =>
+      (p.tasks ?? []).some((t: any) => t.id === taskId),
+    )
+    if (!process) return owners
+    if (process.owner_id != null) owners.push(process.owner_id)
+    const project =
+      projectPlanning.value?.projects?.find((pr: any) => pr.id === process.project_id) ??
+      useAppStore().projects.find((pr: any) => pr.id === process.project_id)
+    if (project?.owner_id != null) owners.push(project.owner_id)
+    return owners
+  }
+
+  /**
+   * Назначает ресурс задаче: POST /assignment + тихий reload задач.
+   * Для не-admin сверяем владельцев заранее (данные уже в кэше планирования):
+   * заведомо 403-назначение не уходит ни в онлайн-запрос, ни в офлайн-очередь.
+   */
   async function assignResource(
     taskId: number,
     resourceId: number,
     quantity: number,
   ): Promise<boolean> {
+    const auth = useAuthStore()
+    const owners = auth.user?.role === 'admin' ? [] : taskOwnerIds(taskId)
+    if (owners.length > 0) {
+      const res = useAppStore().resources.find((r: any) => r.id === resourceId)
+      if (res?.owner_id == null || !owners.includes(res.owner_id)) {
+        error.value = 'Назначить можно только ресурс, принадлежащий владельцу задачи'
+        return false
+      }
+    }
     const tempId = nextTempId()
     return runMutation({
       entity: 'assignment',
@@ -1879,12 +2037,76 @@ export const usePlanningStore = defineStore('planning', () => {
     return true
   }
 
+  // === Комментарии задач ===
+  /** Загрузить комментарии задачи в кэш по task_id.
+   *  - fresh (default) — всегда запрашивать онлайн (открытие модалки);
+   *  - fresh:false — отдать кэш, если он уже есть (ховер тултипа задачи);
+   *  - офлайн — только кэш (online-only). */
+  async function loadTaskComments(taskId: number, opts?: { fresh?: boolean }): Promise<void> {
+    if (commentsByTask.value[taskId] != null && !opts?.fresh) return
+    if (isOffline.value && commentsByTask.value[taskId] != null) return
+    commentsLoading.value = true
+    commentsError.value = null
+    try {
+      const resp = await new TasksApi(apiConfig()).taskIdCommentsGet(taskId)
+      commentsByTask.value[taskId] = (resp.data?.data as DtoCommentResponse[] | undefined) ?? []
+    } catch (e: any) {
+      commentsError.value = e?.message || String(e)
+    } finally {
+      commentsLoading.value = false
+    }
+  }
+
+  /** Создать комментарий задачи (parent_id — ответ на комментарий той же задачи). */
+  async function createTaskComment(
+    taskId: number,
+    content: string,
+    parentId?: number,
+  ): Promise<boolean> {
+    commentsError.value = null
+    try {
+      const resp = await new TasksApi(apiConfig()).taskIdCommentsPost(taskId, {
+        content,
+        parent_id: parentId,
+      })
+      const errBody = resp.data?.error as { code?: unknown; message?: string } | undefined
+      if (errBody && errBody.code != null) throw new Error(apiErrorMessage(errBody))
+      const dto = resp.data?.data as DtoCommentResponse | undefined
+      if (dto) {
+        const list = commentsByTask.value[taskId] ?? []
+        list.push(dto)
+        commentsByTask.value[taskId] = [...list]
+      }
+      return true
+    } catch (e: any) {
+      commentsError.value = e?.message || String(e)
+      return false
+    }
+  }
+
+  /** Удалить комментарий (мягко; ответы остаются — станут «осиротевшими» в дереве). */
+  async function deleteTaskComment(taskId: number, commentId: number): Promise<boolean> {
+    commentsError.value = null
+    try {
+      await new TasksApi(apiConfig()).taskIdCommentsCommentIdDelete(taskId, commentId)
+      const list = commentsByTask.value[taskId]
+      if (list) commentsByTask.value[taskId] = list.filter((c) => c.id !== commentId)
+      return true
+    } catch (e: any) {
+      commentsError.value = e?.message || String(e)
+      return false
+    }
+  }
+
   return {
     projectPlanning,
     processPlanning,
     taskPlanning,
     loading,
     error,
+    commentsByTask,
+    commentsLoading,
+    commentsError,
     loadProjectPlanning,
     loadProcessPlanning,
     loadTaskPlanning,
@@ -1906,6 +2128,301 @@ export const usePlanningStore = defineStore('planning', () => {
     deleteMilestone,
     assignResource,
     removeResource,
+    taskOwnerIds,
     reorderProjects,
+    loadTaskComments,
+    createTaskComment,
+    deleteTaskComment,
+  }
+})
+
+// =============================================================
+// RBAC-политики (матрица прав) — админ-редактор.
+// Все операции online-only (поддержка outbox/офлайна не нужна).
+// =============================================================
+export const useRbacStore = defineStore('rbac', () => {
+  const roles = ref<DomainRole[]>([])
+  /** Активные правила матрицы (с id — нужны для удаления «нет доступа»). */
+  const rules = ref<DtoRuleView[]>([])
+  /** Эффективная матрица (с admin-байпасом) — источник отображения. */
+  const matrix = ref<DtoMatrixCell[]>([])
+  /** Маршрутные проверки (read-only справочник). */
+  const routePolicies = ref<DtoRoutePolicyView[]>([])
+  /** Справочник kind'ов маршрутных проверок. */
+  const kinds = ref<PoliciesKindInfo[]>([])
+  const loading = ref(false)
+  const saving = ref(false)
+  const error = ref<string | null>(null)
+
+  function setError(e: unknown) {
+    error.value = e instanceof Error ? e.message : String(e)
+  }
+
+  /** Загружает весь справочник RBAC одним проходом. */
+  async function loadRbac(): Promise<boolean> {
+    if (loading.value) return false
+    loading.value = true
+    error.value = null
+    try {
+      const api = new RBACApi(apiConfig())
+      const [rolesR, rulesR, matrixR, routesR, kindsR] = await Promise.all([
+        api.rbacRolesGet(),
+        api.rbacRulesGet(),
+        api.rbacMatrixGet(),
+        api.rbacPoliciesGet(),
+        api.rbacKindsGet(),
+      ])
+      roles.value = rolesR.data?.data ?? []
+      rules.value = rulesR.data?.data ?? []
+      matrix.value = matrixR.data?.data ?? []
+      routePolicies.value = routesR.data?.data ?? []
+      kinds.value = kindsR.data?.data ?? []
+      return true
+    } catch (e) {
+      setError(e)
+      return false
+    } finally {
+      loading.value = false
+    }
+  }
+
+  /** Мои права (по матрице) — источник возможностей UI вместо ролей. */
+  const myPermissions = ref<DtoPermission[]>([])
+  const permsLoaded = ref(false)
+
+  /** Владение скоупа по ресурсу — зеркало policies.go (own/parent/ancestor). */
+  function scopeSatisfied(scope: string, resource: string, uid: number, o: { owner?: number | null; projectOwner?: number | null; processOwner?: number | null }): boolean {
+    if (scope === 'all') return true
+    if (uid <= 0) return false
+    switch (scope) {
+      case 'own':
+        switch (resource) {
+          case 'project': return o.projectOwner === uid
+          case 'process': return o.processOwner === uid
+          case 'task':
+          case 'resource':
+          case 'worker':
+            return o.owner === uid
+          default:
+            return false
+        }
+      case 'parent':
+        switch (resource) {
+          case 'process': return o.projectOwner === uid
+          case 'task':
+          case 'milestone':
+          case 'assignment':
+            return o.processOwner === uid
+          default:
+            return false
+        }
+      case 'ancestor':
+        switch (resource) {
+          case 'task':
+          case 'milestone':
+          case 'assignment':
+          case 'process':
+            return o.owner === uid || o.processOwner === uid || o.projectOwner === uid
+          default:
+            return false
+        }
+      default:
+        return false
+    }
+  }
+
+  /** Есть ли у текущей роли право на действие в принципе. */
+  function can(resource: string, action: string): boolean {
+    return myPermissions.value.some((p) => p.resource === resource && p.action === action)
+  }
+
+  /** Скоуп права ('' — права нет). */
+  function perm(resource: string, action: string): string {
+    return myPermissions.value.find((p) => p.resource === resource && p.action === action)?.scope ?? ''
+  }
+
+  /** Право + владение объектом по скоупу (owners — из данных карточки). */
+  function canOwn(
+    resource: string,
+    action: string,
+    owners: { owner?: number | null; projectOwner?: number | null; processOwner?: number | null },
+  ): boolean {
+    const scope = perm(resource, action)
+    if (!scope) return false
+    const auth = useAuthStore()
+    return scopeSatisfied(scope, resource, auth.user?.id ?? 0, owners)
+  }
+
+  /** Загружает мои права с сервера; офлайн — из localStorage-кеша. */
+  async function loadMyPermissions(): Promise<boolean> {
+    if (isOffline.value) {
+      try {
+        const cached = localStorage.getItem(PERMS_KEY)
+        if (cached) myPermissions.value = JSON.parse(cached)
+      } catch {
+        /* кеш не читается — прав нет */
+      }
+      permsLoaded.value = true
+      return true
+    }
+    try {
+      const resp = await new PermissionsApi(apiConfig()).permissionsMeGet()
+      myPermissions.value = resp.data?.data ?? []
+      permsLoaded.value = true
+      try {
+        localStorage.setItem(PERMS_KEY, JSON.stringify(myPermissions.value))
+      } catch {
+        /* localStorage может быть недоступен */
+      }
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  /** Периодическая синхронизация прав (TTL поллинг вслед за бэком). */
+  function startPermissionSync(ms = 30000): () => void {
+    let timer: number | undefined
+    let stopVisibility: (() => void) | undefined
+    const tick = () => {
+      if (!document.hidden) void loadMyPermissions()
+    }
+    const onVisibility = () => {
+      if (document.hidden && timer != null) {
+        window.clearInterval(timer)
+        timer = undefined
+      } else if (!document.hidden && timer == null) {
+        timer = window.setInterval(tick, ms)
+        void loadMyPermissions()
+      }
+    }
+    stopVisibility = () => document.removeEventListener('visibilitychange', onVisibility)
+    document.addEventListener('visibilitychange', onVisibility)
+    onVisibility()
+    return () => {
+      if (timer != null) window.clearInterval(timer)
+      if (stopVisibility) stopVisibility()
+    }
+  }
+
+  /** Легковесная загрузка каталога ролей (для select'ов без полного loadRbac). */
+  async function ensureRoles(): Promise<void> {
+    if (roles.value.length) return
+    try {
+      const rolesR = await new RBACApi(apiConfig()).rbacRolesGet()
+      roles.value = rolesR.data?.data ?? []
+    } catch {
+      // каталог недоступен — UI работает на статическом списке ролей
+    }
+  }
+
+  /** Перечитывает правила и матрицу после изменения (эффект «сейчас»). */
+  async function reloadRules(): Promise<boolean> {
+    try {
+      const api = new RBACApi(apiConfig())
+      const [rulesR, matrixR] = await Promise.all([api.rbacRulesGet(), api.rbacMatrixGet()])
+      rules.value = rulesR.data?.data ?? []
+      matrix.value = matrixR.data?.data ?? []
+      return true
+    } catch (e) {
+      setError(e)
+      return false
+    }
+  }
+
+  /** Записывает правило (upsert по role+resource+action). */
+  async function upsertRule(input: DtoRuleInput): Promise<boolean> {
+    try {
+      await new RBACApi(apiConfig()).rbacRulesPut(input)
+      return true
+    } catch (e) {
+      setError(e)
+      return false
+    }
+  }
+
+  /** Мягкое удаление правила (зона «нет доступа»). */
+  async function deleteRule(id: number): Promise<boolean> {
+    try {
+      await new RBACApi(apiConfig()).rbacRulesIdDelete(id)
+      return true
+    } catch (e) {
+      setError(e)
+      return false
+    }
+  }
+
+  /** Создаёт (или оживляет) роль и обновляет локальный каталог. */
+  async function createRole(input: { name: string; description?: string }): Promise<boolean> {
+    try {
+      const resp = await new RBACApi(apiConfig()).rbacRolesPost({ name: input.name, description: input.description ?? '' })
+      if (resp.data?.data) {
+        roles.value = [...roles.value.filter((r) => r.name !== resp.data?.data?.name), resp.data.data]
+      }
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  /** Обновляет описание роли. */
+  async function updateRole(name: string, description: string): Promise<boolean> {
+    try {
+      await new RBACApi(apiConfig()).rbacRolesNamePut(name, { description })
+      roles.value = roles.value.map((r) => (r.name === name ? { ...r, description } : r))
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  /** Мягко удаляет роль (и её правила) и убирает из локального каталога. */
+  async function deleteRole(name: string): Promise<boolean> {
+    try {
+      await new RBACApi(apiConfig()).rbacRolesNameDelete(name)
+      roles.value = roles.value.filter((r) => r.name !== name)
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  /** Сбрасывает правила и маршрутные проверки к дефолтам бэкенда. */
+  async function resetRbac(): Promise<boolean> {
+    try {
+      await new RBACApi(apiConfig()).rbacResetPost()
+      await reloadRules()
+      return true
+    } catch (e) {
+      setError(e)
+      return false
+    }
+  }
+
+  return {
+    roles,
+    rules,
+    matrix,
+    routePolicies,
+    kinds,
+    loading,
+    saving,
+    error,
+    loadRbac,
+    ensureRoles,
+    createRole,
+    updateRole,
+    deleteRole,
+    myPermissions,
+    permsLoaded,
+    can,
+    perm,
+    canOwn,
+    loadMyPermissions,
+    startPermissionSync,
+    reloadRules,
+    upsertRule,
+    deleteRule,
+    resetRbac,
   }
 })

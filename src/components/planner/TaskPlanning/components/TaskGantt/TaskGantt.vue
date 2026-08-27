@@ -9,6 +9,8 @@ import { toDate } from '../../../calendar'
 
 const props = withDefaults(defineProps<TaskGanttProps>(), {
   canManage: true,
+  users: null,
+  commentsByTask: null,
 })
 
 const emit = defineEmits<{
@@ -16,6 +18,9 @@ const emit = defineEmits<{
   'milestone-change': [payload: { id: number; date: string }]
   contextmenu: [payload: { clientX: number; clientY: number; date: string; rowIndex: number; processId?: number; taskId?: number; milestoneId?: number }]
   'milestone-edit': [payload: number]
+  'open-comments': [payload: number]
+  /** Тултип задачи открылся — лениво подгрузить комментарии (кэш) */
+  'request-comments': [payload: number]
 }>()
 
 const groupItems = computed(() => props.tasks)
@@ -74,8 +79,12 @@ function onMilestoneEdit(id: number) {
           :groupStartDate="groupStartDate"
           :groupEndDate="groupEndDate"
           :draggable="canManage"
+          :users="users"
+          :comments-by-task="commentsByTask"
           @change="(d) => onBarChange(item.id, d)"
           @contextmenu="(p) => onBarContextMenu(p, item.id)"
+          @open-comments="(id) => emit('open-comments', id)"
+          @request-comments="(id) => emit('request-comments', id)"
         />
       </template>
     </GroupGantt>

@@ -1,6 +1,6 @@
 {
   "name": "mvs-erp-desktop",
-  "version": "1.0.0",
+  "version": "1.0.5",
   "description": "Настольная обвязка MVS ERP (Electron) вокруг собранного vite-фронтенда",
   "main": "main.js",
   "author": "MVS ERP",
@@ -34,11 +34,21 @@
       {
         "from": "../dist",
         "to": "web",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       }
     ],
     "win": {
-      "target": [{ "target": "nsis", "arch": ["x64"] }]
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "${productName}-${version}-win-${arch}.${ext}"
     },
     "nsis": {
       "oneClick": false,
@@ -47,14 +57,28 @@
       "createStartMenuShortcut": true
     },
     "mac": {
-      "target": ["dmg", "zip"],
+      "target": [
+        "dmg",
+        "zip"
+      ],
       "category": "public.app-category.business"
     },
     "linux": {
       "target": [
-        { "target": "AppImage", "arch": ["x64"] },
-        { "target": "deb", "arch": ["x64"] }
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "deb",
+          "arch": [
+            "x64"
+          ]
+        }
       ],
+      "artifactName": "${productName}-${version}-linux-${arch}.${ext}",
       "category": "Office;Business"
     }
   }

@@ -1,6 +1,6 @@
 import { ref } from 'vue'
 import axios, { type AxiosError, type Method } from 'axios'
-import { idbAll, idbDel, idbPut } from './db'
+import { idbAll, idbDel, idbPut, IDMAP_STORE_NAME, type IdMapEntry } from './db'
 import { applyToCache } from './cacheApply'
 import { probeBackend } from './state'
 import { getApiUrl } from '@/config'
@@ -49,6 +49,8 @@ export interface OutboxEntry {
   entity: MutationEntity
   /** Временный (отрицательный) id для сущностей, созданных офлайн */
   tempId?: number
+  /** Аккаунт (username), под которым запись была создана (для защиты от автосинка под чужим токеном) */
+  creator?: string
   failed?: { message: string; at: number }
   /** Сколько раз сервер ответил ошибкой (для карантина) */
   attempts?: number
@@ -67,6 +69,9 @@ export const OUTBOX_STORE_NAME = OUTBOX_STORE
 
 /** Число ожидающих синхронизации изменений (реактивно для UI). Карантинные не входят. */
 export const pendingCount = ref(0)
+
+/** Живой прогресс отправки очереди (для UI): { done, total } или null, когда не идёт */
+export const pushProgress = ref<{ done: number; total: number } | null>(null)
 
 /**
  * Человекочитаемое представление записи очереди для UI («Очередь изменений»
@@ -294,7 +299,7 @@ function normalizeBody(body: unknown): unknown {
 export async function enqueueMutation(
   entry: Omit<OutboxEntry, 'id' | 'ts' | 'failed'>,
 ): Promise<void> {
-  const rec: OutboxEntry = { ...entry, body: normalizeBody(entry.body), id: uid(), ts: Date.now() }
+  const rec: OutboxEntry = { ...entry, body: normalizeBody(entry.body), id: uid(), ts: Date.now(), creator: currentUsername() ?? undefined }
   // Дедупликация: повторный клик на ту же мутацию (метод+url+тело) не плодит
   // одинаковые записи — очередь остаётся чистой, а flush не шлёт пачки дублей.
   const bodyKey = rec.body != null ? JSON.stringify(rec.body) : ''
@@ -351,12 +356,82 @@ function isNetworkError(e: unknown): boolean {
 
 export { isNetworkError }
 
+/**
+ * Серверные sentinel-сообщения без деталей → человекочитаемый русский текст.
+ * Когда бэкенд присылает развёрнутое сообщение (например «ресурс не
+ * принадлежит владельцу задачи») — оно показывается как есть.
+ */
+const GENERIC_SERVER_MESSAGES: Record<string, string> = {
+  forbidden: 'Нет прав на операцию (403)',
+  unauthorized: 'Требуется авторизация (401)',
+  'not found': 'Объект не найден (404)',
+  'bad request': 'Некорректные данные (400)',
+  conflict: 'Конфликт: такой объект уже существует (409)',
+  'validation failed': 'Ошибка валидации (422)',
+}
+
 function errorMessage(e: unknown): string {
   const err = e as { response?: { data?: { error?: { message?: string } } }; message?: string }
-  return err?.response?.data?.error?.message ?? err?.message ?? String(e)
+  const server = err?.response?.data?.error?.message
+  if (server && GENERIC_SERVER_MESSAGES[server] != null) return GENERIC_SERVER_MESSAGES[server]
+  return server ?? err?.message ?? String(e)
 }
 
 export { errorMessage }
+
+/** Имя текущего пользователя из сохранённого профиля. Напрямую из localStorage,
+ *  без импорта стора (иначе цикл store ↔ outbox). */
+function currentUsername(): string | null {
+  try {
+    const raw = localStorage.getItem('mvs_erp_user')
+    if (!raw) return null
+    const u = JSON.parse(raw) as { username?: string }
+    return u.username ?? null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Детерминированные клиентские ошибки (4xx, кроме 409/429): повтор не исправит
+ * (нет прав, неверные данные) — карантин сразу. 429 — «замедли темп»; 409 —
+ * «в полёте»/бизнес-конфликт от идемпотентности: первый вызов может ещё
+ * выполняться (ретрай получит сохранённый ответ) — оба остаются на
+ * backoff-ретраях и уходят в карантин после MAX_FAILED_ATTEMPTS.
+ */
+function isPermanentFailure(status: number): boolean {
+  return status >= 400 && status < 500 && status !== 409 && status !== 429
+}
+
+/** Признак «ссылки на ещё не созданный объект»: в URL/body есть отрицательный
+ *  (временный, офлайн) id — запись ждёт синхронизации записи-создателя. */
+function referencesPendingCreation(url: string, body: unknown): boolean {
+  const text = `${url} ${typeof body === 'string' ? body : JSON.stringify(body ?? '')}`
+  return /-\d{6,}/.test(text)
+}
+
+/** Достаёт реальный id созданной сущности из полезной части ответа { data, error }.
+ *  У большинства сущностей id лежит на верхнем уровне (data.id), но у создания
+ *  пользователя — во вложенном data.user (DtoCreateUserResult = { user, password }).
+ *  Без этого маппинг tempId→realId не создаётся и зависимые записи (например
+ *  PUT /user/{tempId}/days) уходят с фейковым id → 404. */
+function createdIdOf(data: unknown): number | undefined {
+  if (!data || typeof data !== 'object') return undefined
+  const obj = data as Record<string, unknown>
+  if (typeof obj.id === 'number') return obj.id
+  const nested = obj.user
+  if (nested && typeof nested === 'object' && typeof (nested as Record<string, unknown>).id === 'number') {
+    return (nested as Record<string, unknown>).id as number
+  }
+  return undefined
+}
+
+/** Idempotency-Key шлём на мутирующие методы (не GET): id записи — стабильный
+ *  UUID между ретраями очереди, сервер вернёт сохранённый ответ вместо
+ *  повторного выполнения при потере ответа первого вызова. */
+function needsIdempotencyKey(method: Method): boolean {
+  return (method || 'get').toUpperCase() !== 'GET'
+}
 
 /** Подробно логирует ошибку отправки записи очереди (для диагностики). */
 function logOutboxError(entry: OutboxEntry, url: string, e: unknown): void {
@@ -428,7 +503,13 @@ export async function flushOutbox(): Promise<FlushResult> {
     }
 
     const entries = (await idbAll<OutboxEntry>(OUTBOX_STORE)).sort((a, b) => a.ts - b.ts)
-    const idMap = new Map<number, number>()
+    // Персистентный маппинг tempId → realId: накоплен прошлыми прогонами
+    // (прерванный flush, повторные запуски). Без него записи, ссылающиеся на
+    // уже отправленные создания, ушли бы с фейковым id → 404 «Объект не найден».
+    const persisted = await idbAll<IdMapEntry>(IDMAP_STORE_NAME).catch(() => [] as IdMapEntry[])
+    const idMap = new Map<number, number>(persisted.map((e) => [e.temp, e.real]))
+    pushProgress.value = { done: 0, total: entries.length }
+    let done = 0
 
     for (const entry of entries) {
       // Карантин и backoff: не дёргаем записи, которые сервер только что отверг.
@@ -436,6 +517,20 @@ export async function flushOutbox(): Promise<FlushResult> {
       if (entry.failed && Date.now() - entry.failed.at < FAILED_BACKOFF_MS) continue
 
       result.entities.add(entry.entity)
+
+      // Очередь привязана к аккаунту создателя: не отправляем правки, сделанные
+      // под другим пользователем (автовход мог сменить аккаунт) — сервер
+      // отклонил бы их по RBAC, а правка осталась бы «зависшей».
+      const sender = currentUsername()
+      if (entry.creator && sender && entry.creator !== sender) {
+        const message = `Запись создана под аккаунтом «${entry.creator}», а синхронизация идёт как «${sender}»: переключите сохранённый аккаунт на экране «Синхронизация»`
+        await idbPut(OUTBOX_STORE, entry.id, { ...entry, quarantined: true, failed: { message, at: Date.now() } })
+        result.failed++
+        result.failedEntries.push({ method: entry.method, url: entry.url, message })
+        await pause()
+        continue
+      }
+
       const url = rewriteIds(rebasedUrl(entry.url), idMap)
       const body = entry.body != null ? rewriteIds(JSON.stringify(entry.body), idMap) : undefined
       try {
@@ -447,15 +542,21 @@ export async function flushOutbox(): Promise<FlushResult> {
           headers: {
             'Content-Type': 'application/json',
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            ...(needsIdempotencyKey(entry.method) ? { 'Idempotency-Key': entry.id } : {}),
           },
           timeout: 15000,
         })
 
         // Создание вернуло реальную сущность → запоминаем temp→real для
-        // переписывания последующих записей очереди.
+        // переписывания последующих записей очереди. Маппинг пишем в IndexedDB
+        // ДО удаления записи-создания: даже если flush оборвётся сразу после,
+        // следующий прогон перепишет зависящие записи реальным id.
         if (entry.tempId != null) {
-          const created = res.data?.data as { id?: number } | undefined
-          if (created?.id != null) idMap.set(entry.tempId, created.id)
+          const created = createdIdOf(res.data?.data)
+          if (created != null) {
+            idMap.set(entry.tempId, created)
+            await idbPut(IDMAP_STORE_NAME, String(entry.tempId), { temp: entry.tempId, real: created } satisfies IdMapEntry)
+          }
         }
 
         await idbDel(OUTBOX_STORE, entry.id)
@@ -497,11 +598,21 @@ export async function flushOutbox(): Promise<FlushResult> {
             result.ok++
           } else {
             // Сервер реально ответил (400/403/409/422/500...) — настоящая ошибка.
-            // Считаем попытки; стабильно отвергнутые записи уходят в карантин.
+            // Детерминированные 4xx (кроме 429) уходят в карантин сразу — повтор
+            // не исправит; 5xx — считаем попытки с backoff.
             logOutboxError(entry, url, e)
             const attempts = (entry.attempts ?? 0) + 1
-            const quarantined = attempts >= MAX_FAILED_ATTEMPTS
-            const message = errorMessage(e)
+            // Запись ссылается на ещё не синхронизированный объект (в URL/body
+            // отрицательный временный id — например PUT /user/{tempId}/days до
+            // создания сотрудника). Такой 404 — не фатальный: создатель уйдёт
+            // следующим flush'ем (или после «Повторить»), поэтому на карантин
+            // не ставим, оставляем на backoff-ретраях.
+            const waitsForCreator = referencesPendingCreation(url, body ?? '')
+            const quarantined = !waitsForCreator && (isPermanentFailure(status) || attempts >= MAX_FAILED_ATTEMPTS)
+            const message =
+              waitsForCreator && status === 404
+                ? 'Объект ещё не создан: сначала синхронизируется запись-создание с временным id'
+                : errorMessage(e)
             await idbPut(OUTBOX_STORE, entry.id, {
               ...entry,
               attempts,
@@ -516,10 +627,22 @@ export async function flushOutbox(): Promise<FlushResult> {
       // Рейт-лимит: пауза между реальными отправками, чтобы не слать пачку
       // запросов (прогревка и очередь не должны класть сервер на колени).
       await pause()
+      done++
+      pushProgress.value = { done, total: entries.length }
     }
   } finally {
     flushing = false
+    pushProgress.value = null
     await refreshPendingCount()
+    // Очередь отправлена целиком (ни записей, ни зависимостей) — маппинги
+    // больше не нужны (reconcile вернул в стор реальные id). Если в очереди
+    // ещё есть записи (прерывание/ошибки) — маппинг сохраняем: следующий
+    // прогон перепишет ими зависящие URL/body.
+    const remaining = await idbAll<OutboxEntry>(OUTBOX_STORE).catch(() => [] as OutboxEntry[])
+    if (remaining.length === 0) {
+      const maps = await idbAll<IdMapEntry>(IDMAP_STORE_NAME).catch(() => [] as IdMapEntry[])
+      await Promise.all(maps.map((m) => idbDel(IDMAP_STORE_NAME, String(m.temp))))
+    }
   }
   return result
 }
@@ -528,6 +651,10 @@ export async function flushOutbox(): Promise<FlushResult> {
 export async function clearOutbox(): Promise<void> {
   const entries = await idbAll<OutboxEntry>(OUTBOX_STORE)
   await Promise.all(entries.map((e) => idbDel(OUTBOX_STORE, e.id)))
+  // Вместе с очередью сбрасываем маппинги: отрицательные id новой сессии не
+  // должны случайно подмениться старыми соответствиями.
+  const maps = await idbAll<IdMapEntry>(IDMAP_STORE_NAME).catch(() => [] as IdMapEntry[])
+  await Promise.all(maps.map((m) => idbDel(IDMAP_STORE_NAME, String(m.temp))))
   await refreshPendingCount()
 }
 
