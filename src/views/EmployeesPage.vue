@@ -10,17 +10,40 @@ import { useEditModal } from '../composables/useEditModal'
 import { useRoleAccess } from '../composables/useRoleAccess'
 import { useAppStore, useTimesheetStore } from '../store'
 import { compareByName } from '../utils'
-import type { DtoUserResponse } from '@/api'
+import type { DtoResourceResponse, DtoUserResponse } from '@/api'
 
 const ts = useTimesheetStore()
 const { employees, employeesWithTitles, loading, error } = storeToRefs(ts)
 
 const app = useAppStore()
 const { users } = storeToRefs(app)
+const { resources, resourcesError } = storeToRefs(app)
 
-// Редактирование/удаление: admin — любого, остальные (vp) — только подчинённых
-const { role, userId, canManageEmployees, canEditEmployee } = useRoleAccess()
+// Редактирование/удаление: admin — любого, остальные (vp) — только подчинённых.
+// Создание сотрудников — только admin (worker.create; у vp права нет).
+const { role, userId, canCreateEmployee, canEditEmployee } = useRoleAccess()
 const isAdmin = computed(() => role.value === 'admin')
+
+/**
+ * Ресурс сотрудника (членство уникально: UNIQUE(user_id)) — для бейджа,
+ * фильтра и смены ресурса при редактировании.
+ */
+function resourceOf(employeeId: number | undefined): DtoResourceResponse | null {
+  if (employeeId == null) return null
+  return app.resourceByUser[employeeId] ?? null
+}
+
+/** Сортировка ресурсов по коду/названию (у ресурсов нет поля name) */
+const byResourceLabel = (a: DtoResourceResponse, b: DtoResourceResponse): number =>
+  `${a.code ?? ''} ${a.title ?? ''}`.localeCompare(`${b.code ?? ''} ${b.title ?? ''}`, 'ru')
+
+/** Ресурсы, которыми пользователь может управлять (admin — все, остальные — свои) */
+const manageableResources = computed<DtoResourceResponse[]>(() =>
+  resources.value.filter((r) => isAdmin.value || r.owner_id === userId.value).sort(byResourceLabel),
+)
+
+/** Все ресурсы (для фильтра-селекта), отсортированные по коду/названию */
+const resourcesSorted = computed<DtoResourceResponse[]>(() => [...resources.value].sort(byResourceLabel))
 
 /** Дата DD.MM.YYYY или «—» */
 function fmtDate(iso?: string): string {
@@ -42,6 +65,10 @@ const search = ref('')
 
 /** Фильтр по руководителю (manager_id): '' — все, 'none' — без руководителя (клиент), число — серверный фильтр */
 const managerFilter = ref<number | 'none' | ''>('')
+
+/** Фильтр по ресурсу: '' — все, 'none' — без ресурса, число — ресурс */
+const resourceFilter = ref<number | 'none' | ''>('')
+
 const filteredEmployees = computed(() => {
   let list = employeesWithTitles.value
   const q = search.value.trim().toLowerCase()
@@ -51,6 +78,11 @@ const filteredEmployees = computed(() => {
   // 'none' (без руководителя) фильтруем на клиенте; числовой manager_id уже отфильтрован сервером
   if (managerFilter.value === 'none') {
     list = list.filter((e) => e.manager_id == null)
+  }
+  if (resourceFilter.value === 'none') {
+    list = list.filter((e) => e.id != null && !app.resourceByUser[e.id])
+  } else if (typeof resourceFilter.value === 'number') {
+    list = list.filter((e) => e.id != null && app.resourceByUser[e.id]?.id === resourceFilter.value)
   }
   return list
 })
@@ -87,6 +119,7 @@ type ModalMode =
       managerId?: number | null
       hireDate?: string
       terminationDate?: string
+      resourceId?: number | null
     }
 
 /** Варианты руководителей (пользователей, без workers) + «Без руководителя» */
@@ -133,7 +166,7 @@ const { open: openModal, close: closeModal, submit: submitModal, bind: modalBind
       { key: 'hireDate', label: 'Дата приёма', type: 'date', value: state.type === 'edit' ? state.hireDate : '' },
       { key: 'terminationDate', label: 'Дата увольнения', type: 'date', value: state.type === 'edit' ? state.terminationDate : '' },
     )
-    // Руководителя выбирает только admin; vp создаёт сотрудников себе в подчинение
+    // Руководителя выбирает только admin (создание сотрудников — только admin)
     if (isAdmin.value) {
       fields.push({
         key: 'managerId',
@@ -141,6 +174,22 @@ const { open: openModal, close: closeModal, submit: submitModal, bind: modalBind
         type: 'select',
         options: managerOptions.value,
         value: state.type === 'edit' ? (state.managerId ?? '') : '',
+      })
+    }
+    // Ресурс меняется только при редактировании и только теми, кто может им управлять
+    if (state.type === 'edit' && manageableResources.value.length) {
+      fields.push({
+        key: 'resourceId',
+        label: 'Ресурс',
+        type: 'select',
+        options: [
+          { value: '', label: 'Без ресурса' },
+          ...manageableResources.value.map((r) => ({
+            value: r.id as number,
+            label: `${r.code} — ${r.title}`,
+          })),
+        ],
+        value: state.type === 'edit' ? (state.resourceId != null ? state.resourceId : '') : '',
       })
     }
     return fields
@@ -164,7 +213,22 @@ const { open: openModal, close: closeModal, submit: submitModal, bind: modalBind
       state.type === 'create'
         ? await ts.createEmployee({ ...payload, role: 'worker' })
         : await ts.updateEmployee(state.id, payload)
-    return { ok, error: ok ? null : error.value }
+    // Смена ресурса сотрудника (только edit и при реальном изменении)
+    let resourceOk = true
+    let resourceError: string | null = null
+    if (state.type === 'edit' && ok) {
+      const toResourceId = values.resourceId === '' || values.resourceId == null ? null : Number(values.resourceId)
+      const fromResourceId = state.resourceId ?? null
+      if (fromResourceId !== toResourceId) {
+        resourceOk = await app.changeEmployeeResource(state.id, fromResourceId, toResourceId)
+        if (!resourceOk) {
+          resourceError = app.resourcesError ?? 'Не удалось изменить ресурс сотрудника'
+        }
+      }
+    }
+    if (!ok) return { ok, error: error.value }
+    if (!resourceOk) return { ok: false, error: resourceError }
+    return { ok: true, error: null }
   },
   (state) => (state.type === 'create' ? 'Создать сотрудника' : 'Редактировать сотрудника'),
   (state) => (state.type === 'create' ? 'Создать' : 'Сохранить'),
@@ -194,6 +258,7 @@ function openEdit(id: number) {
       managerId: emp.manager_id ?? null,
       hireDate: emp.hire_date,
       terminationDate: emp.termination_date,
+      resourceId: resourceOf(emp.id)?.id ?? null,
     })
   }
 }
@@ -213,6 +278,10 @@ function handleSelect(id: string) {
 onMounted(async () => {
   if (!employees.value.length) await ts.fetchEmployees()
   if (isAdmin.value && !users.value.length) await app.loadUsers()
+  // Ресурсы и их участники догружаем безусловно: ресурсы часто уже в сторе
+  // (дашборд/планировщик грузят их раньше), но участники — только здесь;
+  // гейт на resources.length оставлял бы всех «без ресурса» без бейджей.
+  await app.ensureResourceMembers(true)
 })
 </script>
 
@@ -227,12 +296,18 @@ onMounted(async () => {
           <option value="none">Без руководителя</option>
           <option v-for="u in users.filter((u) => u.role !== 'worker').sort(compareByName)" :key="u.id" :value="u.id">{{ u.name ?? `#${u.id}` }}</option>
         </select>
-        <button v-if="canManageEmployees" type="button" class="ep-add" @click="openCreate">Создать сотрудника</button>
+        <select v-if="resources.length" v-model="resourceFilter" class="ep-filter" title="Фильтр по ресурсу">
+          <option value="">Все ресурсы</option>
+          <option value="none">Без ресурса</option>
+          <option v-for="r in resourcesSorted" :key="r.id" :value="r.id">{{ r.code }} — {{ r.title }}</option>
+        </select>
+        <button v-if="canCreateEmployee" type="button" class="ep-add" @click="openCreate">Создать сотрудника</button>
       </div>
     </div>
 
     <p v-if="loading && !employees.length" class="ep-st">Загрузка...</p>
     <p v-if="error && !employees.length" class="ep-st er">{{ error }}</p>
+    <p v-if="resourcesError" class="ep-st er">{{ resourcesError }}</p>
 
     <div v-if="filteredEmployees.length" class="table">
       <div class="tr th">
@@ -248,7 +323,12 @@ onMounted(async () => {
         class="tr"
         @contextmenu.prevent.stop="onRowContextMenu($event, emp)"
       >
-        <div class="name">{{ emp.name }}</div>
+        <div class="name-cell">
+          <span class="name">{{ emp.name }}</span>
+          <span v-if="resourceOf(emp.id)" class="ep-badge" :title="resourceOf(emp.id)?.title">
+            {{ resourceOf(emp.id)?.code }}
+          </span>
+        </div>
         <div>{{ emp.position || '—' }}</div>
         <div>{{ fmtDate(emp.hire_date) }}</div>
         <div>{{ fmtDate(emp.termination_date) }}</div>
@@ -371,5 +451,22 @@ onMounted(async () => {
 .name {
   font-weight: 700;
   color: #1a3a6b;
+}
+.name-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.ep-badge {
+  flex: none;
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.5;
+  background: #e8f0fe;
+  color: #1a73e8;
+  border: 1px solid #c6dafc;
 }
 </style>

@@ -20,6 +20,9 @@ export function useRoleAccess() {
   /** CRUD ресурсов табеля: по правам resource.create/update */
   const canManageResources = computed(() => rbac.can('resource', 'create') || rbac.can('resource', 'update'))
 
+  /** Создание сотрудников — только admin (worker.create): vp управляет своими подчинёнными, но не создаёт */
+  const canCreateEmployee = computed(() => rbac.can('worker', 'create'))
+
   /** Процессы (страница и управление): по правам process.create/update */
   const canManageProcesses = computed(() => rbac.can('process', 'create') || rbac.can('process', 'update'))
 
@@ -65,6 +68,7 @@ export function useRoleAccess() {
     userId,
     canViewProjects,
     canManageResources,
+    canCreateEmployee,
     canManageProcesses,
     canManageTasks,
     canViewTasks,

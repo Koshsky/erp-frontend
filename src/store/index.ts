@@ -21,7 +21,7 @@ const USER_KEY = 'mvs_erp_user'
 const PERMS_KEY = 'mvs_erp_perms'
 
 /** Сколько времени до истечения токена, когда начинаем проактивный refresh */
-const REFRESH_MARGIN_MS = 60 * 1000
+const REFRESH_MARGIN_MS = 120 * 1000
 const REFRESH_INTERVAL_MS = 30 * 1000
 
 /** Размер страницы листингов (совпадает с дефолтом бэкенда). */
@@ -580,6 +580,57 @@ export const useAppStore = defineStore('app', () => {
     })
   }
 
+  /** Обратная карта «пользователь → его ресурс» (членство уникально: UNIQUE(user_id)) */
+  const resourceByUser = computed<Record<number, DtoResourceResponse>>(() => {
+    const map: Record<number, DtoResourceResponse> = {}
+    for (const res of resources.value) {
+      if (res.id == null) continue
+      for (const m of resourceMembers.value[res.id] ?? []) {
+        if (m.id != null) map[m.id] = res
+      }
+    }
+    return map
+  })
+
+  /**
+   * Гарантирует загрузку ресурсов и их участников — для бейджей ресурса и
+   * фильтра на странице «Сотрудники». При force=true участники перезагружаются
+   * всегда (чтобы бейджи отражали актуальное членство после изменений на
+   * странице «Ресурсы»), иначе — только недостающие.
+   */
+  async function ensureResourceMembers(force = false) {
+    if (isOffline.value && resources.value.length) return
+    if (!resources.value.length) await loadResources()
+    for (const res of resources.value) {
+      if (res.id == null) continue
+      if (force || resourceMembers.value[res.id] == null) {
+        await loadResourceMembers(res.id)
+      }
+    }
+  }
+
+  /**
+   * Меняет ресурс сотрудника: открепление от fromResourceId, прикрепление к
+   * toResourceId (null — сотрудник без ресурса). Возвращает false и кладёт
+   * сообщение в resourcesError при отказе (например, 403 на чужой ресурс).
+   */
+  async function changeEmployeeResource(
+    userId: number,
+    fromResourceId: number | null,
+    toResourceId: number | null,
+  ): Promise<boolean> {
+    if (fromResourceId === toResourceId) return true
+    if (fromResourceId != null) {
+      const ok = await removeResourceMember(fromResourceId, userId)
+      if (!ok) return false
+    }
+    if (toResourceId != null) {
+      const ok = await addResourceMember(toResourceId, userId)
+      if (!ok) return false
+    }
+    return true
+  }
+
   // === Календарь доступности ресурсов (/timesheet/calendar) ===
   // Окно загрузки: назад 180 дней, вперёд 360 (всего 540 < лимита бэкенда 730 дней).
   const CALENDAR_BACK_DAYS = 180
@@ -823,6 +874,9 @@ export const useAppStore = defineStore('app', () => {
     loadResourceMembers,
     addResourceMember,
     removeResourceMember,
+    resourceByUser,
+    ensureResourceMembers,
+    changeEmployeeResource,
   }
 })
 
