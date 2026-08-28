@@ -62,6 +62,9 @@ export interface DtoAddMemberRequest {
     'user_id'?: number;
 }
 export interface DtoAdminUserResponse {
+    /**
+     * Account registration time (email/username created at).
+     */
     'created_at'?: string;
     'first_name'?: string;
     'hire_date'?: string;
@@ -91,6 +94,11 @@ export interface DtoAuthResponse {
 export interface DtoAutoCreateConfig {
     'enabled'?: boolean;
     'processes'?: Array<DtoProcessTemplate>;
+}
+export interface DtoAutoCreatedCounts {
+    'assignments'?: number;
+    'processes'?: number;
+    'tasks'?: number;
 }
 export interface DtoAvailabilityPeriod {
     'available'?: number;
@@ -125,7 +133,7 @@ export interface DtoCreateAssignmentRequest {
 export interface DtoCreateCommentRequest {
     'content'?: string;
     /**
-     * Ответ на другой комментарий той же задачи; пусто — корневой комментарий.
+     * Reply to another comment of the same task; empty means a root comment.
      */
     'parent_id'?: number;
 }
@@ -145,6 +153,15 @@ export interface DtoCreateProcessRequest {
 export interface DtoCreateProjectRequest {
     'code'?: string;
     'end_date'?: string;
+    'owner_id'?: number;
+    'priority'?: number;
+    'start_date'?: string;
+}
+export interface DtoCreateProjectResponse {
+    'auto_created'?: DtoAutoCreatedCounts;
+    'code'?: string;
+    'end_date'?: string;
+    'id'?: number;
     'owner_id'?: number;
     'priority'?: number;
     'start_date'?: string;
@@ -204,7 +221,7 @@ export interface DtoDetailedProject {
 }
 export interface DtoDetailedTask {
     /**
-     * Количество активных комментариев задачи (для бейджа на диаграмме).
+     * Number of active comments on the task (for the badge on the diagram).
      */
     'comments_count'?: number;
     'end_date'?: string;
@@ -472,7 +489,7 @@ export interface DtoUserResponse {
     'manager_id'?: number;
     'middle_name'?: string;
     /**
-     * Полное ФИО «Фамилия Имя Отчество» (готовое, для отображения).
+     * Full name \"Last First Middle\" (pre-composed, for display).
      */
     'name'?: string;
     'position'?: string;
@@ -557,8 +574,12 @@ export interface ProjectGet200ResponseAllOfData {
     'offset'?: number;
     'total'?: number;
 }
-export interface ProjectPost201Response {
+export interface ProjectIdGet200Response {
     'data'?: DtoProjectResponse;
+    'error'?: object;
+}
+export interface ProjectPost201Response {
+    'data'?: DtoCreateProjectResponse;
     'error'?: object;
 }
 export interface RbacExplainGet200Response {
@@ -2910,7 +2931,7 @@ export const ProjectsApiFp = function(configuration?: Configuration) {
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async projectIdGet(id: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<ProjectPost201Response>> {
+        async projectIdGet(id: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<ProjectIdGet200Response>> {
             const localVarAxiosArgs = await localVarAxiosParamCreator.projectIdGet(id, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
             const localVarOperationServerBasePath = operationServerMap['ProjectsApi.projectIdGet']?.[localVarOperationServerIndex]?.url;
@@ -2924,7 +2945,7 @@ export const ProjectsApiFp = function(configuration?: Configuration) {
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async projectIdPut(id: number, body: DtoUpdateProjectRequest, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<ProjectPost201Response>> {
+        async projectIdPut(id: number, body: DtoUpdateProjectRequest, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<ProjectIdGet200Response>> {
             const localVarAxiosArgs = await localVarAxiosParamCreator.projectIdPut(id, body, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
             const localVarOperationServerBasePath = operationServerMap['ProjectsApi.projectIdPut']?.[localVarOperationServerIndex]?.url;
@@ -2981,7 +3002,7 @@ export const ProjectsApiFactory = function (configuration?: Configuration, baseP
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        projectIdGet(id: number, options?: RawAxiosRequestConfig): AxiosPromise<ProjectPost201Response> {
+        projectIdGet(id: number, options?: RawAxiosRequestConfig): AxiosPromise<ProjectIdGet200Response> {
             return localVarFp.projectIdGet(id, options).then((request) => request(axios, basePath));
         },
         /**
@@ -2992,7 +3013,7 @@ export const ProjectsApiFactory = function (configuration?: Configuration, baseP
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        projectIdPut(id: number, body: DtoUpdateProjectRequest, options?: RawAxiosRequestConfig): AxiosPromise<ProjectPost201Response> {
+        projectIdPut(id: number, body: DtoUpdateProjectRequest, options?: RawAxiosRequestConfig): AxiosPromise<ProjectIdGet200Response> {
             return localVarFp.projectIdPut(id, body, options).then((request) => request(axios, basePath));
         },
         /**
@@ -6084,7 +6105,7 @@ export const UsersApiAxiosParamCreator = function (configuration?: Configuration
          * @param {number} [limit] Page size (default 50, max 500)
          * @param {string} [role] Filter by role (e.g. worker)
          * @param {number} [managerId] Filter by manager (admin)
-         * @param {boolean} [includeHash] Включить password_hash (только admin)
+         * @param {boolean} [includeHash] Include password_hash (admin only)
          * @param {number} [offset] Page offset
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
@@ -6558,7 +6579,7 @@ export const UsersApiFp = function(configuration?: Configuration) {
          * @param {number} [limit] Page size (default 50, max 500)
          * @param {string} [role] Filter by role (e.g. worker)
          * @param {number} [managerId] Filter by manager (admin)
-         * @param {boolean} [includeHash] Включить password_hash (только admin)
+         * @param {boolean} [includeHash] Include password_hash (admin only)
          * @param {number} [offset] Page offset
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
@@ -6728,7 +6749,7 @@ export const UsersApiFactory = function (configuration?: Configuration, basePath
          * @param {number} [limit] Page size (default 50, max 500)
          * @param {string} [role] Filter by role (e.g. worker)
          * @param {number} [managerId] Filter by manager (admin)
-         * @param {boolean} [includeHash] Включить password_hash (только admin)
+         * @param {boolean} [includeHash] Include password_hash (admin only)
          * @param {number} [offset] Page offset
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
@@ -6868,7 +6889,7 @@ export class UsersApi extends BaseAPI {
      * @param {number} [limit] Page size (default 50, max 500)
      * @param {string} [role] Filter by role (e.g. worker)
      * @param {number} [managerId] Filter by manager (admin)
-     * @param {boolean} [includeHash] Включить password_hash (только admin)
+     * @param {boolean} [includeHash] Include password_hash (admin only)
      * @param {number} [offset] Page offset
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}

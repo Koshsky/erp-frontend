@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import ProjectPlanning from '../components/planner/ProjectPlanning/ProjectPlanning.vue'
@@ -74,6 +74,21 @@ const menu = ref<MenuState | null>(null)
 
 // Delete confirmation dialog (instead of window.confirm — it is blocked in iframes/sandboxes)
 const { confirm: confirmDialog, ask, proceed, cancel } = useConfirm()
+
+/** Transient success feedback (e.g. what the auto-create template added) */
+const feedback = ref('')
+let feedbackTimer: number | undefined
+function showFeedback(text: string) {
+  feedback.value = text
+  if (feedbackTimer) window.clearTimeout(feedbackTimer)
+  feedbackTimer = window.setTimeout(() => {
+    feedback.value = ''
+    feedbackTimer = undefined
+  }, 6000)
+}
+onBeforeUnmount(() => {
+  if (feedbackTimer) window.clearTimeout(feedbackTimer)
+})
 
 const menuItems = computed<ContextMenuItem[]>(() => {
   if (menu.value?.projectId != null) {
@@ -165,12 +180,24 @@ async function handleSelect(id: string) {
   if (!menu.value) return
   const { date, projectId } = menu.value
   if (id === 'create-project' && date != null) {
-    const ok = await store.createProject({
+    const res = await store.createProject({
       code: 'КО_' + Date.now(),
       start_date: date,
       end_date: addMonthsISO(date, 6),
     })
-    if (!ok) error.value = store.error
+    if (!res.ok) {
+      error.value = store.error
+    } else if (res.autoCreated) {
+      const a = res.autoCreated
+      showFeedback(
+        'Проект создан. По шаблону автосоздания добавлено: процессов — ' +
+          a.processes +
+          ', задач — ' +
+          a.tasks +
+          ', назначений ресурсов — ' +
+          a.assignments,
+      )
+    }
   } else if (id === 'edit-project' && projectId != null) {
     openProjectEdit(projectId)
   } else if (id === 'delete-project' && projectId != null) {
@@ -214,6 +241,8 @@ onMounted(() => {
       />
     </div>
 
+    <p v-if="feedback" class="pp-fb" role="status">{{ feedback }}</p>
+
     <ProjectPlanning
       :projects="projectPlanning?.projects || []"
       :loading="loading"
@@ -252,6 +281,15 @@ onMounted(() => {
   display: flex;
   justify-content: flex-end;
   margin-bottom: 12px;
+}
+.pp-fb {
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  background: #e6f4ea;
+  color: #1e8e3e;
+  border: 1px solid #b7dfc0;
+  border-radius: 8px;
+  font-size: 13px;
 }
 .pp-st {
   color: #666;

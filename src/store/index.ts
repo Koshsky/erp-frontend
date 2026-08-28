@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed, onScopeDispose } from 'vue'
 import axios, { type AxiosError, type Method } from 'axios'
 import { AuthApi, ProjectsApi, ProcessesApi, TasksApi, TimesheetResourcesApi, TimesheetCalendarApi, TimesheetStatesApi, PlanningApi, MilestonesApi, UsersApi, AssignmentsApi, AutoCreateApi, RBACApi, PermissionsApi, Configuration } from '@/api'
-import type { DtoUserInfo, DtoProject, DtoResourceResponse, DtoResourceCalendar, DtoResourceMemberResponse, DtoResourceAbsenceResponse, DtoUserResponse, DtoUserStateResponse, DtoStateResponse, DtoCreateResourceRequest, DtoUpdateResourceRequest, DtoCreateUserRequest, DtoUpdateUserRequest, DtoSetDaysRequest, DtoAdminUserResponse, DtoCreateUserResult, DtoResetPasswordResponse, DtoAutoCreateConfig, DtoCommentResponse, DomainRole, DtoRuleInput, DtoRuleView, DtoMatrixCell, DtoRoutePolicyView, PoliciesKindInfo, DtoPermission } from '@/api'
+import type { DtoUserInfo, DtoProject, DtoResourceResponse, DtoResourceCalendar, DtoResourceMemberResponse, DtoResourceAbsenceResponse, DtoUserResponse, DtoUserStateResponse, DtoStateResponse, DtoCreateResourceRequest, DtoUpdateResourceRequest, DtoCreateUserRequest, DtoUpdateUserRequest, DtoSetDaysRequest, DtoAdminUserResponse, DtoCreateUserResult, DtoResetPasswordResponse, DtoAutoCreateConfig, DtoAutoCreatedCounts, DtoCommentResponse, DomainRole, DtoRuleInput, DtoRuleView, DtoMatrixCell, DtoRoutePolicyView, PoliciesKindInfo, DtoPermission } from '@/api'
 import { apiErrorMessage, fullName } from '@/utils'
 import { getApiUrl } from '@/config'
 import { isOffline } from '@/offline/state'
@@ -1627,7 +1627,9 @@ export const usePlanningStore = defineStore('planning', () => {
     list.splice(i, 0, item)
   }
 
-  /** Creates a project with a fixed priority of 100 — at the end of the list */
+  /** Creates a project with a fixed priority of 100 — at the end of the list.
+   *  Returns what the auto-create template (server-side trigger) added to the
+   *  project (null when offline/optimistic or the template is empty). */
   async function createProject(
     payload: {
       code: string
@@ -1635,9 +1637,10 @@ export const usePlanningStore = defineStore('planning', () => {
       end_date: string
       priority?: number
     },
-  ): Promise<boolean> {
+  ): Promise<{ ok: boolean; autoCreated: DtoAutoCreatedCounts | null }> {
     const tempId = nextTempId()
-    return runMutation({
+    let autoCreated: DtoAutoCreatedCounts | null = null
+    const ok = await runMutation({
       entity: 'project',
       tempId,
       call: async () => {
@@ -1655,7 +1658,10 @@ export const usePlanningStore = defineStore('planning', () => {
           end_date?: string
           priority?: number
           owner_id?: number
+          auto_created?: DtoAutoCreatedCounts
         }
+        const ac = d.auto_created
+        if (ac && (ac.processes || ac.tasks || ac.assignments)) autoCreated = ac
         const item = {
           id: d.id ?? 0,
           project_code: d.code ?? payload.code,
@@ -1685,6 +1691,7 @@ export const usePlanningStore = defineStore('planning', () => {
         error.value = m
       },
     })
+    return { ok, autoCreated }
   }
 
   async function createProcess(
