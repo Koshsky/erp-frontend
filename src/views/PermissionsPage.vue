@@ -378,7 +378,7 @@ onMounted(() => {
                 :aria-expanded="isOpen(resource)"
                 @click="toggleGroup(resource)"
               >
-                <span class="pm-entity-caret">{{ isOpen(resource) ? '▾' : '▸' }}</span>
+                <span class="pm-entity-caret" aria-hidden="true">▸</span>
                 <span>{{ ENTITY_NAMES[resource] ?? resource }}</span>
               </button>
               <div v-if="isOpen(resource)" class="pm-entity-body">
@@ -471,24 +471,29 @@ onMounted(() => {
 </template>
 
 <style scoped>
+/* Unified palette:
+   - accent (interactive): #1a73e8; deep navy #1a3a6b only for headings;
+   - neutrals: borders #e3e8ef (hover #c7d2e0), subtle fills #f7f9fc / #fbfcfe;
+   - text: #2c3e50 primary, #66738a secondary, #94a0b4 tertiary;
+   - status: amber #e5a50a (dirty), green #2e7d4f (success), red #c0392b (error). */
 .pm-head {
-  margin-bottom: 16px;
+  margin-bottom: 18px;
 }
 .pm-title {
   font-size: 24px;
   font-weight: 700;
-  color: #2c3e50;
+  color: #1a3a6b;
   margin: 0 0 6px;
 }
 .pm-note {
-  color: #666;
+  color: #66738a;
   font-size: 13px;
   margin: 0;
   max-width: 900px;
-  line-height: 1.5;
+  line-height: 1.55;
 }
 .pm-load {
-  color: #888;
+  color: #94a0b4;
   font-size: 13px;
 }
 .pm-load.er {
@@ -513,29 +518,35 @@ onMounted(() => {
   gap: 10px;
   text-align: left;
   padding: 11px 14px;
-  border: 1px solid #dfe4ec;
+  border: 1px solid #e3e8ef;
   border-radius: 10px;
   background: #fff;
   cursor: pointer;
   font-size: 14px;
+  color: #2c3e50;
+  transition: border-color 0.15s, background 0.15s;
 }
 .pm-role-btn:hover {
-  border-color: #b7c3d6;
+  border-color: #c7d2e0;
+  background: #f7f9fc;
 }
 .pm-role-btn.active {
-  border-color: #1a3a6b;
-  background: #1a3a6b;
+  border-color: #1a73e8;
+  background: #1a73e8;
   color: #fff;
 }
 .pm-role-btn.active .pm-role-code {
-  background: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+.pm-role-btn.active .pm-role-name {
   color: #fff;
 }
 .pm-role-code {
   font-size: 11px;
   font-weight: 700;
-  background: #eef2f8;
-  color: #1a3a6b;
+  background: #eef3fb;
+  color: #1a73e8;
   border-radius: 999px;
   padding: 2px 9px;
   text-transform: uppercase;
@@ -545,105 +556,142 @@ onMounted(() => {
 }
 .pm-role-name {
   font-weight: 600;
+  color: #2c3e50;
 }
 .pm-role-lock {
   margin-left: auto;
   font-size: 11px;
-  color: #999;
+  color: #94a0b4;
   font-weight: 500;
 }
 .pm-editor {
   min-width: 0;
 }
 .pm-admin-note {
-  background: #f2f5fa;
-  border: 1px solid #e0e6f0;
+  background: #f7f9fc;
+  border: 1px solid #e3e8ef;
   border-radius: 10px;
   padding: 12px 14px;
   font-size: 13.5px;
-  color: #4a5a72;
-  line-height: 1.5;
+  color: #5a6b84;
+  line-height: 1.55;
 }
 .pm-group {
-  margin-bottom: 22px;
+  margin-bottom: 26px;
 }
 .pm-group-title {
-  font-size: 15px;
+  font-size: 12px;
   font-weight: 700;
-  color: #7a8699;
+  color: #94a0b4;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.6px;
   margin: 0 0 10px;
 }
+/* Entity = white card accordion */
 .pm-block {
-  margin-bottom: 14px;
+  background: #fff;
+  border: 1px solid #e3e8ef;
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 8px;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.pm-block:hover {
+  border-color: #c7d2e0;
 }
 .pm-entity {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 10px;
   width: 100%;
   text-align: left;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   color: #2c3e50;
-  background: #f4f6f9;
-  border: 1px solid #e4e9f0;
-  border-radius: 8px;
-  padding: 8px 12px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 11px 14px;
   cursor: pointer;
   user-select: none;
+  transition: background 0.15s;
 }
-.pm-entity:hover {
-  border-color: #b7c3d6;
+.pm-entity:hover,
+.pm-entity.open {
+  background: #f7f9fc;
+}
+.pm-entity.open {
+  border-bottom: 1px solid #eef1f6;
 }
 .pm-entity-caret {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background: #eef3fb;
+  color: #1a73e8;
   font-size: 11px;
-  color: #1a3a6b;
+  line-height: 1;
+  transition: transform 0.15s;
+}
+.pm-entity.open .pm-entity-caret {
+  transform: rotate(90deg);
 }
 .pm-entity-body {
-  padding-top: 6px;
+  padding: 8px 10px 10px;
 }
 .pm-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 7px 14px;
+  padding: 8px 12px;
   background: #fff;
-  border: 1px solid #eef1f6;
   border-radius: 8px;
-  margin-bottom: 4px;
-  font-size: 14px;
+  margin-bottom: 2px;
+  font-size: 13.5px;
+  transition: background 0.15s;
 }
 .pm-row:hover {
-  border-color: #d4dce8;
+  background: #f7f9fc;
 }
 .pm-row.dirty {
-  border-color: #e8b10a;
-  background: #fffbe6;
+  background: #fdf6e3;
+  outline: 1px solid #e5a50a;
+  outline-offset: -1px;
 }
 .pm-row-label {
   color: #2c3e50;
 }
 .pm-select {
   font-size: 13.5px;
-  padding: 5px 8px;
-  border: 1px solid #cdd5e1;
-  border-radius: 6px;
+  padding: 5px 10px;
+  border: 1px solid #d3dbe6;
+  border-radius: 7px;
   background: #fff;
   color: #2c3e50;
   cursor: pointer;
   min-width: 210px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.pm-select:focus {
+  border-color: #1a73e8;
+  box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.12);
+  outline: none;
 }
 .pm-comment {
   font-size: 12.5px;
-  color: #78849a;
-  padding: 8px 0 8px 2px;
+  color: #66738a;
+  padding: 8px 0 4px 2px;
+  line-height: 1.5;
 }
 .pm-inspect {
   margin-top: 18px;
-  border: 1px solid #e4e8ef;
+  border: 1px solid #e3e8ef;
   border-radius: 10px;
   background: #fbfcfe;
   padding: 10px 14px;
@@ -651,7 +699,7 @@ onMounted(() => {
 .pm-inspect-summary {
   font-size: 13px;
   font-weight: 600;
-  color: #1a3a6b;
+  color: #1a73e8;
   cursor: pointer;
 }
 .pm-route {
@@ -668,11 +716,11 @@ onMounted(() => {
   min-width: 190px;
 }
 .pm-route-kind {
-  color: #555;
+  color: #66738a;
   min-width: 90px;
 }
 .pm-route-params {
-  color: #666;
+  color: #66738a;
   word-break: break-all;
 }
 .pm-savebar {
@@ -680,9 +728,10 @@ onMounted(() => {
   bottom: 12px;
   margin-top: 18px;
   background: #fff;
-  border: 1px solid #e8b10a;
+  border: 1px solid #e3e8ef;
+  border-left: 4px solid #e5a50a;
   border-radius: 12px;
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 10px 30px rgba(16, 24, 40, 0.1);
   padding: 12px 16px;
   display: flex;
   gap: 18px;
@@ -692,7 +741,7 @@ onMounted(() => {
 .pm-savebar-info {
   flex: 1;
   font-size: 13px;
-  color: #333;
+  color: #2c3e50;
 }
 .pm-savebar-info ul {
   margin: 6px 0 0;
@@ -710,41 +759,117 @@ onMounted(() => {
 .pm-btn {
   font-size: 13px;
   font-weight: 600;
-  border: 1px solid #cdd5e1;
+  border: 1px solid #d3dbe6;
   background: #fff;
   color: #2c3e50;
   border-radius: 8px;
   padding: 7px 14px;
   cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.pm-btn:hover:not(:disabled) {
+  background: #f7f9fc;
 }
 .pm-btn:disabled {
   opacity: 0.5;
   cursor: default;
 }
 .pm-btn.primary {
-  background: #1a3a6b;
-  border-color: #1a3a6b;
+  background: #1a73e8;
+  border-color: #1a73e8;
   color: #fff;
+}
+.pm-btn.primary:hover:not(:disabled) {
+  background: #1765cc;
+  border-color: #1765cc;
 }
 .pm-btn.danger {
   color: #c0392b;
   border-color: #e6b8b3;
 }
+.pm-btn.danger:hover:not(:disabled) {
+  background: #fdf1f0;
+}
 .pm-save-msg {
   font-size: 13px;
-  color: #1d6b2f;
+  color: #2e7d4f;
   margin: 12px 0;
 }
 .pm-save-msg.er {
   color: #c0392b;
 }
-.pm-section-title { font-size: 18px; font-weight: 700; color: #1a3a6b; margin: 18px 0 8px; }
-.pm-roles-editor { margin-bottom: 14px; }
-.pm-role-create { display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
-.pm-input { font-size: 13px; padding: 6px 10px; border: 1px solid #cdd5e1; border-radius: 6px; flex: 1; min-width: 180px; }
-.pm-role-list { display: flex; flex-direction: column; gap: 6px; }
-.pm-role-editable { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px; background: #fff; border: 1px solid #eef1f6; border-radius: 8px; }
-.pm-role-editable-main { display: flex; align-items: center; gap: 10px; min-width: 0; }
-.pm-role-editable-desc { color: #666; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pm-role-editable-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.pm-section-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #1a3a6b;
+  margin: 22px 0 8px;
+}
+.pm-hint {
+  color: #66738a;
+  font-size: 13px;
+  margin: 0 0 10px;
+  line-height: 1.5;
+}
+.pm-roles-editor {
+  margin-bottom: 14px;
+}
+.pm-role-create {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+.pm-input {
+  font-size: 13px;
+  padding: 6px 10px;
+  border: 1px solid #d3dbe6;
+  border-radius: 7px;
+  background: #fff;
+  color: #2c3e50;
+  flex: 1;
+  min-width: 180px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.pm-input:focus {
+  border-color: #1a73e8;
+  box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.12);
+  outline: none;
+}
+.pm-role-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.pm-role-editable {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  background: #fff;
+  border: 1px solid #e3e8ef;
+  border-radius: 10px;
+  transition: border-color 0.15s;
+}
+.pm-role-editable:hover {
+  border-color: #c7d2e0;
+}
+.pm-role-editable-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.pm-role-editable-desc {
+  color: #66738a;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pm-role-editable-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
 </style>
