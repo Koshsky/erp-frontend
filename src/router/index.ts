@@ -36,7 +36,7 @@ const router = createRouter({
       children: [
         // Main screen: the task planner if allowed by permissions
         // (task.view), otherwise the profile. The guard decides after the
-        // redirect to /planner (see plannerAccessible below).
+        // redirect to /planner (see pageAccessible below).
         {
           path: '',
           name: 'home',
@@ -113,23 +113,26 @@ const router = createRouter({
 })
 
 /**
- * Main screen — the task planner if available per RBAC (task.view),
- * otherwise the profile page. Permissions load asynchronously (online — /permissions/me,
- * offline — cache), so for a root transition we wait for them so a "cold"
- * start does not wrongly send the user to the profile; if permissions could not
- * be obtained at all (no network and no cache) — fall back to the planner nav roles.
+ * Page access by matrix permission (a resource/action pair from `pagePerm`),
+ * WAITING for the permissions to load first. On a cold start (page reload)
+ * the store is fresh: deciding access before /permissions/me (or the offline
+ * cache) arrives would see an empty permission list and wrongly send the user
+ * to the profile. If permissions could not be obtained at all (no network and
+ * no cache) — fall back to the planner nav roles.
  */
 const PLANNER_ROLES = ['admin', 'dp', 'rp', 'vp']
 
-async function plannerAccessible(
+async function pageAccessible(
   rbac: ReturnType<typeof useRbacStore>,
-  role?: string,
+  role: string | undefined,
+  resource: string,
+  action: string,
 ): Promise<boolean> {
   if (!rbac.permsLoaded) {
     const ok = await rbac.loadMyPermissions()
     if (!ok && !rbac.permsLoaded) return PLANNER_ROLES.includes(role ?? '')
   }
-  return rbac.can('task', 'view')
+  return rbac.can(resource, action)
 }
 
 // Global guard: unauthenticated users always go to /login.
@@ -161,14 +164,10 @@ router.beforeEach(async (to) => {
     return { name: 'home' }
   }
 
-  // Permissions for navigation: load once per session (except offline — cache).
+  // The permission gate below (pageAccessible) waits for the permissions on
+  // every guarded page — no fire-and-forget load here, otherwise it would race
+  // the awaited load with a duplicate /permissions/me request.
   const rbac = useRbacStore()
-  // For /planner we wait for permissions below (plannerAccessible) — no duplicate request here.
-  if (auth.isAuthenticated && !rbac.permsLoaded && !isOffline.value && to.name !== 'planner') {
-    // Do not block navigation on the network: permissions load asynchronously
-    // (buttons appear as they load; polling updates them further).
-    void rbac.loadMyPermissions()
-  }
 
   // Show actions/pages by matrix permissions, not by roles.
   // Business pages — by the view permission; admin sections — a temporary fallback
@@ -188,12 +187,10 @@ router.beforeEach(async (to) => {
   }
   const needed = pagePerm[to.name as string]
   if (needed && to.meta.requiresAuth) {
-    // Decide the main screen by matrix permissions, after waiting for them to load
-    // (otherwise a "cold" start would wrongly send the user to the profile).
-    const allowed =
-      to.name === 'planner'
-        ? await plannerAccessible(rbac, auth.user?.role)
-        : rbac.can(needed[0], needed[1])
+    // Decide access by matrix permissions after WAITING for them: on a cold
+    // start (F5 / Ctrl+Shift+R) rbac.can() evaluated before the permissions
+    // arrive sees an empty list and wrongly redirects the page to the profile.
+    const allowed = await pageAccessible(rbac, auth.user?.role, needed[0], needed[1])
     if (!allowed) {
       return { name: 'profile' }
     }
