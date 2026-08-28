@@ -12,21 +12,65 @@ const app = useAppStore()
 const rbac = useRbacStore()
 const { adminUsers, adminUsersLoading, adminUsersError, users } = storeToRefs(app)
 
-/** Users sorted by full name */
-const sortedUsers = computed(() => [...adminUsers.value].sort(compareByName))
+type ColumnKey = 'name' | 'username' | 'created_at' | 'role' | 'manager'
 
-/** Search by full name (ФИО), case-insensitive */
-const search = ref('')
+/** Table columns: header labels, per-column filters and sortable keys */
+const COLUMNS: { key: ColumnKey; label: string }[] = [
+  { key: 'name', label: 'ФИО' },
+  { key: 'username', label: 'Логин' },
+  { key: 'created_at', label: 'Регистрация' },
+  { key: 'role', label: 'Роль' },
+  { key: 'manager', label: 'Руководитель' },
+]
 
-/** Role filter: '' — all roles */
-const roleFilter = ref('')
+/** Per-column filters, rendered under the table header */
+const fName = ref('')
+const fLogin = ref('')
+const fManager = ref('')
+const fRole = ref('') // '' — all roles
+const fRegDate = ref('') // yyyy-mm-dd
+
+/** Active sort: column key + direction (1 asc, -1 desc); default ФИО ↑ */
+const sortBy = ref<{ key: ColumnKey; dir: 1 | -1 }>({ key: 'name', dir: 1 })
+
+function toggleSort(key: ColumnKey) {
+  if (sortBy.value.key === key) {
+    sortBy.value = { key, dir: sortBy.value.dir === 1 ? -1 : 1 }
+  } else {
+    sortBy.value = { key, dir: 1 }
+  }
+}
+
+/** Alphanumeric-aware string comparison: "worker_2" sorts before "worker_10" */
+function cmp(a: string, b: string): number {
+  return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })
+}
+
+/** Sort-key value of a user for a column; dates compare fine as ISO strings */
+function sortValue(u: DtoAdminUserResponse, key: ColumnKey): string {
+  switch (key) {
+    case 'name': return u.name ?? ''
+    case 'username': return u.username ?? ''
+    case 'created_at': return u.created_at ?? ''
+    case 'role': return roleLabel(u.role)
+    case 'manager': return managerLabel(u)
+  }
+}
 
 const filteredUsers = computed(() => {
-  let list = sortedUsers.value
-  const q = search.value.trim().toLowerCase()
-  if (q) list = list.filter((u) => (u.name ?? '').toLowerCase().includes(q))
-  if (roleFilter.value) list = list.filter((u) => u.role === roleFilter.value)
-  return list
+  const qName = fName.value.trim().toLowerCase()
+  const qLogin = fLogin.value.trim().toLowerCase()
+  const qManager = fManager.value.trim().toLowerCase()
+  const list = adminUsers.value.filter((u) => {
+    if (qName && !(u.name ?? '').toLowerCase().includes(qName)) return false
+    if (qLogin && !(u.username ?? '').toLowerCase().includes(qLogin)) return false
+    if (qManager && !managerLabel(u).toLowerCase().includes(qManager)) return false
+    if (fRole.value && u.role !== fRole.value) return false
+    if (fRegDate.value && (u.created_at ?? '').slice(0, 10) !== fRegDate.value) return false
+    return true
+  })
+  const { key, dir } = sortBy.value
+  return list.sort((a, b) => dir * cmp(sortValue(a, key), sortValue(b, key)))
 })
 
 const ROLE_LABELS: Record<string, string> = {
@@ -52,6 +96,10 @@ function fmtDate(iso?: string): string {
   const [datePart] = iso.split('T')
   const [y, m, d] = datePart.split('-')
   return `${d}.${m}.${y}`
+}
+
+function roleLabel(role?: string): string {
+  return role ? (ROLE_LABELS[role] ?? role) : '—'
 }
 
 // === Create / edit user dialog ===
@@ -265,11 +313,6 @@ onMounted(() => {
     <div class="up-head">
       <h2 class="up-title">Пользователи</h2>
       <div class="up-actions">
-        <input v-model="search" type="search" class="up-search" placeholder="Поиск по ФИО" />
-        <select v-model="roleFilter" class="up-filter" title="Фильтр по роли">
-          <option value="">Все роли</option>
-          <option v-for="opt in roleOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-        </select>
         <button type="button" class="up-add" @click="openCreate">Создать пользователя</button>
       </div>
     </div>
@@ -278,12 +321,29 @@ onMounted(() => {
     <p v-if="adminUsersError && !adminUsers.length" class="up-st er">{{ adminUsersError }}</p>
 
     <div v-if="filteredUsers.length" class="table">
-      <div class="tr th">
-        <div>ФИО</div>
-        <div>Логин</div>
-        <div>Регистрация</div>
-        <div>Роль</div>
-        <div>Руководитель</div>
+      <div class="tr th th-sort">
+        <button
+          v-for="col in COLUMNS"
+          :key="col.key"
+          type="button"
+          class="th-cell"
+          :class="{ 'th-active': sortBy.key === col.key }"
+          :title="`Сортировать по «${col.label}»`"
+          @click="toggleSort(col.key)"
+        >
+          {{ col.label }}
+          <span v-if="sortBy.key === col.key" class="th-arrow">{{ sortBy.dir === 1 ? '▲' : '▼' }}</span>
+        </button>
+      </div>
+      <div class="tr th th-filters">
+        <input v-model="fName" type="search" class="th-filter" placeholder="по ФИО" />
+        <input v-model="fLogin" type="search" class="th-filter" placeholder="по логину" />
+        <input v-model="fRegDate" type="date" class="th-filter" :title="'Фильтр по дате регистрации'" />
+        <select v-model="fRole" class="th-filter" :title="'Фильтр по роли'">
+          <option value="">Все роли</option>
+          <option v-for="opt in roleOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+        </select>
+        <input v-model="fManager" type="search" class="th-filter" placeholder="по руководителю" />
       </div>
       <div
         v-for="u in filteredUsers"
@@ -416,36 +476,6 @@ onMounted(() => {
   gap: 10px;
   flex-wrap: wrap;
 }
-.up-search {
-  width: 220px;
-  box-sizing: border-box;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  padding: 9px 12px;
-  font-size: 14px;
-  font-family: inherit;
-  color: #333;
-  background: #fff;
-  outline: none;
-}
-.up-search:focus {
-  border-color: #1a73e8;
-  box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.12);
-}
-.up-filter {
-  box-sizing: border-box;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  padding: 9px 12px;
-  font-size: 14px;
-  font-family: inherit;
-  color: #333;
-  background: #fff;
-  outline: none;
-}
-.up-filter:focus {
-  border-color: #1a73e8;
-}
 .up-add {
   border: none;
   border-radius: 8px;
@@ -523,6 +553,55 @@ onMounted(() => {
   background: #f8f9fa;
   font-weight: 600;
   color: #555;
+}
+.th-sort {
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+.th-cell {
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-weight: 600;
+  color: inherit;
+  text-align: left;
+  padding: 0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  user-select: none;
+}
+.th-cell:hover {
+  color: #1a73e8;
+}
+.th-active {
+  color: #1a3a6b;
+}
+.th-arrow {
+  font-size: 10px;
+  line-height: 1;
+}
+.th-filters {
+  background: #fafbfc;
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+.th-filter {
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 5px 8px;
+  font-size: 12px;
+  font-family: inherit;
+  color: #333;
+  background: #fff;
+  outline: none;
+}
+.th-filter:focus {
+  border-color: #1a73e8;
 }
 .name {
   font-weight: 700;
