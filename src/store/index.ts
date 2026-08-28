@@ -772,13 +772,13 @@ export const useAppStore = defineStore('app', () => {
   const adminUsersLoading = ref(false)
   const adminUsersError = ref<string | null>(null)
 
-  /** Full user list for the admin page (includes password_hash) */
-  async function loadAdminUsers(includeHash = true) {
+  /** Full user list for the admin page (without password hashes) */
+  async function loadAdminUsers() {
     adminUsersLoading.value = true
     adminUsersError.value = null
     try {
       const api = new UsersApi(apiConfig())
-      const resp = await api.userGet(500, undefined, undefined, includeHash, 0)
+      const resp = await api.userGet(500, undefined, undefined, false, 0)
       adminUsers.value = resp.data?.data?.items ?? []
     } catch (e: any) {
       adminUsersError.value = apiErrorMessage(e)

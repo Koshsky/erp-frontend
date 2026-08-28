@@ -121,7 +121,7 @@ async function onChangeManager(user: DtoAdminUserResponse, event: Event) {
 }
 
 onMounted(() => {
-  void app.loadAdminUsers(false)
+  void app.loadAdminUsers()
   if (!users.value.length) void app.loadUsers()
 })
 </script>

@@ -62,6 +62,7 @@ export interface DtoAddMemberRequest {
     'user_id'?: number;
 }
 export interface DtoAdminUserResponse {
+    'created_at'?: string;
     'first_name'?: string;
     'hire_date'?: string;
     'id'?: number;
