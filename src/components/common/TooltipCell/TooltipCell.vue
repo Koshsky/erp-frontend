@@ -4,6 +4,7 @@ import type { TooltipCellProps } from './types'
 
 const props = withDefaults(defineProps<TooltipCellProps>(), {
   multiline: false,
+  disabled: false,
 })
 
 const emit = defineEmits<{
@@ -36,6 +37,8 @@ function positionAt(e: MouseEvent) {
 }
 
 function onMouseEnter(e: MouseEvent) {
+  // Disabled (e.g. during a range drag): do not open the popup at all
+  if (props.disabled) return
   positionAt(e)
   showTimer = setTimeout(() => {
     visible.value = true

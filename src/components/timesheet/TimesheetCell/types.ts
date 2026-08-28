@@ -11,4 +11,6 @@ export interface TimesheetCellProps {
   showText?: boolean
   /** Date range of the active selection this cell belongs to (assignment tooltip) */
   selectionRange?: { start: string; end: string } | null
+  /** When true, the hover tooltip is suppressed (while a range is being dragged) */
+  tooltipDisabled?: boolean
 }

@@ -11,6 +11,7 @@ const props = withDefaults(defineProps<TimesheetCellProps>(), {
   selected: false,
   showText: false,
   selectionRange: null,
+  tooltipDisabled: false,
 })
 
 const bg = computed<string>(() => {
@@ -49,7 +50,7 @@ const emptyLabel = computed(() => (props.isWeekend ? 'Выходной' : 'Ра�
 </script>
 
 <template>
-  <TooltipCell class="tsc" :multiline="true">
+  <TooltipCell class="tsc" :multiline="true" :disabled="tooltipDisabled">
     <div
       class="tsc-inner"
       :class="{ 'tsc--selected': selected, 'tsc--show-text': showText }"

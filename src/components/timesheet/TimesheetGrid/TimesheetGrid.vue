@@ -36,6 +36,9 @@ const selection = ref<{ employeeId: number; startIdx: number; endIdx: number } |
 /** Live tooltip position — follows the cursor while selecting (assignment feedback) */
 const dragTip = ref<{ x: number; y: number } | null>(null)
 
+/** Whether a range drag is in progress (left mouse button held) */
+const dragging = ref(false)
+
 /** Floating panel for assigning a state */
 const panel = ref<{
   x: number
@@ -154,6 +157,7 @@ function onPointerDown(e: PointerEvent) {
   e.preventDefault()
   selection.value = { employeeId: empId, startIdx: idx, endIdx: idx }
   dragTip.value = { x: e.clientX, y: e.clientY }
+  dragging.value = true
   document.body.style.userSelect = 'none'
   window.addEventListener('pointermove', onPointerMove)
   window.addEventListener('pointerup', onPointerUp)
@@ -177,16 +181,15 @@ function onPointerMove(e: PointerEvent) {
 function onPointerUp(e: PointerEvent) {
   const s = selection.value
   selection.value = null
+  dragging.value = false
+  dragTip.value = null
   document.body.style.userSelect = ''
   window.removeEventListener('pointermove', onPointerMove)
   window.removeEventListener('pointerup', onPointerUp)
   // The drag may have left a browser selection anchor — clear it so a click outside the panel
   // does not "stretch" text between clicks
   window.getSelection()?.removeAllRanges()
-  if (!s || Number.isNaN(s.endIdx)) {
-    dragTip.value = null
-    return
-  }
+  if (!s || Number.isNaN(s.endIdx)) return
   const lo = Math.min(s.startIdx, s.endIdx)
   const hi = Math.max(s.startIdx, s.endIdx)
   const payload = {
@@ -200,7 +203,6 @@ function onPointerUp(e: PointerEvent) {
   if (openTimer) {
     clearTimeout(openTimer)
     openTimer = null
-    dragTip.value = null
     return
   }
   // Show the selection immediately, the panel after a delay (to distinguish a double-click)
@@ -208,8 +210,6 @@ function onPointerUp(e: PointerEvent) {
   openTimer = setTimeout(() => {
     openTimer = null
     panel.value = payload
-    // The panel head shows the range — hide the live tooltip
-    dragTip.value = null
   }, OPEN_DELAY_MS)
 }
 
@@ -242,6 +242,7 @@ function closePanel() {
   panel.value = null
   selection.value = null
   dragTip.value = null
+  dragging.value = false
   // Remove the browser selection left after a drag/click outside the panel
   window.getSelection()?.removeAllRanges()
 }
@@ -265,6 +266,7 @@ function onDblClick() {
   panel.value = null
   selection.value = null
   dragTip.value = null
+  dragging.value = false
 }
 
 function onKeydown(e: KeyboardEvent) {
@@ -281,6 +283,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('resize', clampPanel)
   document.body.style.userSelect = ''
   dragTip.value = null
+  dragging.value = false
 })
 
 /** The visible date range — signal to load more states (on scroll/zoom) */
@@ -346,6 +349,7 @@ const labelsH = computed(() => props.employees.length * ROW_H)
             :is-weekend="isWeekend(i)"
             :selected="isSelected(emp.id ?? 0, i)"
             :selection-range="selectionRangeFor(emp.id ?? 0, i)"
+            :tooltip-disabled="dragging"
             :show-text="t.cellPx >= 40"
           />
         </div>
