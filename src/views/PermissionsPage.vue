@@ -41,6 +41,34 @@ const RESOURCE_LABELS: Record<string, string> = {
   rbac_config: 'настроек администрирования',
 }
 
+/** Entity names (nominative) for the collapsible group headers. */
+const ENTITY_NAMES: Record<string, string> = {
+  project: 'Проекты',
+  process: 'Процессы',
+  task: 'Задачи',
+  milestone: 'Вехи',
+  assignment: 'Назначения ресурсов',
+  state: 'Статусы',
+  resource: 'Ресурсы табеля',
+  worker: 'Сотрудники',
+  user_catalog: 'Каталог пользователей',
+  rbac_config: 'Настройки администрирования',
+}
+
+/** Collapsed by default; the header click expands/collapses an entity group */
+const openEntities = ref<Set<string>>(new Set())
+
+function isOpen(resource: string): boolean {
+  return openEntities.value.has(resource)
+}
+
+function toggleGroup(resource: string) {
+  const next = new Set(openEntities.value)
+  if (next.has(resource)) next.delete(resource)
+  else next.add(resource)
+  openEntities.value = next
+}
+
 /**
  * Available scopes with human-readable labels in the resource context.
  * The scope set mirrors policies.ScopeApplicable on the backend; the wording
@@ -343,16 +371,32 @@ onMounted(() => {
           <div v-for="group in GROUPS" :key="group.key" class="pm-group">
             <h3 class="pm-group-title">{{ group.title }}</h3>
             <div v-for="resource in group.resources" :key="resource" class="pm-block">
-              <h4 class="pm-entity">Просмотр — удаление · {{ RESOURCE_LABELS[resource] }}</h4>
-              <div v-for="action in ACTIONS" :key="action" class="pm-row" :class="{ dirty: staged[cellKey(selected, resource, action)] }">
-                <div class="pm-row-label">{{ ACTION_LABELS[action] }} {{ RESOURCE_LABELS[resource] }}</div>
-                <select
-                  class="pm-select"
-                  :value="cellValue(selected, resource, action)"
-                  @change="onCellChange(resource, action, ($event.target as HTMLSelectElement).value)"
+              <button
+                type="button"
+                class="pm-entity"
+                :class="{ open: isOpen(resource) }"
+                :aria-expanded="isOpen(resource)"
+                @click="toggleGroup(resource)"
+              >
+                <span class="pm-entity-caret">{{ isOpen(resource) ? '▾' : '▸' }}</span>
+                <span>{{ ENTITY_NAMES[resource] ?? resource }}</span>
+              </button>
+              <div v-if="isOpen(resource)" class="pm-entity-body">
+                <div
+                  v-for="action in ACTIONS"
+                  :key="action"
+                  class="pm-row"
+                  :class="{ dirty: staged[cellKey(selected, resource, action)] }"
                 >
-                  <option v-for="opt in SCOPE_OPTIONS[resource]" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-                </select>
+                  <div class="pm-row-label">{{ ACTION_LABELS[action] }} {{ RESOURCE_LABELS[resource] }}</div>
+                  <select
+                    class="pm-select"
+                    :value="cellValue(selected, resource, action)"
+                    @change="onCellChange(resource, action, ($event.target as HTMLSelectElement).value)"
+                  >
+                    <option v-for="opt in SCOPE_OPTIONS[resource]" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+                  </select>
+                </div>
               </div>
             </div>
             <p v-if="group.key === 'planning'" class="pm-comment">
@@ -535,10 +579,30 @@ onMounted(() => {
   margin-bottom: 14px;
 }
 .pm-entity {
-  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  text-align: left;
+  font-size: 13px;
   font-weight: 600;
-  color: #8a96a8;
-  margin: 0 0 6px;
+  color: #2c3e50;
+  background: #f4f6f9;
+  border: 1px solid #e4e9f0;
+  border-radius: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  user-select: none;
+}
+.pm-entity:hover {
+  border-color: #b7c3d6;
+}
+.pm-entity-caret {
+  font-size: 11px;
+  color: #1a3a6b;
+}
+.pm-entity-body {
+  padding-top: 6px;
 }
 .pm-row {
   display: flex;
