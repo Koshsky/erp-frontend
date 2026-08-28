@@ -4,7 +4,7 @@ import { storeToRefs } from 'pinia'
 import { CopyField } from '../components/common'
 import { useAppStore, useRbacStore } from '../store'
 import { compareByName, translitPhio } from '../utils'
-import type { DtoAdminUserResponse, DtoCreateUserRequest } from '@/api'
+import type { DtoAdminUserResponse, DtoCreateUserRequest, DtoUpdateUserRequest } from '@/api'
 
 const app = useAppStore()
 const rbac = useRbacStore()
@@ -52,12 +52,14 @@ function fmtDate(iso?: string): string {
   return `${d}.${m}.${y}`
 }
 
-// === Creating a user ===
-const createOpen = ref(false)
-const createBusy = ref(false)
-const createError = ref<string | null>(null)
+// === Create / edit user dialog ===
+const dialogOpen = ref(false)
+const dialogBusy = ref(false)
+const dialogError = ref<string | null>(null)
+/** The user being edited; null — the dialog creates a new user */
+const editingUser = ref<DtoAdminUserResponse | null>(null)
 
-const create = reactive({
+const form = reactive({
   lastName: '',
   firstName: '',
   middleName: '',
@@ -71,12 +73,12 @@ const create = reactive({
 /** The login field was edited manually — stop auto-filling from the full name */
 const loginTouched = ref(false)
 
-// Live default login: translit of the full name, updated as ФИО is typed
+// Live default login (create mode only): translit of the full name, updated as ФИО is typed
 watch(
-  () => [create.lastName, create.firstName, create.middleName] as const,
+  () => [form.lastName, form.firstName, form.middleName] as const,
   () => {
-    if (loginTouched.value) return
-    create.login = translitPhio(create.lastName, create.firstName, create.middleName)
+    if (loginTouched.value || editingUser.value) return
+    form.login = translitPhio(form.lastName, form.firstName, form.middleName)
   },
 )
 
@@ -89,51 +91,112 @@ const managerOptions = computed(() => [
     .map((u) => ({ value: u.id as number, label: u.name ?? `#${u.id}` })),
 ])
 
-function openCreate() {
-  createError.value = null
-  create.lastName = ''
-  create.firstName = ''
-  create.middleName = ''
-  create.login = ''
-  create.role = 'worker'
-  create.managerId = ''
-  create.position = ''
-  create.hireDate = ''
-  create.terminationDate = ''
+function resetForm() {
+  form.lastName = ''
+  form.firstName = ''
+  form.middleName = ''
+  form.login = ''
+  form.role = 'worker'
+  form.managerId = ''
+  form.position = ''
+  form.hireDate = ''
+  form.terminationDate = ''
   loginTouched.value = false
-  createOpen.value = true
 }
 
-const canCreate = computed(
-  () => create.lastName.trim() !== '' && create.firstName.trim() !== '' && !createBusy.value,
-)
+function openCreate() {
+  dialogError.value = null
+  editingUser.value = null
+  resetForm()
+  dialogOpen.value = true
+}
 
-async function onCreate() {
-  if (!canCreate.value) return
-  createBusy.value = true
-  createError.value = null
-  const payload: DtoCreateUserRequest = {
-    last_name: create.lastName.trim(),
-    first_name: create.firstName.trim(),
-    middle_name: create.middleName.trim() || undefined,
-    role: create.role,
-    position: create.position.trim(),
+function openEdit(u: DtoAdminUserResponse) {
+  dialogError.value = null
+  editingUser.value = u
+  form.lastName = u.last_name ?? ''
+  form.firstName = u.first_name ?? ''
+  form.middleName = u.middle_name ?? ''
+  form.login = u.username ?? ''
+  form.role = u.role ?? 'worker'
+  form.managerId = u.manager_id != null ? String(u.manager_id) : ''
+  form.position = u.position ?? ''
+  form.hireDate = u.hire_date ?? ''
+  form.terminationDate = u.termination_date ?? ''
+  // In edit mode the login is entered manually — no auto-fill
+  loginTouched.value = true
+  dialogOpen.value = true
+}
+
+const canSubmit = computed(() => {
+  if (dialogBusy.value) return false
+  if (form.lastName.trim() === '' || form.firstName.trim() === '') return false
+  if (editingUser.value && form.login.trim() === '') return false
+  return true
+})
+
+async function onSubmit() {
+  if (!canSubmit.value) return
+  dialogBusy.value = true
+  dialogError.value = null
+  try {
+    const common = {
+      last_name: form.lastName.trim(),
+      first_name: form.firstName.trim(),
+      role: form.role,
+    }
+    if (editingUser.value) {
+      const id = editingUser.value.id
+      if (id == null) return
+      // Empty strings clear the field (unlike undefined, which would keep it)
+      const patch: DtoUpdateUserRequest = {
+        ...common,
+        middle_name: form.middleName.trim(),
+        username: form.login.trim(),
+        position: form.position.trim(),
+      }
+      if (form.hireDate) patch.hire_date = form.hireDate
+      if (form.terminationDate) patch.termination_date = form.terminationDate
+      const ok = await app.updateUser(id, patch)
+      const prevManager = editingUser.value.manager_id ?? null
+      const nextManager = form.managerId === '' ? null : Number(form.managerId)
+      if (ok && nextManager !== prevManager) await app.updateManager(id, nextManager)
+      if (ok) {
+        dialogOpen.value = false
+        editingUser.value = null
+      } else {
+        dialogError.value = adminUsersError.value
+      }
+      return
+    }
+    const payload: DtoCreateUserRequest = {
+      ...common,
+      middle_name: form.middleName.trim() || undefined,
+      position: form.position.trim(),
+    }
+    const login = form.login.trim()
+    // Send the login only if entered; an empty one lets the backend generate it
+    // (transliteration of the last name, uniqueness ensured by a numeric suffix).
+    if (login) payload.username = login
+    if (form.hireDate) payload.hire_date = form.hireDate
+    if (form.terminationDate) payload.termination_date = form.terminationDate
+    if (form.managerId !== '') payload.manager_id = Number(form.managerId)
+    const res = await app.createUser(payload)
+    if (res && res.user) {
+      dialogOpen.value = false
+      showPassword(res.password, `Пользователь «${res.user.name}» создан`)
+    } else {
+      dialogError.value = adminUsersError.value
+    }
+  } finally {
+    dialogBusy.value = false
   }
-  const login = create.login.trim()
-  // Send the login only if entered; an empty one lets the backend generate it
-  // (transliteration of the last name, uniqueness ensured by a numeric suffix).
-  if (login) payload.username = login
-  if (create.hireDate) payload.hire_date = create.hireDate
-  if (create.terminationDate) payload.termination_date = create.terminationDate
-  if (create.managerId !== '') payload.manager_id = Number(create.managerId)
-  const res = await app.createUser(payload)
-  createBusy.value = false
-  if (res && res.user) {
-    createOpen.value = false
-    showPassword(res.password, `Пользователь «${res.user.name}» создан`)
-  } else {
-    createError.value = adminUsersError.value
-  }
+}
+
+// === Manager (for the label; editing is in the user dialog) ===
+function managerLabel(user: DtoAdminUserResponse): string {
+  if (user.manager_id == null) return '—'
+  return users.value.find((u) => u.id === user.manager_id)?.name ?? `#${user.manager_id}`
 }
 
 // === Showing the generated password (once) ===
@@ -150,7 +213,7 @@ async function onResetPassword(user: DtoAdminUserResponse) {
   showPassword(password ?? undefined, `Новый пароль для «${user.name}»`)
 }
 
-// === Changing the role ===
+// === Changing the role (fast, inline) ===
 const roleChanging = ref(false)
 async function onChangeRole(user: DtoAdminUserResponse, event: Event) {
   const role = (event.target as HTMLSelectElement).value
@@ -158,12 +221,6 @@ async function onChangeRole(user: DtoAdminUserResponse, event: Event) {
   roleChanging.value = true
   await app.updateUser(user.id, { role })
   roleChanging.value = false
-}
-
-// === Manager (for the label; editing is on the structure page) ===
-function managerLabel(user: DtoAdminUserResponse): string {
-  if (user.manager_id == null) return '—'
-  return users.value.find((u) => u.id === user.manager_id)?.name ?? `#${user.manager_id}`
 }
 
 onMounted(() => {
@@ -210,6 +267,7 @@ onMounted(() => {
         </div>
         <div>{{ managerLabel(u) }}</div>
         <div class="act">
+          <button type="button" class="up-btn" @click="openEdit(u)">Редактировать</button>
           <button type="button" class="up-btn" @click="onResetPassword(u)">Сбросить пароль</button>
         </div>
       </div>
@@ -218,69 +276,77 @@ onMounted(() => {
       {{ adminUsers.length ? 'Ничего не найдено' : 'Нет данных' }}
     </p>
 
-    <!-- Create user dialog -->
-    <div v-if="createOpen" class="pw-overlay" @click.self="createOpen = false">
-      <div class="pw-card uc-card" role="dialog" aria-modal="true" aria-label="Создать пользователя">
-        <div class="pw-caption">Создать пользователя</div>
+    <!-- Create / edit user dialog -->
+    <div v-if="dialogOpen" class="pw-overlay" @click.self="dialogOpen = false">
+      <div class="pw-card uc-card" role="dialog" aria-modal="true" :aria-label="editingUser ? 'Редактировать пользователя' : 'Создать пользователя'">
+        <div class="pw-caption">{{ editingUser ? 'Редактировать пользователя' : 'Создать пользователя' }}</div>
 
         <label class="uc-field">
           <span class="uc-label">Фамилия *</span>
-          <input v-model="create.lastName" type="text" class="uc-input" autocomplete="off" />
+          <input v-model="form.lastName" type="text" class="uc-input" autocomplete="off" />
         </label>
         <label class="uc-field">
           <span class="uc-label">Имя *</span>
-          <input v-model="create.firstName" type="text" class="uc-input" autocomplete="off" />
+          <input v-model="form.firstName" type="text" class="uc-input" autocomplete="off" />
         </label>
         <label class="uc-field">
           <span class="uc-label">Отчество</span>
-          <input v-model="create.middleName" type="text" class="uc-input" autocomplete="off" />
+          <input v-model="form.middleName" type="text" class="uc-input" autocomplete="off" />
         </label>
         <label class="uc-field">
-          <span class="uc-label">Логин</span>
+          <span class="uc-label">Логин{{ editingUser ? ' *' : '' }}</span>
           <input
-            v-model="create.login"
+            v-model="form.login"
             type="text"
             class="uc-input"
             autocomplete="off"
             placeholder="Автозаполняется из ФИО"
             @input="loginTouched = true"
           />
-          <span v-if="!loginTouched" class="uc-hint">Заполняется автоматически по ФИО (транслит); можно изменить</span>
+          <span v-if="!editingUser && !loginTouched" class="uc-hint">Заполняется автоматически по ФИО (транслит); можно изменить</span>
         </label>
         <label class="uc-field">
           <span class="uc-label">Роль *</span>
-          <select v-model="create.role" class="uc-input uc-select">
+          <select v-model="form.role" class="uc-input uc-select">
             <option v-for="opt in roleOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
           </select>
         </label>
         <label class="uc-field">
           <span class="uc-label">Руководитель</span>
-          <select v-model="create.managerId" class="uc-input uc-select">
+          <select v-model="form.managerId" class="uc-input uc-select">
             <option v-for="opt in managerOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
           </select>
         </label>
         <label class="uc-field">
           <span class="uc-label">Должность</span>
-          <input v-model="create.position" type="text" class="uc-input" placeholder="Свободный текст, например «Ведущий инженер»" />
+          <input v-model="form.position" type="text" class="uc-input" placeholder="Свободный текст, например «Ведущий инженер»" />
         </label>
         <div class="uc-row">
           <label class="uc-field">
             <span class="uc-label">Дата приёма</span>
-            <input v-model="create.hireDate" type="date" class="uc-input" />
+            <input v-model="form.hireDate" type="date" class="uc-input" />
           </label>
           <label class="uc-field">
             <span class="uc-label">Дата увольнения</span>
-            <input v-model="create.terminationDate" type="date" class="uc-input" />
+            <input v-model="form.terminationDate" type="date" class="uc-input" />
           </label>
         </div>
 
-        <p v-if="createError" class="uc-error">{{ createError }}</p>
-        <p class="uc-note">Пароль генерируется автоматически и будет показан один раз.</p>
+        <p v-if="dialogError" class="uc-error">{{ dialogError }}</p>
+        <p v-if="!editingUser" class="uc-note">Пароль генерируется автоматически и будет показан один раз.</p>
 
         <div class="uc-actions">
-          <button type="button" class="up-btn" @click="createOpen = false">Отмена</button>
-          <button type="button" class="up-add" :disabled="!canCreate" @click="onCreate">
-            {{ createBusy ? 'Создание…' : 'Создать' }}
+          <button type="button" class="up-btn" @click="dialogOpen = false">Отмена</button>
+          <button type="button" class="up-add" :disabled="!canSubmit" @click="onSubmit">
+            {{
+              dialogBusy
+                ? editingUser
+                  ? 'Сохранение…'
+                  : 'Создание…'
+                : editingUser
+                  ? 'Сохранить'
+                  : 'Создать'
+            }}
           </button>
         </div>
       </div>
@@ -388,6 +454,7 @@ onMounted(() => {
   font-size: 13px;
   color: #1a73e8;
   cursor: pointer;
+  white-space: nowrap;
 }
 .up-btn:hover {
   background: #eef4fd;
@@ -411,7 +478,7 @@ onMounted(() => {
 }
 .tr {
   display: grid;
-  grid-template-columns: 1.3fr 1fr 110px 1fr 1fr 150px;
+  grid-template-columns: 1.3fr 1fr 110px 1fr 1fr 200px;
   gap: 8px;
   padding: 12px 20px;
   border-bottom: 1px solid #f0f0f0;
@@ -429,13 +496,19 @@ onMounted(() => {
   font-weight: 700;
   color: #1a3a6b;
 }
-.act { text-align: right; }
+.act {
+  text-align: right;
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
 
+/* Overlays sit above the app header (z 30000), like the other modals */
 .pw-overlay {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.4);
-  z-index: 1000;
+  z-index: 40000;
   display: flex;
   align-items: center;
   justify-content: center;
