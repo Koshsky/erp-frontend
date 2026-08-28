@@ -21,6 +21,8 @@ const props = withDefaults(defineProps<{
   reorderable?: boolean
   /** Check manage rights for a project */
   canManage?: (projectId: number) => boolean
+  /** Whether the current user may create projects (affects the empty-state hint) */
+  canCreate?: boolean
   /** On open, scroll the timeline to this date (navigation from another tab) */
   focusDate?: string | null
   /** On open, scroll vertically to the group (project row) */
@@ -34,6 +36,7 @@ const props = withDefaults(defineProps<{
   users: null,
   reorderable: true,
   canManage: () => true,
+  canCreate: true,
   focusDate: null,
   focusGroupId: null,
 })
@@ -44,6 +47,8 @@ const emit = defineEmits<{
   'header-ctxmenu': [payload: { clientX: number; clientY: number }]
   reorder: [payload: { from: number; to: number }]
   navigate: [payload: number]
+  /** Empty state: create a new project (the page decides the dates) */
+  create: []
   /** Visible timeline window (the "as on screen" period) — forwarded from TimelineGrid */
   'visible-range': [payload: { from: string; to: string; cellWidthPx: number; scale: number }]
 }>()
@@ -74,6 +79,10 @@ function onGridCtx(p: { clientX: number; clientY: number; date: string | null; r
 
 <template>
   <PlannerStates :loading="loading" :error="error" :has-data="displayProjects.length > 0">
+    <!-- Empty DB: just a centered create-project action -->
+    <template v-if="canCreate" #empty>
+      <button type="button" class="pp-big" @click="emit('create')">Новый проект</button>
+    </template>
     <TimelineGrid v-if="displayProjects.length" id="project" :origin="origin" :unit="unit" :focus-date="focusDate" :focus-group-id="focusGroupId" @ctxmenu="onGridCtx" @header-ctxmenu="(p) => emit('header-ctxmenu', p)" @visible-range="(p) => emit('visible-range', p)">
       <template #default="{ t }">
         <CalendarHeader :t="t" />
@@ -91,4 +100,21 @@ function onGridCtx(p: { clientX: number; clientY: number; date: string | null; r
     </TimelineGrid>
   </PlannerStates>
 </template>
+
+<style scoped>
+.pp-big {
+  display: block;
+  margin: 24px auto;
+  padding: 16px 36px;
+  background: #1a73e8;
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  font-size: 16px;
+  cursor: pointer;
+}
+.pp-big:hover {
+  background: #1765cc;
+}
+</style>
 

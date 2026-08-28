@@ -17,7 +17,7 @@ import { useUnitMenu } from '../composables/useUnitMenu'
 import { useRoleAccess } from '../composables/useRoleAccess'
 import { useFindPlanningItem } from '../composables/useFindPlanningItem'
 import { usePlanningStore, useAppStore } from '../store'
-import { addMonthsISO } from '../components/planner/calendar'
+import { addMonthsISO, fmtDate } from '../components/planner/calendar'
 import { CELL_WIDTH } from '../components/planner/layout'
 
 const store = usePlanningStore()
@@ -176,28 +176,34 @@ function openProjectEdit(id: number) {
   }
 }
 
+/** Creates a project starting at the given date (shared by the toolbar button
+ *  and the right-click menu); shows the auto-create template feedback. */
+async function createProjectAt(date: string) {
+  const res = await store.createProject({
+    code: 'КО_' + Date.now(),
+    start_date: date,
+    end_date: addMonthsISO(date, 6),
+  })
+  if (!res.ok) {
+    error.value = store.error
+  } else if (res.autoCreated) {
+    const a = res.autoCreated
+    showFeedback(
+      'Проект создан. По шаблону автосоздания добавлено: процессов — ' +
+        a.processes +
+        ', задач — ' +
+        a.tasks +
+        ', назначений ресурсов — ' +
+        a.assignments,
+    )
+  }
+}
+
 async function handleSelect(id: string) {
   if (!menu.value) return
   const { date, projectId } = menu.value
   if (id === 'create-project' && date != null) {
-    const res = await store.createProject({
-      code: 'КО_' + Date.now(),
-      start_date: date,
-      end_date: addMonthsISO(date, 6),
-    })
-    if (!res.ok) {
-      error.value = store.error
-    } else if (res.autoCreated) {
-      const a = res.autoCreated
-      showFeedback(
-        'Проект создан. По шаблону автосоздания добавлено: процессов — ' +
-          a.processes +
-          ', задач — ' +
-          a.tasks +
-          ', назначений ресурсов — ' +
-          a.assignments,
-      )
-    }
+    await createProjectAt(date)
   } else if (id === 'edit-project' && projectId != null) {
     openProjectEdit(projectId)
   } else if (id === 'delete-project' && projectId != null) {
@@ -252,11 +258,13 @@ onMounted(() => {
       :unit="unit"
       :reorderable="canReorderProjects"
       :can-manage="canManageProject"
+      :can-create="canCreateProject"
       @change="(p) => store.updateProjectDates(p.id, p.start_date, p.end_date)"
       @contextmenu="onContextMenu"
       @header-ctxmenu="onHeaderCtx"
       @reorder="onReorder"
       @navigate="goToProcesses"
+      @create="() => createProjectAt(fmtDate(new Date()))"
       @visible-range="onVisibleRange"
     />
 

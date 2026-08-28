@@ -13,7 +13,10 @@ withDefaults(defineProps<PlannerStatesProps>(), {
       <p v-if="error" class="pg-error">{{ error }}</p>
       <slot v-if="hasData" />
       <div v-else-if="error" class="st er">{{ error }}</div>
-      <div v-else class="st">{{ emptyText }}</div>
+      <div v-else class="st">
+        <!-- Empty-state content (e.g. a create-action button); falls back to the text -->
+        <slot name="empty">{{ emptyText }}</slot>
+      </div>
     </template>
   </div>
 </template>
