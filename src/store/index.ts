@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import { ref, computed, onScopeDispose } from 'vue'
 import axios, { type AxiosError, type Method } from 'axios'
 import { AuthApi, ProjectsApi, ProcessesApi, TasksApi, TimesheetResourcesApi, TimesheetCalendarApi, TimesheetStatesApi, PlanningApi, MilestonesApi, UsersApi, AssignmentsApi, AutoCreateApi, RBACApi, PermissionsApi, Configuration } from '@/api'
 import type { DtoUserInfo, DtoProject, DtoResourceResponse, DtoResourceCalendar, DtoResourceMemberResponse, DtoResourceAbsenceResponse, DtoUserResponse, DtoUserStateResponse, DtoStateResponse, DtoCreateResourceRequest, DtoUpdateResourceRequest, DtoCreateUserRequest, DtoUpdateUserRequest, DtoSetDaysRequest, DtoAdminUserResponse, DtoCreateUserResult, DtoResetPasswordResponse, DtoAutoCreateConfig, DtoCommentResponse, DomainRole, DtoRuleInput, DtoRuleView, DtoMatrixCell, DtoRoutePolicyView, PoliciesKindInfo, DtoPermission } from '@/api'
@@ -12,6 +12,7 @@ import { scheduleWarmup } from '@/offline/warmup'
 import { enqueueMutation, isNetworkError, clearOutbox, type MutationEntity } from '@/offline/outbox'
 import { applyRangeSplit } from '@/offline/periodSplit'
 import { getAccessToken, setAccessToken } from '@/token'
+import { tryAcquireRefreshLock, releaseRefreshLock, publishToken, subscribeToken } from '@/sessionSync'
 import { isLoggedOut, clearLoggedOut, setLoggedOut } from '@/loggedOut'
 import { getSavedLogin } from '@/syncCredentials'
 import { shouldAutoSync } from '@/settings'
@@ -138,6 +139,30 @@ function accessTokenExpiring(): boolean {
   const exp = decodeTokenExp(getAccessToken())
   if (exp == null) return true
   return exp - Date.now() <= REFRESH_MARGIN_MS
+}
+
+/**
+ * Cross-tab refresh (web): another tab is already rotating the shared refresh
+ * cookie. Adopt the access token it broadcasts (if it is fresher than ours),
+ * otherwise return true and let the next 401 retry use the rotated cookie.
+ */
+function waitForExternalToken(): Promise<boolean> {
+  return new Promise((resolve) => {
+    let timer: number | undefined
+    const unsub = subscribeToken((token) => {
+      if (!token) return
+      const cur = decodeTokenExp(getAccessToken())
+      const next = decodeTokenExp(token)
+      if (next != null && (cur == null || next > cur)) setAccessToken(token)
+      if (timer != null) window.clearTimeout(timer)
+      unsub()
+      resolve(true)
+    })
+    timer = window.setTimeout(() => {
+      unsub()
+      resolve(true)
+    }, 2000)
+  })
 }
 
 // === Auth ===
@@ -298,6 +323,17 @@ export const useAuthStore = defineStore('auth', () => {
     // the revoked token would trigger reuse detection (revoking all of the
     // user's sessions). We return false without the network — the caller is logged out.
     if (isLoggedOut()) return false
+    // Web only: coordinate the refresh across tabs. The refresh cookie is shared, and two tabs
+    // refreshing the same (rotating) session pair at once make the second tab hit the backend
+    // reuse detection — which revokes ALL of the user's sessions and logs every tab out.
+    // Only one tab refreshes at a time; the rest adopt the token it broadcasts.
+    const coordinated = !isElectron
+    if (coordinated && !tryAcquireRefreshLock()) {
+      // Another tab is refreshing — wait briefly for its token, otherwise defer:
+      // the next 401 retry will use the already-rotated cookie (safe — the new
+      // token is not revoked).
+      return await waitForExternalToken()
+    }
     loading.value = true
     error.value = null
     try {
@@ -307,6 +343,8 @@ export const useAuthStore = defineStore('auth', () => {
       const errBody = body?.error as { code?: unknown; message?: string } | undefined
       if (errBody && errBody.code != null) throw new Error(apiErrorMessage(errBody))
       applySession(body?.data)
+      const token = getAccessToken()
+      if (coordinated && token) publishToken(token)
       return true
     } catch (e: any) {
       // Network error (no HTTP response): the server is unreachable. We do not log out.
@@ -322,6 +360,7 @@ export const useAuthStore = defineStore('auth', () => {
       return false
     } finally {
       loading.value = false
+      if (coordinated) releaseRefreshLock()
     }
   }
 
@@ -369,6 +408,18 @@ export const useAuthStore = defineStore('auth', () => {
   if (isAuthenticated.value) {
     scheduleProactiveRefresh()
     scheduleWarmup()
+  }
+
+  // Web: adopt fresher access tokens published by sibling tabs (cross-tab refresh
+  // coordination — the refresh cookie is shared and rotated once per family).
+  let unsubscribeSessionToken: (() => void) | null = null
+  if (!isElectron) {
+    unsubscribeSessionToken = subscribeToken((token) => {
+      const cur = decodeTokenExp(getAccessToken())
+      const next = decodeTokenExp(token)
+      if (next != null && (cur == null || next > cur)) setAccessToken(token)
+    })
+    onScopeDispose(() => unsubscribeSessionToken?.())
   }
 
   return {
