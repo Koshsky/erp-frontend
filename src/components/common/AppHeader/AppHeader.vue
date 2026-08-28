@@ -22,7 +22,7 @@ const offline = computed(() => isOffline.value)
 const pending = computed(() => pendingCount.value)
 
 // Шапка — список категорий; подкатегории открываются выпадающим меню.
-const { visibleCategories, activeCategory, standalone } = useNavigation()
+const { visibleCategories, activeCategory } = useNavigation()
 
 // shallowRef: хранит объект категории как есть (без deep-reactive обёртки),
 // чтобы работало сравнение по идентичности openCategory === cat.
@@ -74,9 +74,6 @@ onBeforeUnmount(() => {
   <header class="ah">
     <div class="ah-brand">{{ props.brand }}</div>
     <nav ref="navEl" class="ah-nav">
-      <RouterLink v-for="item in standalone" :key="item.to" :to="item.to" class="ah-link">
-        {{ item.label }}
-      </RouterLink>
       <div
         v-for="cat in visibleCategories"
         :key="cat.label"

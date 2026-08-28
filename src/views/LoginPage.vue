@@ -165,7 +165,10 @@ if (isElectron && isOffline.value && !username.value) {
         </button>
       </form>
 
-      <div v-if="serverBase" class="lp-server-row">
+      <!-- Строка «Сервер: …» + пинг и настройки сервера — только в настольной
+           (Electron) сборке. В онлайн (веб) версии адрес задаётся деплоем,
+           смена сервера невозможна — блок не показываем целиком. -->
+      <div v-if="isElectron && serverBase" class="lp-server-row">
         <span class="lp-server">Сервер: {{ serverBase }}</span>
         <button
           type="button"
@@ -180,7 +183,7 @@ if (isElectron && isOffline.value && !username.value) {
         </button>
       </div>
 
-      <RouterLink to="/login/settings" class="lp-settings-link">⚙ Настройки сервера</RouterLink>
+      <RouterLink v-if="isElectron" to="/login/settings" class="lp-settings-link">⚙ Настройки сервера</RouterLink>
     </div>
   </div>
 </template>

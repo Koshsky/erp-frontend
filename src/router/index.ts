@@ -34,10 +34,13 @@ const router = createRouter({
       component: MainLayout,
       meta: { requiresAuth: true },
       children: [
+        // Главный экран: планировщик задач, если он доступен по правам
+        // (task.view), иначе — профиль. Решение принимает guard после
+        // redirect'а на /planner (см. plannerAccessible ниже).
         {
           path: '',
-          name: 'dashboard',
-          component: () => import('../views/DashboardPage.vue'),
+          name: 'home',
+          redirect: { name: 'planner' },
         },
         {
           path: 'planner',
@@ -109,6 +112,26 @@ const router = createRouter({
   ],
 })
 
+/**
+ * Главный экран — планировщик задач, если он доступен по RBAC (task.view),
+ * иначе страница профиля. Права грузятся асинхронно (онлайн — /permissions/me,
+ * офлайн — кэш), поэтому для корневого перехода дожидаемся их, чтобы «холодный»
+ * старт не уводил на профиль ошибочно; если права получить не удалось совсем
+ * (нет сети и кэша) — fallback на роли навигации планировщика.
+ */
+const PLANNER_ROLES = ['admin', 'dp', 'rp', 'vp']
+
+async function plannerAccessible(
+  rbac: ReturnType<typeof useRbacStore>,
+  role?: string,
+): Promise<boolean> {
+  if (!rbac.permsLoaded) {
+    const ok = await rbac.loadMyPermissions()
+    if (!ok && !rbac.permsLoaded) return PLANNER_ROLES.includes(role ?? '')
+  }
+  return rbac.can('task', 'view')
+}
+
 // Глобальный guard: неавторизованных пользователей всегда отправляем на /login.
 // Если access-токен отсутствует или протух, но есть refresh — сначала тихо
 // обновляем сессию: web — refresh по куке, desktop — тихий re-login по кредам
@@ -135,12 +158,13 @@ router.beforeEach(async (to) => {
 
   // Уже авторизованных не пускаем на страницу входа
   if (to.name === 'login' && auth.isAuthenticated) {
-    return { name: auth.user?.role === 'worker' ? 'profile' : 'dashboard' }
+    return { name: 'home' }
   }
 
   // Права для навигации: загружаем один раз на сессию (кроме офлайна — кеш).
   const rbac = useRbacStore()
-  if (auth.isAuthenticated && !rbac.permsLoaded && !isOffline.value) {
+  // Для /planner права ждём ниже (plannerAccessible) — здесь не дублируем запрос.
+  if (auth.isAuthenticated && !rbac.permsLoaded && !isOffline.value && to.name !== 'planner') {
     // Не блокируем навигацию сетью: права подгружаются асинхронно
     // (кнопки появятся по мере загрузки; поллинг обновляет дальше).
     void rbac.loadMyPermissions()
@@ -163,8 +187,16 @@ router.beforeEach(async (to) => {
     permissions: ['rbac_config', 'view'],
   }
   const needed = pagePerm[to.name as string]
-  if (needed && to.meta.requiresAuth && !rbac.can(needed[0], needed[1])) {
-    return { name: 'dashboard' }
+  if (needed && to.meta.requiresAuth) {
+    // Главный экран решаем по правам из матрицы, дождавшись их загрузки
+    // (иначе «холодный» старт ошибочно уводил бы на профиль).
+    const allowed =
+      to.name === 'planner'
+        ? await plannerAccessible(rbac, auth.user?.role)
+        : rbac.can(needed[0], needed[1])
+    if (!allowed) {
+      return { name: 'profile' }
+    }
   }
 
   // Пользователь без прав ни на одну бизнес-страницу — только профиль
@@ -172,7 +204,6 @@ router.beforeEach(async (to) => {
   if (
     to.meta.requiresAuth &&
     to.name !== 'profile' &&
-    to.name !== 'dashboard' &&
     to.name !== 'sync' &&
     !pagePerm[to.name as string] &&
     !rbac.can('project', 'view') &&
@@ -188,7 +219,14 @@ router.beforeEach(async (to) => {
   // Синхронизация (офлайн-настройки) — доступна только в настольной (Electron)
   // сборке. В веб-версии офлайна нет, страница недоступна.
   if (to.name === 'sync' && !isElectron) {
-    return { name: 'dashboard' }
+    return { name: 'home' }
+  }
+
+  // Настройки адреса сервера — только настольная (Electron) сборка. В онлайн
+  // (веб) версии адрес задаётся при развёртывании (same-origin nginx-прокси),
+  // экран недоступен.
+  if (to.name === 'server-settings' && !isElectron) {
+    return { name: 'login' }
   }
 
   return true

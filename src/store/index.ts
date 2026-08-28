@@ -390,7 +390,6 @@ export const useAuthStore = defineStore('auth', () => {
 // === App (проекты и ресурсы) ===
 export const useAppStore = defineStore('app', () => {
   const projects = ref<DtoProject[]>([])
-  const projectsTotal = ref(0)
   const projectsLoading = ref(false)
   const projectsError = ref<string | null>(null)
 
@@ -400,7 +399,6 @@ export const useAppStore = defineStore('app', () => {
     const role = useAuthStore().user?.role
     if (role && role !== 'admin' && role !== 'dp' && role !== 'rp') {
       projects.value = []
-      projectsTotal.value = 0
       return
     }
     if (isOffline.value && projects.value.length) return
@@ -411,7 +409,6 @@ export const useAppStore = defineStore('app', () => {
       const resp = await api.projectGet(PAGE_SIZE, undefined, 0)
       const data = resp.data?.data
       projects.value = data?.items ?? []
-      projectsTotal.value = data?.total ?? 0
     } catch (e: any) {
       projectsError.value = e.message || String(e)
     } finally {
@@ -420,7 +417,6 @@ export const useAppStore = defineStore('app', () => {
   }
 
   const resources = ref<DtoResourceResponse[]>([])
-  const resourcesTotal = ref(0)
   const resourcesLoading = ref(false)
   const resourcesError = ref<string | null>(null)
 
@@ -433,7 +429,6 @@ export const useAppStore = defineStore('app', () => {
       const resp = await api.resourcesGet(PAGE_SIZE, ownerId ?? undefined, 0)
       const data = resp.data?.data
       resources.value = data?.items ?? []
-      resourcesTotal.value = data?.total ?? 0
     } catch (e: any) {
       resourcesError.value = e.message || String(e)
     } finally {
@@ -825,23 +820,16 @@ export const useAppStore = defineStore('app', () => {
     }
   }
 
-  const totalProjects = computed(() => projectsTotal.value)
-  const totalResources = computed(() => resourcesTotal.value)
-
   return {
     projects,
-    projectsTotal,
     projectsLoading,
     projectsError,
     resources,
-    resourcesTotal,
     resourcesLoading,
     resourcesError,
     users,
     usersLoading,
     usersError,
-    totalProjects,
-    totalResources,
     calendar,
     calendarLoading,
     calendarError,
