@@ -22,4 +22,8 @@ export interface BarProps {
   shadow?: boolean
   /** Enables dragging and duration-resize handles */
   draggable?: boolean
+  /** Vertical row reorder: pressing the bar body and dragging vertically calls
+   *  this with the pointerdown event (horizontal drags keep changing dates).
+   *  null/undefined — the bar body only drags dates. */
+  startRowReorder?: ((e: PointerEvent) => void) | null
 }

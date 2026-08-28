@@ -45,7 +45,7 @@ function onContextMenu(p: { clientX: number; clientY: number; id: number }) {
     :rowHeight="52"
     @reorder="(p) => emit('reorder', p)"
   >
-    <template #bar="{ item }">
+    <template #bar="{ item, startReorder }">
       <ProjectBar
         :timeline="timeline"
         :startDate="item.start_date"
@@ -54,6 +54,7 @@ function onContextMenu(p: { clientX: number; clientY: number; id: number }) {
         :priority="item.priority"
         :ownerName="item.owner_name"
         :draggable="canManage(item.id)"
+        :start-row-reorder="reorderable ? startReorder : null"
         @change="(d) => onBarChange(item.id, d)"
         @contextmenu="(p) => onContextMenu({ ...p, id: item.id })"
         @click="() => emit('navigate', item.id)"

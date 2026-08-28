@@ -76,7 +76,7 @@ function onMilestoneEdit(id: number) {
         </div>
       </template>
 
-      <template #bar="{ item }">
+      <template #bar="{ item, startReorder }">
         <TaskBar
           :timeline="timeline"
           :task="item"
@@ -84,6 +84,7 @@ function onMilestoneEdit(id: number) {
           :groupStartDate="groupStartDate"
           :groupEndDate="groupEndDate"
           :draggable="canManage"
+          :start-row-reorder="reorderable ? startReorder : null"
           :users="users"
           :comments-by-task="commentsByTask"
           @change="(d) => onBarChange(item.id, d)"

@@ -57,7 +57,7 @@ function onBarContextMenu(p: { clientX: number; clientY: number }, id: number) {
       </div>
     </template>
 
-    <template #bar="{ item }">
+    <template #bar="{ item, startReorder }">
       <ProcessBar
         :timeline="timeline"
         :startDate="item.start_date"
@@ -68,6 +68,7 @@ function onBarContextMenu(p: { clientX: number; clientY: number }, id: number) {
         :groupStartDate="groupStartDate"
         :groupEndDate="groupEndDate"
         :draggable="canManage"
+        :start-row-reorder="reorderable ? startReorder : null"
         @change="(d) => onBarChange(item.id, d)"
         @contextmenu="(p) => onBarContextMenu(p, item.id)"
         @click="() => emit('navigate', item.id)"

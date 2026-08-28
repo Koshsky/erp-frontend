@@ -39,6 +39,7 @@ const emit = defineEmits<{
     padding="0 10px"
     :shadow="true"
     :draggable="draggable"
+    :start-row-reorder="startRowReorder"
     @change="(d) => emit('change', d)"
     @contextmenu="(p) => emit('contextmenu', p)"
     @click="() => emit('click')"

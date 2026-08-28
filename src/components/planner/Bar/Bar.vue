@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, ref, useSlots, watch } from 'vue'
 import { cellRangeForSpan, clampSpanDates, spanToDates, formatDateRange } from '../calendar'
 import { useTimelineItem } from '../../../composables/useTimelineItem'
+import { useWindowPointerTrack } from '../../../utils'
 import { TooltipCell } from '../../common'
 import type { BarProps } from './types'
 
@@ -47,8 +48,50 @@ const CLICK_MOVE_PX = 4
 let clickTimer: ReturnType<typeof setTimeout> | null = null
 const downPos = ref<{ x: number; y: number } | null>(null)
 
+// === Body press: vertical reorder vs horizontal date drag ===
+// With a reorderable row (startRowReorder is provided) the press on the bar body
+// is not committed to the date drag immediately: the dominant movement axis
+// decides — vertical → row reorder, horizontal → date drag as before.
+const REORDER_AXIS_PX = 8
+let pressStart: { x: number; y: number; e: PointerEvent } | null = null
+
+const pressTrack = useWindowPointerTrack({
+  onMove: (e) => {
+    if (!pressStart) return
+    const dx = e.clientX - pressStart.x
+    const dy = e.clientY - pressStart.y
+    if (Math.abs(dx) < REORDER_AXIS_PX && Math.abs(dy) < REORDER_AXIS_PX) return
+    const start = pressStart
+    pressStart = null
+    pressTrack.stop()
+    if (Math.abs(dy) > Math.abs(dx)) {
+      // Vertical — row reorder (with the bar's own pointerdown event)
+      start.e.preventDefault()
+      start.e.stopPropagation()
+      props.startRowReorder?.(start.e)
+    } else if (props.draggable) {
+      // Horizontal — regular date drag
+      startDrag(start.e, 'move')
+    }
+  },
+  onUp: () => {
+    pressStart = null
+    pressTrack.stop()
+  },
+  onCancel: () => {
+    pressStart = null
+    pressTrack.stop()
+  },
+})
+
 function onBodyPointerDown(e: PointerEvent) {
   if (e.button === 0) downPos.value = { x: e.clientX, y: e.clientY }
+  if (props.startRowReorder) {
+    // Axis disambiguation pending — the drag starts once the move direction is clear
+    pressStart = { x: e.clientX, y: e.clientY, e }
+    pressTrack.start()
+    return
+  }
   if (props.draggable) startDrag(e, 'move')
 }
 

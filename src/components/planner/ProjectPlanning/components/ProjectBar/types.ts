@@ -12,4 +12,7 @@ export interface ProjectBarProps {
   opacity?: number
   /** Enables dragging and duration-resize handles */
   draggable?: boolean
+  /** Vertical row reorder: pressing the bar body and dragging vertically calls
+   *  this with the pointerdown event (horizontal drags keep changing dates). */
+  startRowReorder?: ((e: PointerEvent) => void) | null
 }

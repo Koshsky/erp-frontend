@@ -13,6 +13,9 @@ const props = withDefaults(
     task: Task
     projectCode?: string
     draggable?: boolean
+    /** Vertical row reorder: pressing the bar body and dragging vertically calls
+     *  this with the pointerdown event (horizontal drags keep changing dates). */
+    startRowReorder?: ((e: PointerEvent) => void) | null
     /** Process bounds — limit task dragging */
     groupStartDate?: string | Date | number | null
     groupEndDate?: string | Date | number | null
@@ -180,6 +183,7 @@ watch(
     :groupEndDate="groupEndDate"
     :title="task.title"
     :draggable="draggable"
+    :start-row-reorder="startRowReorder"
     @change="(d) => emit('change', d)"
     @contextmenu="(p) => emit('contextmenu', p)"
     @dragstart="(d) => setDragPreview(d)"

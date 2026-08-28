@@ -4,8 +4,6 @@ import type { GroupGanttProps } from './types'
 import { cellRangeForSpan, toDate } from '../calendar'
 import { LABEL_WIDTH } from '../layout'
 import { useRowReorder } from '../../../composables/useRowReorder'
-import { TooltipCell } from '../../common/TooltipCell'
-import { InfoTooltip } from '../../common/Tooltips'
 
 const props = withDefaults(defineProps<GroupGanttProps>(), {
   reorderable: false,
@@ -52,8 +50,8 @@ const mergedHeight = computed(() =>
   Math.max(displayCount.value * props.rowHeight, props.minLabelHeight) + 'px',
 )
 
-// === Vertical row drag (reorder) ===
-const { draggingFrom, dropStyle, rowDragCursor, startRowDrag } = useRowReorder(
+// === Vertical row drag (reorder): started from the row's bar (see #bar slot) ===
+const { dropStyle, startRowDrag } = useRowReorder(
   () => props.items.length,
   () => props.reorderable,
   groupEl,
@@ -63,7 +61,8 @@ const { draggingFrom, dropStyle, rowDragCursor, startRowDrag } = useRowReorder(
 defineSlots<{
   label(): any
   row(props: { item: any; index: number }): any
-  bar(props: { item: any; index: number; count: number }): any
+  /** startReorder — begin row reordering with the bar's pointerdown event */
+  bar(props: { item: any; index: number; count: number; startReorder: (e: PointerEvent) => void }): any
 }>()
 
 function fmt(d: string | Date | number | null | undefined): string {
@@ -76,51 +75,31 @@ function fmt(d: string | Date | number | null | undefined): string {
     <div v-if="overlayStyle" class="gg-overlay" :style="overlayStyle" />
 
     <!-- Merged group label (object code + process): sticky left, full height.
-         When reorderable — a per-row drag handle (one per row band). -->
+         Reordering is started by dragging the bar row itself (see #bar slot). -->
     <div
       v-if="mergedLabel"
       class="gg-merged"
       :style="{ height: mergedHeight, marginBottom: '-' + mergedHeight }"
     >
       <slot name="label" />
-      <template v-if="reorderable">
-        <TooltipCell
-          v-for="i in displayCount"
-          :key="'gh' + i"
-          class="row-handle gg-merged-handle"
-          :class="{ 'is-grabbing': rowDragCursor && draggingFrom === i - 1 }"
-          :style="{ top: (i - 1) * rowHeight + 'px', height: rowHeight + 'px' }"
-          :multiline="true"
-          @pointerdown.stop="startRowDrag($event, i - 1)"
-        >⠿
-          <template #popup>
-            <InfoTooltip :lines="['Перетащить для изменения порядка']" />
-          </template>
-        </TooltipCell>
-      </template>
     </div>
 
     <template v-for="(item, index) in items" :key="'gi' + item.id">
       <div class="gg-row" :style="{ height: rowHeight + 'px' }" :data-row-index="index">
-        <div v-if="!mergedLabel" class="gg-label" :class="{ 'with-handle': reorderable }">
-          <TooltipCell
-            v-if="reorderable"
-            class="row-handle"
-            :class="{ 'is-grabbing': rowDragCursor && draggingFrom === index }"
-            :multiline="true"
-            @pointerdown.stop="startRowDrag($event, index)"
-          >&⠿
-            <template #popup>
-              <InfoTooltip :lines="['Перетащить для изменения порядка']" />
-            </template>
-          </TooltipCell>
+        <div v-if="!mergedLabel" class="gg-label">
           <slot name="row" :item="item" :index="index">
             <span class="item-title">{{ item.title }}</span>
             <div class="item-dates">{{ fmt(item.start_date) }} — {{ fmt(item.end_date) }}</div>
           </slot>
         </div>
         <div class="gg-bars">
-          <slot name="bar" :item="item" :index="index" :count="items.length" />
+          <slot
+            name="bar"
+            :item="item"
+            :index="index"
+            :count="items.length"
+            :start-reorder="(e: PointerEvent) => startRowDrag(e, index)"
+          />
         </div>
       </div>
     </template>
@@ -209,36 +188,6 @@ function fmt(d: string | Date | number | null | undefined): string {
   cursor: default;
   user-select: none;
   -webkit-user-select: none;
-}
-.gg-label.with-handle {
-  padding-left: 24px;
-}
-.row-handle {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 2px;
-  display: flex;
-  align-items: center;
-  color: #bbb;
-  font-size: 14px;
-  padding: 0 3px;
-  cursor: grab;
-  touch-action: none;
-  user-select: none;
-  -webkit-user-select: none;
-}
-/* Merge-label variant: one handle per row band (position/size from the row) */
-.gg-merged-handle {
-  box-sizing: border-box;
-}
-.row-handle:hover {
-  color: #1a73e8;
-  background: rgba(26, 115, 232, 0.08);
-}
-.row-handle.is-grabbing {
-  cursor: grabbing;
-  color: #1a73e8;
 }
 .item-title {
   font-weight: 400;

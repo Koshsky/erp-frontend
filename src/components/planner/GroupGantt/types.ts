@@ -14,7 +14,8 @@ export interface GroupGanttProps {
   /** Group bounds (optional — highlight on the timeline) */
   groupStartDate?: string | Date | number | null
   groupEndDate?: string | Date | number | null
-  /** Enables row reordering (handle in the label column) to change order */
+  /** Enables row reordering: the bar rows of the group start reorder on a
+   *  vertical drag of the bar body (see the #bar slot's startReorder) */
   reorderable?: boolean
   /** Merges the label column into one cell spanning the whole group height (#label slot) */
   mergedLabel?: boolean

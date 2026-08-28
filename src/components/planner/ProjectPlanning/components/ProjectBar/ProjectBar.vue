@@ -27,6 +27,7 @@ const emit = defineEmits<{
     :height="40"
     :top="6"
     :draggable="draggable"
+    :start-row-reorder="startRowReorder"
     @change="(d) => emit('change', d)"
     @contextmenu="(p) => emit('contextmenu', p)"
     @click="() => emit('click')"
