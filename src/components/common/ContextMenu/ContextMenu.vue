@@ -100,7 +100,7 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .cm {
-  z-index: 10000;
+  z-index: 50000;
   min-width: 180px;
   background: #fff;
   border: 1px solid #e0e0e0;

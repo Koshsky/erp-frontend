@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
-import { CopyField } from '../components/common'
+import { ContextMenu, CopyField } from '../components/common'
+import type { ContextMenuItem } from '../components/common/ContextMenu'
+import { useContextMenu } from '../composables/useContextMenu'
 import { useAppStore, useRbacStore } from '../store'
 import { compareByName, translitPhio } from '../utils'
 import type { DtoAdminUserResponse, DtoCreateUserRequest, DtoUpdateUserRequest } from '@/api'
@@ -193,6 +195,34 @@ async function onSubmit() {
   }
 }
 
+// === Row actions (context menu) ===
+interface RowMenuState {
+  x: number
+  y: number
+  userId: number
+}
+const menu = ref<RowMenuState | null>(null)
+
+const menuItems = computed<ContextMenuItem[]>(() => [
+  { id: 'edit-user', label: 'Редактировать' },
+  { id: 'reset-password', label: 'Сбросить пароль' },
+])
+
+function onRowContextMenu(e: MouseEvent, u: DtoAdminUserResponse) {
+  if (u.id == null) return
+  openMenu({ x: e.clientX, y: e.clientY, userId: u.id })
+}
+
+const { open: openMenu, close: closeMenu, select, bind: menuBind } = useContextMenu(menu, menuItems, handleSelect)
+
+function handleSelect(id: string) {
+  if (!menu.value) return
+  const u = adminUsers.value.find((x) => x.id === menu.value?.userId)
+  if (!u) return
+  if (id === 'edit-user') openEdit(u)
+  else if (id === 'reset-password') onResetPassword(u)
+}
+
 // === Manager (for the label; editing is in the user dialog) ===
 function managerLabel(user: DtoAdminUserResponse): string {
   if (user.manager_id == null) return '—'
@@ -254,9 +284,13 @@ onMounted(() => {
         <div>Регистрация</div>
         <div>Роль</div>
         <div>Руководитель</div>
-        <div class="act">Действия</div>
       </div>
-      <div v-for="u in filteredUsers" :key="u.id" class="tr">
+      <div
+        v-for="u in filteredUsers"
+        :key="u.id"
+        class="tr"
+        @contextmenu.prevent.stop="onRowContextMenu($event, u)"
+      >
         <div class="name">{{ u.name }}</div>
         <div class="mono">{{ u.username }}</div>
         <div>{{ fmtDate(u.created_at) }}</div>
@@ -266,15 +300,13 @@ onMounted(() => {
           </select>
         </div>
         <div>{{ managerLabel(u) }}</div>
-        <div class="act">
-          <button type="button" class="up-btn" @click="openEdit(u)">Редактировать</button>
-          <button type="button" class="up-btn" @click="onResetPassword(u)">Сбросить пароль</button>
-        </div>
       </div>
     </div>
     <p v-else-if="!adminUsersLoading && !adminUsersError" class="up-st">
       {{ adminUsers.length ? 'Ничего не найдено' : 'Нет данных' }}
     </p>
+
+    <ContextMenu v-bind="menuBind" @select="select" @close="closeMenu" />
 
     <!-- Create / edit user dialog -->
     <div v-if="dialogOpen" class="pw-overlay" @click.self="dialogOpen = false">
@@ -478,7 +510,7 @@ onMounted(() => {
 }
 .tr {
   display: grid;
-  grid-template-columns: 1.3fr 1fr 110px 1fr 1fr 200px;
+  grid-template-columns: 1.3fr 1fr 110px 1fr 1fr;
   gap: 8px;
   padding: 12px 20px;
   border-bottom: 1px solid #f0f0f0;
@@ -495,12 +527,6 @@ onMounted(() => {
 .name {
   font-weight: 700;
   color: #1a3a6b;
-}
-.act {
-  text-align: right;
-  display: flex;
-  gap: 8px;
-  justify-content: flex-end;
 }
 
 /* Overlays sit above the app header (z 30000), like the other modals */
