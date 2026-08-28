@@ -2,29 +2,29 @@ import { inject, provide } from 'vue'
 import type { InjectionKey, Ref } from 'vue'
 
 /**
- * Активный драг задачи для live-предпросмотра загрузки ресурсов:
- * ResourceHeader красит ячейки так, как будто задача уже лежит на новом месте.
- * Пишется из TaskBar (на dragstart/dragmove/dragend бара), читается в TaskPlanning
- * через обёртку usageForDay → usagePreview.
+ * Active task drag for live resource-load preview:
+ * ResourceHeader colors cells as if the task already sits at its new position.
+ * Written from TaskBar (on bar dragstart/dragmove/dragend), read in TaskPlanning
+ * via the usageForDay → usagePreview wrapper.
  */
 export interface DragPreviewState {
-  /** Идёт ли сейчас перетаскивание задачи */
+  /** Whether a task drag is currently in progress */
   active: boolean
-  /** id перетаскиваемой задачи (для поиска старых дат и ресурсов в displayProcesses) */
+  /** Id of the dragged task (to look up old dates and resources in displayProcesses) */
   taskId: number | null
-  /** Предложенные новые даты (span бара во время драга) */
+  /** Proposed new dates (bar span during the drag) */
   startDate: string | null
   endDate: string | null
 }
 
 export const DragPreviewKey: InjectionKey<Ref<DragPreviewState>> = Symbol('drag-preview')
 
-/** Получить текущий drag-preview (null, если провайдер не подключён) */
+/** Get the current drag-preview (null if no provider is mounted) */
 export function useDragPreview(): Ref<DragPreviewState> | null {
   return inject(DragPreviewKey, null)
 }
 
-/** Зарегистрировать drag-preview (в TaskPlanning) */
+/** Register a drag-preview (in TaskPlanning) */
 export function provideDragPreview(state: Ref<DragPreviewState>): void {
   provide(DragPreviewKey, state)
 }

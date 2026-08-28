@@ -17,14 +17,14 @@ const fraction = computed(() =>
 )
 const percent = computed(() => (pct.value == null ? '' : `(${Math.round(pct.value)}%)`))
 
-/** DD.MM даты периода отсутствия */
+/** DD.MM of the absence period dates */
 function fmtDM(iso?: string): string {
   if (!iso) return ''
   const [, m, d] = iso.split('-')
   return `${d}.${m}`
 }
 
-/** Строка «Имя — Причина (даты)» для отсутствующего сотрудника */
+/** "Name — Reason (dates)" line for an absent employee */
 function absenceLabel(a: DtoResourceAbsenceResponse): string {
   return `${a.user_name} — ${a.state_name} (${fmtDM(a.start_date)}–${fmtDM(a.end_date)})`
 }

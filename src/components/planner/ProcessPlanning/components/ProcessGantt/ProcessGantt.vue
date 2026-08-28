@@ -12,13 +12,13 @@ const props = withDefaults(defineProps<ProcessGanttProps>(), {
 const emit = defineEmits<{
   change: [payload: { id: number; start_date: string; end_date: string }]
   contextmenu: [payload: { clientX: number; clientY: number; date: string; rowIndex: number; projectId?: number; processId?: number }]
-  /** Одиночный клик по бару процесса — переход на вкладку задач этого процесса */
+  /** Single click on a process bar — switch to that process's tasks tab */
   navigate: [payload: number]
 }>()
 
 const groupItems = computed(() => props.processes)
 
-/** Мин. высота объединённого лейбла: код (19px) + даты (11px) + отступы ≈ 43px */
+/** Min merged-label height: code (19px) + dates (11px) + padding ≈ 43px */
 const MIN_LABEL_HEIGHT = 46
 
 function fmtDate(d: string | Date | number | null | undefined): string {

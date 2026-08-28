@@ -26,14 +26,14 @@ const emit = defineEmits<{
   delete: [payload: DeleteCommentPayload]
 }>()
 
-/** Черновик корневого комментария и ответа (один активный ответ одновременно) */
+/** Drafts of the root comment and a reply (only one active reply at a time) */
 const rootDraft = ref('')
 const replyTo = ref<number | null>(null)
 const replyDraft = ref('')
 
 const composerDisabled = computed(() => props.busy || props.disabledReason != null)
 
-/** Плоский пре-ордер список для рендера с отступами */
+/** Flat pre-order list for indented rendering */
 const flat = computed(() => flattenComments(props.comments))
 
 const userById = computed(() => new Map((props.users || []).map((u) => [u.id ?? 0, u])))
@@ -71,7 +71,7 @@ function authorName(c: DtoCommentResponse): string {
   return userById.value.get(c.author_id)?.name ?? `Пользователь #${c.author_id}`
 }
 
-/** Удаление: автор — всегда, чужие — только при canManage (admin/vp) */
+/** Deletion: own always, others only with canManage (admin/vp) */
 function canDelete(c: DtoCommentResponse): boolean {
   return c.author_id != null && (c.author_id === props.userId || props.canManage)
 }
@@ -345,7 +345,7 @@ function sendReply(commentId: number) {
   opacity: 0.55;
   cursor: not-allowed;
 }
-/* Квадратная кнопка-иконка (удаление комментария) */
+/* Square icon button (comment deletion) */
 .tc-icon {
   display: inline-flex;
   align-items: center;

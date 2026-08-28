@@ -11,17 +11,17 @@ const props = withDefaults(defineProps<{
   projects?: DtoDetailedProject[] | null
   loading?: boolean
   error?: string | null
-  /** Якорь шкалы: ячейка с индексом 0 (начальная позиция) */
+  /** Timeline anchor: cell with index 0 (starting position) */
   origin?: Date | string
-  /** Единица ячейки: день или декада */
+  /** Cell unit: day or decade */
   unit?: PlanningUnit
-  /** Пользователи для отображения владельца (owner_id → name) в тултипах */
+  /** Users to display the owner (owner_id → name) in tooltips */
   users?: DtoUserInfo[] | null
-  /** Разрешает изменение процессов: перенос дат, редактирование, удаление */
+  /** Allows modifying processes: moving dates, editing, deleting */
   canManage?: boolean
-  /** При открытии прокрутить шкалу к этой дате (навигация с другой вкладки) */
+  /** On open, scroll the timeline to this date (navigation from another tab) */
   focusDate?: string | null
-  /** При открытии прокрутить по вертикали к группе (строке) проекта */
+  /** On open, scroll vertically to the group (project row) */
   focusGroupId?: string | number | null
 }>(), {
   projects: null,
@@ -40,13 +40,13 @@ const emit = defineEmits<{
   contextmenu: [payload: { clientX: number; clientY: number; date: string | null; rowIndex: number; projectId?: number; processId?: number }]
   'header-ctxmenu': [payload: { clientX: number; clientY: number }]
   navigate: [payload: number]
-  /** Видимое окно шкалы (период «как на экране») — проброс из TimelineGrid */
+  /** Visible timeline window (the "as on screen" period) — forwarded from TimelineGrid */
   'visible-range': [payload: { from: string; to: string; cellWidthPx: number; scale: number }]
 }>()
 
 const userNames = computed(() => new Map((props.users || []).map((u) => [u.id, u.name])))
 
-/** Маппим DTO (из /planning/processes) во внутренний тип. Процессы сортируем по алфавиту. */
+/** Map the DTO (from /planning/processes) into the internal type. Processes are sorted alphabetically. */
 const displayProjects = computed(() =>
   (props.projects || []).map((dto) => ({
     id: dto.id ?? 0,
@@ -68,7 +68,7 @@ const displayProjects = computed(() =>
   })),
 )
 
-/** ПКМ по пустому месту внутри группы проекта — создание процесса в этом проекте */
+/** Right-click on empty space inside a project group — create a process in that project */
 function onGridCtx(p: { clientX: number; clientY: number; date: string | null; rowIndex?: number; groupId?: string }) {
   const projectId = p.groupId ? Number(p.groupId) : undefined
   emit('contextmenu', {

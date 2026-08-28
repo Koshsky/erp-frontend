@@ -26,22 +26,22 @@ const props = withDefaults(defineProps<BarProps>(), {
 const emit = defineEmits<{
   change: [payload: { start_date: string; end_date: string }]
   contextmenu: [payload: { clientX: number; clientY: number }]
-  /** Одиночный клик (без перетаскивания) — навигация между вкладками */
+  /** Single click (without dragging) — navigation between tabs */
   click: []
-  /** Старт драга/ресайза: предложенные новые даты (live-предпросмотр загрузки) */
+  /** Drag/resize start: proposed new dates (live loading preview) */
   dragstart: [payload: { start_date: string; end_date: string }]
-  /** Драг продолжается — новые даты обновились */
+  /** Drag continues — new dates updated */
   dragmove: [payload: { start_date: string; end_date: string }]
-  /** Драг закончен (любым образом) — превью сбросить */
+  /** Drag finished (any way) — reset the preview */
   dragend: []
-  /** Тултип бара стал видимым — для ленивой подгрузки связанных данных */
+  /** Bar tooltip became visible — for lazy loading of related data */
   'tooltip-open': []
 }>()
 
-// === Разграничение одиночного клика и даблклика ===
-// Одиночный клик запускает короткий таймер (120мс); если пришёл второй клик (dblclick) —
-// таймер гасится и даблклик не делает ничего. Это позволяет клику по бару
-// навигировать между вкладками быстро, не срабатывая на двойном клике.
+// === Distinguishing a single click from a double click ===
+// A single click starts a short timer (120ms); if a second click arrives (dblclick) —
+// the timer is cancelled and the double click does nothing. This lets a click on a bar
+// navigate between tabs quickly without firing on a double click.
 const CLICK_DELAY_MS = 120
 const CLICK_MOVE_PX = 4
 let clickTimer: ReturnType<typeof setTimeout> | null = null
@@ -56,9 +56,9 @@ function onPointerUp(e: PointerEvent) {
   const p = downPos.value
   downPos.value = null
   if (!p || e.button !== 0) return
-  // Было движение (драг/ресиз) — это не клик.
+  // There was movement (drag/resize) — this is not a click.
   if (Math.abs(e.clientX - p.x) + Math.abs(e.clientY - p.y) >= CLICK_MOVE_PX) return
-  // Уже есть таймер — это второй клик из даблклика: гасим навигацию, ждём dblclick.
+  // A timer already exists — this is the second click of a double click: suppress navigation, wait for dblclick.
   if (clickTimer) {
     clearTimeout(clickTimer)
     clickTimer = null
@@ -74,7 +74,7 @@ onBeforeUnmount(() => {
   if (clickTimer) clearTimeout(clickTimer)
 })
 
-/** Есть ли кастомный тултип: через проп `tooltip` или слот `#tooltip` */
+/** Whether there is a custom tooltip: via the `tooltip` prop or the `#tooltip` slot */
 const hasTooltip = computed(() => Boolean(props.tooltip) || Boolean(slots.tooltip))
 
 const span = computed(() =>
@@ -92,8 +92,8 @@ const { bounds, visible, isDragging, cursor, previewStyle, dragSpan, startDrag }
   },
 })
 
-/** Live-предпросмотр: публикуем предложенные даты бара, пока идёт драг/ресайз.
- *  flush:'sync' — цвет ячеек пересчитывается сразу на каждый move. */
+/** Live preview: publish the bar's proposed dates while dragging/resizing.
+ *  flush:'sync' — cell colors are recalculated immediately on each move. */
 watch(
   dragSpan,
   (sp) => {
@@ -131,14 +131,14 @@ const cursorStyle = computed<Record<string, string>>(() => {
   return { cursor: 'default' }
 })
 
-/** Диапазон дат бара «дд.мм.гггг — дд.мм.гггг» (для тултипа и слотов) */
+/** Bar date range "dd.mm.yyyy — dd.mm.yyyy" (for tooltip and slots) */
 const dateRange = computed(() => formatDateRange(props.startDate, props.endDate))
 
 function onHandlePointerDown(e: PointerEvent, mode: 'resizeStart' | 'resizeEnd') {
   if (props.draggable) startDrag(e, mode)
 }
 
-/** Даблклик по бару не делает ничего; гасим отложенный одиночный клик (навигацию) */
+/** Double click on the bar does nothing; cancel the deferred single click (navigation) */
 function onDblClick() {
   if (clickTimer) {
     clearTimeout(clickTimer)

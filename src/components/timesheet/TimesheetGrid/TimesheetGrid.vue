@@ -15,25 +15,25 @@ const props = withDefaults(defineProps<TimesheetGridProps>(), {
 const emit = defineEmits<{
   assign: [payload: { employeeId: number; stateId: number; startDate: string; endDate: string }]
   clear: [payload: ClearPayload]
-  /** Видимый диапазон дат изменился (для дозагрузки окна состояний) */
+  /** The visible date range changed (to load more of the states window) */
   range: [payload: { startDate: string; endDate: string }]
 }>()
 
-/** Высота строки сотрудника и слоя имён (px): две строки — ФИО + должность */
+/** Employee row and name-layer height (px): two lines — full name + position */
 const ROW_H = 32
 
 /**
- * Задержка открытия панели назначения после отпускания мыши: различает одиночный
- * клик (открыть меню) и даблклик (сброс зума). Если в этот интервал приходит
- * второй клик — панель не открываем, сброс отработает по событию dblclick.
+ * Delay before opening the assignment panel after mouse release: distinguishes a single
+ * click (open the menu) from a double-click (zoom reset). If a second click arrives within
+ * this interval, the panel is not opened; the reset is handled by the dblclick event.
  */
 const OPEN_DELAY_MS = 200
 let openTimer: ReturnType<typeof setTimeout> | null = null
 
-/** Активное выделение диапазона (drag) */
+/** Active range selection (drag) */
 const selection = ref<{ employeeId: number; startIdx: number; endIdx: number } | null>(null)
 
-/** Плавающая панель назначения состояния */
+/** Floating panel for assigning a state */
 const panel = ref<{
   x: number
   y: number
@@ -42,15 +42,15 @@ const panel = ref<{
   endDate: string
 } | null>(null)
 
-/** Ссылка на панель для измерения её фактического размера */
+/** Reference to the panel for measuring its actual size */
 const panelEl = ref<HTMLElement | null>(null)
 
-/** Отступ панели от краёв окна (px) */
+/** Panel offset from window edges (px) */
 const PANEL_MARGIN = 8
 
 /**
- * Проверяет, помещается ли панель в окно браузера; если нет —
- * сдвигает её так, чтобы она целиком осталась в видимой области.
+ * Checks whether the panel fits in the browser window; if not,
+ * shifts it so that it stays entirely within the visible area.
  */
 function clampPanel() {
   const el = panelEl.value
@@ -67,7 +67,7 @@ function clampPanel() {
   if (x !== p.x || y !== p.y) panel.value = { ...p, x, y }
 }
 
-/** После открытия панели измеряем её и корректируем позицию под размер окна */
+/** After the panel opens, measure it and adjust its position to fit the window size */
 watch(panel, (p) => {
   if (p) {
     nextTick(clampPanel)
@@ -129,7 +129,7 @@ function onPointerMove(e: PointerEvent) {
   const cell = el?.closest<HTMLElement>('.ts-cell')
   if (!cell) return
   const empId = Number(cell.dataset.employeeId)
-  // Выделение остаётся в строке начального сотрудника
+  // Keep the selection within the starting employee's row
   if (empId !== selection.value.employeeId) return
   const idx = Number(cell.dataset.cellIndex)
   if (!Number.isNaN(idx)) selection.value.endIdx = idx
@@ -141,8 +141,8 @@ function onPointerUp(e: PointerEvent) {
   document.body.style.userSelect = ''
   window.removeEventListener('pointermove', onPointerMove)
   window.removeEventListener('pointerup', onPointerUp)
-  // Драг мог оставить якорь браузерного выделения — снимаем, чтобы клик вне панели
-  // не «растянул» текст между кликами
+  // The drag may have left a browser selection anchor — clear it so a click outside the panel
+  // does not "stretch" text between clicks
   window.getSelection()?.removeAllRanges()
   if (!s || Number.isNaN(s.endIdx)) return
   const lo = Math.min(s.startIdx, s.endIdx)
@@ -154,13 +154,13 @@ function onPointerUp(e: PointerEvent) {
     startDate: fmtDate(props.t.cellStart(lo)),
     endDate: fmtDate(props.t.cellEnd(hi)),
   }
-  // Второй клик из даблклика — панель не открываем: сброс зума отработает по dblclick
+  // Second click of a double-click — do not open the panel: the zoom reset is handled by dblclick
   if (openTimer) {
     clearTimeout(openTimer)
     openTimer = null
     return
   }
-  // Выделение показываем сразу, панель — после задержки (для различения даблклика)
+  // Show the selection immediately, the panel after a delay (to distinguish a double-click)
   selection.value = { employeeId: s.employeeId, startIdx: lo, endIdx: hi }
   openTimer = setTimeout(() => {
     openTimer = null
@@ -196,20 +196,20 @@ function closePanel() {
   }
   panel.value = null
   selection.value = null
-  // Убираем браузерное выделение, оставшееся после драга/клика вне панели
+  // Remove the browser selection left after a drag/click outside the panel
   window.getSelection()?.removeAllRanges()
 }
 
-/** Клик вне панели (оверлей): закрываем и запрещаем создание/расширение выделения текста */
+/** Click outside the panel (overlay): close it and prevent creating/extending a text selection */
 function onOverlayPointerDown(e: PointerEvent) {
   e.preventDefault()
   closePanel()
 }
 
 /**
- * Даблклик по табелю — сброс масштаба к исходному (обрабатывает бесконечная
- * шкала). Здесь гасим отложенное открытие панели и снимаем выделение, чтобы
- * одиночный клик (открытие меню) не сработал на двойном.
+ * Double-click on the timesheet resets the zoom to the default (handled by the infinite
+ * scale). Here we cancel the delayed panel opening and clear the selection so that
+ * a single click (opening the menu) does not fire on a double one.
  */
 function onDblClick() {
   if (openTimer) {
@@ -235,7 +235,7 @@ onBeforeUnmount(() => {
   document.body.style.userSelect = ''
 })
 
-/** Видимый диапазон дат — сигнал для дозагрузки состояний (при прокрутке/зуме) */
+/** The visible date range — signal to load more states (on scroll/zoom) */
 watch(
   () => [props.t.windowStart, props.t.viewportCells, props.t.cellPx] as const,
   () => {
@@ -254,7 +254,7 @@ const labelsH = computed(() => props.employees.length * ROW_H)
 
 <template>
   <div class="ts" @pointerdown="onPointerDown" @dblclick="onDblClick">
-    <!-- Слой имён сотрудников: строки липнут слева, вертикально едут с рядами -->
+    <!-- Employee names layer: rows stick to the left and scroll vertically with the rows -->
     <div
       class="ts-labels"
       :style="{ width: LABEL_WIDTH + 'px', marginBottom: '-' + labelsH + 'px' }"
@@ -277,7 +277,7 @@ const labelsH = computed(() => props.employees.length * ROW_H)
       </TooltipCell>
     </div>
 
-    <!-- Сетка ячеек: ряд на сотрудника, ячейки по видимым дням -->
+    <!-- Cell grid: one row per employee, cells by visible days -->
     <div class="ts-rows">
       <div
         v-for="emp in employees"
@@ -305,7 +305,7 @@ const labelsH = computed(() => props.employees.length * ROW_H)
 
     <p v-if="error" class="ts-error">{{ error }}</p>
 
-    <!-- Плавающая панель назначения состояния выделенному диапазону -->
+    <!-- Floating panel for assigning a state to the selected range -->
     <Teleport to="body">
       <template v-if="panel">
         <div class="ts-overlay" @pointerdown="onOverlayPointerDown" />
@@ -349,9 +349,9 @@ const labelsH = computed(() => props.employees.length * ROW_H)
 .ts {
   position: relative;
 }
-/* Боковая панель имён: липнет слева, поверх контента (ячеек/линий), шапки календаря
-   (30) и линии текущей даты (25), но под корнером (90). Ширина колонки 180px, поэтому
-   с шапкой не пересекается (у шапки слева — корнер), а линия «сегодня» идёт от x>=180. */
+/* Side names panel: sticks to the left, above the content (cells/lines), the calendar header
+   (30) and the current-date line (25), but below the corner (90). The column is 180px wide, so
+   it does not overlap the header (the header has a corner on its left), and the "today" line runs from x>=180. */
 .ts-labels {
   position: sticky;
   left: 0;

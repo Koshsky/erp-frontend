@@ -6,7 +6,7 @@ import { syncNow } from './sync'
 
 const busy = ref(false)
 
-/** Кнопка в баннере: если сеть вернулась — очередь уйдёт, если нет — flush тихо ничего не сделает. */
+/** Banner button: if the network is back the queue flushes, otherwise the flush quietly does nothing. */
 async function onPush() {
   if (busy.value) return
   busy.value = true

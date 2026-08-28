@@ -5,7 +5,7 @@ export interface ResourceOption {
 }
 
 export interface AssignedResource {
-  /** Идентификатор назначения (из /planning/tasks); отсутствует у старых данных */
+  /** Assignment id (from /planning/tasks); absent in legacy data */
   assignment_id?: number
   resource_id: number
   quantity: number

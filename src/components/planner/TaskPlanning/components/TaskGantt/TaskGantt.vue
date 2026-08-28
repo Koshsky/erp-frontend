@@ -19,13 +19,13 @@ const emit = defineEmits<{
   contextmenu: [payload: { clientX: number; clientY: number; date: string; rowIndex: number; processId?: number; taskId?: number; milestoneId?: number }]
   'milestone-edit': [payload: number]
   'open-comments': [payload: number]
-  /** Тултип задачи открылся — лениво подгрузить комментарии (кэш) */
+  /** Task tooltip opened — lazy-load the comments (cache) */
   'request-comments': [payload: number]
 }>()
 
 const groupItems = computed(() => props.tasks)
 
-/** Мин. высота объединённого лейбла: код (19px) + имя (14px) + даты (11px) + отступы ≈ 60px */
+/** Min merged label height: code (19px) + name (14px) + dates (11px) + padding ≈ 60px */
 const MS_MIN_LABEL_HEIGHT = 64
 
 function fmtDate(d: string | Date | number | null | undefined): string {
@@ -51,7 +51,7 @@ function onMilestoneEdit(id: number) {
 
 <template>
   <div class="tg-task-group">
-    <!-- Непрозрачная липкая ячейка колонки названий для строки вех (иначе сквозь неё видны бары) -->
+    <!-- Opaque sticky label-column cell for the milestone row (otherwise bars show through) -->
     <div class="tg-ms-label" :style="{ width: LABEL_WIDTH + 'px' }" />
     <GroupGantt
       :timeline="timeline"
@@ -119,7 +119,7 @@ function onMilestoneEdit(id: number) {
   left: 0;
   height: 20px;
   background: #fff;
-  /* Боковая панель — выше линии текущей даты (25) */
+  /* Side panel — above the today line (25) */
   z-index: 65;
   margin-top: -20px;
   cursor: default;

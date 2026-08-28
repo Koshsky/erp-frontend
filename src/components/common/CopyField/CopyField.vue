@@ -36,7 +36,7 @@ async function onCopy() {
     await navigator.clipboard.writeText(props.value)
     flashCopied()
   } catch {
-    // Буфер обмена недоступен — выделяем текст для ручного копирования.
+    // Clipboard unavailable — select the text for manual copying.
     selectText()
   }
 }

@@ -16,7 +16,7 @@ const props = defineProps<{
 
 const dowMap = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб']
 
-/** Подпись числа ячейки: для дня — число; для декады — диапазон дней (1-10, 11-20, 21-конец) */
+/** Cell number label: for a day — the number; for a decade — the day range (1-10, 11-20, 21-end) */
 function numLabel(i: number): string {
   const s = props.t.cellStart(i)
   const e = props.t.cellEnd(i)
@@ -28,8 +28,8 @@ function monthLabel(d: Date): string {
   return m.charAt(0).toUpperCase() + m.slice(1) + ' ' + d.getFullYear()
 }
 
-/** Месяцы с объединением ячеек — метка центрируется по ПОЛНОЙ длине месяца
- *  (от первой до последней ячейки месяца), а не по видимому окну, чтобы не «плавала» при прокрутке */
+/** Months with merged cells — the label is centered over the FULL month width
+ *  (from the month's first to last cell), not the visible window, so it does not "float" while scrolling */
 const monthGroups = computed(() => {
   const out: { key: string; label: string; from: number; to: number }[] = []
   const seen = new Set<string>()
@@ -45,7 +45,7 @@ const monthGroups = computed(() => {
   return out
 })
 
-/** Ряды чисел и дней недели скрываются, когда ячейка слишком узкая для их подписей */
+/** The number and weekday rows are hidden when the cell is too narrow for their labels */
 const showNumRow = computed(() =>
   props.t.cellPx >= (props.t.unit === 'day' ? CELL_PX_NUM_DAY : CELL_PX_NUM_DECADE),
 )
@@ -90,12 +90,12 @@ const showWdRow = computed(() => props.t.unit === 'day' && props.t.cellPx >= CEL
   z-index: 30;
   background: #f8f9fa;
 }
-/* Корнер — часть боковой панели: липнет к левому и верхнему краю, лежит выше
- * всех слоёв боковой панели (строки 65, объединённые лейблы 70, коды ресурсов 80)
- * и линии текущей даты (25), но вне stacking context шапки (30). Иначе при
- * вертикальном скролле лейблы групп проезжают поверх него — корнер выглядит
- * «выбитым окном». Высота и отрицательный margin задаются инлайном, чтобы не
- * сдвигать шапку. */
+/* Corner — part of the side panel: sticks to the left and top edges, sits above
+ * all side-panel layers (rows 65, merged labels 70, resource codes 80)
+ * and the today line (25), but outside the header stacking context (30). Otherwise
+ * on vertical scroll group labels pass over it — the corner looks like
+ * a "punched-out window". Height and negative margin are set inline so the
+ * header is not shifted. */
 .th-corner {
   position: sticky;
   top: 0;

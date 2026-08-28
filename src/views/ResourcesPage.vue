@@ -18,12 +18,12 @@ const ts = useTimesheetStore()
 const { employees } = storeToRefs(ts)
 const auth = useAuthStore()
 
-// dp (директор проектов) — read-only: может менять только приоритет проектов,
-// поэтому создание/редактирование/удаление ресурсов ему недоступно.
+// dp (project director) — read-only: can change only project priorities,
+// so creating/editing/deleting resources is not available to them.
 const { canManageResources, role, userId } = useRoleAccess()
 const isAdmin = computed(() => role.value === 'admin')
 
-/** Подпись владельца ресурса: admin — имя, vp — «Я» */
+/** Resource owner label: admin — name, vp — "Me" */
 function ownerLabel(ownerId?: number | null): string {
   if (ownerId == null) return '—'
   if (ownerId === userId.value) return 'Я'
@@ -31,7 +31,7 @@ function ownerLabel(ownerId?: number | null): string {
   return u?.name ?? `#${ownerId}`
 }
 
-// ПКМ по строке ресурса: редактирование/удаление
+// Right-click on a resource row: edit/delete
 interface MenuState {
   x: number
   y: number
@@ -43,14 +43,14 @@ const menuItems = computed<ContextMenuItem[]>(() => [
   { id: 'delete-resource', label: 'Удалить ресурс' },
 ])
 
-// Диалог подтверждения удаления (вместо window.confirm — блокируется в iframe/песочнице)
+// Delete confirmation dialog (instead of window.confirm — it is blocked in iframes/sandboxes)
 const { confirm: confirmDialog, ask, proceed, cancel } = useConfirm()
 
 type ModalMode =
   | { type: 'create' }
   | { type: 'edit'; id: number; code: string; title: string; ownerId?: number }
 
-/** Варианты владельцев (пользователей, без workers) */
+/** Owner options (users, excluding workers) */
 const ownerOptions = computed<ModalField['options']>(() =>
   users.value
     .filter((u) => u.id != null && u.role !== 'worker')
@@ -58,11 +58,11 @@ const ownerOptions = computed<ModalField['options']>(() =>
     .map((u) => ({ value: u.id as number, label: u.name ?? `#${u.id}` })),
 )
 
-/** Фильтр по владельцу (owner_id): admin выбирает владельца, бэкенд фильтрует по скоупу */
+/** Filter by owner (owner_id): admin picks the owner, the backend filters by scope */
 const ownerFilter = ref<number | ''>('')
 const filteredResources = computed(() => resources.value)
 
-// Смена фильтра владельца перезагружает листинг с owner_id (только для admin)
+// Changing the owner filter reloads the listing with owner_id (admin only)
 watch(ownerFilter, (v) => {
   if (isAdmin.value) store.loadResources(typeof v === 'number' ? v : undefined)
 })
@@ -73,7 +73,7 @@ const { open: openModal, close: closeModal, submit: submitModal, bind: modalBind
       { key: 'code', label: 'Код', type: 'text', value: state.type === 'create' ? '' : state.code, required: true },
       { key: 'title', label: 'Название', type: 'text', value: state.type === 'create' ? '' : state.title },
     ]
-    // Владельца выбирает только admin (owner_id обязателен); vp создаёт себе в собственность
+    // The owner is chosen by admin only (owner_id is required); vp creates resources in their own ownership
     if (isAdmin.value) {
       fields.push({
         key: 'ownerId',
@@ -133,7 +133,7 @@ function handleSelect(id: string) {
   }
 }
 
-// === Управление участниками (пользователями) ресурса ===
+// === Resource member (user) management ===
 const expandedId = ref<number | null>(null)
 const addMemberId = ref<number | ''>('')
 
@@ -141,14 +141,14 @@ function membersFor(id: number): DtoResourceMemberResponse[] {
   return [...(store.resourceMembers[id] ?? [])].sort(compareByName)
 }
 
-/** Workers и текущий пользователь, ещё не входящие в ресурс (кандидаты на добавление) */
+/** Workers and the current user not yet in the resource (candidates for adding) */
 function workersNotIn(id: number) {
   const ids = new Set(membersFor(id).map((m) => m.id))
   const candidates: Array<{ id: number; name: string }> = employees.value
     .filter((w) => w.id != null && !ids.has(w.id))
     .map((w) => ({ id: w.id as number, name: w.name ?? `#${w.id}` }))
   const me = auth.user
-  // Владелец (vp) может добавить себя в свой ресурс (РСИ и т.п.)
+  // The owner (vp) can add themselves to their own resource (e.g. the installation service manager resource)
   if (me?.id != null && !ids.has(me.id)) {
     candidates.push({ id: me.id, name: me.name ?? 'Я' })
   }

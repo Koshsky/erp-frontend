@@ -33,7 +33,7 @@ const { resources, calendar } = storeToRefs(app)
 
 const { unit, origin } = usePlanningOrigin()
 
-/** Текущее видимое окно шкалы (период «как на экране») + зум — для печати в PDF */
+/** Current visible timeline window (the period "as on screen") + zoom — for PDF export */
 const viewRange = ref<{ from: string; to: string; cellWidthPx: number; scale: number }>({
   from: '',
   to: '',
@@ -41,12 +41,12 @@ const viewRange = ref<{ from: string; to: string; cellWidthPx: number; scale: nu
   scale: 1,
 })
 
-/** Отсутствия членов ресурсов (для тултипа UsageCell) */
+/** Absences of resource members (for the UsageCell tooltip) */
 const { absenceByResource } = storeToRefs(app)
 
 let absenceTimer: ReturnType<typeof setTimeout> | null = null
 
-/** Загрузить отсутствия по всем ресурсам за видимое окно (с дебаунсом при скролле/зуме) */
+/** Load absences for all resources over the visible window (debounced on scroll/zoom) */
 function loadAbsenceForRange(from: string, to: string) {
   if (!from || !to) return
   for (const r of resources.value) {
@@ -60,10 +60,10 @@ function onVisibleRange(v: { from: string; to: string; cellWidthPx: number; scal
   absenceTimer = setTimeout(() => loadAbsenceForRange(v.from, v.to), 300)
 }
 
-// Меню ПКМ по шапке таблицы: переключение масштаба «День» / «Декада»
+// Right-click menu on the table header: switching the "Day" / "Decade" scale
 const { open: openUnitMenu, close: closeUnitMenu, select: selectUnit, bind: unitMenuBind } = useUnitMenu(unit)
 
-/** Якорь шкалы при навигации с вкладки процессов (клик по бару процесса) */
+/** Timeline anchor when navigating from the processes tab (click on a process bar) */
 const focusDate = computed(() => {
   const id = Number(route.query.process)
   if (!id) return null
@@ -71,21 +71,21 @@ const focusDate = computed(() => {
   return proc?.start_date ?? null
 })
 
-/** Прокрутка по вертикали к строке (блоку задач) процесса */
+/** Vertical scroll to the process row (task block) */
 const focusGroupId = computed(() => {
   const id = Number(route.query.process)
   return id ? id : null
 })
 
-// vp владеет задачами/вехами/назначениями своих процессов; rp — view only
-// (список задач для него уже отфильтрован бэкендом), dp — read-only.
+// vp owns the tasks/milestones/assignments of their processes; rp — view only
+// (the task list for them is already filtered by the backend), dp — read-only.
 const { canManageTasks, canViewTasks, canViewProjects, role, userId } = useRoleAccess()
 
 const { findTask, findMilestone } = useFindPlanningItem()
 
-// ПКМ по пустому месту группы: создание задачи или вехи в процессе-родителе.
-// Дата под курсором; задача вставляется строкой в позицию ПКМ, веха — точка на шкале.
-// ПКМ по бару задачи / флажку вехи: меню редактирования/удаления.
+// Right-click on an empty group area: create a task or milestone in the parent process.
+// The date is under the cursor; a task is inserted as a row at the right-click position, a milestone is a point on the timeline.
+// Right-click on a task bar / milestone flag: edit/delete menu.
 interface MenuState {
   x: number
   y: number
@@ -97,12 +97,12 @@ interface MenuState {
 }
 const menu = ref<MenuState | null>(null)
 
-// Диалог подтверждения удаления (вместо window.confirm — блокируется в iframe/песочнице)
+// Delete confirmation dialog (instead of window.confirm — it is blocked in iframes/sandboxes)
 const { confirm: confirmDialog, ask, proceed, cancel } = useConfirm()
 
 const menuItems = computed<ContextMenuItem[]>(() => {
   if (!canViewTasks.value) return []
-  // Задача: «Комментарии» доступны всем, кто видит задачу; остальное — управляющим ролям.
+  // Task: "Comments" is available to everyone who can see the task; the rest — to managing roles.
   if (menu.value?.taskId != null) {
     const items: ContextMenuItem[] = [{ id: 'comments', label: 'Комментарии' }]
     if (canManageTasks.value) {
@@ -128,12 +128,12 @@ const menuItems = computed<ContextMenuItem[]>(() => {
   ]
 })
 
-// Модалка редактирования задачи (название, ответственный) или вехи (название + контент)
+// Edit modal for a task (title, assignee) or a milestone (title + content)
 type EditState =
   | { type: 'task'; id: number; title: string; ownerId?: number }
   | { type: 'milestone'; id: number; title: string; content: string }
 
-/** Кандидаты в «ответственные» задачи — только свои сотрудники (прямые подчинённые) */
+/** Candidates for task "assignee" — own employees only (direct subordinates) */
 const ownerOptions = computed(() =>
   [...app.myStaff]
     .sort(compareByName)
@@ -157,8 +157,8 @@ const { open: openEdit, close: closeEdit, submit: submitEdit, bind: editBind } =
     }
     return [
       base,
-      // Ответственный выбирается из своих сотрудников. Владельца нельзя удалить
-      // (set null); если не выбрать никого из списка — поле owner_id не отправляется.
+      // The assignee is chosen from own employees. The owner cannot be removed
+      // (set null); if none is selected from the list — the owner_id field is not sent.
       {
         key: 'owner_id',
         label: 'Ответственный',
@@ -171,7 +171,7 @@ const { open: openEdit, close: closeEdit, submit: submitEdit, bind: editBind } =
   async (state, values) => {
     const title = String(values.title ?? '')
     if (state.type === 'task') {
-      // Пустое значение (не выбран сотрудник) — владельца не меняем: поле не отправляется.
+      // Empty value (no employee selected) — the owner is not changed: the field is not sent.
       const ownerId = values.owner_id === '' ? undefined : Number(values.owner_id)
       const ok = await planning.updateTaskMeta(state.id, { title, owner_id: ownerId })
       return { ok, error: ok ? null : planning.error }
@@ -187,14 +187,14 @@ const { open: openEdit, close: closeEdit, submit: submitEdit, bind: editBind } =
 
 function onContextMenu(p: { clientX: number; clientY: number; date: string | null; rowIndex: number; processId?: number; taskId?: number; milestoneId?: number }) {
   if (!canViewTasks.value) return
-  // Пустое место группы: создание задач/вех — только управляющим ролям.
+  // Empty group area: creating tasks/milestones — managing roles only.
   if (p.taskId == null && p.milestoneId == null && !canManageTasks.value) return
-  // Пустое место группы: создание требует процесс-родитель и известную дату
+  // Empty group area: creation requires a parent process and a known date
   if (p.taskId == null && p.milestoneId == null && (p.processId == null || p.date == null)) return
   openMenu({ x: p.clientX, y: p.clientY, date: p.date, rowIndex: p.rowIndex, processId: p.processId, taskId: p.taskId, milestoneId: p.milestoneId })
 }
 
-/** ПКМ по шапке таблицы — меню масштаба «День»/«Декада» (закрыв меню действий) */
+/** Right-click on the table header — the "Day"/"Decade" scale menu (after closing the actions menu) */
 function onHeaderCtx(p: { clientX: number; clientY: number }) {
   closeMenu()
   openUnitMenu(p.clientX, p.clientY)
@@ -227,8 +227,8 @@ async function handleSelect(id: string) {
   if (id === 'create-task') {
     if (processId == null || date == null) return
     const proc = planning.taskPlanning?.processes?.find((p: any) => p.id === processId)
-    // Задача создаётся в пределах процесса-родителя с сохранением дефолтной длины:
-    // клик вне границ прижимает спана к началу/концу родителя, но не ужимает его.
+    // A task is created within the bounds of the parent process keeping the default length:
+    // a click outside the bounds clamps the span to the parent start/end but does not shrink it.
     const { start_date, end_date } = shiftSpanDates(
       date,
       addDaysISO(date, 7),
@@ -269,18 +269,18 @@ async function handleSelect(id: string) {
   }
 }
 
-// Модалка «Управление ресурсами» задачи (назначение/снятие ресурсов)
+// Task "Resource management" modal (assigning/removing resources)
 const resourcesModalTaskId = ref<number | null>(null)
 const resourcesBusy = ref(false)
 const resourcesError = ref<string | null>(null)
 
-/** Название задачи для заголовка модалки */
+/** Task title for the modal header */
 const resourcesTaskTitle = computed(() => {
   if (resourcesModalTaskId.value == null) return ''
   return findTask(resourcesModalTaskId.value)?.title ?? ''
 })
 
-/** Назначенные задаче ресурсы из /planning/tasks (обновляются после тихого reload) */
+/** Resources assigned to the task from /planning/tasks (updated after a silent reload) */
 const assignedResources = computed<AssignedResource[]>(() => {
   if (resourcesModalTaskId.value == null) return []
   const task = findTask(resourcesModalTaskId.value)
@@ -294,10 +294,10 @@ const assignedResources = computed<AssignedResource[]>(() => {
 })
 
 /**
- * Справочник ресурсов для выбора в модалке (только с id). Для не-admin
- * оставляем ресурсы владельцев задачи (process/project) — сервер всё равно
- * отклонит чужой ресурс (403). admin видит все; при неизвестных владельцах
- * (холодный кэш) список не фильтруем — сервер — финальный арбитр.
+ * Resource catalog for choosing in the modal (only those with id). For non-admin
+ * keep the resources of the task owners (process/project) — the server will
+ * reject a foreign resource anyway (403). admin sees all; when owners are unknown
+ * (cold cache) the list is not filtered — the server is the final arbiter.
  */
 const resourceOptions = computed(() => {
   const opts = resources.value.filter((r) => r.id != null)
@@ -338,17 +338,17 @@ async function onRemoveResource(payload: { resource_id: number }) {
   if (!ok) resourcesError.value = planning.error
 }
 
-// Модалка «Комментарии» задачи: открывается кликом по бару или из ПКМ-меню
-// (доступна всем, кто видит задачу; в офлайне — просмотр кэша без отправки).
+// Task "Comments" modal: opens by clicking the bar or from the right-click menu
+// (available to everyone who can see the task; offline — viewing the cache without sending).
 const commentsTaskId = ref<number | null>(null)
 
-/** Название задачи для заголовка модалки */
+/** Task title for the modal header */
 const commentsTaskTitle = computed(() => {
   if (commentsTaskId.value == null) return ''
   return findTask(commentsTaskId.value)?.title ?? ''
 })
 
-/** Комментарии задачи из кэша стора (плоский список; дерево строит компонент) */
+/** Task comments from the store cache (flat list; the tree is built by the component) */
 const taskComments = computed(() => {
   if (commentsTaskId.value == null) return []
   return planning.commentsByTask[commentsTaskId.value] ?? []
@@ -372,24 +372,24 @@ function onDeleteComment(payload: DeleteCommentPayload) {
 }
 
 onMounted(async () => {
-  // Приоритеты проектов и ресурсы нужны до задач: processesByPriority сортируется по ним,
-  // и при монтировании шкалы порядок групп уже финальный (иначе якорь навигации уезжает).
-  // Проекты получают только admin/dp/rp; у vp/worker их нет (403) — сортировка по id.
+  // Project priorities and resources are needed before tasks: processesByPriority sorts by them,
+  // and when the timeline mounts the group order is already final (otherwise the navigation anchor drifts).
+  // Projects are fetched by admin/dp/rp only; vp/worker do not have them (403) — sorting by id.
   if (canViewProjects.value && !app.projects.length) await app.loadProjects()
   if (!resources.value.length) await app.loadResources()
-  // Справочник пользователей — для имён ответственных задач (owner_id → name)
+  // User catalog — for task assignee names (owner_id → name)
   if (!app.users.length) await app.loadUsers()
-  // Свои сотрудники — пул кандидатов в «ответственные» задачи
+  // Own employees — the pool of candidates for task "assignees"
   await app.loadMyStaff()
-  // Календарь доступности обновляем при КАЖДОМ заходе на страницу: табель мог
-  // измениться, и ResourceHeader должен сразу показывать свежую доступность.
+  // The availability calendar is refreshed on EVERY page entry: the timesheet may
+  // have changed, and ResourceHeader must immediately show fresh availability.
   await app.loadCalendar()
   await planning.loadTaskPlanning()
 })
 
 /**
- * Процессы на странице Задач отсортированы по приоритету проекта, к которому они
- * относятся (сначала приоритет, внутри — по id). Приоритеты берём из app.projects.
+ * Processes on the Tasks page are sorted by the priority of their project
+ * (priority first, then by id). Priorities come from app.projects.
  */
 const processesByPriority = computed(() => {
   const prio = new Map<number, number>()
@@ -397,7 +397,7 @@ const processesByPriority = computed(() => {
     if (p.id != null) prio.set(p.id, p.priority ?? Number.MAX_SAFE_INTEGER)
   }
   let list = taskPlanning.value?.processes ?? []
-  // vp: показываем процессы только в проектах, где у vp есть хотя бы один процесс
+  // vp: show only processes in projects where vp owns at least one process
   if (role.value === 'vp' && userId.value != null) {
     const myProjects = new Set(
       list.filter((p: any) => p.owner_id === userId.value).map((p: any) => p.project_id),
@@ -411,7 +411,7 @@ const processesByPriority = computed(() => {
   })
 })
 
-/** Печатная модель для PdfExport: процесс = группа, задачи = строки */
+/** Print model for PdfExport: a process = a group, tasks = rows */
 const taskGroups = computed<PdfGanttGroup[]>(() =>
   processesByPriority.value.map((p: any) => ({
     id: p.id,
@@ -435,7 +435,7 @@ const taskGroups = computed<PdfGanttGroup[]>(() =>
 
 <template>
   <section class="pp">
-    <!-- Печать диаграммы в PDF: период и ширина ячейки берутся с текущего вида страницы -->
+    <!-- Printing the diagram as PDF: the period and cell width come from the current page view -->
     <div class="pp-toolbar">
       <PdfExport
         :groups="taskGroups"
@@ -453,8 +453,8 @@ const taskGroups = computed<PdfGanttGroup[]>(() =>
       />
     </div>
 
-    <!-- Диаграмма Задач: данные загружает PlannerPage (view) через store,
-         TaskPlanning получает их через props -->
+    <!-- Tasks Diagram: PlannerPage (view) loads the data via the store,
+         TaskPlanning receives it through props -->
     <TaskPlanning
       :processes="processesByPriority"
       :resources="resources"

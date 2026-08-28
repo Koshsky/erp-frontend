@@ -27,7 +27,7 @@ const { projectPlanning, loading, error } = storeToRefs(store)
 
 const { unit, origin } = usePlanningOrigin()
 
-/** Текущее видимое окно шкалы (период «как на экране») + зум — для печати в PDF */
+/** Current visible timeline window (the period "as on screen") + zoom — for PDF export */
 const viewRange = ref<{ from: string; to: string; cellWidthPx: number; scale: number }>({
   from: '',
   to: '',
@@ -38,7 +38,7 @@ function onVisibleRange(v: { from: string; to: string; cellWidthPx: number; scal
   viewRange.value = v
 }
 
-/** Печатная модель для PdfExport: одна группа «Проекты», строки = проекты */
+/** Print model for PdfExport: one "Projects" group, rows = projects */
 const projectGroups = computed<PdfGanttGroup[]>(() => {
   const rows = (projectPlanning.value?.projects ?? []).map((p: any) => ({
     id: p.id,
@@ -51,18 +51,18 @@ const projectGroups = computed<PdfGanttGroup[]>(() => {
   return rows.length ? [{ id: 'projects', title: 'Проекты', rows }] : []
 })
 
-// Меню ПКМ по шапке таблицы: переключение масштаба «День» / «Декада»
+// Right-click menu on the table header: switching the "Day" / "Decade" scale
 const { open: openUnitMenu, close: closeUnitMenu, select: selectUnit, bind: unitMenuBind } = useUnitMenu(unit)
 
-// === Права по ролям ===
-// dp (директор проектов): просматривает и редактирует все проекты, не удаляет
-// rp (руководитель проекта): создаёт проекты (сам становится owner), редактирует и удаляет свои
+// === Role permissions ===
+// dp (project director): views and edits all projects, cannot delete
+// rp (project manager): creates projects (becomes the owner), edits and deletes their own
 const { role, userId, canCreateProject, canReorderProjects, canManageProject, canDeleteProject } = useRoleAccess()
 
 const { findProject } = useFindPlanningItem()
 
-// ПКМ по пустому месту: меню создания проекта (дата под курсором, вставка в позицию ПКМ)
-// ПКМ по бару проекта: меню редактирования/удаления проекта
+// Right-click on an empty area: create-project menu (date under the cursor, inserted at the right-click position)
+// Right-click on a project bar: edit/delete menu for the project
 interface MenuState {
   x: number
   y: number
@@ -72,7 +72,7 @@ interface MenuState {
 }
 const menu = ref<MenuState | null>(null)
 
-// Диалог подтверждения удаления (вместо window.confirm — блокируется в iframe/песочнице)
+// Delete confirmation dialog (instead of window.confirm — it is blocked in iframes/sandboxes)
 const { confirm: confirmDialog, ask, proceed, cancel } = useConfirm()
 
 const menuItems = computed<ContextMenuItem[]>(() => {
@@ -99,7 +99,7 @@ const ownerOptions = computed(() =>
     .map((u) => ({ value: u.id ?? 0, label: u.name ?? '' })),
 )
 
-// Модалка редактирования проекта (код, владелец)
+// Project edit modal (code, owner)
 interface EditState {
   id: number
   code: string
@@ -110,7 +110,7 @@ const { open: openEdit, close: closeEdit, submit: submitEdit, bind: editBind } =
     const fields: ModalField[] = [
       { key: 'code', label: 'Код проекта', type: 'text', value: state.code, required: true },
     ]
-    // Владелец проекта не может быть изменён: у rp поле скрываем, admin его видит
+    // The project owner cannot be changed: the field is hidden for rp, admin sees it
     if (role.value === 'admin') {
       fields.push({
         key: 'owner_id',
@@ -124,7 +124,7 @@ const { open: openEdit, close: closeEdit, submit: submitEdit, bind: editBind } =
   },
   async (state, values) => {
     const patch: { code: string; owner_id?: number } = { code: String(values.code ?? '') }
-    // Владельца проекта изменить нельзя: owner_id отправляем только для admin
+    // The project owner cannot be changed: owner_id is sent only for admin
     if (role.value === 'admin' && values.owner_id !== '' && values.owner_id != null) {
       patch.owner_id = Number(values.owner_id)
     }
@@ -135,18 +135,18 @@ const { open: openEdit, close: closeEdit, submit: submitEdit, bind: editBind } =
 )
 
 function onContextMenu(p: { clientX: number; clientY: number; date: string | null; rowIndex: number; projectId?: number }) {
-  // Бар проекта: меню открываем только если есть права на управление проектом
+  // Project bar: open the menu only if there are rights to manage the project
   if (p.projectId != null) {
     if (!canManageProject(p.projectId)) return
     openMenu({ x: p.clientX, y: p.clientY, date: p.date, rowIndex: p.rowIndex, projectId: p.projectId })
     return
   }
-  // Пустое место: меню создания только для ролей с правом создания и при известной дате
+  // Empty area: create menu only for roles with the create right and when the date is known
   if (!canCreateProject.value || p.date == null) return
   openMenu({ x: p.clientX, y: p.clientY, date: p.date, rowIndex: p.rowIndex })
 }
 
-/** ПКМ по шапке таблицы — меню масштаба «День»/«Декада» (закрыв меню действий) */
+/** Right-click on the table header — the "Day"/"Decade" scale menu (after closing the actions menu) */
 function onHeaderCtx(p: { clientX: number; clientY: number }) {
   closeMenu()
   openUnitMenu(p.clientX, p.clientY)
@@ -185,7 +185,7 @@ async function onReorder(e: { from: number; to: number }) {
   if (!ok) error.value = store.error
 }
 
-/** Клик по бару проекта — переход на вкладку процессов с якорем на начало проекта */
+/** Click on a project bar — navigate to the processes tab anchored at the project start */
 function goToProcesses(projectId: number) {
   router.push({ path: '/processes', query: { project: String(projectId) } })
 }
@@ -198,7 +198,7 @@ onMounted(() => {
 
 <template>
   <section class="pp">
-    <!-- Печать диаграммы проектов в PDF: период и ширина ячейки со страницы -->
+    <!-- Printing the projects diagram as PDF: the period and cell width from the page -->
     <div class="pp-toolbar">
       <PdfExport
         :groups="projectGroups"

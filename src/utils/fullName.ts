@@ -1,4 +1,4 @@
-/** Полное ФИО «Фамилия Имя Отчество» из структурированных полей пользователя */
+/** Full name "Surname First Middle" from the user's structured fields */
 export function fullName(u?: {
   last_name?: string | null
   first_name?: string | null

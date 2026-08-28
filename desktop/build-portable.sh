@@ -1,74 +1,74 @@
 #!/usr/bin/env bash
 #
-# Сборка релизных версий MVS ERP из Electron-обвязки (Windows + Linux).
+# Builds MVS ERP release versions from the Electron wrapper (Windows + Linux).
 #
-#  Что делает:
-#    1. Определяет версию приложения (см. «Версия» ниже).
-#    2. Собирает веб-фронтенд (services/frontend/dist/) с той же версией
-#       (если ещё не собран или передан флаг --build-web).
-#    3. Проверяет/ставит зависимости Electron-обвязки (desktop/).
-#    4. Запускает electron-builder для включённых частей релиза (флаги ниже).
-#       Все артефакты одного релиза складываются в ОДНУ директорию,
-#       именованную конкретной версией: release/<версия>/.
+#  What it does:
+#    1. Determines the app version (see "Version" below).
+#    2. Builds the web frontend (services/frontend/dist/) with the same version
+#       (unless already built or --build-web is passed).
+#    3. Checks/installs the Electron wrapper dependencies (desktop/).
+#    4. Runs electron-builder for the enabled release parts (flags below).
+#       All artifacts of one release go into ONE directory named after the
+#       specific version: release/<version>/.
 #
-#  Части релиза и флаги (Linux по умолчанию ВКЛЮЧЕН, Windows — ВЫКЛЮЧЕН;
-#  явные флаги добавляют части к Linux-дефолту):
-#    --linux-portable   Linux portable-папка linux-unpacked/          (default on)
-#    --linux-appimage   Linux единый файл *.AppImage                  (default on)
+#  Release parts and flags (Linux is ON by default, Windows OFF; explicit
+#  flags add parts to the Linux default):
+#    --linux-portable   Linux portable folder linux-unpacked/          (default on)
+#    --linux-appimage   Linux single file *.AppImage                  (default on)
 #    --win-portable     Windows portable: win-unpacked/ + *.zip       (default off)
-#    --win-exe          Windows единый self-contained *.exe           (default off)
-#    --win              сокращение для --win-portable --win-exe
-#    --linux            явное включение обоих Linux-флагов (no-op, и так дефолт)
+#    --win-exe          Windows single self-contained *.exe           (default off)
+#    --win              shorthand for --win-portable --win-exe
+#    --linux            explicit enable of both Linux flags (no-op, already default)
 #
-#  Версия:
-#    - источник — desktop/package.json (semver), её же получают артефакты и UI
-#      (в dist через env APP_VERSION);
-#    - по умолчанию на каждую сборку инкрементируется patch (1.0.0 -> 1.0.1);
-#    - --version X.Y.Z — точная версия (без инкремента);
-#    - --bump minor|major|patch — явный тип инкремента; --no-bump — без изменений.
-#    Скрипт версию не коммитит: bump лучше зафиксировать отдельным коммитом
-#    (например chore(desktop): release v1.0.1).
+#  Version:
+#    - source — desktop/package.json (semver); artifacts and UI get the same one
+#      (in dist via env APP_VERSION);
+#    - by default every build increments patch (1.0.0 -> 1.0.1);
+#    - --version X.Y.Z — exact version (no increment);
+#    - --bump minor|major|patch — explicit increment type; --no-bump — unchanged.
+#    The script does not commit the version: commit the bump separately
+#    (e.g. chore(desktop): release v1.0.1).
 #
-#  Использование:
-#    ./build-portable.sh                     # Linux (обе части); версия = bump patch
-#    ./build-portable.sh --win-portable      # Linux + Windows portable (zip+папка)
-#    ./build-portable.sh --win-exe           # Linux + единый Windows .exe (best-effort)
-#    ./build-portable.sh --win               # Linux + обе Windows-части
-#    ./build-portable.sh --version 2.1.0     # собрать именно 2.1.0
-#    ./build-portable.sh --no-bump           # текущая версия как есть
-#    ./build-portable.sh --bump minor        # инкремент minor
-#    ./build-portable.sh --build-web         # принудительно пересобрать dist/
-#    ./build-portable.sh --clean             # очистить release/ перед сборкой
+#  Usage:
+#    ./build-portable.sh                     # Linux (both parts); version = patch bump
+#    ./build-portable.sh --win-portable      # Linux + Windows portable (zip+folder)
+#    ./build-portable.sh --win-exe           # Linux + single Windows .exe (best-effort)
+#    ./build-portable.sh --win               # Linux + both Windows parts
+#    ./build-portable.sh --version 2.1.0     # build exactly 2.1.0
+#    ./build-portable.sh --no-bump           # current version as is
+#    ./build-portable.sh --bump minor        # increment minor
+#    ./build-portable.sh --build-web         # force rebuild of dist/
+#    ./build-portable.sh --clean             # clean release/ before building
 #
-#  Артефакты (release/<версия>/ — все файлы одного релиза в одной директории):
-#    Windows: MVS ERP-<v>-win-x64.zip (portable-архив) + win-unpacked/
-#             MVS ERP-<v>-win-x64.exe (единый self-contained .exe; best-effort)
-#    Linux:   MVS ERP-<v>-linux-x86_64.AppImage (единый файл) + linux-unpacked/
+#  Artifacts (release/<version>/ — all files of one release in one directory):
+#    Windows: MVS ERP-<v>-win-x64.zip (portable archive) + win-unpacked/
+#             MVS ERP-<v>-win-x64.exe (single self-contained .exe; best-effort)
+#    Linux:   MVS ERP-<v>-linux-x86_64.AppImage (single file) + linux-unpacked/
 #
-#  Примечание по wine: таргеты zip/dir/portable/AppImage не требуют wine на
-#  Linux-хосте; единый Windows-.exe (portable) собирается отдельным вызовом и
-#  при недоступных инструментах среды не ломает остальные артефакты. NSIS-
-#  установщик (npm run dist:win) НЕ portable и требует wine/makensis или
-#  Windows-хост — здесь намеренно не собирается.
+#  Note on wine: zip/dir/portable/AppImage targets do not need wine on a
+#  Linux host; the single Windows .exe (portable) is built in a separate
+#  invocation and, when environment tools are unavailable, does not break the
+#  other artifacts. The NSIS installer (npm run dist:win) is NOT portable and
+#  needs wine/makensis or a Windows host — deliberately not built here.
 #
 set -euo pipefail
 
-# Каталог скрипта (desktop/) и корень фронтенда
+# Script directory (desktop/) and the frontend root
 DESKTOP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FRONTEND_DIR="$(cd "$DESKTOP_DIR/.." && pwd)"
 OUT_DIR="$DESKTOP_DIR/release"
 
-# Кэш electron/electron-builder. По умолчанию они кладут бинари в ~/.cache,
-# который во многих окружениях (песочница/CI) read-only. Перенаправляем в
-# рабочее дерево (этот каталог gitignored). @electron/get на Linux читает
-# XDG_CACHE_HOME (envPaths) — именно его и задаём, плюс запасные переменные.
+# electron/electron-builder cache. By default they put binaries into ~/.cache,
+# which is read-only in many environments (sandbox/CI). Redirect into the
+# working tree (this directory is gitignored). @electron/get on Linux reads
+# XDG_CACHE_HOME (envPaths) — that is what we set, plus fallback variables.
 export XDG_CACHE_HOME="$DESKTOP_DIR/.cache"
 export ELECTRON_CACHE="$XDG_CACHE_HOME/electron"
 export electron_config_cache="$XDG_CACHE_HOME/electron"
 export ELECTRON_BUILDER_CACHE="$XDG_CACHE_HOME/electron-builder"
 mkdir -p "$XDG_CACHE_HOME" "$ELECTRON_BUILDER_CACHE"
 
-# Части релиза: Linux по умолчанию включён, Windows выключен
+# Release parts: Linux on by default, Windows off
 LINUX_PORTABLE=1
 LINUX_APPIMAGE=1
 WIN_PORTABLE=0
@@ -112,9 +112,9 @@ case "$BUMP_TYPE" in
   *) echo "Некорректный --bump: $BUMP_TYPE (ожидается patch|minor|major)" >&2; exit 1 ;;
 esac
 
-# ---------- Версия ----------
-# Источник — desktop/package.json. По умолчанию bump patch; --version снимает
-# инкремент и задаёт точную; --no-bump просто оставляет текущую.
+# ---------- Version ----------
+# Source — desktop/package.json. Default bumps patch; --version disables the
+# increment and sets the exact one; --no-bump simply keeps the current one.
 CURRENT_VERSION="$(node -p "require('$DESKTOP_DIR/package.json').version" 2>/dev/null || echo '0.0.0')"
 
 if [ -n "$OVERRIDE_VERSION" ]; then
@@ -127,17 +127,17 @@ else
   VERSION="$CURRENT_VERSION"
 fi
 
-# Валидация semver-вида (npm уже проверяет при bump; контроль для --version)
+# semver-ish validation (npm already checks on bump; guard for --version)
 if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
   echo "Некорректная версия: $VERSION (ожидается X.Y.Z)" >&2
   exit 1
 fi
 
-# Версия уходит в веб-сборку: vite пропишет её в __APP_VERSION__ и
-# precache-manifest.json — UI («Версия приложения/сборки») совпадёт с артефактами.
+# The version goes into the web build: vite writes it into __APP_VERSION__ and
+# precache-manifest.json — the UI ("App/build version") matches the artifacts.
 export APP_VERSION="$VERSION"
 
-# Директория конкретного релиза: все артефакты этой версии — в одном месте
+# Per-release directory: all artifacts of this version in one place
 REL_DIR="$OUT_DIR/$VERSION"
 
 echo "== MVS ERP: сборка релиза v$VERSION =="
@@ -149,7 +149,7 @@ if [ "$CLEAN" -eq 1 ] && [ -d "$OUT_DIR" ]; then
   rm -rf "$OUT_DIR"
 fi
 
-# 1. Веб-фронтенд
+# 1. Web frontend
 if [ "$BUILD_WEB" -eq 1 ] || [ ! -f "$FRONTEND_DIR/dist/index.html" ]; then
   echo "== собираем web-фронтенд (dist/, версия $APP_VERSION) =="
   (cd "$FRONTEND_DIR" && test -d node_modules || npm install)
@@ -158,19 +158,19 @@ else
   echo "== dist/ уже собран (пропуск; --build-web для пересборки) =="
 fi
 
-# 2. Зависимости Electron-обвязки
+# 2. Electron wrapper dependencies
 if [ ! -d "$DESKTOP_DIR/node_modules/electron-builder" ]; then
   echo "== устанавливаем зависимости desktop/ =="
   (cd "$DESKTOP_DIR" && npm install)
 fi
 
-# 3. Упаковка включённых частей в общую директорию релиза.
-#    Директория версии всегда свежая — повторная сборка той же версии
-#    не смешивает артефакты от предыдущего запуска.
+# 3. Package the enabled parts into the common release directory.
+#    The version directory is always fresh — rebuilding the same version
+#    does not mix artifacts from a previous run.
 rm -rf "$REL_DIR"
 mkdir -p "$REL_DIR"
 
-# Linux (по умолчанию включён; флаги --linux-portable/--linux-appimage)
+# Linux (on by default; flags --linux-portable/--linux-appimage)
 if [ "$LINUX_PORTABLE" -eq 1 ] && [ "$LINUX_APPIMAGE" -eq 1 ]; then
   echo "== Linux: dir (portable-папка) + AppImage (единый файл) =="
   (cd "$DESKTOP_DIR" && npx electron-builder --linux dir AppImage --x64 -c.directories.output="$REL_DIR")
@@ -182,7 +182,7 @@ else
   (cd "$DESKTOP_DIR" && npx electron-builder --linux AppImage --x64 -c.directories.output="$REL_DIR")
 fi
 
-# Windows (по умолчанию выключен; включают --win-portable/--win-exe/--win)
+# Windows (off by default; enabled via --win-portable/--win-exe/--win)
 if [ "$WIN_PORTABLE" -eq 1 ]; then
   echo "== Windows: zip (portable-папка + архив) =="
   (cd "$DESKTOP_DIR" && npx electron-builder --win zip --x64 -c.directories.output="$REL_DIR")
@@ -199,8 +199,8 @@ if [ "$WIN_EXE" -eq 1 ]; then
   fi
 fi
 
-# Убираем служебные файлы electron-builder из директории релиза:
-# в release/<версия>/ остаются только распределяемые артефакты.
+# Remove electron-builder service files from the release directory:
+# only distributable artifacts remain in release/<version>/.
 rm -rf "$REL_DIR/.icon-ico" "$REL_DIR/builder-debug.yml" "$REL_DIR/builder-effective-config.yaml"
 
 echo ""

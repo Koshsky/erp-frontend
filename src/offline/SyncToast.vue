@@ -15,7 +15,7 @@ watch(syncNotice, (n) => {
     window.clearTimeout(timer)
     timer = null
   }
-  // Пока есть отвергнутые записи — тост висит: нужны действия пользователя.
+  // While there are rejected entries, the toast stays visible: user action is required.
   if (failedItems.value.length === 0) {
     timer = window.setTimeout(() => {
       visible.value = false
@@ -58,7 +58,7 @@ async function onDiscard() {
   }
 }
 
-/** Закрыть уведомление, отложив обработку ошибок на потом: очередь не трогаем. */
+/** Close the notice, deferring error handling: the queue is untouched. */
 function onClose() {
   visible.value = false
   dismissSyncNotice()

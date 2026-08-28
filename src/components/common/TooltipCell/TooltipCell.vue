@@ -7,7 +7,7 @@ const props = withDefaults(defineProps<TooltipCellProps>(), {
 })
 
 const emit = defineEmits<{
-  /** Поповер стал видимым (после задержки наведения) — для ленивой подгрузки контента */
+  /** Popover became visible (after the hover delay) — for lazy content loading */
   open: []
 }>()
 
@@ -21,7 +21,7 @@ const slots = useSlots()
 
 const PAD = 12
 
-/** Позиция поповера у курсора: справа-снизу, с зажимом в пределы окна */
+/** Position the popover at the cursor: below-right, clamped to the window bounds */
 function positionAt(e: MouseEvent) {
   let left = e.clientX + PAD
   let top = e.clientY + PAD
@@ -99,7 +99,7 @@ onBeforeUnmount(() => {
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
 }
 .tt-popup--multiline {
-  /* Растягиваем подложку под весь контент (строки nowrap не должны вылезать за край) */
+  /* Stretch the backdrop to fit all content (nowrap lines must not overflow the edge) */
   width: max-content;
   max-width: none;
   white-space: normal;

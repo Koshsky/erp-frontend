@@ -50,7 +50,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
 .cd-overlay {
   position: fixed;
   inset: 0;
-  /* Подтверждение — поверх всех оверлеев страницы (модалки, меню) */
+  /* Confirmation dialog renders above all page overlays (modals, menus) */
   z-index: 50000;
   display: flex;
   align-items: center;

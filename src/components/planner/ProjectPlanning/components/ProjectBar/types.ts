@@ -1,7 +1,7 @@
 import type { TimelineCtx } from '@/composables/timeline-context'
 
 export interface ProjectBarProps {
-  /** Контекст бесконечной шкалы */
+  /** Infinite timeline context */
   timeline: TimelineCtx
   startDate: string
   endDate: string
@@ -10,6 +10,6 @@ export interface ProjectBarProps {
   ownerName?: string
   color?: string
   opacity?: number
-  /** Включает перетаскивание и ручки изменения длительности */
+  /** Enables dragging and duration-resize handles */
   draggable?: boolean
 }

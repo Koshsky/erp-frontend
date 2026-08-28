@@ -14,10 +14,10 @@ import type { DtoStateResponse } from '@/api'
 const ts = useTimesheetStore()
 const { states, loading, error } = storeToRefs(ts)
 
-// Страница доступна только vp/admin (роут + guard); кнопки — тем же правилом.
+// The page is available to vp/admin only (route + guard); the buttons follow the same rule.
 const { canManageStates } = useRoleAccess()
 
-// ПКМ по строке: редактирование/удаление
+// Right-click on a row: edit/delete
 interface MenuState {
   x: number
   y: number
@@ -29,14 +29,14 @@ const menuItems = computed<ContextMenuItem[]>(() => [
   { id: 'delete-state', label: 'Удалить статус' },
 ])
 
-// Диалог подтверждения удаления
+// Delete confirmation dialog
 const { confirm: confirmDialog, ask, proceed, cancel } = useConfirm()
 
 type ModalMode =
   | { type: 'create' }
   | { type: 'edit'; id: number; code: string; name: string; isAvailable: boolean }
 
-/** Доступность статуса (ModalField не поддерживает boolean — используем '1'/'0') */
+/** Status availability (ModalField does not support boolean — we use '1'/'0') */
 const availabilityOptions: ModalField['options'] = [
   { value: '1', label: 'Доступен' },
   { value: '0', label: 'Недоступен' },

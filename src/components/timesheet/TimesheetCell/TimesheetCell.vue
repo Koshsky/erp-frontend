@@ -26,7 +26,7 @@ function fmtDM(iso?: string): string {
   return `${d}.${m}`
 }
 
-/** Цветной маркер состояния (для пустого дня — нет маркера) */
+/** Colored state marker (no marker for an empty day) */
 const marker = computed<string | null>(() => {
   const s = props.state
   if (!s) return null

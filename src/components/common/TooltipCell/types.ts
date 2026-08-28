@@ -1,6 +1,6 @@
 export interface TooltipCellProps {
-  /** Текст тултипа; можно не указывать, если контент передан слотом #popup */
+  /** Tooltip text; may be omitted if content is provided via the #popup slot */
   text?: string
-  /** Многострочный режим: текст переносится по строкам (white-space: normal, max-width) */
+  /** Multiline mode: text wraps across lines (white-space: normal, max-width) */
   multiline?: boolean
 }

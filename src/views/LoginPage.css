@@ -9,7 +9,7 @@
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
 }
 
-/* === Левая брендовая панель === */
+/* === Left brand panel === */
 .lp-brand {
   background: linear-gradient(160deg, #1a73e8 0%, #0d47a1 100%);
   color: #fff;
@@ -80,7 +80,7 @@
   opacity: 0.8;
 }
 
-/* === Правая форма === */
+/* === Right form === */
 .lp-form-side {
   padding: 40px 44px;
   display: flex;
@@ -101,7 +101,7 @@
   font-size: 14px;
 }
 
-/* === Вкладки === */
+/* === Tabs === */
 .lp-tabs {
   display: flex;
   gap: 6px;
@@ -241,7 +241,7 @@
   text-decoration: underline;
 }
 
-/* === Строка «Сервер: …» + пинг (символ-кнопка с сигнализатором) === */
+/* === "Server: …" row + ping (symbol-button with status indicator) === */
 .lp-server-row {
   display: flex;
   align-items: center;
@@ -259,7 +259,7 @@
   white-space: nowrap;
 }
 
-/* Символ-кнопка пинга: без рамок/фона/тени — просто «ссылка»-символ */
+/* Ping symbol-button: no border/background/shadow — just a "link"-style symbol */
 .lp-ping {
   border: none;
   background: transparent;
@@ -279,7 +279,7 @@
   cursor: default;
 }
 
-/* Сигнализатор соединения: цвет символа = состояние */
+/* Connection indicator: symbol color = state */
 .lp-ping.ping-ok {
   color: #188038;
 }
@@ -288,7 +288,7 @@
   color: #d93025;
 }
 
-/* Настройки сразу под строкой сервера — компактно, одной группой */
+/* Settings right below the server row — compact, as one group */
 .lp-server-row + .lp-settings-link {
   margin-top: 4px;
 }

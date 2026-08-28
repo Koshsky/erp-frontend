@@ -9,7 +9,7 @@ const props = withDefaults(defineProps<BarTooltipProps>(), {
   accent: '',
 })
 
-/** Сколько записей лога показываем до свёртки */
+/** How many log entries to show before collapsing */
 const MAX_COMMENTS = 4
 
 const shownComments = computed(() => props.comments.slice(0, MAX_COMMENTS))

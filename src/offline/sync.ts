@@ -17,21 +17,21 @@ import {
 import { isOffline } from './state'
 
 /**
- * Синхронизация офлайн-очереди: при появлении сети (и при старте приложения
- * с сохранённой очередью) отправляет накопленные мутации в бэкенд, затем
- * перечитывает затронутые домены с сервера — серверная правда побеждает,
- * а изменения, которые применить не удалось, визуально откатываются.
+ * Offline queue synchronization: when the network returns (and at app startup
+ * with a saved queue) sends accumulated mutations to the backend, then
+ * re-reads affected domains from the server — server truth wins,
+ * and changes that could not be applied are visually rolled back.
  */
 
 export interface SyncNoticeData {
   ok: number
   failed: number
   interrupted: boolean
-  /** Неотправленные записи с причинами (для тоста) */
+  /** Unsent entries with reasons (for the toast) */
   failedEntries: FailedSyncItem[]
 }
 
-/** Результат последней синхронизации (показывается тостом) */
+/** Result of the last sync (shown in the toast) */
 export const syncNotice = ref<SyncNoticeData | null>(null)
 
 export function dismissSyncNotice(): void {
@@ -50,7 +50,7 @@ function readLastPush(): number | null {
   }
 }
 
-/** Время последней удачной отправки очереди (для UI; переживает перезагрузки) */
+/** Time of the last successful queue push (for UI; survives reloads) */
 export const lastPushAt = ref<number | null>(readLastPush())
 
 function noteLastPush(): void {
@@ -58,7 +58,7 @@ function noteLastPush(): void {
   try {
     localStorage.setItem(LAST_PUSH_KEY, String(lastPushAt.value))
   } catch {
-    // метка не критична — при следующем прогоне обновится
+    // the timestamp is not critical — it will update on the next run
   }
 }
 
@@ -73,7 +73,7 @@ function reload(name: string, run: () => Promise<unknown>): Reloader {
   return { name, run }
 }
 
-/** Набор перечитываний данных под роль (тяжёлые — по мере необходимости) */
+/** Reload set per role (heavy ones — on demand) */
 function reloadersFor(entity: MutationEntity): Reloader[] {
   const app = useAppStore()
   const planning = usePlanningStore()
@@ -118,7 +118,7 @@ async function reconcile(entities: Set<MutationEntity>): Promise<void> {
     try {
       await run()
     } catch {
-      // отдельное перечитывание упало — данные подтянутся при следующем обращении
+      // a single reload failed — data will be fetched on the next access
     }
   }
 }
@@ -144,17 +144,17 @@ async function runSync(): Promise<void> {
 }
 
 /**
- * Кнопка «PUSH» на экране синхронизации: отправка очереди + reconcile.
- * Синхронный вызов внутри приложения (автосинк) идёт через initOfflineSync.
+ * The "PUSH" button on the sync screen: queue flush + reconcile.
+ * In-app synchronous calls (autosync) go through initOfflineSync.
  */
 export function syncNow(): Promise<void> {
   return runSync()
 }
 
 /**
- * Кнопка «Синхронизировать всё»: PUSH (отправка очереди) затем, если сеть
- * жива, PULL (прогревка офлайн-кэша). Части независимы: упавшая не роняет
- * вторую. Возвращает, что реально выполнилось (для сообщения в UI).
+ * The "Sync all" button: PUSH (queue flush) then, if the network
+ * is alive, PULL (offline cache warmup). Parts are independent: a failed one
+ * does not break the other. Returns what actually ran (for the UI message).
  */
 export async function syncAll(): Promise<{ pushed: boolean; pulled: boolean }> {
   try {
@@ -167,30 +167,30 @@ export async function syncAll(): Promise<{ pushed: boolean; pulled: boolean }> {
     }
     return { pushed, pulled }
   } finally {
-    // runSync/warmNow сами сбрасывают свои блокировки и прогресс
+    // runSync/warmNow reset their own locks and progress
   }
 }
 
-/** Кнопка «Повторить»: снимаем карантин и пробуем отправить снова */
+/** The "Retry" button: lift quarantine and try sending again */
 export async function retryFailed(): Promise<void> {
   await resetFailedRetries()
   await runSync()
 }
 
-/** Кнопка «Пропустить»: удаляем отвергнутые записи (см. outbox) */
+/** The "Skip" button: removes rejected entries (see outbox) */
 export { discardFailed } from './outbox'
 
-/** Интервал поллинга очереди для «тихого» возврата сети (без события online) */
+/** Queue polling interval for a "quiet" network return (without an online event) */
 const SYNC_POLL_MS = 15000
 
-/** Инициализация: реконсил при старте с очередью + триггер на возврат сети */
+/** Initialization: reconcile at startup with a queue + trigger on network return */
 export async function initOfflineSync(): Promise<void> {
-  // Write-through в кэш ДО первой загрузки данных (main.ts ждёт эту функцию):
-  // офлайн-перезагрузка показывает несинхронизированные изменения очереди.
+  // Write-through into the cache BEFORE the first data load (main.ts awaits this function):
+  // an offline reload shows the unsynced queue changes.
   await replayOutboxToCache()
   void refreshPendingCount()
   watch(isOffline, (offline) => {
-    // После явного выхода (logout) автосинк не запускаем до ручного входа
+    // After an explicit logout, autosync is not started until manual login
     if (!offline && shouldAutoSync() && !isLoggedOut()) void runSync()
   })
   if (!isOffline.value) {
@@ -198,26 +198,26 @@ export async function initOfflineSync(): Promise<void> {
       if (shouldAutoSync() && !isLoggedOut() && pendingCount.value > 0) void runSync()
     })
   }
-  // Интернет может вернуться без события online (интерфейс всё время «up»).
-  // runSync сам проверит доступность сервера (probe в flushOutbox), так что
-  // поллинг безопасен и дешёв — работает только пока есть очередь.
+  // The internet can return without an online event (the interface is always "up").
+  // runSync checks server availability itself (probe in flushOutbox), so the
+  // polling is safe and cheap — it only runs while there is a queue.
   window.setInterval(() => {
     if (shouldAutoSync() && !isLoggedOut() && pendingCount.value > 0 && !isOffline.value) void runSync()
   }, SYNC_POLL_MS)
 }
 
 /**
- * Авторелогin для настольной версии (Electron).
- * Если автосинк включён, сессии нет (токены протухли/отсутствуют) и в
- * safeStorage сохранены логин+пароль — тихо входим, чтобы автосинк мог
- * работать без ручного ввода. В браузере (нет safeStorage) ничего не делает.
- * После явного выхода (флаг mvs_erp_logged_out) не входит до ручного входа.
+ * Auto re-login for the desktop build (Electron).
+ * If autosync is enabled, there is no session (tokens expired/missing) and the
+ * safeStorage holds login+password — silently log in so autosync can
+ * work without manual input. In the browser (no safeStorage) it does nothing.
+ * After an explicit logout (mvs_erp_logged_out flag) it does not log in until manual login.
  */
 export async function ensureDesktopAutoSyncSession(): Promise<void> {
   if (!isElectron || !shouldAutoSync()) return
   if (isLoggedOut()) return
   const auth = useAuthStore()
-  // Сессия уже жива — не трогаем.
+  // Session already alive — don't touch it.
   if (auth.isAuthenticated && !auth.accessExpired) return
   if (isOffline.value) return
   const creds = await getSyncCredentials()
@@ -225,17 +225,17 @@ export async function ensureDesktopAutoSyncSession(): Promise<void> {
   await auth.login(creds.login, creds.password)
 }
 
-/** Период фоновой поддержки сессии (продление access-токена тихим входом) */
+/** Background session maintenance period (extending the access token with a silent login) */
 const SESSION_MAINTENANCE_MS = 30 * 1000
 
 let maintenanceTimer: number | null = null
 
 /**
- * Фоновая поддержка сессии в Desktop: каждые 30 с тихо обновляем access-токен
- * по кредам автосинка, когда он на исходе (refresh-кука не работает
- * кросс-сайт, поэтому продлеваем входом). Идемпотентна: ensure... сам
- * отсекает свежую сессию, офлайн и флаг «после выхода». Офлайн-сессия
- * (вход без сети) автоматически становится реальной при возврате сети.
+ * Background session maintenance in Desktop: every 30 s silently refresh the access
+ * token with autosync credentials when it is about to expire (the refresh cookie does
+ * not work cross-site, so we extend it by logging in). Idempotent: ensure... itself
+ * filters out a fresh session, offline, and the "after logout" flag. An offline session
+ * (login without network) automatically becomes real when the network returns.
  */
 export function startSessionMaintenance(): void {
   if (!isElectron || maintenanceTimer != null) return

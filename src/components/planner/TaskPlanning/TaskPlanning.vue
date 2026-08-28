@@ -17,25 +17,25 @@ import { shortName } from '@/utils'
 const props = withDefaults(defineProps<{
   processes?: DtoDetailedProcess[] | null
   resources?: DtoResourceResponse[] | null
-  /** Доступность ресурсов (periods из /timesheet/calendar), окно «сегодня ± 1 год» */
+  /** Resource availability (periods from /timesheet/calendar), "today ± 1 year" window */
   calendar?: DtoResourceCalendar[] | null
-  /** Отсутствия членов ресурсов (для тултипа UsageCell) по id ресурса */
+  /** Resource-member absences (for the UsageCell tooltip) by resource id */
   absenceByResource?: Record<number, DtoResourceAbsenceResponse[]> | null
   loading?: boolean
   error?: string | null
-  /** Якорь шкалы: ячейка с индексом 0 (начальная позиция) */
+  /** Timeline anchor: cell with index 0 (starting position) */
   origin?: Date | string
-  /** Единица ячейки: день или декада */
+  /** Cell unit: day or decade */
   unit?: PlanningUnit
-  /** Разрешает изменение задач и вех: перенос дат, редактирование, удаление */
+  /** Allows modifying tasks and milestones: moving dates, editing, deleting */
   canManage?: boolean
-  /** Пользователи для отображения ответственного (owner_id → name) в тултипах */
+  /** Users to display the owner (owner_id → name) in tooltips */
   users?: DtoUserInfo[] | null
-  /** При открытии прокрутить шкалу к этой дате (навигация с другой вкладки) */
+  /** On open, scroll the timeline to this date (navigation from another tab) */
   focusDate?: string | null
-  /** При открытии прокрутить по вертикали к группе (строке) процесса */
+  /** On open, scroll vertically to the group (process row) */
   focusGroupId?: string | number | null
-  /** Кэш комментариев по задаче (для бейджа и лога в тултипе задач) */
+  /** Per-task comment cache (for the badge and log in task tooltips) */
   commentsByTask?: Record<number, DtoCommentResponse[]> | null
 }>(), {
   processes: null,
@@ -59,19 +59,19 @@ const emit = defineEmits<{
   contextmenu: [payload: { clientX: number; clientY: number; date: string | null; rowIndex: number; processId?: number; taskId?: number; milestoneId?: number }]
   'header-ctxmenu': [payload: { clientX: number; clientY: number }]
   'milestone-edit': [payload: number]
-  /** Видимое окно шкалы (период «как на экране») — проброс из TimelineGrid */
+  /** Visible timeline window (the "as on screen" period) — forwarded from TimelineGrid */
   'visible-range': [payload: { from: string; to: string; cellWidthPx: number; scale: number }]
-  /** Клик по бару задачи — открыть её комментарии */
+  /** Click on a task bar — open its comments */
   'open-comments': [payload: number]
-  /** Тултип задачи открылся — лениво подгрузить комментарии (кэш) */
+  /** Task tooltip opened — lazily load comments (cache) */
   'request-comments': [payload: number]
 }>()
 
-/** Активный драг задачи — для live-предпросмотра загрузки ресурсов (пишется из TaskBar) */
+/** Active task drag — for the live resource-load preview (written from TaskBar) */
 const dragPreview = ref<DragPreviewState>({ active: false, taskId: null, startDate: null, endDate: null })
 provideDragPreview(dragPreview)
 
-/** Маппим DTO (из /planning/tasks) во внутренние типы. Задачи сортируем по алфавиту. */
+/** Map the DTO (from /planning/tasks) into internal types. Tasks are sorted alphabetically. */
 const userById = computed(() => new Map((props.users || []).map((u) => [u.id ?? 0, u])))
 
 const displayProcesses = computed<Process[]>(() =>
@@ -121,7 +121,7 @@ const displayResources = computed<Resource[]>(() =>
   })),
 )
 
-/** Периоды доступности по ресурсу (для быстрого поиска по дате) */
+/** Availability periods per resource (for quick date lookup) */
 const periodByResource = computed(() => {
   const map = new Map<number, DtoAvailabilityPeriod[]>()
   for (const rc of props.calendar ?? []) {
@@ -132,7 +132,7 @@ const periodByResource = computed(() => {
   return map
 })
 
-/** Доступность ресурса на день из /timesheet/calendar (null — вне окна загрузки ±год) */
+/** Resource availability for a day from /timesheet/calendar (null — outside the ±year load window) */
 function availableForDay(resourceId: number, day: Date): number | null {
   const periods = periodByResource.value.get(resourceId)
   if (!periods || !periods.length) return null
@@ -159,7 +159,7 @@ function usageForDay(resourceId: number, day: Date): number {
   return used
 }
 
-/** Найти задачу по id во всех процессах (для live-предпросмотра загрузки) */
+/** Find a task by id across all processes (for the live-load preview) */
 function findTaskRow(taskId: number) {
   for (const proc of displayProcesses.value) {
     const t = (proc.tasks || []).find((x) => x.id === taskId)
@@ -168,9 +168,9 @@ function findTaskRow(taskId: number) {
   return null
 }
 
-/** usageForDay + дельта перетаскиваемой задачи: на новый диапазон добавляем её
- *  количество, на покинутый старый — вычитаем. Цвета ячеек обновляются в реальном
- *  времени, пока кнопка мыши не отпущена. */
+/** usageForDay + the dragged task's delta: add its quantity to the new range,
+ *  subtract it from the abandoned old one. Cell colors update in real time
+ *  while the mouse button is held. */
 function usageForDayPreview(resourceId: number, day: Date): number {
   let used = usageForDay(resourceId, day)
   const p = dragPreview.value
@@ -186,7 +186,7 @@ function usageForDayPreview(resourceId: number, day: Date): number {
   return inNew ? used + a.quantity : used - a.quantity
 }
 
-/** ПКМ по пустому месту внутри группы процесса — создание задачи/вехи в этом процессе */
+/** Right-click on empty space inside a process group — create a task/milestone in that process */
 function onGridCtx(p: { clientX: number; clientY: number; date: string | null; rowIndex?: number; groupId?: string }) {
   const processId = p.groupId ? Number(p.groupId) : undefined
   emit('contextmenu', {

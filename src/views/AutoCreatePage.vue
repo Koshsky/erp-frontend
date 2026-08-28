@@ -26,7 +26,7 @@ const dirty = ref(false)
 const saving = ref(false)
 const saveMsg = ref<{ ok: boolean; text: string } | null>(null)
 
-/** Кандидаты во владельцы процесса (без workers) */
+/** Process owner candidates (excluding workers) */
 const ownerOptions = computed(() =>
   users.value
     .filter((u) => u.role !== 'worker')
@@ -34,7 +34,7 @@ const ownerOptions = computed(() =>
     .map((u) => ({ value: u.id as number, label: u.name ?? `#${u.id}` })),
 )
 
-/** Кандидаты в ресурсы задачи */
+/** Task resource candidates */
 const resourceOptions = computed(() =>
   resources.value
     .sort((a, b) => (a.title ?? '').localeCompare(b.title ?? '', 'ru'))

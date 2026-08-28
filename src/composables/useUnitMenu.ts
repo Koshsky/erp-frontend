@@ -10,8 +10,8 @@ export interface UnitMenuState {
 }
 
 /**
- * Меню ПКМ по шапке таблицы: переключение масштаба «День» / «Декада».
- * Активный масштаб подсвечивается галочкой. Общее для трёх страниц планирования.
+ * Table header right-click menu: switching the "Day" / "Decade" scale.
+ * The active scale is highlighted with a checkmark. Shared across the three planning pages.
  */
 export function useUnitMenu(unit: Ref<PlanningUnit>) {
   const menu = ref<UnitMenuState | null>(null)

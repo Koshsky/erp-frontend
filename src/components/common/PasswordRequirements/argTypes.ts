@@ -29,5 +29,5 @@ export const passwordRequirementsArgTypes: ArgTypes<PasswordRequirementsProps> =
 
 export default passwordRequirementsArgTypes
 
-// Переэкспорт для сторибука, чтобы rules по умолчанию были реальными
+// Re-export for Storybook so the default rules are real ones
 export { passwordRules }

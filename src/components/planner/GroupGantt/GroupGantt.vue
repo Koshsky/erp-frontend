@@ -24,7 +24,7 @@ const emit = defineEmits<{
   reorder: [payload: { from: number; to: number }]
 }>()
 
-/** Подложка границ группы на шкале (одна на группу, за строками) */
+/** Group bounds backdrop on the timeline (one per group, behind the rows) */
 const overlayStyle = computed(() => {
   const span = cellRangeForSpan(
     props.timeline.origin,
@@ -40,19 +40,19 @@ const overlayStyle = computed(() => {
   }
 })
 
-/** Сколько строк рисуется в группе: не меньше minRows (пустые строки-заглушки) */
+/** How many rows are rendered in the group: at least minRows (empty placeholder rows) */
 const displayCount = computed(() => Math.max(props.items.length, props.minRows))
 
-/** Сколько пустых строк-заглушек добавить до displayCount */
+/** How many empty placeholder rows to add up to displayCount */
 const emptyCount = computed(() => displayCount.value - props.items.length)
 
-/** Высота объединённого лейбла = вся группа (строки фиксированной высоты),
- *  но не меньше minLabelHeight — чтобы при 0–1 строках код/имя/даты не сжимались */
+/** Merged label height = the whole group (rows of fixed height),
+ *  but not less than minLabelHeight — so the code/name/dates do not shrink with 0-1 rows */
 const mergedHeight = computed(() =>
   Math.max(displayCount.value * props.rowHeight, props.minLabelHeight) + 'px',
 )
 
-// === Вертикальный драг строк (reorder) ===
+// === Vertical row drag (reorder) ===
 const { draggingFrom, dropStyle, rowDragCursor, startRowDrag } = useRowReorder(
   () => props.items.length,
   () => props.reorderable,
@@ -75,7 +75,7 @@ function fmt(d: string | Date | number | null | undefined): string {
   <div ref="groupEl" class="gg-group" :data-group="groupId ?? ''" :data-rows="displayCount" :style="{ minHeight: mergedHeight }">
     <div v-if="overlayStyle" class="gg-overlay" :style="overlayStyle" />
 
-    <!-- Объединённый лейбл группы (код объекта + процесс): липкий слева, на всю высоту -->
+    <!-- Merged group label (object code + process): sticky left, full height -->
     <div
       v-if="mergedLabel"
       class="gg-merged"
@@ -109,7 +109,7 @@ function fmt(d: string | Date | number | null | undefined): string {
       </div>
     </template>
 
-    <!-- Пустые строки-заглушки до minRows: тот же фон группы, без баров -->
+    <!-- Empty placeholder rows up to minRows: same group background, no bars -->
     <template v-for="i in emptyCount" :key="'ge' + (items.length + i)">
       <div class="gg-row" :style="{ height: rowHeight + 'px' }" :data-row-index="items.length + i - 1">
         <div v-if="!mergedLabel" class="gg-label" />
@@ -125,10 +125,10 @@ function fmt(d: string | Date | number | null | undefined): string {
 .gg-group {
   position: relative;
 }
-/* Разделитель групп по всей ширине таймлайна. Начинается сразу за боковой
- * панелью (180px = LABEL_WIDTH): в колонке названий линия уже есть (нижние
- * границы .gg-merged/.gg-label), так что без двойных границ получается ровная
- * линия. Абсолютное позиционирование не добавляет высоту группам. */
+/* Group divider across the full timeline width. Starts right after the side
+ * panel (180px = LABEL_WIDTH): in the label column the line already exists (bottom
+ * borders of .gg-merged/.gg-label), so without double borders a straight
+ * line results. Absolute positioning does not add height to the groups. */
 .gg-group::after {
   content: '';
   position: absolute;
@@ -152,7 +152,7 @@ function fmt(d: string | Date | number | null | undefined): string {
   left: 0;
   width: 180px;
   background: #fff;
-  /* Боковая панель — выше линии текущей даты (25) */
+  /* Side panel — above the today line (25) */
   z-index: 70;
   display: flex;
   flex-direction: column;
@@ -176,7 +176,7 @@ function fmt(d: string | Date | number | null | undefined): string {
   width: 180px;
   height: 100%;
   background: #fff;
-  /* Боковая панель — выше линии текущей даты (25) */
+  /* Side panel — above the today line (25) */
   z-index: 65;
   display: flex;
   flex-direction: column;

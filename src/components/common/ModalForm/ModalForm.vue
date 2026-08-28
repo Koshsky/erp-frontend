@@ -14,7 +14,7 @@ const emit = defineEmits<{
   close: []
 }>()
 
-/** Локальное состояние формы; инициализируется из fields при открытии */
+/** Local form state; initialized from fields on open */
 const values = reactive<Record<string, any>>({})
 const formEl = ref<HTMLElement | null>(null)
 

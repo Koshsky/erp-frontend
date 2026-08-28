@@ -19,40 +19,40 @@ const app = useAppStore()
 const { users } = storeToRefs(app)
 const { resources, resourcesError } = storeToRefs(app)
 
-// Редактирование/удаление: admin — любого, остальные (vp) — только подчинённых.
-// Создание сотрудников — только admin (worker.create; у vp права нет).
+// Edit/delete: admin can edit anyone, others (vp) — only their subordinates.
+// Creating employees — admin only (worker.create; vp has no such permission).
 const { role, userId, canCreateEmployee, canEditEmployee } = useRoleAccess()
 const isAdmin = computed(() => role.value === 'admin')
 
 /**
- * Ресурс сотрудника (членство уникально: UNIQUE(user_id)) — для бейджа,
- * фильтра и смены ресурса при редактировании.
+ * Employee resource (membership is unique: UNIQUE(user_id)) — for the badge,
+ * filter, and resource change when editing.
  */
 function resourceOf(employeeId: number | undefined): DtoResourceResponse | null {
   if (employeeId == null) return null
   return app.resourceByUser[employeeId] ?? null
 }
 
-/** Сортировка ресурсов по коду/названию (у ресурсов нет поля name) */
+/** Sort resources by code/title (resources have no name field) */
 const byResourceLabel = (a: DtoResourceResponse, b: DtoResourceResponse): number =>
   `${a.code ?? ''} ${a.title ?? ''}`.localeCompare(`${b.code ?? ''} ${b.title ?? ''}`, 'ru')
 
-/** Ресурсы, которыми пользователь может управлять (admin — все, остальные — свои) */
+/** Resources the user can manage (admin — all, others — their own) */
 const manageableResources = computed<DtoResourceResponse[]>(() =>
   resources.value.filter((r) => isAdmin.value || r.owner_id === userId.value).sort(byResourceLabel),
 )
 
-/** Все ресурсы (для фильтра-селекта), отсортированные по коду/названию */
+/** All resources (for the filter select), sorted by code/title */
 const resourcesSorted = computed<DtoResourceResponse[]>(() => [...resources.value].sort(byResourceLabel))
 
-/** Дата DD.MM.YYYY или «—» */
+/** Date as DD.MM.YYYY or «—» */
 function fmtDate(iso?: string): string {
   if (!iso) return '—'
   const [y, m, d] = iso.split('-')
   return `${d}.${m}.${y}`
 }
 
-/** Подпись руководителя сотрудника */
+/** Label of the employee's manager */
 function managerLabel(managerId?: number | null): string {
   if (managerId == null) return '—'
   if (managerId === userId.value) return 'Я'
@@ -60,13 +60,13 @@ function managerLabel(managerId?: number | null): string {
   return u?.name ?? `#${managerId}`
 }
 
-/** Поиск по ФИО и должности (регистронезависимый) */
+/** Search by full name and position (case-insensitive) */
 const search = ref('')
 
-/** Фильтр по руководителю (manager_id): '' — все, 'none' — без руководителя (клиент), число — серверный фильтр */
+/** Filter by manager (manager_id): '' — all, 'none' — no manager (client-side), number — server-side filter */
 const managerFilter = ref<number | 'none' | ''>('')
 
-/** Фильтр по ресурсу: '' — все, 'none' — без ресурса, число — ресурс */
+/** Filter by resource: '' — all, 'none' — no resource, number — a resource */
 const resourceFilter = ref<number | 'none' | ''>('')
 
 const filteredEmployees = computed(() => {
@@ -75,7 +75,7 @@ const filteredEmployees = computed(() => {
   if (q) {
     list = list.filter((e) => `${e.name ?? ''} ${e.position ?? ''}`.toLowerCase().includes(q))
   }
-  // 'none' (без руководителя) фильтруем на клиенте; числовой manager_id уже отфильтрован сервером
+  // 'none' (no manager) is filtered on the client; numeric manager_id is already filtered by the server
   if (managerFilter.value === 'none') {
     list = list.filter((e) => e.manager_id == null)
   }
@@ -87,12 +87,12 @@ const filteredEmployees = computed(() => {
   return list
 })
 
-// Смена фильтра руководителя перезагружает листинг с manager_id (только для admin)
+// Changing the manager filter reloads the listing with manager_id (admin only)
 watch(managerFilter, (v) => {
   if (isAdmin.value) ts.fetchEmployees(typeof v === 'number' ? v : undefined)
 })
 
-// ПКМ по строке: редактирование/удаление (только свои сотрудники / admin)
+// Right-click on a row: edit/delete (own employees only / admin)
 interface MenuState {
   x: number
   y: number
@@ -104,7 +104,7 @@ const menuItems = computed<ContextMenuItem[]>(() => [
   { id: 'delete-employee', label: 'Удалить сотрудника' },
 ])
 
-// Диалог подтверждения удаления
+// Delete confirmation dialog
 const { confirm: confirmDialog, ask, proceed, cancel } = useConfirm()
 
 type ModalMode =
@@ -122,7 +122,7 @@ type ModalMode =
       resourceId?: number | null
     }
 
-/** Варианты руководителей (пользователей, без workers) + «Без руководителя» */
+/** Manager options (users, excluding workers) + the "No manager" option */
 const managerOptions = computed<ModalField['options']>(() => [
   { value: '', label: 'Без руководителя' },
   ...users.value
@@ -166,7 +166,7 @@ const { open: openModal, close: closeModal, submit: submitModal, bind: modalBind
       { key: 'hireDate', label: 'Дата приёма', type: 'date', value: state.type === 'edit' ? state.hireDate : '' },
       { key: 'terminationDate', label: 'Дата увольнения', type: 'date', value: state.type === 'edit' ? state.terminationDate : '' },
     )
-    // Руководителя выбирает только admin (создание сотрудников — только admin)
+    // Manager is chosen by admin only (creating employees is admin-only)
     if (isAdmin.value) {
       fields.push({
         key: 'managerId',
@@ -176,7 +176,7 @@ const { open: openModal, close: closeModal, submit: submitModal, bind: modalBind
         value: state.type === 'edit' ? (state.managerId ?? '') : '',
       })
     }
-    // Ресурс меняется только при редактировании и только теми, кто может им управлять
+    // Resource is changed only when editing and only by those who can manage it
     if (state.type === 'edit' && manageableResources.value.length) {
       fields.push({
         key: 'resourceId',
@@ -205,7 +205,7 @@ const { open: openModal, close: closeModal, submit: submitModal, bind: modalBind
     }
     if (values.hireDate) payload.hire_date = String(values.hireDate)
     if (values.terminationDate) payload.termination_date = String(values.terminationDate)
-    // Руководителя шлём только admin и только если выбран явно (иначе — без изменений)
+    // Send the manager only for admin and only when explicitly chosen (otherwise — unchanged)
     if (isAdmin.value && values.managerId !== '' && values.managerId != null) {
       payload.manager_id = Number(values.managerId)
     }
@@ -213,7 +213,7 @@ const { open: openModal, close: closeModal, submit: submitModal, bind: modalBind
       state.type === 'create'
         ? await ts.createEmployee({ ...payload, role: 'worker' })
         : await ts.updateEmployee(state.id, payload)
-    // Смена ресурса сотрудника (только edit и при реальном изменении)
+    // Changing the employee's resource (only on edit and when it actually changed)
     let resourceOk = true
     let resourceError: string | null = null
     if (state.type === 'edit' && ok) {
@@ -278,9 +278,9 @@ function handleSelect(id: string) {
 onMounted(async () => {
   if (!employees.value.length) await ts.fetchEmployees()
   if (isAdmin.value && !users.value.length) await app.loadUsers()
-  // Ресурсы и их участники догружаем безусловно: ресурсы часто уже в сторе
-  // (дашборд/планировщик грузят их раньше), но участники — только здесь;
-  // гейт на resources.length оставлял бы всех «без ресурса» без бейджей.
+  // Load resources and their members unconditionally: resources are often already in the store
+  // (dashboard/planner load them earlier), but members — only here;
+  // a gate on resources.length would leave everyone "without a resource" without badges.
   await app.ensureResourceMembers(true)
 })
 </script>

@@ -27,7 +27,7 @@ const { processPlanning, loading, error } = storeToRefs(store)
 
 const { unit, origin } = usePlanningOrigin()
 
-/** Текущее видимое окно шкалы (период «как на экране») + зум — для печати в PDF */
+/** Current visible timeline window (the period "as on screen") + zoom — for PDF export */
 const viewRange = ref<{ from: string; to: string; cellWidthPx: number; scale: number }>({
   from: '',
   to: '',
@@ -38,7 +38,7 @@ function onVisibleRange(v: { from: string; to: string; cellWidthPx: number; scal
   viewRange.value = v
 }
 
-/** Печатная модель для PdfExport: проект = группа, процессы = строки */
+/** Print model for PdfExport: a project = a group, processes = rows */
 const processGroups = computed<PdfGanttGroup[]>(() =>
   (processPlanning.value?.projects ?? []).map((project: any) => ({
     id: project.id,
@@ -58,16 +58,16 @@ const processGroups = computed<PdfGanttGroup[]>(() =>
   })),
 )
 
-// Меню ПКМ по шапке таблицы: переключение масштаба «День» / «Декада»
+// Right-click menu on the table header: switching the "Day" / "Decade" scale
 const { open: openUnitMenu, close: closeUnitMenu, select: selectUnit, bind: unitMenuBind } = useUnitMenu(unit)
 
-// dp (директор проектов) — read-only; rp управляет процессами своих проектов,
-// vp/worker — без прав (список процессов для них уже отфильтрован бэкендом).
+// dp (project director) — read-only; rp manages the processes of their projects,
+// vp/worker — no rights (the process list for them is already filtered by the backend).
 const { canManageProcesses, role, userId } = useRoleAccess()
 
 const { findProcess } = useFindPlanningItem()
 
-/** Якорь шкалы при навигации с вкладки проектов (клик по бару проекта) */
+/** Timeline anchor when navigating from the projects tab (click on a project bar) */
 const focusDate = computed(() => {
   const id = Number(route.query.project)
   if (!id) return null
@@ -75,20 +75,20 @@ const focusDate = computed(() => {
   return project?.start_date ?? null
 })
 
-/** Прокрутка по вертикали к группе (строке) проекта */
+/** Vertical scroll to the project group (row) */
 const focusGroupId = computed(() => {
   const id = Number(route.query.project)
   return id ? id : null
 })
 
-/** Клик по бару процесса — переход на вкладку задач с якорем на первые дни процесса */
+/** Click on a process bar — navigate to the tasks tab anchored at the first days of the process */
 function goToTasks(processId: number) {
   router.push({ path: '/planner', query: { process: String(processId) } })
 }
 
-// ПКМ по пустому месту группы: создание процесса в проекте-родителе.
-// Дата под курсором, вставка строки в позицию ПКМ.
-// ПКМ по бару процесса: меню редактирования/удаления процесса.
+// Right-click on an empty group area: create a process in the parent project.
+// The date is under the cursor, the row is inserted at the right-click position.
+// Right-click on a process bar: edit/delete menu for the process.
 interface MenuState {
   x: number
   y: number
@@ -99,7 +99,7 @@ interface MenuState {
 }
 const menu = ref<MenuState | null>(null)
 
-// Диалог подтверждения удаления (вместо window.confirm — блокируется в iframe/песочнице)
+// Delete confirmation dialog (instead of window.confirm — it is blocked in iframes/sandboxes)
 const { confirm: confirmDialog, ask, proceed, cancel } = useConfirm()
 
 const menuItems = computed<ContextMenuItem[]>(() => {
@@ -119,7 +119,7 @@ const ownerOptions = computed(() =>
     .map((u) => ({ value: u.id ?? 0, label: u.name ?? '' })),
 )
 
-// Модалка редактирования процесса (название, владелец)
+// Process edit modal (title, owner)
 interface EditState {
   id: number
   title: string
@@ -140,12 +140,12 @@ const { open: openEdit, close: closeEdit, submit: submitEdit, bind: editBind } =
 
 function onContextMenu(p: { clientX: number; clientY: number; date: string | null; rowIndex: number; projectId?: number; processId?: number }) {
   if (!canManageProcesses.value) return
-  // Пустое место группы: создание процесса требует проект-родитель и известной даты
+  // Empty group area: creating a process requires a parent project and a known date
   if (p.processId == null && (p.projectId == null || p.date == null)) return
   openMenu({ x: p.clientX, y: p.clientY, date: p.date, rowIndex: p.rowIndex, projectId: p.projectId, processId: p.processId })
 }
 
-/** ПКМ по шапке таблицы — меню масштаба «День»/«Декада» (закрыв меню действий) */
+/** Right-click on the table header — the "Day"/"Decade" scale menu (after closing the actions menu) */
 function onHeaderCtx(p: { clientX: number; clientY: number }) {
   closeMenu()
   openUnitMenu(p.clientX, p.clientY)
@@ -166,8 +166,8 @@ async function handleSelect(id: string) {
   if (id === 'create-process') {
     if (projectId == null || date == null) return
     const project = store.processPlanning?.projects?.find((p: any) => p.id === projectId)
-    // Процесс создаётся в пределах проекта-родителя с сохранением дефолтной длины:
-    // клик вне границ прижимает спана к началу/концу родителя, но не ужимает его.
+    // A process is created within the bounds of the parent project keeping the default length:
+    // a click outside the bounds clamps the span to the parent start/end but does not shrink it.
     const { start_date, end_date } = shiftSpanDates(
       date,
       addMonthsISO(date, 3),
@@ -198,7 +198,7 @@ onMounted(() => {
 
 <template>
   <section class="pp">
-    <!-- Печать диаграммы процессов в PDF: период и ширина ячейки со страницы -->
+    <!-- Printing the processes diagram as PDF: the period and cell width from the page -->
     <div class="pp-toolbar">
       <PdfExport
         :groups="processGroups"

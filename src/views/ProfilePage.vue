@@ -22,7 +22,7 @@ interface ProfileField {
   value: string
 }
 
-// Реальный профиль текущего пользователя, полученный из API (auth.user)
+// Real profile of the current user, fetched from the API (auth.user)
 const profile = computed<ProfileField[]>(() => {
   const u = auth.user
   return [

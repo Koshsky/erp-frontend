@@ -11,19 +11,19 @@ import { ensureDesktopAutoSyncSession } from './offline/sync'
 import { shouldAutoSync } from './settings'
 import { isLoggedOut } from './loggedOut'
 
-/** Пути, где 401 не означает «токен протух» — их не трогаем (защита от петли) */
+/** Paths where 401 does not mean "token expired" — we leave them alone (loop protection) */
 const AUTH_PATHS = ['/auth/login', '/auth/refresh', '/auth/logout']
 
 interface RetryableConfig extends InternalAxiosRequestConfig {
   _retried?: boolean
 }
 
-/** Полный URL запроса — единый ключ для кэша (и запись, и чтение) */
+/** Full request URL — the single cache key (both write and read) */
 function cacheKey(config: InternalAxiosRequestConfig): string {
   return axios.getUri(config)
 }
 
-/** Единственный «в полёте» refresh для всех параллельных 401 */
+/** The single in-flight refresh for all parallel 401s */
 let refreshing: Promise<boolean> | null = null
 
 function redirectToLogin() {
@@ -34,13 +34,13 @@ function redirectToLogin() {
 }
 
 /**
- * Перехватчик 401: тихо обновляет access-токен по refresh-токену и повторяет
- * запрос. Срабатывает на общем axios-инстансе, который используют все
- * сгенерированные API-клиенты (src/api/base.ts: globalAxios).
+ * 401 interceptor: silently refreshes the access token via the refresh token
+ * and retries the request. It runs on the shared axios instance used by all
+ * generated API clients (src/api/base.ts: globalAxios).
  */
 export function setupHttp() {
-  // Успешные GET пишем в офлайн-кэш (сеть доступна — данные свежие).
-  // Кэш и write-through overlay нужны только офлайн-режиму (Electron).
+  // Successful GETs are written to the offline cache (network is up — data is fresh).
+  // The cache and write-through overlay are only needed for offline mode (Electron).
   axios.interceptors.response.use(
     async (response) => {
       const { config, status } = response
@@ -53,9 +53,9 @@ export function setupHttp() {
         !AUTH_PATHS.some((path) => config.url!.includes(path))
       ) {
         await cachePut(cacheKey(config), response.data)
-        // Инвариант «кэш = сервер + очередь»: после свежей записи снова накладываем
-        // несинхронизированные мутации — warmup/reconcile не должны стирать их
-        // серверной правдой (иначе офлайн-правки пропадают после перезагрузки).
+        // Invariant "cache = server + queue": after a fresh write we re-apply
+        // unsynchronized mutations — warmup/reconcile must not erase them with
+        // server truth (otherwise offline edits are lost after a reload).
         await replayOutboxToCache()
       }
       return response
@@ -66,18 +66,18 @@ export function setupHttp() {
         return Promise.reject(error)
       }
 
-      // Сервер недоступен (сеть, таймаут, abort — любой запрос без HTTP-ответа):
-      // в офлайн-режиме (Electron) отдаём последний сохранённый ответ из кэша
-      // (тот же формат { data, error }). Read-time overlay: перед чтением
-      // накладываем несинхронизированные мутации на нагретый кэш.
-      // В web-сборке офлайна нет — просто пробрасываем ошибку.
+      // Server unreachable (network, timeout, abort — any request without an HTTP response):
+      // in offline mode (Electron) we serve the last saved response from the cache
+      // (same { data, error } format). Read-time overlay: before reading we apply
+      // unsynchronized mutations on top of the warmed cache.
+      // The web build has no offline — just propagate the error.
       if (!error.response) {
         if (isElectron && (config.method ?? 'get').toLowerCase() === 'get') {
           await replayOutboxToCache()
           const key = cacheKey(config)
           let cached = await cacheGet<unknown>(key)
-          // Точный ключ мог не совпасть (GET с дата-окном зависит от «сегодня»
-          // и после прогревки отличается) — ищем свежий ответ по эндпоинту.
+          // The exact key may not match (a GET with a date window depends on "today"
+          // and differs after warmup) — look up the fresh response by endpoint.
           if (cached == null) {
             const pathname = (() => {
               try {
@@ -104,7 +104,7 @@ export function setupHttp() {
             'Нет сохранённых данных: откройте эту страницу онлайн хотя бы раз'
           console.log(`[offline] cache miss: ${key}`)
         }
-        // Диагностика сетевой ошибки (таймаут/обрыв/CORS/abort) — подробно в консоль.
+        // Network error diagnostics (timeout/drop/CORS/abort) — detailed output to the console.
         const ax = error as AxiosError & { code?: string; timeout?: number }
         console.error(
           `[http] сетевая ошибка (нет HTTP-ответа): ${(config.method || 'get').toUpperCase()} ${config.url ?? ''}`,
@@ -124,8 +124,8 @@ export function setupHttp() {
         return Promise.reject(error)
       }
 
-      // Подставляем локальный текст ошибки из тела ответа ({ data, error })
-      // вместо «Request failed with status code …», чтобы стора показывала причину.
+      // Substitute the local error text from the response body ({ data, error })
+      // instead of "Request failed with status code …" so the store shows the reason.
       if (response.status >= 400) {
         const body = response.data as { error?: { message?: string; code?: string | number } } | undefined
         if (body?.error) {
@@ -142,11 +142,11 @@ export function setupHttp() {
         return Promise.reject(error)
       }
 
-      // Пользователь явно вышел (logout): не пытаемся восстановить сессию.
-      // Refresh-кука уже отозвана сервером, запрос /auth/refresh вернёт 401,
-      // а повторное использование отозванного токена сервер трактует как
-      // reuse (отзыв ВСЕХ сессий пользователя) — плюс UI покажет ложное
-      // «Сессия истекла» вместо ожидаемого состояния «вышел».
+      // The user explicitly logged out: do not try to restore the session.
+      // The refresh cookie is already revoked by the server, /auth/refresh would return 401,
+      // and reusing a revoked token is treated by the server as
+      // reuse (revoking ALL user sessions) — plus the UI would show a false
+      // "Session expired" instead of the expected "logged out" state.
       if (isLoggedOut()) {
         redirectToLogin()
         return Promise.reject(error)
@@ -158,8 +158,8 @@ export function setupHttp() {
         return Promise.reject(error)
       }
 
-      // Свежая сессия перед повтором: web — refresh по HttpOnly-куке; desktop —
-      // тихий re-login по кредам автосинка (кука не работает кросс-сайт).
+      // Fresh session before retry: web — refresh via the HttpOnly cookie; desktop —
+      // silent re-login with auto-sync credentials (the cookie does not work cross-site).
       refreshing ??= (async () => {
         if (isElectron && shouldAutoSync() && !isLoggedOut()) {
           await ensureDesktopAutoSyncSession()

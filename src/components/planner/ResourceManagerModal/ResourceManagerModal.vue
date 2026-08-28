@@ -23,7 +23,7 @@ const emit = defineEmits<{
 const selectedResourceId = ref<number | ''>('')
 const quantity = ref(1)
 
-/** Ресурсы, ещё не назначенные задаче — доступны для добавления */
+/** Resources not yet assigned to the task — available for adding */
 const available = computed<ResourceOption[]>(() =>
   props.resources.filter(
     (r) => !props.assigned.some((a) => a.resource_id === r.id),
@@ -39,7 +39,7 @@ function resetForm() {
   quantity.value = 1
 }
 
-/** Сброс формы при открытии и после изменения набора назначенных (успешный add/remove) */
+/** Form reset on open and after the assigned set changes (successful add/remove) */
 watch(
   () => props.open,
   (open) => {

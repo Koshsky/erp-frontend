@@ -1,14 +1,14 @@
 export interface ContextMenuItem {
   id: string
   label: string
-  /** Активный (текущий) пункт — подсвечивается, например выбранный масштаб шкалы */
+  /** Active (current) item — highlighted, e.g. the selected timeline scale */
   active?: boolean
 }
 
 export interface ContextMenuProps {
-  /** Видимость меню */
+  /** Menu visibility */
   open: boolean
-  /** Позиция курсора (clientX / clientY) */
+  /** Cursor position (clientX / clientY) */
   x: number
   y: number
   items: ContextMenuItem[]

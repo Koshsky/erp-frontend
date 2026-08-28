@@ -3,17 +3,17 @@ import type { Ref } from 'vue'
 
 export interface TimelinePan {
   isPanning: Ref<boolean>
-  /** Подписка pointerdown на контейнер (pan по пустому месту ЛКМ) */
+  /** Subscribe to pointerdown on the container (pan by dragging empty space with LMB) */
   enable: () => void
-  /** Отписка */
+  /** Unsubscribe */
   disable: () => void
 }
 
 /**
- * Панорамирование бесконечной шкалы: зажимаем ЛКМ на «пустом» месте
- * (не бары/лейблы/ручки — см. ignoreSelector) и тянем — контейнер
- * прокручивается в обе стороны. Горизонтальная прокрутка триггерит
- * штатное событие scroll, которое расширяет диапазон (sync).
+ * Panning the infinite timeline: hold LMB on "empty" space (not bars/labels/
+ * handles — see ignoreSelector) and drag — the container scrolls in both
+ * directions. Horizontal scroll triggers the regular scroll event, which
+ * extends the range (sync).
  */
 export function useTimelinePan(
   container: Ref<HTMLElement | null>,
@@ -47,9 +47,9 @@ export function useTimelinePan(
     if (!active) return
     const el = container.value
     if (!el) return
-    // Инкрементальные дельты: sync() при расширении левого диапазона сам
-    // компенсирует scrollLeft, поэтому абсолютный пересчёт от старта драга
-    // конфликтовал бы с компенсацией (пан «застревал» у origin).
+    // Incremental deltas: sync() itself compensates scrollLeft when the left
+    // range expands, so an absolute recompute from drag start would conflict
+    // with that compensation (the pan would "stick" at the origin).
     el.scrollLeft -= e.clientX - lastX
     el.scrollTop -= e.clientY - lastY
     lastX = e.clientX
@@ -59,8 +59,8 @@ export function useTimelinePan(
   function onPointerUp(e?: PointerEvent) {
     if (!active) return
     const el = container.value
-    // Браузер коалесит быстрые pointermove — последнее движение может не дойти
-    // до pointerup; дофлашиваем остаток дельты из координат события отпускания.
+    // The browser coalesces fast pointermove events — the last move may not
+    // reach pointerup; flush the remaining delta from the release event coords.
     if (el && e) {
       el.scrollLeft -= e.clientX - lastX
       el.scrollTop -= e.clientY - lastY

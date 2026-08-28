@@ -13,11 +13,11 @@ export interface ProcessItem {
 export interface ProcessGanttProps {
   timeline: TimelineCtx
   projectCode?: string
-  /** Идентификатор проекта-родителя (для создания процессов в группе) */
+  /** Parent project id (for creating processes in the group) */
   projectId?: number
   processes: ProcessItem[]
   groupStartDate?: string | Date | number | null
   groupEndDate?: string | Date | number | null
-  /** Разрешает изменение процессов: перенос дат, редактирование, удаление */
+  /** Allows modifying processes: moving dates, editing, deleting */
   canManage?: boolean
 }

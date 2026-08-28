@@ -22,13 +22,13 @@ const apiUrl = ref('')
 const busy = ref(false)
 const statusMsg = ref<string | null>(null)
 const statusOk = ref(false)
-/** Предупреждение про http-схему (Secure-кука refresh не работает) */
+/** Warning about the http scheme (the refresh Secure cookie does not work) */
 const apiUrlWarn = ref<string | null>(null)
 
 const failedEntries = ref<Array<{ method: string; url: string; message: string }>>([])
 const cachedData = ref(0)
 
-// === Аккаунт синка: логин (localStorage) + пароль (safeStorage) ===
+// === Sync account: login (localStorage) + password (safeStorage) ===
 const savedLogin = ref(getSavedLogin() ?? '')
 const credsSaved = ref(false)
 const editingCreds = ref(false)
@@ -37,9 +37,9 @@ const credPassword = ref('')
 const credMsg = ref<string | null>(null)
 const credOk = ref(false)
 
-// === Приложение / офлайн (перенесено с экрана профиля) ===
+// === App / offline (moved from the profile screen) ===
 const appVersion = ref('—')
-/** Версия запущенного бандла (инжектится на build; в dev — 'dev-...') */
+/** Version of the running bundle (injected at build time; in dev — 'dev-...') */
 const appBuildVersion = __APP_VERSION__
 const cachedAssets = ref(0)
 let refreshTimer: number | null = null
@@ -60,21 +60,21 @@ const lastPushLabel = computed(() =>
     : 'ещё не было',
 )
 
-/** Процент отправленной очереди (для прогресс-бара PUSH) */
+/** Percentage of the sent queue (for the PUSH progress bar) */
 const pushPercent = computed(() => {
   const p = pushProgress.value
   if (!p || p.total === 0) return 0
   return Math.round((p.done / p.total) * 100)
 })
 
-// === Очередь изменений: выбор блока и просмотр технической информации ===
+// === Change queue: selecting an entry and viewing technical details ===
 const selectedId = ref<string | null>(null)
 
 function toggleItem(id: string) {
   selectedId.value = selectedId.value === id ? null : id
 }
 
-/** Красивый JSON для отображения тела запроса. */
+/** Pretty JSON for displaying the request body. */
 function jsonBody(body: unknown): string {
   if (body == null) return '—'
   try {
@@ -116,7 +116,7 @@ function formatTime(ts: number): string {
   }
 }
 
-/** Применяет URL из поля к runtime-конфигурации; false — невалидный URL */
+/** Applies the URL from the field to the runtime config; false — invalid URL */
 function applyApiUrl(): boolean {
   apiUrlWarn.value = httpSchemeWarning(apiUrl.value)
   const applied = setApiUrl(apiUrl.value, true)
@@ -126,7 +126,7 @@ function applyApiUrl(): boolean {
   return applied
 }
 
-/** Кнопка «Сохранить» для API_URL: валидирует и сохраняет в localStorage */
+/** The "Save" button for API_URL: validates and saves to localStorage */
 function onSaveApiUrl(): boolean {
   statusMsg.value = null
   if (!applyApiUrl()) return false
@@ -134,7 +134,7 @@ function onSaveApiUrl(): boolean {
   return true
 }
 
-/** Работа с синхронизацией возможна только с активной сессией — иначе на /login */
+/** Sync operations require an active session — otherwise redirect to /login */
 function requireAuth(): boolean {
   if (auth.isAuthenticated) return true
   void router.push({ name: 'login', query: { redirect: route.fullPath } })
@@ -154,7 +154,7 @@ async function refreshStatus() {
   await refreshAppInfo()
 }
 
-/** Версии сборки и размеры офлайн-кэшей (для карточки «Приложение и офлайн») */
+/** Build version and offline cache sizes (for the "App and offline" card) */
 async function refreshAppInfo() {
   try {
     const res = await fetch('/precache-manifest.json')
@@ -163,7 +163,7 @@ async function refreshAppInfo() {
       appVersion.value = data.version ?? '—'
     }
   } catch {
-    // офлайн — версия сборки не критична
+    // offline — the build version is not critical
   }
   try {
     const cacheNames = await caches.keys()
@@ -179,7 +179,7 @@ async function refreshAppInfo() {
   }
 }
 
-/** Прямая проверка доступности сервера (не трогает офлайн-кэш): любой статус <500 = живо */
+/** Direct server availability check (does not touch the offline cache): any status < 500 means alive */
 async function probeConnection(): Promise<boolean> {
   const base = getApiUrl()
   if (!base) return false
@@ -222,7 +222,7 @@ async function onCheck() {
   }
 }
 
-/** Кнопка «Сменить» у аккаунта синка: открывает форму логин/пароль */
+/** The "Change" button of the sync account: opens the login/password form */
 function onEditCreds() {
   credMsg.value = null
   editingCreds.value = true
@@ -235,7 +235,7 @@ function onCancelCreds() {
   editingCreds.value = false
 }
 
-/** «Сохранить и проверить»: вход проверяет пару, затем сохраняем креды синка */
+/** "Save and verify": logging in checks the pair, then we save the sync credentials */
 async function onSaveCreds() {
   if (busy.value) return
   credMsg.value = null
@@ -311,7 +311,7 @@ async function onPush() {
   }
 }
 
-/** Кнопка «Синхронизировать всё»: PUSH (отправка очереди) → PULL (прогревка) */
+/** The "Sync all" button: PUSH (sending the queue) → PULL (warmup) */
 async function onSyncAll() {
   if (busy.value) return
   busy.value = true

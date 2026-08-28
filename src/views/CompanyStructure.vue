@@ -26,7 +26,7 @@ interface TreeNode {
   childrenCount: number
 }
 
-/** Пользователи, сгруппированные по руководителю (manager_id), по ФИО на каждом уровне */
+/** Users grouped by their manager (manager_id), sorted by full name at each level */
 const childrenOf = computed(() => {
   const map = new Map<number, DtoAdminUserResponse[]>()
   for (const u of adminUsers.value) {
@@ -39,12 +39,12 @@ const childrenOf = computed(() => {
   return map
 })
 
-/** Плоский иерархический список с отступами (обход от корней, защита от циклов) */
+/** Flat hierarchical list with indentation (walk from the roots, cycle protection) */
 const tree = computed<TreeNode[]>(() => {
   const byId = new Map<number, DtoAdminUserResponse>()
   for (const u of adminUsers.value) if (u.id != null) byId.set(u.id, u)
 
-  // Подсчёт подчинённых (включая вложенных), с защитой от циклов
+  // Count subordinates (including nested ones), with cycle protection
   const countChildren = (id: number, seen: Set<number>): number => {
     if (seen.has(id)) return 0
     seen.add(id)
@@ -72,14 +72,14 @@ const tree = computed<TreeNode[]>(() => {
   for (const root of childrenOf.value.get(0) ?? []) {
     if (root.id != null) visit(root.id, 0, new Set())
   }
-  // Защитный показ: неохваченные обходом (циклы/битые данные) показываем корнями
+  // Fallback display: users not reached by the walk (cycles/broken data) are shown as roots
   for (const u of adminUsers.value) {
     if (u.id != null && !visited.has(u.id)) visit(u.id, 0, new Set())
   }
   return out
 })
 
-/** Все прямые и косвенные потомки пользователя (циклоустойчиво) */
+/** All direct and indirect descendants of a user (cycle-safe) */
 function descendantsOf(id: number): Set<number> {
   const out = new Set<number>()
   const stack = [...(childrenOf.value.get(id) ?? [])]
@@ -95,7 +95,7 @@ function descendantsOf(id: number): Set<number> {
 const saving = ref(false)
 const saveError = ref<string | null>(null)
 
-/** Варианты руководителя: все пользователи, кроме самого и его потомков, по ФИО */
+/** Manager options: all users except the user itself and its descendants, sorted by name */
 function managerOptions(user: DtoAdminUserResponse) {
   const excluded = user.id != null ? descendantsOf(user.id) : new Set<number>()
   if (user.id != null) excluded.add(user.id)

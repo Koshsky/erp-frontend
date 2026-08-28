@@ -1,28 +1,28 @@
 /**
- * Предпросмотр сгенерированного PDF: страницы рисуются на canvas через pdf.js
- * и стопкуются в контейнер. pdf.js и его модули подгружаются лениво (только при
- * первом рендере предпросмотра), чтобы не тянуть их в основной чанк.
+ * Preview of the generated PDF: pages are drawn on canvas via pdf.js
+ * and stacked into the container. pdf.js and its modules are lazy-loaded (only on
+ * the first preview render) so they are not pulled into the main chunk.
  *
- * Используется pdfjs-dist v4 (закреплён точной версией): v5+ требует
- * Map.prototype.getOrInsertComputed (ES2025), которого нет в старых браузерах.
+ * Uses pdfjs-dist v4 (pinned to an exact version): v5+ requires
+ * Map.prototype.getOrInsertComputed (ES2025), which old browsers lack.
  *
- * Рендер выполняется БЕЗ воркера (fake worker pdf.js — на главном потоке):
- * отдельный Worker имеет собственную глобальную область видимости, куда не
- * действуют наши полифилы, и при отсутствии в браузере современных API воркер
- * падает с uncaught-исключением — loadingTask.promise не резолвится, и
- * предпросмотр висит вечно («Готовим предпросмотр…»). На главном потоке все
- * полифилы работают, поэтому рендер гарантированно выполняется.
+ * Rendering runs WITHOUT a worker (pdf.js fake worker — on the main thread):
+ * a separate Worker has its own global scope where our polyfills do not apply,
+ * and when the browser lacks modern APIs the worker crashes with an uncaught
+ * exception — loadingTask.promise never resolves, so the preview hangs forever
+ * ("Preparing preview…"). On the main thread all polyfills work, so rendering
+ * is guaranteed to complete.
  */
 
-/** Таймаут на весь рендер предпросмотра — защита от «вечного» спиннера */
+/** Timeout for the whole preview render — protection against an "endless" spinner */
 const RENDER_TIMEOUT_MS = 20000
 
 let pdfjsPromise: Promise<typeof import('pdfjs-dist')> | null = null
 let workerReady = false
 
 /**
- * Полифил Promise.withResolvers для браузеров, где pdf.js v4 его ещё не
- * встречает (Chrome <119, Firefox <121). No-op, если метод уже есть.
+ * Promise.withResolvers polyfill for browsers where pdf.js v4 does not yet
+ * encounter it (Chrome <119, Firefox <121). No-op if the method already exists.
  */
 function ensurePromiseWithResolvers() {
   const P = Promise as unknown as {
@@ -42,10 +42,10 @@ function ensurePromiseWithResolvers() {
 }
 
 /**
- * Лениво подгружает pdf.js и включает main-thread-рендер (fake worker):
- * импорт модуля воркера на главном потоке выставляет globalThis.pdfjsWorker,
- * после чего PDFWorker._initialize() идёт по пути _setupFakeWorker() и Worker
- * вообще не создаётся.
+ * Lazily loads pdf.js and enables main-thread rendering (fake worker):
+ * importing the worker module on the main thread sets globalThis.pdfjsWorker,
+ * after which PDFWorker._initialize() takes the _setupFakeWorker() path and no
+ * Worker is created at all.
  */
 function loadPdfjs(): Promise<typeof import('pdfjs-dist')> {
   if (!pdfjsPromise) {
@@ -55,12 +55,12 @@ function loadPdfjs(): Promise<typeof import('pdfjs-dist')> {
       try {
         const g = globalThis as { pdfjsWorker?: unknown }
         if (!g.pdfjsWorker) {
-          // Модуль воркера (webpack-сборка) при импорте в main-thread сам
-          // выполняет: __webpack_exports__ = globalThis.pdfjsWorker = {...}
+          // The worker module (webpack build) on main-thread import itself
+          // executes: __webpack_exports__ = globalThis.pdfjsWorker = {...}
           await import('pdfjs-dist/build/pdf.worker.min.mjs')
         }
       } catch {
-        // Не удалось подключить fake worker — остаёмся на обычном воркере
+        // Could not attach the fake worker — fall back to the regular worker
       }
       if (!workerReady) {
         const { default: workerUrl } = await import('pdfjs-dist/build/pdf.worker.min.mjs?url')
@@ -74,38 +74,38 @@ function loadPdfjs(): Promise<typeof import('pdfjs-dist')> {
 }
 
 export interface PdfPreviewHandle {
-  /** Количество страниц в документе */
+  /** Page count in the document */
   pageCount: number
-  /** Очищает контейнер и освобождает документ */
+  /** Clears the container and releases the document */
   destroy: () => void
 }
 
 /**
- * Предзагружает pdf.js + воркер-модуль (fake worker) заранее, чтобы первый
- * рендер предпросмотра не ждал загрузки тяжёлых чанков (~1.6 МБ). Идемпотентно:
- * повторные вызовы возвращают тот же промис (модульный кэш).
+ * Preloads pdf.js + the worker module (fake worker) ahead of time so the first
+ * preview render does not wait for heavy chunks (~1.6 MB). Idempotent:
+ * repeated calls return the same promise (module cache).
  */
 export function preloadPdfPreview(): Promise<unknown> {
   return loadPdfjs()
 }
 
 /**
- * Рендерит все страницы PDF в контейнер (canvas + номер страницы, вписано по
- * ширине контейнера). Возвращает handle для очистки. При ошибке контейнер
- * очищается и исключение пробрасывается наверх. Весь рендер ограничен
- * таймаутом — предпросмотр не может «зависнуть» (вечный спиннер).
+ * Renders all PDF pages into the container (canvas + page number, fitted to the
+ * container width). Returns a handle for cleanup. On error the container is
+ * cleared and the exception is rethrown. The whole render is bounded by
+ * a timeout — the preview cannot "hang" (endless spinner).
  */
 export async function renderPdfPreview(bytes: Uint8Array, container: HTMLElement): Promise<PdfPreviewHandle> {
   const pdfjs = await loadPdfjs()
   container.innerHTML = ''
 
-  // Копия байтов: pdf.js забирает TypedArray себе (transfer)
+  // Byte copy: pdf.js takes the TypedArray over (transfer)
   const copy = new Uint8Array(bytes.byteLength)
   copy.set(bytes)
   const loadingTask = pdfjs.getDocument({ data: copy })
   const destroyed = { value: false }
 
-  /** Обещает с таймаутом: по истечении уничтожаем задачу и отклоняем */
+  /** Wraps a promise with a timeout: on expiry destroy the task and reject */
   const withTimeout = <T>(p: Promise<T>, ms: number, msg: string): Promise<T> =>
     new Promise<T>((resolve, reject) => {
       const t = window.setTimeout(() => {

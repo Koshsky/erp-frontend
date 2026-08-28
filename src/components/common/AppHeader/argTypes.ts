@@ -1,7 +1,7 @@
 import type { ArgTypes } from '@storybook/vue3-vite'
 
 export interface AppHeaderProps {
-  /** Название бренда в шапке */
+  /** Brand name shown in the header */
   brand?: string
 }
 

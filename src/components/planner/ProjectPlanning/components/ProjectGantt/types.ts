@@ -12,8 +12,8 @@ export interface ProjectGanttItem {
 export interface ProjectGanttProps {
   timeline: TimelineCtx
   projects: ProjectGanttItem[]
-  /** Разрешает переупорядочивание строк (смену приоритетов) */
+  /** Allows reordering rows (changing priorities) */
   reorderable?: boolean
-  /** Проверка прав на управление проектом: редактирование, удаление, перенос дат */
+  /** Manage-rights check for a project: editing, deleting, moving dates */
   canManage?: (projectId: number) => boolean
 }

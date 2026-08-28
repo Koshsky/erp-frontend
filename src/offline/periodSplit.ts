@@ -1,14 +1,14 @@
 /**
- * Разбиение периодов табеля с той же семантикой, что и бэкенд
- * (SetStateRange/DeleteStateRange + insertResidues): при наложении диапазона
- * [s, e] пересекающиеся интервалы НЕ удаляются целиком — из них вычитается
- * [s, e], а «хвосты» [a, s-1] и [e+1, b] сохраняются с исходным состоянием.
- * Покрытые полностью интервалы удаляются. PUT добавляет новый период [s, e].
- * Чистая функция без зависимостей — используется и в optimistic-обновлении
- * стора, и в write-through дельтах кэша (cacheApply).
+ * Timesheet period splitting with the same semantics as the backend
+ * (SetStateRange/DeleteStateRange + insertResidues): when a range [s, e]
+ * overlaps intervals, they are NOT removed entirely — [s, e] is subtracted
+ * from them, and the "tails" [a, s-1] and [e+1, b] keep their original state.
+ * Fully covered intervals are removed. PUT adds a new period [s, e].
+ * Pure function without dependencies — used both in the store's optimistic update
+ * and in write-through cache deltas (cacheApply).
  */
 
-/** Период табеля (минимальный набор полей, нужных для разбиения) */
+/** Timesheet period (minimal set of fields needed for splitting) */
 export interface DayPeriod {
   id?: number
   state_id?: number
@@ -19,7 +19,7 @@ export interface DayPeriod {
   is_available?: boolean
 }
 
-/** Поля нового периода для PUT (ид + состояние) */
+/** Fields of the new period for PUT (id + state) */
 export interface PutPeriodFields {
   id?: number
   state_id: number
@@ -28,7 +28,7 @@ export interface PutPeriodFields {
   is_available?: boolean
 }
 
-/** Дата YYYY-MM-DD через n дней от ISO-даты (локальная зона) */
+/** Date YYYY-MM-DD n days from an ISO date (local zone) */
 function shiftDate(iso: string, days: number): string {
   const d = new Date(`${iso}T00:00:00`)
   d.setDate(d.getDate() + days)
@@ -42,12 +42,12 @@ function overlaps(p: DayPeriod, s: string, e: string): boolean {
 }
 
 /**
- * Применяет PUT/DELETE диапазона [start, end] к списку периодов.
- *  - op='put': вычитает [s,e] из пересекающихся интервалов (сохраняя хвосты),
- *    покрытые удаляет, затем добавляет новый период putFields.
- *  - op='delete': то же вычитание без вставки; при stateId != null вырезает
- *    только интервалы указанного состояния (остальные не трогает).
- * Результат отсортирован по start_date.
+ * Applies a PUT/DELETE of range [start, end] to a list of periods.
+ *  - op='put': subtracts [s,e] from overlapping intervals (keeping tails),
+ *    removes covered ones, then adds the new period putFields.
+ *  - op='delete': the same subtraction without insertion; when stateId != null, cuts out
+ *    only intervals of the given state (leaves the others untouched).
+ * The result is sorted by start_date.
  */
 export function applyRangeSplit(
   periods: DayPeriod[],
@@ -63,7 +63,7 @@ export function applyRangeSplit(
       out.push(p)
       continue
     }
-    // DELETE с фильтром по состоянию: чужие состояния не трогаем
+    // DELETE with a state filter: don't touch states other than the given one
     if (op === 'delete' && stateId != null && p.state_id != null && p.state_id !== stateId) {
       out.push(p)
       continue

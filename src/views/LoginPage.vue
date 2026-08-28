@@ -12,7 +12,7 @@ const router = useRouter()
 const route = useRoute()
 const auth = useAuthStore()
 
-// Поля для входа
+// Login fields
 const username = ref('')
 const password = ref('')
 
@@ -25,18 +25,18 @@ const features = [
 ]
 
 const offline = computed(() => isElectron && isOffline.value)
-/** Адрес сервера для показа на странице входа (если задан) */
+/** Server address to show on the login page (if set) */
 const serverBase = computed(() => getServerBase())
-/** Одна кнопка входа: лейбл меняется по сети, поведение — в onSubmit */
+/** Single login button: the label depends on the network state, the behavior is in onSubmit */
 const submitLabel = computed(() =>
   auth.loading ? 'Подождите…' : offline.value ? 'Войти офлайн' : 'Войти →',
 )
 
-// === Пинг сервера: символ-кнопка + сигнализатор соединения ===
+// === Server ping: symbol button + connection indicator ===
 const pinging = ref(false)
-/** Результат пинга: null — ещё не было, true — доступен, false — недоступен */
+/** Ping result: null — not attempted yet, true — reachable, false — unreachable */
 const pingOk = ref<boolean | null>(null)
-// Если сервер уже известен как недоступный (офлайн) — индикатор сразу красный
+// If the server is already known to be unreachable (offline) — the indicator is red right away
 if (isElectron && isOffline.value) pingOk.value = false
 
 const pingSymbol = computed(() => (pinging.value ? '⏳' : '⇄'))
@@ -55,7 +55,7 @@ const pingTitle = computed(() => {
   return 'Проверить соединение с сервером'
 })
 
-/** Пинг бэкенда (GET /health, публичный): любой статус <500 = жив */
+/** Ping the backend (GET /health, public): any status < 500 means alive */
 async function onPing() {
   if (pinging.value) return
   pinging.value = true
@@ -74,9 +74,9 @@ function getError(): string | null {
 }
 
 /**
- * Офлайн-вход: локальная сессия без токена (данные из кэша, мутации в
- * очередь), пароль не проверяется и не сохраняется. Идентичность: введённый
- * логин → сохранённый профиль → логин автосинка (см. префилл ниже).
+ * Offline login: a local session without a token (data from the cache, mutations
+ * go to a queue), the password is neither checked nor saved. Identity: typed
+ * login → saved profile → autosync login (see the prefilled value below).
  */
 function enterOffline() {
   const typed = username.value.trim()
@@ -102,13 +102,13 @@ async function onSubmit() {
   }
   const ok = await auth.login(username.value, password.value)
   if (ok) {
-    // Desktop: креды успешного входа — safeguard-креды автосинка (пароль в
-    // safeStorage). Сохраняем только верифицированный пароль.
+    // Desktop: credentials of a successful login — the autosync safeguard credentials (password in
+    // safeStorage). Only the verified password is saved.
     if (isElectron) {
       try {
         await saveSyncCredentials(username.value, password.value)
       } catch {
-        // автосинк просто останется без пароля — не критично
+        // autosync will simply remain without a password — not critical
       }
     }
     goToRedirect()
@@ -120,8 +120,8 @@ function goToRedirect() {
   router.push(redirect)
 }
 
-// В офлайне подставляем сохранённый логин автосинка — пользователю остаётся
-// только нажать одну кнопку.
+// Offline: prefill the saved autosync login — the user only needs
+// to press one button.
 if (isElectron && isOffline.value && !username.value) {
   username.value = getSavedLogin() ?? ''
 }
@@ -165,9 +165,9 @@ if (isElectron && isOffline.value && !username.value) {
         </button>
       </form>
 
-      <!-- Строка «Сервер: …» + пинг и настройки сервера — только в настольной
-           (Electron) сборке. В онлайн (веб) версии адрес задаётся деплоем,
-           смена сервера невозможна — блок не показываем целиком. -->
+      <!-- The "Server: …" row + ping and server settings — desktop (Electron)
+           build only. In the online (web) version the address is set by the
+           deployment and cannot be changed — the block is not shown at all. -->
       <div v-if="isElectron && serverBase" class="lp-server-row">
         <span class="lp-server">Сервер: {{ serverBase }}</span>
         <button

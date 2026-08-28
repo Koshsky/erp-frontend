@@ -7,9 +7,9 @@ const props = withDefaults(
     label?: string
     placeholder?: string
     autocomplete?: string
-    /** Скрывать кнопку переключения видимости */
+    /** Hide the visibility toggle button */
     toggle?: boolean
-    /** Общий атрибут id для label */
+    /** Common id attribute for the label */
     id?: string
   }>(),
   {

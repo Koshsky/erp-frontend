@@ -5,13 +5,13 @@ import { getServerBase, getApiUrl, setServerBase, httpSchemeWarning } from '../c
 import { isElectron } from '../electron'
 
 /**
- * Экран настройки адреса сервера (до входа).
- * В настольной (Electron) версии позволяет задать, к какому бэкенду
- * подключаться: пользователь вводит базовый адрес сервера, приложение
- * добавляет /api/v1 (адрес на машине с exe может отличаться).
- * В браузерной версии смена адреса невозможна (same-origin nginx-прокси,
- * CSP connect-src 'self', refresh-кука не переживает смену origin) — экран
- * показывает развёрнутый адрес как информацию, без возможности редактирования.
+ * Server address settings screen (before login).
+ * In the desktop (Electron) version it lets you choose which backend to
+ * connect to: the user enters the server base address, the app
+ * appends /api/v1 (the address on the machine with the exe may differ).
+ * In the browser version changing the address is impossible (same-origin nginx proxy,
+ * CSP connect-src 'self', the refresh cookie does not survive an origin change) — the screen
+ * shows the deployed address as information only, without editing.
  */
 
 const router = useRouter()
@@ -20,7 +20,7 @@ const serverBase = ref(getServerBase())
 const busy = ref(false)
 const msg = ref<string | null>(null)
 const ok = ref(false)
-/** Предупреждение про http-схему (Secure-кука refresh не работает) */
+/** Warning about the http scheme (the refresh Secure cookie does not work) */
 const warning = ref<string | null>(null)
 
 function applyAndStore(url: string): boolean {
@@ -33,7 +33,7 @@ function applyAndStore(url: string): boolean {
   return saved
 }
 
-/** Живой ли сервер: POST /auth/login вернёт <500 (401 «плохие креды» тоже подходит) */
+/** Whether the server is alive: POST /auth/login returns <500 (401 "bad credentials" also counts) */
 async function probeServer(): Promise<boolean> {
   const base = getApiUrl()
   if (!base) return false
@@ -115,7 +115,7 @@ function onSave() {
     <div class="lp-form-side">
       <h2 class="lp-title">Адрес сервера</h2>
 
-      <!-- Electron: адрес можно задать (exe подключается к внешнему бэкенду) -->
+      <!-- Electron: the address can be set (the exe connects to an external backend) -->
       <template v-if="isElectron">
         <p class="lp-subtitle">Адрес подключаемого бэкенда. Сохраняется на этом устройстве.</p>
 
@@ -141,7 +141,7 @@ function onSave() {
         </form>
       </template>
 
-      <!-- Web: адрес задаётся деплоем (same-origin nginx-прокси) — только информация -->
+      <!-- Web: the address is set by the deployment (same-origin nginx proxy) — information only -->
       <template v-else>
         <p class="lp-subtitle">
           Браузерная версия подключается к API того же адреса, с которого открыта
@@ -166,7 +166,7 @@ function onSave() {
 <style src="./LoginPage.css" scoped></style>
 
 <style scoped>
-/* Ошибка с признаком успеха — зелёным */
+/* Error with the success flag — in green */
 .lp-error.ok {
   color: #188038;
 }
@@ -180,7 +180,7 @@ function onSave() {
   text-decoration: none;
 }
 
-/* Информационная карточка адреса (web: смена сервера недоступна) */
+/* Address info card (web: changing the server is unavailable) */
 .ss-info {
   display: flex;
   align-items: center;

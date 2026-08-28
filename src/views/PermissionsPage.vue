@@ -1,11 +1,11 @@
 <script setup lang="ts">
 /**
- * Права доступа — роль-центричный редактор.
- * Слева — роли, справа — возможности выбранной роли по разделам.
- * Зоны переведены в человеческий язык в контексте ресурса
- * («в своих процессах», «в своих проектах», «только свои», «все»).
- * Источник истины — матрица на бэкенде (/api/v1/rbac/*), правки
- * применяются сразу (upsert; «нет доступа» = мягкое удаление).
+ * Access permissions — a role-centric editor.
+ * Roles on the left, capabilities of the selected role by section on the right.
+ * Scopes are rendered in human language in the resource context
+ * ("in own processes", "in own projects", "own only", "all").
+ * Source of truth — the matrix on the backend (/api/v1/rbac/*); edits are
+ * applied immediately (upsert; "no access" = soft delete).
  */
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
@@ -16,10 +16,10 @@ import { useConfirm } from '../composables/useConfirm'
 const rbac = useRbacStore()
 const { roles, rules, matrix, routePolicies, loading, error, saving } = storeToRefs(rbac)
 
-/** Выбранная роль (по умолчанию — первая из каталога, не admin). */
+/** Selected role (by default — the first one from the catalog, not admin). */
 const selected = ref('')
 
-/** Коды ресурсов и действий (зеркалит кодеки бэкенда). */
+/** Resource and action codes (mirror the backend codecs). */
 const ACTION_LABELS: Record<string, string> = {
   view: 'Просмотр',
   create: 'Создание',
@@ -27,7 +27,7 @@ const ACTION_LABELS: Record<string, string> = {
   delete: 'Удаление',
 }
 
-// Ресурс → человекопонятное имя (родительный падеж для фраз «Просмотр …»).
+// Resource → human-readable name (genitive case for phrases like "View …").
 const RESOURCE_LABELS: Record<string, string> = {
   project: 'проектов',
   process: 'процессов',
@@ -42,9 +42,9 @@ const RESOURCE_LABELS: Record<string, string> = {
 }
 
 /**
- * Доступные зоны с человеческими подписями в контексте ресурса.
- * Набор зон — зеркало policies.ScopeApplicable на бэкенде; сами формулировки
- * объясняют владельца («в своих процессах» = владелец процесса и т.п.).
+ * Available scopes with human-readable labels in the resource context.
+ * The scope set mirrors policies.ScopeApplicable on the backend; the wording
+ * itself explains the owner ("in own processes" = process owner, etc.).
  */
 const SCOPE_OPTIONS: Record<string, { value: string; label: string }[]> = {
   project: [
@@ -102,7 +102,7 @@ const SCOPE_OPTIONS: Record<string, { value: string; label: string }[]> = {
   ],
 }
 
-/** Разделы страницы. */
+/** Page sections. */
 const GROUPS = [
   { key: 'planning', title: 'Планирование', resources: ['project', 'process', 'task', 'milestone', 'assignment'] },
   { key: 'timesheet', title: 'Табель', resources: ['state', 'resource', 'worker'] },
@@ -111,7 +111,7 @@ const GROUPS = [
 
 const ACTIONS = ['view', 'create', 'update', 'delete'] as const
 
-/** Эффективная зона ячейки из матрицы (нет правила = «нет доступа»). */
+/** Effective cell scope from the matrix (no rule = "no access"). */
 const effective = computed<Record<string, string>>(() => {
   const map: Record<string, string> = {}
   for (const cell of matrix.value) {
@@ -121,7 +121,7 @@ const effective = computed<Record<string, string>>(() => {
   return map
 })
 
-/** id правила для удаления. */
+/** Rule id for deletion. */
 const ruleIdByCell = computed<Record<string, number>>(() => {
   const map: Record<string, number> = {}
   for (const rule of rules.value) {
@@ -139,13 +139,13 @@ function cellValue(role: string, resource: string, action: string): string {
   return staged[cellKey(role, resource, action)] ?? effective.value[cellKey(role, resource, action)] ?? 'none'
 }
 
-/** Человеческая подпись зоны в контексте ресурса. */
+/** Human-readable scope label in the resource context. */
 function scopeLabel(resource: string, scope: string): string {
   const opt = SCOPE_OPTIONS[resource]?.find((o) => o.value === scope)
   return opt?.label ?? 'Нет доступа'
 }
 
-/** Человеческие имена известных ролей (каталог из БД держит описания на английском). */
+/** Human-readable names of known roles (the DB catalog keeps descriptions in English). */
 const ROLE_TITLES: Record<string, string> = {
   admin: 'Администратор',
   dp: 'Директор проектов',
@@ -158,7 +158,7 @@ function roleTitle(code: string): string {
   return ROLE_TITLES[code] ?? code
 }
 
-/** Список ролей: admin + каталог (без дублей). */
+/** Role list: admin + catalog (no duplicates). */
 const roleList = computed(() => {
   const names = ['admin']
   for (const r of roles.value) {
@@ -169,13 +169,13 @@ const roleList = computed(() => {
 
 const isAdminSelected = computed(() => selected.value === 'admin')
 
-/** Изменённые ячейки. */
+/** Changed cells. */
 const staged = reactive<Record<string, string>>({})
 const dirtyKeys = computed<string[]>(() =>
   Object.keys(staged).filter((key) => staged[key] !== (effective.value[key] ?? 'none')),
 )
 
-/** Описания изменений для панели сохранения. */
+/** Change descriptions for the save bar. */
 const dirtyChanges = computed(() =>
   dirtyKeys.value.map((key) => {
     const [role, resource, action] = key.split('|')
@@ -230,10 +230,10 @@ function cancelDirty() {
   saveMsg.value = null
 }
 
-// Сброс к дефолтам.
+// Reset to defaults.
 const { confirm: confirmDialog, ask, proceed, cancel } = useConfirm()
 
-// === Управление ролями (каталог) ===
+// === Role management (catalog) ===
 const newRoleName = ref('')
 const newRoleDesc = ref('')
 const roleMsg = ref<{ ok: boolean; text: string } | null>(null)
@@ -283,7 +283,7 @@ function onReset() {
   }, 'Сбросить')
 }
 
-/** Выбор роли по умолчанию после загрузки каталога. */
+/** Select the default role after the catalog is loaded. */
 watch(roleList, (list) => {
   if ((!selected.value || !list.includes(selected.value)) && list.length) {
     selected.value = list[0] === 'admin' ? (list[1] ?? 'admin') : list[0]
@@ -314,7 +314,7 @@ onMounted(() => {
     <p v-if="error && !rules.length" class="pm-load er">{{ error }}</p>
 
     <div v-if="rules.length && roleList.length" class="pm-layout">
-      <!-- Роли -->
+      <!-- Roles -->
       <nav class="pm-roles">
         <button
           v-for="role in roleList"
@@ -332,7 +332,7 @@ onMounted(() => {
         </button>
       </nav>
 
-      <!-- Редактор выбранной роли -->
+      <!-- Editor of the selected role -->
       <div class="pm-editor">
         <div v-if="isAdminSelected" class="pm-admin-note">
           Администратор имеет полный доступ ко всем операциям и листингам — это защитный
@@ -387,7 +387,7 @@ onMounted(() => {
           </div>
         </div>
 
-        <!-- Служебное -->
+        <!-- Internal -->
         <details class="pm-inspect">
           <summary class="pm-inspect-summary">Служебное: маршрутные проверки (name → kind и параметры)</summary>
           <div v-for="p in routePolicies" :key="p.name" class="pm-route">
@@ -399,7 +399,7 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- Панель сохранения -->
+    <!-- Save bar -->
     <div v-if="dirtyKeys.length" class="pm-savebar">
       <div class="pm-savebar-info">
         <strong>Изменения ({{ dirtyKeys.length }}):</strong>

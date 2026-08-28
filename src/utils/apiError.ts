@@ -1,4 +1,4 @@
-/** Маппинг machine-readable кодов бэкенда на локальные тексты. */
+/** Maps backend machine-readable codes to local texts. */
 const CODE_MESSAGES: Record<string, string> = {
   BAD_REQUEST: 'Некорректный запрос',
   UNAUTHORIZED: 'Требуется авторизация',
@@ -11,15 +11,15 @@ const CODE_MESSAGES: Record<string, string> = {
   INTERNAL_ERROR: 'Внутренняя ошибка сервера',
 }
 
-/** Локальный текст по коду ошибки; null, если код неизвестен. */
+/** Local text for an error code; null if the code is unknown. */
 export function errorTextByCode(code?: string): string | null {
   if (!code) return null
   return CODE_MESSAGES[code] ?? null
 }
 
 /**
- * Человекочитаемое сообщение об ошибке из тела ответа { data, error }.
- * Приоритет: локальный текст по коду → сообщение бэкенда → fallback.
+ * Human-readable error message from the { data, error } response body.
+ * Priority: local text by code → backend message → fallback.
  */
 export function apiErrorMessage(
   errorBody: { message?: string; code?: unknown } | null | undefined,

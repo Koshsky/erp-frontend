@@ -1,6 +1,11 @@
 # AGENTS.md
 
-Frontend service of the MVS ERP monorepo (repo root is `../..`, sibling `services/backend` is the Go API serving `/api/v1`). Stack: Vue 3 (`<script setup>`) + TypeScript + Vite + Pinia + Vue Router, component-driven with Storybook. UI strings and comments are in Russian.
+Frontend service of the MVS ERP monorepo (repo root is `../..`, sibling `services/backend` is the Go API serving `/api/v1`). Stack: Vue 3 (`<script setup>`) + TypeScript + Vite + Pinia + Vue Router, component-driven with Storybook.
+
+## Language rule (mandatory)
+
+- Code comments, documentation, and commit messages are written in **English only**.
+- UI strings and user-facing messages stay in Russian (the product language) — never translate them (they are displayed to the user, not documentation).
 
 ## Commands
 - `npm run dev` runs **Storybook** (port 6006) — not the app. `npm start` runs the Vite dev server (port 5173); `npm run stop` kills it.

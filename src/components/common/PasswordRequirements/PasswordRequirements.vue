@@ -7,7 +7,7 @@ const props = withDefaults(
   defineProps<{
     modelValue?: string
     rules?: PasswordRule[]
-    /** Показывать правила как «все выполнены» до ввода */
+    /** Show rules as "all met" before any input */
     showIdle?: boolean
   }>(),
   {
@@ -17,7 +17,7 @@ const props = withDefaults(
   },
 )
 
-/** Выполненность каждого правила для текущего значения */
+/** Whether each rule is met for the current value */
 const status = computed<{ rule: PasswordRule; ok: boolean }[]>(() =>
   props.rules.map((rule) => ({ rule, ok: rule.test(props.modelValue ?? '') })),
 )

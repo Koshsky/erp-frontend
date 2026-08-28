@@ -13,7 +13,7 @@ const emit = defineEmits<{
   change: [payload: { id: number; start_date: string; end_date: string }]
   contextmenu: [payload: { clientX: number; clientY: number; date: string; rowIndex: number; projectId?: number }]
   reorder: [payload: { from: number; to: number }]
-  /** Одиночный клик по бару проекта — переход на вкладку процессов этого проекта */
+  /** Single click on a project bar — switch to that project's processes tab */
   navigate: [payload: number]
 }>()
 

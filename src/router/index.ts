@@ -21,8 +21,8 @@ const router = createRouter({
           component: () => import('../views/LoginPage.vue'),
         },
         {
-          // Настройка адреса сервера — доступна до входа (нужно для exe:
-          // на другом компьютере бэкенд может быть не на localhost).
+          // Server address settings — available before login (needed for the exe:
+          // on another machine the backend may not be on localhost).
           path: 'settings',
           name: 'server-settings',
           component: () => import('../views/ServerSettingsPage.vue'),
@@ -34,9 +34,9 @@ const router = createRouter({
       component: MainLayout,
       meta: { requiresAuth: true },
       children: [
-        // Главный экран: планировщик задач, если он доступен по правам
-        // (task.view), иначе — профиль. Решение принимает guard после
-        // redirect'а на /planner (см. plannerAccessible ниже).
+        // Main screen: the task planner if allowed by permissions
+        // (task.view), otherwise the profile. The guard decides after the
+        // redirect to /planner (see plannerAccessible below).
         {
           path: '',
           name: 'home',
@@ -113,11 +113,11 @@ const router = createRouter({
 })
 
 /**
- * Главный экран — планировщик задач, если он доступен по RBAC (task.view),
- * иначе страница профиля. Права грузятся асинхронно (онлайн — /permissions/me,
- * офлайн — кэш), поэтому для корневого перехода дожидаемся их, чтобы «холодный»
- * старт не уводил на профиль ошибочно; если права получить не удалось совсем
- * (нет сети и кэша) — fallback на роли навигации планировщика.
+ * Main screen — the task planner if available per RBAC (task.view),
+ * otherwise the profile page. Permissions load asynchronously (online — /permissions/me,
+ * offline — cache), so for a root transition we wait for them so a "cold"
+ * start does not wrongly send the user to the profile; if permissions could not
+ * be obtained at all (no network and no cache) — fall back to the planner nav roles.
  */
 const PLANNER_ROLES = ['admin', 'dp', 'rp', 'vp']
 
@@ -132,10 +132,10 @@ async function plannerAccessible(
   return rbac.can('task', 'view')
 }
 
-// Глобальный guard: неавторизованных пользователей всегда отправляем на /login.
-// Если access-токен отсутствует или протух, но есть refresh — сначала тихо
-// обновляем сессию: web — refresh по куке, desktop — тихий re-login по кредам
-// автосинка (refresh-кука не работает кросс-сайт). Офлайн — без попыток сети.
+// Global guard: unauthenticated users always go to /login.
+// If the access token is missing or expired but a refresh cookie exists — first silently
+// refresh the session: web — refresh via the cookie, desktop — silent re-login with auto-sync
+// credentials (the refresh cookie does not work cross-site). Offline — no network attempts.
 router.beforeEach(async (to) => {
   const auth = useAuthStore()
 
@@ -151,28 +151,28 @@ router.beforeEach(async (to) => {
     }
   }
 
-  // Страницы под главным layout требуют авторизации
+  // Pages under the main layout require authentication
   if (to.meta.requiresAuth && !auth.isAuthenticated) {
     return { name: 'login', query: { redirect: to.fullPath } }
   }
 
-  // Уже авторизованных не пускаем на страницу входа
+  // Already-authenticated users are not allowed on the login page
   if (to.name === 'login' && auth.isAuthenticated) {
     return { name: 'home' }
   }
 
-  // Права для навигации: загружаем один раз на сессию (кроме офлайна — кеш).
+  // Permissions for navigation: load once per session (except offline — cache).
   const rbac = useRbacStore()
-  // Для /planner права ждём ниже (plannerAccessible) — здесь не дублируем запрос.
+  // For /planner we wait for permissions below (plannerAccessible) — no duplicate request here.
   if (auth.isAuthenticated && !rbac.permsLoaded && !isOffline.value && to.name !== 'planner') {
-    // Не блокируем навигацию сетью: права подгружаются асинхронно
-    // (кнопки появятся по мере загрузки; поллинг обновляет дальше).
+    // Do not block navigation on the network: permissions load asynchronously
+    // (buttons appear as they load; polling updates them further).
     void rbac.loadMyPermissions()
   }
 
-  // Действия/страницы показываем по правам из матрицы, а не по ролям.
-  // Бизнес-страницы — по праву view; админ-разделы — временный fallback
-  // на роль (TODO: виртуальные ресурсы-разделы).
+  // Show actions/pages by matrix permissions, not by roles.
+  // Business pages — by the view permission; admin sections — a temporary fallback
+  // to the role (TODO: virtual resource sections).
   const pagePerm: Record<string, [string, string]> = {
     timesheet: ['worker', 'view'],
     employees: ['worker', 'view'],
@@ -188,8 +188,8 @@ router.beforeEach(async (to) => {
   }
   const needed = pagePerm[to.name as string]
   if (needed && to.meta.requiresAuth) {
-    // Главный экран решаем по правам из матрицы, дождавшись их загрузки
-    // (иначе «холодный» старт ошибочно уводил бы на профиль).
+    // Decide the main screen by matrix permissions, after waiting for them to load
+    // (otherwise a "cold" start would wrongly send the user to the profile).
     const allowed =
       to.name === 'planner'
         ? await plannerAccessible(rbac, auth.user?.role)
@@ -199,8 +199,8 @@ router.beforeEach(async (to) => {
     }
   }
 
-  // Пользователь без прав ни на одну бизнес-страницу — только профиль
-  // (сотрудник без назначенных прав; админ и роли с правами ходят дальше).
+  // User with permission to no business page — profile only
+  // (an employee without assigned permissions; admin and roles with permissions continue further).
   if (
     to.meta.requiresAuth &&
     to.name !== 'profile' &&
@@ -216,15 +216,15 @@ router.beforeEach(async (to) => {
     return { name: 'profile' }
   }
 
-  // Синхронизация (офлайн-настройки) — доступна только в настольной (Electron)
-  // сборке. В веб-версии офлайна нет, страница недоступна.
+  // Sync (offline settings) — available only in the desktop (Electron)
+  // build. The web version has no offline, so the page is unavailable.
   if (to.name === 'sync' && !isElectron) {
     return { name: 'home' }
   }
 
-  // Настройки адреса сервера — только настольная (Electron) сборка. В онлайн
-  // (веб) версии адрес задаётся при развёртывании (same-origin nginx-прокси),
-  // экран недоступен.
+  // Server address settings — desktop (Electron) build only. In the online
+  // (web) version the address is set at deployment (same-origin nginx proxy),
+  // the screen is unavailable.
   if (to.name === 'server-settings' && !isElectron) {
     return { name: 'login' }
   }

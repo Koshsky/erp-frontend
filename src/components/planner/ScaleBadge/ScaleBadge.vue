@@ -7,7 +7,7 @@ const props = defineProps<ScaleBadgeProps>()
 const show = ref(false)
 let hideTimer: ReturnType<typeof setTimeout> | null = null
 
-/** Каждый зум перезапускает таймер скрытия — бейдж виден, пока зумишь */
+/** Every zoom restarts the hide timer — the badge stays visible while zooming */
 watch(
   () => props.bump,
   () => {

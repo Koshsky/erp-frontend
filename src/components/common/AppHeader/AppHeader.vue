@@ -14,18 +14,18 @@ const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
 
-// Локальный computed поверх импортированного ref — гарантированная реактивность
-// в шаблоне (импортированные ref привязываются без автораспаковки).
+// Local computed wrapping the imported ref — guaranteed reactivity
+// in the template (imported refs are bound without auto-unwrapping).
 const offline = computed(() => isOffline.value)
 
-// Ожидающие отправки изменения (бейдж у «Синхронизация»)
+// Pending changes awaiting sync (badge next to "Sync")
 const pending = computed(() => pendingCount.value)
 
-// Шапка — список категорий; подкатегории открываются выпадающим меню.
+// Header — list of categories; subcategories open in a dropdown menu.
 const { visibleCategories, activeCategory } = useNavigation()
 
-// shallowRef: хранит объект категории как есть (без deep-reactive обёртки),
-// чтобы работало сравнение по идентичности openCategory === cat.
+// shallowRef: keeps the category object as-is (no deep-reactive wrapper)
+// so identity comparison openCategory === cat works.
 const openCategory = shallowRef<NavCategory | null>(null)
 const navEl = ref<HTMLElement | null>(null)
 
@@ -38,14 +38,14 @@ function closeCategory() {
 }
 
 function onLogout() {
-  // Страховка на уровне обработчика: офлайн выход не выполняется (logout
-  // чистит очередь изменений), даже если атрибут disabled не сработал.
+  // Handler-level safeguard: offline logout is not performed (logout
+  // clears the outbox), even if the disabled attribute did not fire.
   if (offline.value) return
   authStore.logout()
   router.push('/login')
 }
 
-// Клик вне меню или Escape — закрыть
+// Click outside the menu or Escape — close
 function onDocClick(e: MouseEvent) {
   if (navEl.value && !navEl.value.contains(e.target as Node)) closeCategory()
 }
@@ -112,7 +112,7 @@ onBeforeUnmount(() => {
           {{ pending }}
         </span>
       </RouterLink>
-      <!-- Выход офлайн недоступен: logout чистит очередь изменений, а её нужно сохранить до возврата сети -->
+      <!-- Logout is unavailable offline: logout clears the outbox, which must be kept until the network is back -->
       <button
         type="button"
         class="ah-logout"
@@ -139,8 +139,8 @@ onBeforeUnmount(() => {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
   position: sticky;
   top: 0;
-  /* Шапка и её выпадающие меню — поверх контента страницы; модальные окна
-     (z-40000) рисуются поверх шапки и затемняют её */
+  /* Header and its dropdown menus sit above page content; modal dialogs
+     (z-40000) render above the header and dim it */
   z-index: 30000;
 }
 
@@ -223,7 +223,7 @@ onBeforeUnmount(() => {
   padding: 6px;
   display: flex;
   flex-direction: column;
-  /* Внутри контекста шапки (z-30000) — поверх остального контента шапки */
+  /* Within the header's stacking context (z-30000) — above the rest of the header content */
   z-index: 100;
 }
 

@@ -13,7 +13,7 @@ const props = defineProps<{
   resources: Resource[]
   usageFn: (resourceId: number, day: Date) => number
   availableFn: (resourceId: number, day: Date) => number | null
-  /** Отсутствия членов ресурсов по id (для тултипа UsageCell) */
+  /** Resource member absences by id (for the UsageCell tooltip) */
   absenceByResource?: Record<number, DtoResourceAbsenceResponse[]> | null
 }>()
 
@@ -24,7 +24,7 @@ interface CellUsage {
   absentees: DtoResourceAbsenceResponse[]
 }
 
-/** Отсутствия ресурса, пересекающие хоть один день диапазона ячейки */
+/** Resource absences overlapping at least one day of the cell range */
 function cellAbsentees(resourceId: number, start: Date, end: Date): DtoResourceAbsenceResponse[] {
   const list = props.absenceByResource?.[resourceId]
   if (!list?.length) return []
@@ -61,7 +61,7 @@ function cellUsage(resourceId: number, idx: number): CellUsage {
   return { used: peak, available: hasUnknown ? null : minAvail, isWeekend: weekend, absentees }
 }
 
-/** Занятость по ресурсам и видимым ячейкам (пик дневной загрузки внутри ячейки) */
+/** Usage per resource and visible cell (peak daily load inside a cell) */
 const resourceCells = computed(() =>
   props.resources.map((res) => ({
     res,
@@ -69,18 +69,18 @@ const resourceCells = computed(() =>
   })),
 )
 
-/** Ячейки слишком узкие — прячем текст (коды ресурсов и числа загрузки),
- *  но сам блок с раскрашенными ячейками оставляем видимым */
+/** Cells too narrow — hide the text (resource codes and load numbers)
+ *  but keep the colored cell block visible */
 const showText = computed(() => props.t.cellPx >= 12)
 
-/** Высота строки ресурса и суммарная высота слоя кодов (для отрицательного margin) */
+/** Resource row height and total code-layer height (for the negative margin) */
 const rowH = computed(() => (showText.value ? 18 : 9))
 const labelsH = computed(() => resourceCells.value.length * rowH.value)
 </script>
 
 <template>
-  <!-- Слой кодов ресурсов: отдельный sticky-элемент боковой панели (z 80), вне
-       stacking context ресурсного блока — выше линии текущей даты (25) -->
+  <!-- Resource code layer: a separate sticky side-panel element (z 80), outside
+       the resource block's stacking context — above the current-date line (25) -->
   <div
     class="rs-labels"
     :style="{
@@ -105,7 +105,7 @@ const labelsH = computed(() => resourceCells.value.length * rowH.value)
     </div>
   </div>
 
-  <!-- Блок ячеек загрузки «4/5»: липнет под шапкой календаря, ниже линии текущей даты -->
+  <!-- Load-cell block "4/5": sticks below the calendar header, under the current-date line -->
   <div class="rs-block" :style="{ top: headerHeight(t.unit, t.cellPx) + 'px' }">
     <template v-for="rc in resourceCells" :key="'r' + rc.res.id">
       <div class="rs-row" :class="{ 'rs-row--compact': !showText }">
@@ -123,9 +123,9 @@ const labelsH = computed(() => resourceCells.value.length * rowH.value)
 </template>
 
 <style scoped>
-/* Слой кодов ресурсов — боковая панель: липнет к левому и верхнему краю (под шапкой
- * календаря), лежит выше линии текущей даты (25). Высота и отрицательный margin
- * задаются инлайном, чтобы не сдвигать блок ячеек. */
+/* Resource code layer — side panel: sticks to the left and top edges (below the
+ * calendar header), sits above the current-date line (25). Height and negative margin
+ * are set inline so the cell block is not shifted. */
 .rs-labels {
   position: sticky;
   left: 0;
@@ -153,8 +153,8 @@ const labelsH = computed(() => resourceCells.value.length * rowH.value)
   font-size: 13px;
   letter-spacing: 0.5px;
 }
-/* Блок ячеек загрузки «4/5»: липнет сразу под календарным заголовком.
- * z 20 — выше контента (бары 2, вехи 3), но ниже линии текущей даты (25). */
+/* Load-cell block "4/5": sticks right below the calendar header.
+ * z 20 — above content (bars 2, milestones 3), but below the current-date line (25). */
 .rs-block {
   position: sticky;
   z-index: 20;
@@ -165,7 +165,7 @@ const labelsH = computed(() => resourceCells.value.length * rowH.value)
   height: 18px;
   background: #fff;
 }
-/* Текст скрыт (узкие ячейки) — строка ресурса вдвое тоньше, остаётся только заливка */
+/* Text hidden (narrow cells) — the resource row is twice as thin, only the fill remains */
 .rs-row--compact {
   height: 9px;
 }

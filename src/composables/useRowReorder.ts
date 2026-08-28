@@ -3,9 +3,9 @@ import type { Ref } from 'vue'
 import { useWindowPointerTrack } from '../utils'
 
 /**
- * Вертикальный драг строк группы (смена порядка): перенос по строкам только своей
- * группы (запросы скоупированы на groupEl — на странице может быть несколько .gg-group),
- * drop-line и индексы перестановки считаются по позиции курсора.
+ * Vertical drag of group rows (reordering): dragging is limited to the rows of
+ * the same group (queries are scoped to groupEl — a page may have several .gg-group),
+ * the drop line and swap indices are computed from the cursor position.
  */
 export function useRowReorder(
   count: () => number,
@@ -18,12 +18,12 @@ export function useRowReorder(
   const dropStyle = ref<{ top: string } | null>(null)
   const rowDragCursor = ref(false)
 
-  /** Строки только своей группы */
+  /** Rows of the same group only */
   function groupRows(): HTMLElement[] {
     return Array.from(groupEl.value?.querySelectorAll('.gg-row[data-row-index]') ?? [])
   }
 
-  /** Целевой индекс вставки [0..n] по позиции курсора: число строк, середина которых выше курсора */
+  /** Target insertion index [0..n] from the cursor position: number of rows whose midpoint is above the cursor */
   function targetBoundary(clientY: number): number {
     const rows = groupRows()
     if (!rows.length) return 0
@@ -88,8 +88,8 @@ export function useRowReorder(
     onCancel: endRowDrag,
   })
 
-  // Размонтирование посреди драга строки (смена данных/страницы): без этого
-  // слушатели и userSelect=«none» остаются навсегда.
+  // Unmount mid row-drag (data/page change): without this, listeners and
+  // userSelect="none" would remain forever.
   onBeforeUnmount(endRowDrag)
 
   return { draggingFrom, dragTo, dropStyle, rowDragCursor, startRowDrag }

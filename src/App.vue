@@ -26,8 +26,8 @@ body {
   color: #2c3e50;
 }
 
-/* Фиксированная ширина ячейки планировщика, адаптивная под экран.
-   Задаётся на :root, треки грида используют var(--cell-width). */
+/* Fixed planner cell width, responsive to the screen.
+   Set on :root, grid tracks use var(--cell-width). */
 :root {
   --cell-width: 32px;
 }

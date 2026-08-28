@@ -15,27 +15,27 @@ export interface Task {
   start_date: string
   end_date: string
   resources: TaskResource[]
-  /** Ответственный (владелец) задачи: id назначенного пользователя */
+  /** Task owner (assignee): id of the assigned user */
   owner_id?: number | null
-  /** Имя ответственного (резолвится из owner_id по справочнику users) */
+  /** Owner name (resolved from owner_id via the users directory) */
   owner_name?: string
-  /** Короткое ФИО ответственного «Фамилия И.О.» — для бейджа на баре задачи */
+  /** Short owner name "Lastname I.O." — for the badge on the task bar */
   owner_short?: string
-  /** Количество активных комментариев задачи (из /planning/tasks); 0 — без бейджа */
+  /** Number of active task comments (from /planning/tasks); 0 — no badge */
   comments_count?: number
 }
 
 export interface TaskBarProps {
   timeline: TimelineCtx
   task: Task
-  /** Код проекта — показывается бейджем сразу после названия задачи */
+  /** Project code — displayed as a badge right after the task title */
   projectCode?: string
   draggable?: boolean
-  /** Границы процесса — ограничивают перетаскивание задачи */
+  /** Process bounds — restrict dragging of the task */
   groupStartDate?: string | Date | number | null
   groupEndDate?: string | Date | number | null
-  /** Справочник пользователей — имена авторов комментариев в тултипе */
+  /** Users directory — comment author names in the tooltip */
   users?: DtoUserInfo[] | null
-  /** Кэш комментариев по задаче (для лога в тултипе) */
+  /** Per-task comment cache (for the log in the tooltip) */
   commentsByTask?: Record<number, DtoCommentResponse[]> | null
 }

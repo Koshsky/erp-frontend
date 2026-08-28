@@ -1,7 +1,7 @@
 /**
- * In-memory access token (AD-05): access-токен живёт только в памяти процесса,
- * НЕ в localStorage (XSS не сможет его прочитать). После перезагрузки страницы
- * сессия восстанавливается через /auth/refresh по HttpOnly-куке.
+ * In-memory access token (AD-05): the access token lives only in process memory,
+ * NOT in localStorage (XSS cannot read it). After a page reload the session is
+ * restored via /auth/refresh using the HttpOnly cookie.
  */
 let accessToken: string | null = null
 

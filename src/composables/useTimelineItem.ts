@@ -9,20 +9,20 @@ import {
 } from './timeline-context'
 
 export interface UseTimelineItemOptions {
-  /** Текущий контекст бесконечной шкалы (reactive; читается на каждом пересчёте) */
+  /** Current infinite timeline context (reactive; read on every recompute) */
   timeline: () => TimelineCtx
-  /** Границы родителя для зажима драга */
+  /** Parent bounds for clamping the drag */
   groupStartDate?: Date | string | number | null
   groupEndDate?: Date | string | number | null
-  /** Текущий диапазон ячеек элемента (абсолютные индексы) */
+  /** Item's current cell range (absolute indices) */
   getSpan: () => CellSpan | null
-  /** Подтверждение драга: новый диапазон ячеек */
+  /** Drag commit: the new cell range */
   onCommit: (span: CellSpan) => void
 }
 
 /**
- * Общая обвязка элемента шкалы (бар/веха): инъекция скролл-контейнера и sync,
- * границы родителя, видимость в окне (±запас) и клей к useBarDrag.
+ * Shared scaffolding for a timeline item (bar/milestone): scroll container and sync
+ * injection, parent bounds, on-screen visibility (±margin) and glue to useBarDrag.
  */
 export function useTimelineItem(options: UseTimelineItemOptions) {
   const scrollEl = inject(TimelineScrollKey, null)
@@ -39,7 +39,7 @@ export function useTimelineItem(options: UseTimelineItemOptions) {
       : null,
   )
 
-  /** Элемент скрывается, если его спана не пересекает видимое окно (±запас) */
+  /** The item is hidden if its span does not intersect the visible window (±margin) */
   const visible = computed(() => {
     const span = options.getSpan()
     if (!span) return false

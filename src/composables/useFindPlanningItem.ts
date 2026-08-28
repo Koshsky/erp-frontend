@@ -1,6 +1,6 @@
 import { usePlanningStore } from '../store'
 
-/** Поиск задач/вех/процессов/проектов по дереву /planning/* (вместо разбросанных flatMap().find()) */
+/** Find tasks/milestones/processes/projects in the /planning/* tree (instead of scattered flatMap().find()) */
 export function useFindPlanningItem() {
   const planning = usePlanningStore()
 

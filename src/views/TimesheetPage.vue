@@ -18,7 +18,7 @@ const unit = ref<PlanningUnit>('day')
 const origin = ref(toDate(new Date()))
 
 const rbac = useRbacStore()
-/** «Все сотрудники» — когда видимость работников не ограничена (scope all). */
+/** "All employees" — when worker visibility is not restricted (scope all). */
 const seesAllEmployees = computed(() => rbac.perm('worker', 'view') === 'all')
 
 onMounted(async () => {
@@ -26,7 +26,7 @@ onMounted(async () => {
   await ts.loadEmployees()
 })
 
-/** Дозагрузка состояний при прокрутке/зуме (с дебаунсом) */
+/** Lazy-load states on scroll/zoom (debounced) */
 let rangeTimer: number | null = null
 function onRange(p: { startDate: string; endDate: string }) {
   if (rangeTimer != null) clearTimeout(rangeTimer)

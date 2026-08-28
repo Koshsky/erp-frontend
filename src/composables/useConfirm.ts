@@ -4,15 +4,15 @@ import type { Ref } from 'vue'
 export interface ConfirmState {
   message: string
   confirmLabel?: string
-  /** Вызывается при подтверждении (после закрытия диалога) */
+  /** Called on confirmation (after the dialog closes) */
   onConfirm: () => void
 }
 
 /**
- * Встроенный диалог подтверждения вместо window.confirm.
- * window.confirm блокируется в iframe/песочнице и возвращает false — тогда
- * обработчики удаления обрывались до отправки DELETE. ask() открывает диалог,
- * proceed() подтверждает, cancel() отменяет.
+ * Built-in confirmation dialog instead of window.confirm.
+ * window.confirm is blocked in iframe/sandbox and returns false — as a result
+ * delete handlers aborted before sending DELETE. ask() opens the dialog,
+ * proceed() confirms, cancel() cancels.
  */
 export function useConfirm() {
   const confirm: Ref<ConfirmState | null> = ref(null)

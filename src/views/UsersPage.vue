@@ -11,7 +11,7 @@ const app = useAppStore()
 const rbac = useRbacStore()
 const { adminUsers, adminUsersLoading, adminUsersError, users } = storeToRefs(app)
 
-/** Пользователи, отсортированные по ФИО */
+/** Users sorted by full name */
 const sortedUsers = computed(() => [...adminUsers.value].sort(compareByName))
 
 const ROLE_LABELS: Record<string, string> = {
@@ -24,7 +24,7 @@ const ROLE_LABELS: Record<string, string> = {
 
 const STATIC_ROLE_OPTIONS = Object.entries(ROLE_LABELS).map(([value, label]) => ({ value, label }))
 
-/** Роли из каталога /rbac/roles; fallback — статический список. */
+/** Roles from the /rbac/roles catalog; fallback — the static list. */
 const roleOptions = computed(() =>
   rbac.roles.length
     ? rbac.roles.map((r) => ({ value: r.name ?? '', label: ROLE_LABELS[r.name ?? ''] ?? r.name ?? '' }))
@@ -41,7 +41,7 @@ function roleLabel(role?: string): string {
   return role ? (ROLE_LABELS[role] ?? role) : '—'
 }
 
-// === Создание пользователя ===
+// === Creating a user ===
 const createOpen = ref(false)
 const createBusy = ref(false)
 const createError = ref<string | null>(null)
@@ -83,7 +83,7 @@ async function onCreate(values: Record<string, string | number>) {
   }
 }
 
-// === Показ сгенерированного пароля (один раз) ===
+// === Showing the generated password (once) ===
 const passwordModal = ref<{ password: string; caption: string } | null>(null)
 
 function showPassword(password: string | undefined, caption: string) {
@@ -97,7 +97,7 @@ async function onResetPassword(user: DtoAdminUserResponse) {
   showPassword(password ?? undefined, `Новый пароль для «${user.name}»`)
 }
 
-// === Смена роли ===
+// === Changing the role ===
 const roleChanging = ref(false)
 async function onChangeRole(user: DtoAdminUserResponse, event: Event) {
   const role = (event.target as HTMLSelectElement).value
@@ -107,7 +107,7 @@ async function onChangeRole(user: DtoAdminUserResponse, event: Event) {
   roleChanging.value = false
 }
 
-// === Менеджер (для подписи; редактирование — на странице структуры) ===
+// === Manager (for the label; editing is on the structure page) ===
 function managerLabel(user: DtoAdminUserResponse): string {
   if (user.manager_id == null) return '—'
   return users.value.find((u) => u.id === user.manager_id)?.name ?? `#${user.manager_id}`
@@ -166,7 +166,7 @@ onMounted(() => {
       @close="createOpen = false"
     />
 
-    <!-- Показ сгенерированного пароля -->
+    <!-- Showing the generated password -->
     <div v-if="passwordModal" class="pw-overlay" @click.self="passwordModal = null">
       <div class="pw-card">
         <div class="pw-caption">{{ passwordModal.caption }}</div>

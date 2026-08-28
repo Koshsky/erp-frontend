@@ -11,19 +11,19 @@ const props = withDefaults(defineProps<{
   projects?: DtoProject[] | null
   loading?: boolean
   error?: string | null
-  /** Якорь шкалы: ячейка с индексом 0 (начальная позиция) */
+  /** Timeline anchor: cell with index 0 (starting position) */
   origin?: Date | string
-  /** Единица ячейки: день или декада */
+  /** Cell unit: day or decade */
   unit?: PlanningUnit
-  /** Пользователи для отображения владельца (owner_id → name) в тултипах */
+  /** Users to display the owner (owner_id → name) in tooltips */
   users?: DtoUserInfo[] | null
-  /** Разрешает переупорядочивание строк (смену приоритетов) */
+  /** Allows reordering rows (changing priorities) */
   reorderable?: boolean
-  /** Проверка прав на управление проектом */
+  /** Check manage rights for a project */
   canManage?: (projectId: number) => boolean
-  /** При открытии прокрутить шкалу к этой дате (навигация с другой вкладки) */
+  /** On open, scroll the timeline to this date (navigation from another tab) */
   focusDate?: string | null
-  /** При открытии прокрутить по вертикали к группе (строке) проекта */
+  /** On open, scroll vertically to the group (project row) */
   focusGroupId?: string | number | null
 }>(), {
   projects: null,
@@ -44,7 +44,7 @@ const emit = defineEmits<{
   'header-ctxmenu': [payload: { clientX: number; clientY: number }]
   reorder: [payload: { from: number; to: number }]
   navigate: [payload: number]
-  /** Видимое окно шкалы (период «как на экране») — проброс из TimelineGrid */
+  /** Visible timeline window (the "as on screen" period) — forwarded from TimelineGrid */
   'visible-range': [payload: { from: string; to: string; cellWidthPx: number; scale: number }]
 }>()
 
@@ -61,7 +61,7 @@ const displayProjects = computed(() =>
   })),
 )
 
-/** ПКМ по пустому месту шкалы — создание проекта в позиции строки под курсором */
+/** Right-click on empty timeline space — create a project at the row position under the cursor */
 function onGridCtx(p: { clientX: number; clientY: number; date: string | null; rowIndex?: number }) {
   emit('contextmenu', {
     clientX: p.clientX,

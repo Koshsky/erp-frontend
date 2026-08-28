@@ -22,19 +22,19 @@ const props = withDefaults(defineProps<MilestoneMarkerProps>(), {
 const emit = defineEmits<{
   change: [payload: { date: string }]
   contextmenu: [payload: { clientX: number; clientY: number }]
-  /** Дабл клик по вехе — открыть редактирование */
+  /** Double click on the milestone — open editing */
   edit: []
 }>()
 
 const rootEl = ref<HTMLElement | null>(null)
 
-/** Дата вехи в формате для тултипа (локализованная) */
+/** Milestone date formatted for the tooltip (localized) */
 const formattedDate = computed(() => {
   const d = props.timeline.cellStart(cellIndexForDate(props.timeline.origin, props.timeline.unit, props.date))
   return d.toLocaleDateString('ru')
 })
 
-/** Индекс ячейки вехи */
+/** Milestone cell index */
 const idx = computed(() =>
   cellIndexForDate(props.timeline.origin, props.timeline.unit, props.date),
 )
@@ -54,7 +54,7 @@ const { visible, isDragging, cursor, previewStyle, startDrag } = useTimelineItem
   },
 })
 
-/** Позиция и флаг/луч */
+/** Position and ray flag */
 const pos = computed(() => {
   if (!visible.value) return null
   return {
