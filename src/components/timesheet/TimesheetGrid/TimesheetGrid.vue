@@ -33,6 +33,9 @@ let openTimer: ReturnType<typeof setTimeout> | null = null
 /** Active range selection (drag) */
 const selection = ref<{ employeeId: number; startIdx: number; endIdx: number } | null>(null)
 
+/** Live tooltip position — follows the cursor while selecting (assignment feedback) */
+const dragTip = ref<{ x: number; y: number } | null>(null)
+
 /** Floating panel for assigning a state */
 const panel = ref<{
   x: number
@@ -101,12 +104,44 @@ function fmtFull(iso: string): string {
   return `${d}.${m}.${y}`
 }
 
+/** Full date range of the active selection (for the live tooltip) */
+const rangeLabel = computed(() => {
+  const s = selection.value
+  if (!s || Number.isNaN(s.endIdx)) return ''
+  const lo = Math.min(s.startIdx, s.endIdx)
+  const hi = Math.max(s.startIdx, s.endIdx)
+  return `${fmtFull(fmtDate(props.t.cellStart(lo)))} — ${fmtFull(fmtDate(props.t.cellEnd(hi)))}`
+})
+
+/** Date range of the active selection a cell belongs to, for its hover tooltip */
+function selectionRangeFor(employeeId: number, idx: number): { start: string; end: string } | null {
+  const s = selection.value
+  if (!s || s.employeeId !== employeeId) return null
+  const lo = Math.min(s.startIdx, s.endIdx)
+  const hi = Math.max(s.startIdx, s.endIdx)
+  if (idx < lo || idx > hi) return null
+  return {
+    start: fmtDate(props.t.cellStart(lo)),
+    end: fmtDate(props.t.cellEnd(hi)),
+  }
+}
+
 function isSelected(employeeId: number, idx: number): boolean {
   const s = selection.value
   if (!s || s.employeeId !== employeeId) return false
   const lo = Math.min(s.startIdx, s.endIdx)
   const hi = Math.max(s.startIdx, s.endIdx)
   return idx >= lo && idx <= hi
+}
+
+/** Clamp the live tooltip position (cursor + offset) to the window boundaries */
+function dragTipStyle(): Record<string, string> {
+  const p = dragTip.value
+  if (!p) return {}
+  return {
+    left: Math.max(0, Math.min(p.x + 10, window.innerWidth - 200)) + 'px',
+    top: Math.max(0, Math.min(p.y + 10, window.innerHeight - 40)) + 'px',
+  }
 }
 
 function onPointerDown(e: PointerEvent) {
@@ -118,6 +153,7 @@ function onPointerDown(e: PointerEvent) {
   if (empId == null || Number.isNaN(idx)) return
   e.preventDefault()
   selection.value = { employeeId: empId, startIdx: idx, endIdx: idx }
+  dragTip.value = { x: e.clientX, y: e.clientY }
   document.body.style.userSelect = 'none'
   window.addEventListener('pointermove', onPointerMove)
   window.addEventListener('pointerup', onPointerUp)
@@ -132,7 +168,10 @@ function onPointerMove(e: PointerEvent) {
   // Keep the selection within the starting employee's row
   if (empId !== selection.value.employeeId) return
   const idx = Number(cell.dataset.cellIndex)
-  if (!Number.isNaN(idx)) selection.value.endIdx = idx
+  if (!Number.isNaN(idx)) {
+    selection.value.endIdx = idx
+    dragTip.value = { x: e.clientX, y: e.clientY }
+  }
 }
 
 function onPointerUp(e: PointerEvent) {
@@ -144,7 +183,10 @@ function onPointerUp(e: PointerEvent) {
   // The drag may have left a browser selection anchor — clear it so a click outside the panel
   // does not "stretch" text between clicks
   window.getSelection()?.removeAllRanges()
-  if (!s || Number.isNaN(s.endIdx)) return
+  if (!s || Number.isNaN(s.endIdx)) {
+    dragTip.value = null
+    return
+  }
   const lo = Math.min(s.startIdx, s.endIdx)
   const hi = Math.max(s.startIdx, s.endIdx)
   const payload = {
@@ -158,6 +200,7 @@ function onPointerUp(e: PointerEvent) {
   if (openTimer) {
     clearTimeout(openTimer)
     openTimer = null
+    dragTip.value = null
     return
   }
   // Show the selection immediately, the panel after a delay (to distinguish a double-click)
@@ -165,6 +208,8 @@ function onPointerUp(e: PointerEvent) {
   openTimer = setTimeout(() => {
     openTimer = null
     panel.value = payload
+    // The panel head shows the range — hide the live tooltip
+    dragTip.value = null
   }, OPEN_DELAY_MS)
 }
 
@@ -196,6 +241,7 @@ function closePanel() {
   }
   panel.value = null
   selection.value = null
+  dragTip.value = null
   // Remove the browser selection left after a drag/click outside the panel
   window.getSelection()?.removeAllRanges()
 }
@@ -218,6 +264,7 @@ function onDblClick() {
   }
   panel.value = null
   selection.value = null
+  dragTip.value = null
 }
 
 function onKeydown(e: KeyboardEvent) {
@@ -233,6 +280,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('pointerup', onPointerUp)
   window.removeEventListener('resize', clampPanel)
   document.body.style.userSelect = ''
+  dragTip.value = null
 })
 
 /** The visible date range — signal to load more states (on scroll/zoom) */
@@ -297,6 +345,7 @@ const labelsH = computed(() => props.employees.length * ROW_H)
             :state="stateForDay(emp.id ?? 0, isoFor(i)) ?? null"
             :is-weekend="isWeekend(i)"
             :selected="isSelected(emp.id ?? 0, i)"
+            :selection-range="selectionRangeFor(emp.id ?? 0, i)"
             :show-text="t.cellPx >= 40"
           />
         </div>
@@ -304,6 +353,16 @@ const labelsH = computed(() => props.employees.length * ROW_H)
     </div>
 
     <p v-if="error" class="ts-error">{{ error }}</p>
+
+    <!-- Live tooltip: date range of the fragment being selected (follows the cursor) -->
+    <div
+      v-if="dragTip && selection && !panel"
+      class="ts-range-tip"
+      :style="dragTipStyle()"
+      aria-hidden="true"
+    >
+      {{ rangeLabel }}
+    </div>
 
     <!-- Floating panel for assigning a state to the selected range -->
     <Teleport to="body">
@@ -409,6 +468,22 @@ const labelsH = computed(() => props.employees.length * ROW_H)
   margin: 10px 0 0;
   font-size: 13px;
   color: #d93025;
+}
+
+/* Live selection tooltip: same look as the regular popovers, but fixed at the cursor */
+.ts-range-tip {
+  position: fixed;
+  background: #fff;
+  color: #333;
+  font-size: 12px;
+  line-height: 1.45;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid #e0e0e0;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 900;
 }
 
 .ts-overlay {

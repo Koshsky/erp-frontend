@@ -9,4 +9,6 @@ export interface TimesheetCellProps {
   selected?: boolean
   /** Whether to show the state code (wide cells) */
   showText?: boolean
+  /** Date range of the active selection this cell belongs to (assignment tooltip) */
+  selectionRange?: { start: string; end: string } | null
 }

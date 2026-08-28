@@ -10,6 +10,7 @@ const props = withDefaults(defineProps<TimesheetCellProps>(), {
   isWeekend: false,
   selected: false,
   showText: false,
+  selectionRange: null,
 })
 
 const bg = computed<string>(() => {
@@ -24,6 +25,11 @@ function fmtDM(iso?: string): string {
   if (!iso) return ''
   const [, m, d] = iso.split('-')
   return `${d}.${m}`
+}
+
+function fmtFull(iso: string): string {
+  const [y, m, d] = iso.split('-')
+  return `${d}.${m}.${y}`
 }
 
 /** Colored state marker (no marker for an empty day) */
@@ -52,7 +58,19 @@ const emptyLabel = computed(() => (props.isWeekend ? 'Выходной' : 'Ра�
       <span v-if="showText && state" class="tsc-code">{{ state.state_code }}</span>
     </div>
     <template #popup>
-      <InfoTooltip :title="state ? state.state_name : emptyLabel" :lines="state ? [period] : []" :marker="marker" />
+      <!-- While the cell is part of an active selection, show the fragment date
+           range instead of the per-day info (assignment feedback) -->
+      <InfoTooltip
+        v-if="selectionRange"
+        title="Выделенный фрагмент"
+        :lines="[`${fmtFull(selectionRange.start)} — ${fmtFull(selectionRange.end)}`]"
+      />
+      <InfoTooltip
+        v-else
+        :title="state ? state.state_name : emptyLabel"
+        :lines="state ? [period] : []"
+        :marker="marker"
+      />
     </template>
   </TooltipCell>
 </template>
