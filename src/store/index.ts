@@ -2065,6 +2065,9 @@ export const usePlanningStore = defineStore('planning', () => {
         list.push(dto)
         commentsByTask.value[taskId] = [...list]
       }
+      // Keep the task-bar comment badge in sync with the comment list
+      const task = findTaskRow(taskId)
+      if (task) task.comments_count = (task.comments_count ?? 0) + 1
       return true
     } catch (e: any) {
       commentsError.value = e?.message || String(e)
@@ -2079,6 +2082,9 @@ export const usePlanningStore = defineStore('planning', () => {
       await new TasksApi(apiConfig()).taskIdCommentsCommentIdDelete(taskId, commentId)
       const list = commentsByTask.value[taskId]
       if (list) commentsByTask.value[taskId] = list.filter((c) => c.id !== commentId)
+      // Keep the task-bar comment badge in sync (floor at 0 in case of drift)
+      const task = findTaskRow(taskId)
+      if (task) task.comments_count = Math.max(0, (task.comments_count ?? 0) - 1)
       return true
     } catch (e: any) {
       commentsError.value = e?.message || String(e)
