@@ -7,11 +7,14 @@ import { toDate } from '../../../calendar'
 
 const props = withDefaults(defineProps<ProcessGanttProps>(), {
   canManage: true,
+  reorderable: false,
 })
 
 const emit = defineEmits<{
   change: [payload: { id: number; start_date: string; end_date: string }]
   contextmenu: [payload: { clientX: number; clientY: number; date: string; rowIndex: number; projectId?: number; processId?: number }]
+  /** Vertical row drag: the process moved from index `from` to index `to` */
+  reorder: [payload: { from: number; to: number }]
   /** Single click on a process bar — switch to that process's tasks tab */
   navigate: [payload: number]
 }>()
@@ -43,7 +46,9 @@ function onBarContextMenu(p: { clientX: number; clientY: number }, id: number) {
     :groupId="projectId"
     :minLabelHeight="MIN_LABEL_HEIGHT"
     :minRows="3"
+    :reorderable="reorderable"
     mergedLabel
+    @reorder="(p) => emit('reorder', p)"
   >
     <template #label>
       <div v-if="projectCode" class="pg-code">{{ projectCode }}</div>

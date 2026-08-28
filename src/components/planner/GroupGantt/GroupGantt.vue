@@ -75,13 +75,29 @@ function fmt(d: string | Date | number | null | undefined): string {
   <div ref="groupEl" class="gg-group" :data-group="groupId ?? ''" :data-rows="displayCount" :style="{ minHeight: mergedHeight }">
     <div v-if="overlayStyle" class="gg-overlay" :style="overlayStyle" />
 
-    <!-- Merged group label (object code + process): sticky left, full height -->
+    <!-- Merged group label (object code + process): sticky left, full height.
+         When reorderable — a per-row drag handle (one per row band). -->
     <div
       v-if="mergedLabel"
       class="gg-merged"
       :style="{ height: mergedHeight, marginBottom: '-' + mergedHeight }"
     >
       <slot name="label" />
+      <template v-if="reorderable">
+        <TooltipCell
+          v-for="i in displayCount"
+          :key="'gh' + i"
+          class="row-handle gg-merged-handle"
+          :class="{ 'is-grabbing': rowDragCursor && draggingFrom === i - 1 }"
+          :style="{ top: (i - 1) * rowHeight + 'px', height: rowHeight + 'px' }"
+          :multiline="true"
+          @pointerdown.stop="startRowDrag($event, i - 1)"
+        >⠿
+          <template #popup>
+            <InfoTooltip :lines="['Перетащить для изменения порядка']" />
+          </template>
+        </TooltipCell>
+      </template>
     </div>
 
     <template v-for="(item, index) in items" :key="'gi' + item.id">
@@ -93,9 +109,9 @@ function fmt(d: string | Date | number | null | undefined): string {
             :class="{ 'is-grabbing': rowDragCursor && draggingFrom === index }"
             :multiline="true"
             @pointerdown.stop="startRowDrag($event, index)"
-          >⠿
+          >&⠿
             <template #popup>
-              <InfoTooltip :lines="['Перетащить для смены приоритета']" />
+              <InfoTooltip :lines="['Перетащить для изменения порядка']" />
             </template>
           </TooltipCell>
           <slot name="row" :item="item" :index="index">
@@ -211,6 +227,10 @@ function fmt(d: string | Date | number | null | undefined): string {
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
+}
+/* Merge-label variant: one handle per row band (position/size from the row) */
+.gg-merged-handle {
+  box-sizing: border-box;
 }
 .row-handle:hover {
   color: #1a73e8;

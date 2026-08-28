@@ -2083,6 +2083,90 @@ export const usePlanningStore = defineStore('planning', () => {
     return true
   }
 
+  /** Reorders the processes of one project (row drag): renumbers the order
+   *  values locally and sends the complete ordered id list to /process/order.
+   *  Offline (desktop) — the reorder is queued; on any other error the data is
+   *  silently reloaded (server order wins). */
+  async function reorderProcesses(projectId: number, from: number, to: number): Promise<boolean> {
+    const project = processPlanning.value?.projects?.find((p: any) => p.id === projectId)
+    const list = project?.processes
+    if (!Array.isArray(list) || from === to) return true
+    if (from < 0 || from >= list.length || to < 0 || to >= list.length) return false
+    const moved = list.splice(from, 1)[0]
+    list.splice(to, 0, moved)
+    list.forEach((p: any, i: number) => {
+      p.order = i + 1
+    })
+    const ids = list.map((p: any) => p.id)
+
+    try {
+      await new ProcessesApi(apiConfig()).processOrderPut({ project_id: projectId, ids })
+    } catch (e: any) {
+      const err = e as AxiosError
+      if (err?.config && isElectron && isNetworkError(e)) {
+        try {
+          await enqueueMutation({
+            entity: 'reorder',
+            method: (err.config.method ?? 'put') as Method,
+            url: axios.getUri(err.config),
+            body: { project_id: projectId, ids },
+          })
+        } catch {
+          error.value = e?.message ?? String(e)
+          await loadProcessPlanning(true)
+          return false
+        }
+        return true
+      }
+      error.value = e.message || String(e)
+      await loadProcessPlanning(true)
+      return false
+    }
+    return true
+  }
+
+  /** Reorders the tasks of one process (row drag): renumbers the order values
+   *  locally and sends the complete ordered id list to /task/order.
+   *  Offline (desktop) — the reorder is queued; on any other error the data is
+   *  silently reloaded (server order wins). */
+  async function reorderTasks(processId: number, from: number, to: number): Promise<boolean> {
+    const process = taskPlanning.value?.processes?.find((p: any) => p.id === processId)
+    const list = process?.tasks
+    if (!Array.isArray(list) || from === to) return true
+    if (from < 0 || from >= list.length || to < 0 || to >= list.length) return false
+    const moved = list.splice(from, 1)[0]
+    list.splice(to, 0, moved)
+    list.forEach((t: any, i: number) => {
+      t.order = i + 1
+    })
+    const ids = list.map((t: any) => t.id)
+
+    try {
+      await new TasksApi(apiConfig()).taskOrderPut({ process_id: processId, ids })
+    } catch (e: any) {
+      const err = e as AxiosError
+      if (err?.config && isElectron && isNetworkError(e)) {
+        try {
+          await enqueueMutation({
+            entity: 'reorder',
+            method: (err.config.method ?? 'put') as Method,
+            url: axios.getUri(err.config),
+            body: { process_id: processId, ids },
+          })
+        } catch {
+          error.value = e?.message ?? String(e)
+          await loadTaskPlanning(true)
+          return false
+        }
+        return true
+      }
+      error.value = e.message || String(e)
+      await loadTaskPlanning(true)
+      return false
+    }
+    return true
+  }
+
   // === Task comments ===
   /** Loads a task's comments into the cache by task_id.
    *  - fresh (default) — always request online (opening the modal);
@@ -2182,6 +2266,8 @@ export const usePlanningStore = defineStore('planning', () => {
     removeResource,
     taskOwnerIds,
     reorderProjects,
+    reorderProcesses,
+    reorderTasks,
     loadTaskComments,
     createTaskComment,
     deleteTaskComment,

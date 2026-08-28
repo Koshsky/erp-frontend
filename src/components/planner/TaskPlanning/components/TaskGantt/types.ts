@@ -24,6 +24,8 @@ export interface TaskGanttProps {
   groupEndDate?: string | Date | number | null
   /** Allows modifying tasks and milestones: moving dates, editing, deleting */
   canManage?: boolean
+  /** Enables vertical row drag to reorder the tasks of the process */
+  reorderable?: boolean
   /** Users directory — comment author names in task tooltips */
   users?: DtoUserInfo[] | null
   /** Per-task comment cache (for the log in the tooltip) */

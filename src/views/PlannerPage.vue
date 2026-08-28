@@ -407,7 +407,8 @@ const processesByPriority = computed(() => {
   return [...list].sort((a, b) => {
     const pa = prio.get(a.project_id ?? -1) ?? Number.MAX_SAFE_INTEGER
     const pb = prio.get(b.project_id ?? -1) ?? Number.MAX_SAFE_INTEGER
-    return pa - pb || (a.id ?? 0) - (b.id ?? 0)
+    // Same project priority — processes keep their per-project order
+    return pa - pb || (a.order ?? a.id ?? 0) - (b.order ?? b.id ?? 0)
   })
 })
 
@@ -466,6 +467,7 @@ const taskGroups = computed<PdfGanttGroup[]>(() =>
       :origin="origin"
       :unit="unit"
       :can-manage="canManageTasks"
+      :reorderable="canManageTasks"
       :focus-date="focusDate"
       :focus-group-id="focusGroupId"
       :comments-by-task="planning.commentsByTask"
@@ -473,6 +475,7 @@ const taskGroups = computed<PdfGanttGroup[]>(() =>
       @milestone-change="(p) => planning.updateMilestoneDate(p.id, p.date)"
       @contextmenu="onContextMenu"
       @header-ctxmenu="onHeaderCtx"
+      @reorder="(p) => void planning.reorderTasks(p.processId, p.from, p.to)"
       @milestone-edit="openMilestoneEdit"
       @visible-range="onVisibleRange"
       @open-comments="openComments"

@@ -203,6 +203,10 @@ export interface DtoDetailedProcess {
     'end_date'?: string;
     'id'?: number;
     'milestones'?: Array<DtoMilestone>;
+    /**
+     * Order of the process within its project (ascending display order).
+     */
+    'order'?: number;
     'owner_id'?: number;
     'project_code'?: string;
     'project_id'?: number;
@@ -226,6 +230,10 @@ export interface DtoDetailedTask {
     'comments_count'?: number;
     'end_date'?: string;
     'id'?: number;
+    /**
+     * Order of the task within its process (ascending display order).
+     */
+    'order'?: number;
     'owner_id'?: number;
     'process_id'?: number;
     'resources'?: Array<DtoResource>;
@@ -268,6 +276,10 @@ export interface DtoPermission {
 export interface DtoProcess {
     'end_date'?: string;
     'id'?: number;
+    /**
+     * Order of the process within its project (ascending display order).
+     */
+    'order'?: number;
     'owner_id'?: number;
     'project_code'?: string;
     'project_id'?: number;
@@ -280,6 +292,10 @@ export interface DtoProcessPlanning {
 export interface DtoProcessResponse {
     'end_date'?: string;
     'id'?: number;
+    /**
+     * Order of the process within its project (ascending display order).
+     */
+    'order'?: number;
     'owner_id'?: number;
     'project_id'?: number;
     'start_date'?: string;
@@ -308,6 +324,14 @@ export interface DtoProjectResponse {
     'owner_id'?: number;
     'priority'?: number;
     'start_date'?: string;
+}
+export interface DtoReorderProcessRequest {
+    'ids'?: Array<number>;
+    'project_id'?: number;
+}
+export interface DtoReorderTaskRequest {
+    'ids'?: Array<number>;
+    'process_id'?: number;
 }
 export interface DtoResetPasswordResponse {
     'password'?: string;
@@ -407,6 +431,10 @@ export interface DtoTaskPlanning {
 export interface DtoTaskResponse {
     'end_date'?: string;
     'id'?: number;
+    /**
+     * Order of the task within its process (ascending display order).
+     */
+    'order'?: number;
     'owner_id'?: number;
     'process_id'?: number;
     'start_date'?: string;
@@ -2436,6 +2464,44 @@ export const ProcessesApiAxiosParamCreator = function (configuration?: Configura
             };
         },
         /**
+         * Rewrite the order of all active processes of a project (the request carries the complete ordered id list)
+         * @summary Reorder processes
+         * @param {DtoReorderProcessRequest} order New process order
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        processOrderPut: async (order: DtoReorderProcessRequest, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'order' is not null or undefined
+            assertParamExists('processOrderPut', 'order', order)
+            const localVarPath = `/process/order`;
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'PUT', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication ApiKeyAuth required
+            await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
+
+            localVarHeaderParameter['Content-Type'] = 'application/json';
+            localVarHeaderParameter['Accept'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+            localVarRequestOptions.data = serializeDataIfNeeded(order, localVarRequestOptions, configuration)
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
          * Create a new process
          * @summary Create process
          * @param {DtoCreateProcessRequest} process Process data
@@ -2538,6 +2604,19 @@ export const ProcessesApiFp = function(configuration?: Configuration) {
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
+         * Rewrite the order of all active processes of a project (the request carries the complete ordered id list)
+         * @summary Reorder processes
+         * @param {DtoReorderProcessRequest} order New process order
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async processOrderPut(order: DtoReorderProcessRequest, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<void>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.processOrderPut(order, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['ProcessesApi.processOrderPut']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
          * Create a new process
          * @summary Create process
          * @param {DtoCreateProcessRequest} process Process data
@@ -2603,6 +2682,16 @@ export const ProcessesApiFactory = function (configuration?: Configuration, base
             return localVarFp.processIdPut(id, body, options).then((request) => request(axios, basePath));
         },
         /**
+         * Rewrite the order of all active processes of a project (the request carries the complete ordered id list)
+         * @summary Reorder processes
+         * @param {DtoReorderProcessRequest} order New process order
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        processOrderPut(order: DtoReorderProcessRequest, options?: RawAxiosRequestConfig): AxiosPromise<void> {
+            return localVarFp.processOrderPut(order, options).then((request) => request(axios, basePath));
+        },
+        /**
          * Create a new process
          * @summary Create process
          * @param {DtoCreateProcessRequest} process Process data
@@ -2664,6 +2753,17 @@ export class ProcessesApi extends BaseAPI {
      */
     public processIdPut(id: number, body: DtoUpdateProcessRequest, options?: RawAxiosRequestConfig) {
         return ProcessesApiFp(this.configuration).processIdPut(id, body, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * Rewrite the order of all active processes of a project (the request carries the complete ordered id list)
+     * @summary Reorder processes
+     * @param {DtoReorderProcessRequest} order New process order
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    public processOrderPut(order: DtoReorderProcessRequest, options?: RawAxiosRequestConfig) {
+        return ProcessesApiFp(this.configuration).processOrderPut(order, options).then((request) => request(this.axios, this.basePath));
     }
 
     /**
@@ -4431,6 +4531,44 @@ export const TasksApiAxiosParamCreator = function (configuration?: Configuration
             };
         },
         /**
+         * Rewrite the order of all active tasks of a process (the request carries the complete ordered id list)
+         * @summary Reorder tasks
+         * @param {DtoReorderTaskRequest} order New task order
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        taskOrderPut: async (order: DtoReorderTaskRequest, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'order' is not null or undefined
+            assertParamExists('taskOrderPut', 'order', order)
+            const localVarPath = `/task/order`;
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'PUT', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication ApiKeyAuth required
+            await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
+
+            localVarHeaderParameter['Content-Type'] = 'application/json';
+            localVarHeaderParameter['Accept'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+            localVarRequestOptions.data = serializeDataIfNeeded(order, localVarRequestOptions, configuration)
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
          * Create a new task
          * @summary Create a new task
          * @param {DtoCreateTaskRequest} task Task
@@ -4574,6 +4712,19 @@ export const TasksApiFp = function(configuration?: Configuration) {
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
+         * Rewrite the order of all active tasks of a process (the request carries the complete ordered id list)
+         * @summary Reorder tasks
+         * @param {DtoReorderTaskRequest} order New task order
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async taskOrderPut(order: DtoReorderTaskRequest, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<void>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.taskOrderPut(order, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['TasksApi.taskOrderPut']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
          * Create a new task
          * @summary Create a new task
          * @param {DtoCreateTaskRequest} task Task
@@ -4669,6 +4820,16 @@ export const TasksApiFactory = function (configuration?: Configuration, basePath
          */
         taskIdPut(id: number, task: DtoUpdateTaskRequest, options?: RawAxiosRequestConfig): AxiosPromise<TaskPost201Response> {
             return localVarFp.taskIdPut(id, task, options).then((request) => request(axios, basePath));
+        },
+        /**
+         * Rewrite the order of all active tasks of a process (the request carries the complete ordered id list)
+         * @summary Reorder tasks
+         * @param {DtoReorderTaskRequest} order New task order
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        taskOrderPut(order: DtoReorderTaskRequest, options?: RawAxiosRequestConfig): AxiosPromise<void> {
+            return localVarFp.taskOrderPut(order, options).then((request) => request(axios, basePath));
         },
         /**
          * Create a new task
@@ -4767,6 +4928,17 @@ export class TasksApi extends BaseAPI {
      */
     public taskIdPut(id: number, task: DtoUpdateTaskRequest, options?: RawAxiosRequestConfig) {
         return TasksApiFp(this.configuration).taskIdPut(id, task, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * Rewrite the order of all active tasks of a process (the request carries the complete ordered id list)
+     * @summary Reorder tasks
+     * @param {DtoReorderTaskRequest} order New task order
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    public taskOrderPut(order: DtoReorderTaskRequest, options?: RawAxiosRequestConfig) {
+        return TasksApiFp(this.configuration).taskOrderPut(order, options).then((request) => request(this.axios, this.basePath));
     }
 
     /**

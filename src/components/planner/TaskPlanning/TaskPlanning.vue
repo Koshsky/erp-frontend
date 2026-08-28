@@ -29,6 +29,8 @@ const props = withDefaults(defineProps<{
   unit?: PlanningUnit
   /** Allows modifying tasks and milestones: moving dates, editing, deleting */
   canManage?: boolean
+  /** Enables vertical row drag to reorder tasks within each process */
+  reorderable?: boolean
   /** Users to display the owner (owner_id → name) in tooltips */
   users?: DtoUserInfo[] | null
   /** On open, scroll the timeline to this date (navigation from another tab) */
@@ -47,6 +49,7 @@ const props = withDefaults(defineProps<{
   origin: '',
   unit: 'day',
   canManage: true,
+  reorderable: false,
   users: null,
   focusDate: null,
   focusGroupId: null,
@@ -59,6 +62,8 @@ const emit = defineEmits<{
   contextmenu: [payload: { clientX: number; clientY: number; date: string | null; rowIndex: number; processId?: number; taskId?: number; milestoneId?: number }]
   'header-ctxmenu': [payload: { clientX: number; clientY: number }]
   'milestone-edit': [payload: number]
+  /** Vertical row drag: a task moved within its process group */
+  reorder: [payload: { processId: number; from: number; to: number }]
   /** Visible timeline window (the "as on screen" period) — forwarded from TimelineGrid */
   'visible-range': [payload: { from: string; to: string; cellWidthPx: number; scale: number }]
   /** Click on a task bar — open its comments */
@@ -71,7 +76,8 @@ const emit = defineEmits<{
 const dragPreview = ref<DragPreviewState>({ active: false, taskId: null, startDate: null, endDate: null })
 provideDragPreview(dragPreview)
 
-/** Map the DTO (from /planning/tasks) into internal types. Tasks are sorted alphabetically. */
+/** Map the DTO (from /planning/tasks) into internal types. Tasks are sorted by
+ *  their per-process order (fallback: id). */
 const userById = computed(() => new Map((props.users || []).map((u) => [u.id ?? 0, u])))
 
 const displayProcesses = computed<Process[]>(() =>
@@ -82,7 +88,7 @@ const displayProcesses = computed<Process[]>(() =>
     end_date: dto.end_date ?? '',
     project_code: dto.project_code ?? '',
     tasks: [...(dto.tasks || [])]
-      .sort((a, b) => (a.title || '').localeCompare(b.title || '', 'ru'))
+      .sort((a, b) => (a.order ?? a.id ?? 0) - (b.order ?? b.id ?? 0))
       .map((t) => {
         const owner = t.owner_id != null ? userById.value.get(t.owner_id) : undefined
         return {
@@ -218,11 +224,13 @@ function onGridCtx(p: { clientX: number; clientY: number; date: string | null; r
           :groupStartDate="proc.start_date"
           :groupEndDate="proc.end_date"
           :can-manage="canManage"
+          :reorderable="reorderable"
           :users="users"
           :comments-by-task="commentsByTask"
           @change="(p) => emit('change', p)"
           @milestone-change="(p) => emit('milestone-change', p)"
           @contextmenu="(p) => emit('contextmenu', p)"
+          @reorder="(p) => emit('reorder', { processId: proc.id, ...p })"
           @milestone-edit="(id) => emit('milestone-edit', id)"
           @open-comments="(id) => emit('open-comments', id)"
           @request-comments="(id) => emit('request-comments', id)"

@@ -9,6 +9,7 @@ import { toDate } from '../../../calendar'
 
 const props = withDefaults(defineProps<TaskGanttProps>(), {
   canManage: true,
+  reorderable: false,
   users: null,
   commentsByTask: null,
 })
@@ -18,6 +19,8 @@ const emit = defineEmits<{
   'milestone-change': [payload: { id: number; date: string }]
   contextmenu: [payload: { clientX: number; clientY: number; date: string; rowIndex: number; processId?: number; taskId?: number; milestoneId?: number }]
   'milestone-edit': [payload: number]
+  /** Vertical row drag: a task moved within its process group */
+  reorder: [payload: { from: number; to: number }]
   'open-comments': [payload: number]
   /** Task tooltip opened — lazy-load the comments (cache) */
   'request-comments': [payload: number]
@@ -61,7 +64,9 @@ function onMilestoneEdit(id: number) {
       :groupId="processId"
       :minLabelHeight="MS_MIN_LABEL_HEIGHT"
       :minRows="3"
+      :reorderable="reorderable"
       mergedLabel
+      @reorder="(p) => emit('reorder', p)"
     >
       <template #label>
         <div v-if="projectCode" class="gl-code">{{ projectCode }}</div>

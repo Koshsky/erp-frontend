@@ -222,11 +222,13 @@ onMounted(() => {
       :origin="origin"
       :unit="unit"
       :can-manage="canManageProcesses"
+      :reorderable="canManageProcesses"
       :focus-date="focusDate"
       :focus-group-id="focusGroupId"
       @change="(p) => store.updateProcessDates(p.id, p.start_date, p.end_date)"
       @contextmenu="onContextMenu"
       @header-ctxmenu="onHeaderCtx"
+      @reorder="(p) => void store.reorderProcesses(p.projectId, p.from, p.to)"
       @navigate="goToTasks"
       @visible-range="onVisibleRange"
     />

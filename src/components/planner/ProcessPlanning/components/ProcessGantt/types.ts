@@ -8,6 +8,8 @@ export interface ProcessItem {
   owner_id?: number
   owner_name?: string
   project_id?: number
+  /** Order of the process within the project (ascending display order) */
+  order?: number
 }
 
 export interface ProcessGanttProps {
@@ -20,4 +22,6 @@ export interface ProcessGanttProps {
   groupEndDate?: string | Date | number | null
   /** Allows modifying processes: moving dates, editing, deleting */
   canManage?: boolean
+  /** Enables vertical row drag to reorder the processes of the project */
+  reorderable?: boolean
 }

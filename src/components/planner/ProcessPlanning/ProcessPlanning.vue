@@ -19,6 +19,8 @@ const props = withDefaults(defineProps<{
   users?: DtoUserInfo[] | null
   /** Allows modifying processes: moving dates, editing, deleting */
   canManage?: boolean
+  /** Enables vertical row drag to reorder processes within each project */
+  reorderable?: boolean
   /** On open, scroll the timeline to this date (navigation from another tab) */
   focusDate?: string | null
   /** On open, scroll vertically to the group (project row) */
@@ -31,6 +33,7 @@ const props = withDefaults(defineProps<{
   unit: 'day',
   users: null,
   canManage: true,
+  reorderable: false,
   focusDate: null,
   focusGroupId: null,
 })
@@ -39,6 +42,8 @@ const emit = defineEmits<{
   change: [payload: { id: number; start_date: string; end_date: string }]
   contextmenu: [payload: { clientX: number; clientY: number; date: string | null; rowIndex: number; projectId?: number; processId?: number }]
   'header-ctxmenu': [payload: { clientX: number; clientY: number }]
+  /** Vertical row drag: a process moved within its project group */
+  reorder: [payload: { projectId: number; from: number; to: number }]
   navigate: [payload: number]
   /** Visible timeline window (the "as on screen" period) — forwarded from TimelineGrid */
   'visible-range': [payload: { from: string; to: string; cellWidthPx: number; scale: number }]
@@ -46,7 +51,8 @@ const emit = defineEmits<{
 
 const userNames = computed(() => new Map((props.users || []).map((u) => [u.id, u.name])))
 
-/** Map the DTO (from /planning/processes) into the internal type. Processes are sorted alphabetically. */
+/** Map the DTO (from /planning/processes) into the internal type. Processes are
+ *  sorted by their per-project order (fallback: id). */
 const displayProjects = computed(() =>
   (props.projects || []).map((dto) => ({
     id: dto.id ?? 0,
@@ -55,7 +61,7 @@ const displayProjects = computed(() =>
     end_date: dto.end_date ?? '',
     priority: dto.priority,
     processes: [...(dto.processes || [])]
-      .sort((a, b) => (a.title || '').localeCompare(b.title || '', 'ru'))
+      .sort((a, b) => (a.order ?? a.id ?? 0) - (b.order ?? b.id ?? 0))
       .map((p) => ({
         id: p.id ?? 0,
         title: p.title ?? '',
@@ -64,6 +70,7 @@ const displayProjects = computed(() =>
         owner_id: p.owner_id,
         owner_name: p.owner_id != null ? userNames.value.get(p.owner_id) : undefined,
         project_id: p.project_id,
+        order: p.order,
       })),
   })),
 )
@@ -96,8 +103,10 @@ function onGridCtx(p: { clientX: number; clientY: number; date: string | null; r
           :groupStartDate="project.start_date"
           :groupEndDate="project.end_date"
           :can-manage="canManage"
+          :reorderable="reorderable"
           @change="(p) => emit('change', p)"
           @contextmenu="(p) => emit('contextmenu', p)"
+          @reorder="(p) => emit('reorder', { projectId: project.id, ...p })"
           @navigate="(id) => emit('navigate', id)"
         />
       </template>
