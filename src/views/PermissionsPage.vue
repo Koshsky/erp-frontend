@@ -38,6 +38,7 @@ const RESOURCE_LABELS: Record<string, string> = {
   resource: 'ресурсов табеля',
   worker: 'сотрудников',
   user_catalog: 'каталога пользователей',
+  user_admin: 'пользователей',
   rbac_config: 'настроек администрирования',
 }
 
@@ -52,6 +53,7 @@ const ENTITY_NAMES: Record<string, string> = {
   resource: 'Ресурсы табеля',
   worker: 'Сотрудники',
   user_catalog: 'Каталог пользователей',
+  user_admin: 'Пользователи (администрирование)',
   rbac_config: 'Настройки администрирования',
 }
 
@@ -124,6 +126,10 @@ const SCOPE_OPTIONS: Record<string, { value: string; label: string }[]> = {
     { value: 'none', label: 'Нет доступа' },
     { value: 'all', label: 'Доступен' },
   ],
+  user_admin: [
+    { value: 'none', label: 'Нет доступа' },
+    { value: 'all', label: 'Доступен' },
+  ],
   rbac_config: [
     { value: 'none', label: 'Нет доступа' },
     { value: 'all', label: 'Доступен' },
@@ -134,7 +140,7 @@ const SCOPE_OPTIONS: Record<string, { value: string; label: string }[]> = {
 const GROUPS = [
   { key: 'planning', title: 'Планирование', resources: ['project', 'process', 'task', 'milestone', 'assignment'] },
   { key: 'timesheet', title: 'Табель', resources: ['state', 'resource', 'worker'] },
-  { key: 'advanced', title: 'Дополнительные ресурсы', resources: ['user_catalog', 'rbac_config'] },
+  { key: 'advanced', title: 'Дополнительные ресурсы', resources: ['user_catalog', 'user_admin', 'rbac_config'] },
 ] as const
 
 const ACTIONS = ['view', 'create', 'update', 'delete'] as const

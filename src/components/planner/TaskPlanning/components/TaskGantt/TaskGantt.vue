@@ -25,6 +25,8 @@ const emit = defineEmits<{
   'edit': [payload: number]
   /** Task tooltip opened — lazy-load the comments (cache) */
   'request-comments': [payload: number]
+  /** Click on the comments badge - open the comments panel */
+  'open-comments': [payload: number]
 }>()
 
 const groupItems = computed(() => props.tasks)
@@ -92,6 +94,7 @@ function onMilestoneEdit(id: number) {
           @contextmenu="(p) => onBarContextMenu(p, item.id)"
           @edit="(id) => emit('edit', id)"
           @request-comments="(id) => emit('request-comments', id)"
+          @open-comments="(id) => emit('open-comments', id)"
         />
       </template>
     </GroupGantt>

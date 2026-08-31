@@ -141,7 +141,7 @@ export function buildPullSteps(): PullStep[] {
     steps.push({
       name: 'employees',
       path: apiPath('/user'),
-      keyPredicate: (key) => /\brole=worker\b/.test(key),
+      keyPredicate: (key) => /\blimit=50\b/.test(key),
       refresh: () => ts.refreshEmployees(),
     })
     // Timesheet periods are per-employee, date-windowed: staleness cannot be

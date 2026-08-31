@@ -44,6 +44,8 @@ const emit = defineEmits<{
   'edit': [payload: number]
   /** Tooltip opened on a task with comments — lazy-load them (cache) */
   'request-comments': [payload: number]
+  /** Click on the comments badge (bubble + counter) - open the comments panel */
+  'open-comments': [payload: number]
 }>()
 
 /** Tooltip rows: owner (if assigned) + date range */
@@ -208,7 +210,7 @@ watch(
           :style="r.color ? { background: r.color } : undefined"
         >{{ badgeLabel(r) }}×{{ r.quantity }}</span>
       </span>
-      <span v-if="hasComments" class="tb-comments" :title="`Комментарии: ${task.comments_count}`">
+      <span v-if="hasComments" class="tb-comments" :title="`Комментарии: ${task.comments_count}`" @pointerdown.stop @click.stop="emit('open-comments', task.id)">
         <svg
           width="11"
           height="11"
@@ -230,7 +232,7 @@ watch(
         :title="task.title"
         :accent="color || task.color || 'var(--ui-gantt-task)'"
         :rows="tooltipRows(dateRange)"
-        :resources="(task.resources || []).map((r) => ({ label: r.title || r.code, quantity: r.quantity }))"
+        :resources="(task.resources || []).map((r) => ({ label: r.title || r.code, quantity: r.quantity, color: r.color }))"
         :comments="tooltipComments"
       />
     </template>
@@ -316,7 +318,7 @@ watch(
 .tb-badges.is-stacked .tb-badge:first-child {
   margin-left: 0;
 }
-/* Comments badge: dialog bubble + counter; does not interfere with dragging */
+/* Comments badge: dialog bubble + counter; a click opens the comments panel */
 .tb-comments {
   flex-shrink: 0;
   display: inline-flex;
@@ -331,6 +333,10 @@ watch(
   border-radius: 10px;
   padding: 0 7px;
   white-space: nowrap;
-  pointer-events: none;
+  cursor: pointer;
+}
+/* Hover over the comments badge: highlight so it reads as clickable */
+.tb-comments:hover {
+  background: var(--ui-accent);
 }
 </style>

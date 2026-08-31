@@ -3,7 +3,7 @@ import { ref, computed, onScopeDispose } from 'vue'
 import axios, { type AxiosError, type Method } from 'axios'
 import { AuthApi, ProjectsApi, ProcessesApi, TasksApi, TimesheetResourcesApi, TimesheetCalendarApi, TimesheetStatesApi, PlanningApi, MilestonesApi, UsersApi, AssignmentsApi, AutoCreateApi, RBACApi, PermissionsApi, Configuration } from '@/api'
 import type { DtoUserInfo, DtoProject, DtoResourceResponse, DtoResourceCalendar, DtoResourceMemberResponse, DtoResourceAbsenceResponse, DtoUserResponse, DtoUserStateResponse, DtoStateResponse, DtoCreateResourceRequest, DtoUpdateResourceRequest, DtoCreateUserRequest, DtoUpdateUserRequest, DtoSetDaysRequest, DtoAdminUserResponse, DtoCreateUserResult, DtoResetPasswordResponse, DtoAutoCreateConfig, DtoAutoCreatedCounts, DtoCommentResponse, DomainRole, DtoRuleInput, DtoRuleView, DtoMatrixCell, DtoRoutePolicyView, PoliciesKindInfo, DtoPermission } from '@/api'
-import { apiErrorMessage, fullName } from '@/utils'
+import { apiErrorMessage } from '@/utils'
 import { getApiUrl } from '@/config'
 import { isOffline } from '@/offline/state'
 import { isElectron, setDesktopPassword } from '@/electron'
@@ -972,6 +972,19 @@ export const useAppStore = defineStore('app', () => {
     }
   }
 
+  /** Deletes (soft) a user — user lifecycle lives in the admin users section */
+  async function deleteUser(id: number): Promise<boolean> {
+    try {
+      const api = new UsersApi(apiConfig())
+      await api.userIdDelete(id)
+      await loadAdminUsers()
+      return true
+    } catch (e: any) {
+      adminUsersError.value = apiErrorMessage(e)
+      return false
+    }
+  }
+
   // === Admin: auto-creation of projects ===
   const autoCreateConfig = ref<DtoAutoCreateConfig | null>(null)
   const autoCreateLoading = ref(false)
@@ -1040,6 +1053,7 @@ export const useAppStore = defineStore('app', () => {
     resetPassword,
     updateUser,
     updateManager,
+    deleteUser,
     autoCreateConfig,
     autoCreateLoading,
     autoCreateError,
@@ -1078,7 +1092,7 @@ export const useTimesheetStore = defineStore('timesheet', () => {
   const busy = ref(false)
   const error = ref<string | null>(null)
 
-  /** Employees (users with the worker role), sorted by full name */
+  /** Employees (users visible to the current user), sorted by full name */
   const employeesWithTitles = computed<DtoUserResponse[]>(() =>
     [...employees.value].sort(
       (a, b) =>
@@ -1181,14 +1195,16 @@ export const useTimesheetStore = defineStore('timesheet', () => {
     return p && p.end_date != null && p.end_date >= iso ? p : undefined
   }
 
-  /** Local-first: hydrate the employee list (worker role) from the cache */
+  /** Local-first: hydrate the employee list (scoped by the backend) from the cache */
   async function loadEmployeesList(): Promise<void> {
     if (employees.value.length) return
     await hydrateFromCache([
       {
         path: apiPath('/user'),
         filled: () => employees.value.length > 0,
-        keyPredicate: (key) => /\brole=worker\b/.test(key),
+        // No role filter — the roster is scoped server-side (admin: all, vp: own
+        // subordinates). The employees query is the only /user call with limit=50.
+        keyPredicate: (key) => /\blimit=50\b/.test(key),
         apply: (body) => {
           const d = (body as { data?: { items?: DtoUserResponse[]; total?: number } } | undefined)?.data
           employees.value = d?.items ?? []
@@ -1203,7 +1219,7 @@ export const useTimesheetStore = defineStore('timesheet', () => {
     error.value = null
     try {
       const api = new UsersApi(apiConfig())
-      const resp = await api.userGet(PAGE_SIZE, 'worker', managerId ?? undefined, undefined, 0)
+      const resp = await api.userGet(PAGE_SIZE, undefined, managerId ?? undefined, undefined, 0)
       const data = resp.data?.data
       // Sorting is added by the computed employeesWithTitles.
       employees.value = data?.items ?? []
@@ -1225,101 +1241,6 @@ export const useTimesheetStore = defineStore('timesheet', () => {
     }
     if (!employees.value.length) await loadEmployeesList()
     await loadInitialWindow()
-  }
-
-  /** Fields of the create/update employee request (a user with the worker role) */
-  interface EmployeePayload {
-    last_name: string
-    first_name: string
-    middle_name?: string
-    role?: string
-    position?: string
-    manager_id?: number
-    hire_date?: string
-    termination_date?: string
-  }
-
-  /** Creates an employee (worker); for vp the manager is forced to the current user */
-  async function createEmployee(payload: EmployeePayload): Promise<boolean> {
-    busy.value = true
-    error.value = null
-    const tempId = nextTempId()
-    try {
-      return await runMutation({
-        entity: 'user',
-        tempId,
-        call: () => {
-          const req: DtoCreateUserRequest = { ...payload, role: 'worker' }
-          return new UsersApi(apiConfig()).userPost(req)
-        },
-        apply: async () => {
-          await refreshEmployees()
-        },
-        optimistic: () => {
-          employees.value.push({
-            id: tempId,
-            ...payload,
-            role: 'worker',
-            name: fullName(payload),
-          } as unknown as DtoUserResponse)
-        },
-        onError: (m) => {
-          error.value = m
-        },
-      })
-    } finally {
-      busy.value = false
-    }
-  }
-
-  /** Updates an employee; for vp the manager is forced to the current user */
-  async function updateEmployee(id: number, payload: EmployeePayload): Promise<boolean> {
-    busy.value = true
-    error.value = null
-    try {
-      return await runMutation({
-        entity: 'user',
-        call: () => new UsersApi(apiConfig()).userIdPut(id, payload as DtoUpdateUserRequest),
-        apply: async () => {
-          await refreshEmployees()
-        },
-        optimistic: () => {
-          const i = employees.value.findIndex((e) => e.id === id)
-          if (i >= 0) employees.value[i] = { ...employees.value[i], ...payload }
-        },
-        onError: (m) => {
-          error.value = m
-        },
-      })
-    } finally {
-      busy.value = false
-    }
-  }
-
-  /** Deletes an employee (soft delete) */
-  async function deleteEmployee(id: number): Promise<boolean> {
-    busy.value = true
-    error.value = null
-    const remove = () => {
-      const i = employees.value.findIndex((e) => e.id === id)
-      if (i >= 0) employees.value.splice(i, 1)
-      delete periodsByEmployee.value[id]
-    }
-    try {
-      return await runMutation({
-        entity: 'user',
-        call: () => new UsersApi(apiConfig()).userIdDelete(id),
-        apply: async () => {
-          await refreshEmployees()
-        },
-        optimistic: remove,
-        onError: (m) => {
-          error.value = m
-        },
-      })
-    } finally {
-      busy.value = false
-    }
   }
 
   /** Loads the states reference — desktop local-first, web reads from the server */
@@ -1563,9 +1484,6 @@ export const useTimesheetStore = defineStore('timesheet', () => {
     loadStates,
     refreshStates,
     refreshPeriods,
-    createEmployee,
-    updateEmployee,
-    deleteEmployee,
     createState,
     updateState,
     deleteState,

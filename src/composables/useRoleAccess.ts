@@ -56,13 +56,6 @@ export function useRoleAccess() {
   /** "Statuses" page (management): state.create/update */
   const canManageStates = computed(() => rbac.can('state', 'create') || rbac.can('state', 'update'))
 
-  /** Permission to edit an employee: worker.update + ownership (own: manager_id) */
-  function canEditEmployee(emp: { manager_id?: number | null }): boolean {
-    return rbac.canOwn('worker', 'update', { owner: emp.manager_id ?? null })
-  }
-
-  const canDeleteEmployee = canEditEmployee
-
   return {
     role,
     userId,
@@ -78,7 +71,5 @@ export function useRoleAccess() {
     canDeleteProject,
     canManageEmployees,
     canManageStates,
-    canEditEmployee,
-    canDeleteEmployee,
   }
 }

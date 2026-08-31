@@ -370,6 +370,7 @@ const taskComments = computed(() => {
 })
 
 function openComments(taskId: number) {
+  if (!canViewTasks.value) return
   commentsTaskId.value = taskId
   void planning.loadTaskComments(taskId)
 }
@@ -495,6 +496,7 @@ const taskGroups = computed<PdfGanttGroup[]>(() =>
       @visible-range="onVisibleRange"
       @edit="onTaskBarEdit"
       @request-comments="(id) => planning.loadTaskComments(id, { fresh: false })"
+      @open-comments="openComments"
     />
 
     <ContextMenu v-bind="menuBind" @select="select" @close="closeMenu" />

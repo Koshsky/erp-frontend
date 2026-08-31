@@ -164,6 +164,11 @@ onBeforeUnmount(() => {
 
 .ah {
   width: 100%; /* the header width never depends on the page or scrollbars */
+  /* The header is a flex item of .ml (column flex): without this the flex
+     shrink distribution on viewport-filling diagram pages squeezes the header
+     height below 60px (the timeline is taller than the container). flex: none
+     keeps the header size dependent only on the screen, never on page content. */
+  flex: none;
   background: var(--ui-surface);
   color: var(--ui-text);
   padding: 0 24px;

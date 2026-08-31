@@ -19,7 +19,7 @@ export const BarVariants: Story = {
     template: `
       <div style="font-family:sans-serif;display:grid;gap:16px;grid-template-columns:repeat(2,240px);align-items:start;">
         <div><div style="font-size:12px;color:#888;margin-bottom:4px;">Задача</div>
-          <BarTooltip title="Монтаж конструкций" :accent="'#34a853'" :rows="['18.07.2026 — 07.08.2026']" :resources="[{label:'Монтажник',quantity:3},{label:'Инженер',quantity:1}]" /></div>
+          <BarTooltip title="Монтаж конструкций" :accent="'#34a853'" :rows="['18.07.2026 — 07.08.2026']" :resources="[{label:'Монтажник',quantity:3,color:'#ea4335'},{label:'Инженер',quantity:1,color:'#1a73e8'}]" /></div>
         <div><div style="font-size:12px;color:#888;margin-bottom:4px;">Проект</div>
           <BarTooltip title="Склад-Логистика" :accent="'#1a73e8'" :rows="['Приоритет: высокий','Владелец: Иванов','01.08.2026 — 20.09.2026']" /></div>
         <div><div style="font-size:12px;color:#888;margin-bottom:4px;">Процесс</div>

@@ -70,6 +70,8 @@ const emit = defineEmits<{
   'edit': [payload: number]
   /** Task tooltip opened — lazily load comments (cache) */
   'request-comments': [payload: number]
+  /** Click on the comments badge - open the comments panel */
+  'open-comments': [payload: number]
 }>()
 
 /** Active task drag — for the live resource-load preview (written from TaskBar) */
@@ -237,6 +239,7 @@ function onGridCtx(p: { clientX: number; clientY: number; date: string | null; r
           @milestone-edit="(id) => emit('milestone-edit', id)"
           @edit="(id) => emit('edit', id)"
           @request-comments="(id) => emit('request-comments', id)"
+          @open-comments="(id) => emit('open-comments', id)"
         />
       </template>
     </TimelineGrid>

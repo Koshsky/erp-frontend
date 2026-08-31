@@ -22,7 +22,7 @@ const moreComments = computed(() => props.comments.length - shownComments.value.
     <div v-for="r in rows" :key="r" class="bt-row">{{ r }}</div>
     <div v-if="resources.length" class="bt-resources">
       <div v-for="(r, i) in resources" :key="i" class="bt-res">
-        <span class="bt-res-dot" :style="{ background: accent || '#cfcfcf' }" />
+        <span class="bt-res-dot" :style="{ background: r.color || accent || '#cfcfcf' }" />
         <span>{{ r.label }}</span>
         <template v-if="r.quantity != null"><span class="bt-res-qty">×{{ r.quantity }}</span></template>
       </div>
@@ -74,6 +74,7 @@ const moreComments = computed(() => props.comments.length - shownComments.value.
   white-space: nowrap;
 }
 .bt-res-dot {
+  /* Resource color; falls back to the accent (task) color, then gray */
   width: 8px;
   height: 8px;
   border-radius: 50%;
