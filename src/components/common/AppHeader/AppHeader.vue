@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../../../store'
 import { useNavigation } from '../../../composables/useNavigation'
@@ -23,11 +23,22 @@ const offline = computed(() => isOffline.value)
 // Pending changes awaiting sync (badge next to "Sync")
 const pending = computed(() => pendingCount.value)
 
+// Reactive clock so the freshness label keeps advancing while mounted
+// (a computed reading Date.now() alone would freeze after the last pull).
+const CLOCK_TICK_MS = 30_000
+const now = ref(Date.now())
+let clockTimer: number | undefined
+onMounted(() => {
+  clockTimer = window.setInterval(() => {
+    now.value = Date.now()
+  }, CLOCK_TICK_MS)
+})
+
 // Data freshness (desktop): how long ago the background PULL last updated the cache
 const lastPullLabel = computed(() => {
   const ts = lastPullAt.value
   if (ts == null) return '—'
-  const s = Math.max(0, Math.round((Date.now() - ts) / 1000))
+  const s = Math.max(0, Math.round((now.value - ts) / 1000))
   if (s < 60) return `${s} с`
   const m = Math.round(s / 60)
   if (m < 60) return `${m} мин`
@@ -82,6 +93,7 @@ watch(openCategory, (oc) => {
 })
 
 onBeforeUnmount(() => {
+  if (clockTimer != null) window.clearInterval(clockTimer)
   window.removeEventListener('click', onDocClick)
   window.removeEventListener('keydown', onKeydown)
 })

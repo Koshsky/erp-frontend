@@ -295,8 +295,11 @@ app.on('certificate-error', (event, webContents, url, error, certificate, callba
 })
 
 app.whenReady().then(async () => {
-  // Without the single-instance lock the app already quit itself (see above).
-  if (!gotTheLock) return
+  // Stop startup only when the lock is held by another instance (the lock
+  // file exists). If the lock could not be created at all (read-only
+  // userData, unusual environments) we run anyway — the dynamic port
+  // fallback below covers duplicate instances.
+  if (!gotTheLock && fs.existsSync(lockFile)) return
 
   // setCertificateVerifyProc intercepts ALL TLS session verifications, including
   // fetch/axios from the renderer (for them certificate-error does not always fire).

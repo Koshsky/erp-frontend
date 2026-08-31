@@ -2581,12 +2581,20 @@ export const useRbacStore = defineStore('rbac', () => {
     if (permsLoaded.value) return true
     try {
       const cached = localStorage.getItem(PERMS_KEY)
-      if (cached) myPermissions.value = JSON.parse(cached)
+      if (cached) {
+        const parsed = JSON.parse(cached)
+        // Defensive: a valid-JSON non-array payload must not overwrite the ref
+        // (would break rbac.can()'s .some()).
+        if (Array.isArray(parsed)) myPermissions.value = parsed
+      }
     } catch {
       /* cache unreadable — no permissions */
     }
-    permsLoaded.value = true
-    return true
+    // An empty/missing/corrupt cache does NOT count as loaded: the router guard
+    // falls back to the planner-role check while permsLoaded is false, and the
+    // background sync (refreshPermissions) populates the list afterwards.
+    permsLoaded.value = myPermissions.value.length > 0
+    return permsLoaded.value
   }
 
   /** Network refresh of my permissions (PULL). Falls back to cache when offline. */
