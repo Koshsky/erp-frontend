@@ -40,8 +40,8 @@ const props = withDefaults(
 const emit = defineEmits<{
   change: [payload: { start_date: string; end_date: string }]
   contextmenu: [payload: { clientX: number; clientY: number }]
-  /** Single click on the bar (without dragging) — open the task comments */
-  'open-comments': [payload: number]
+  /** Single click on the bar (without dragging) — open the task editor */
+  'edit': [payload: number]
   /** Tooltip opened on a task with comments — lazy-load them (cache) */
   'request-comments': [payload: number]
 }>()
@@ -193,7 +193,7 @@ watch(
     @dragstart="(d) => setDragPreview(d)"
     @dragmove="(d) => setDragPreview(d)"
     @dragend="() => setDragPreview(null)"
-    @click="emit('open-comments', task.id)"
+    @click="emit('edit', task.id)"
     @tooltip-open="onTooltipOpen"
   >
     <span ref="contentRef" class="tb-content">

@@ -208,6 +208,12 @@ function onHeaderCtx(p: { clientX: number; clientY: number }) {
 
 const { open: openMenu, close: closeMenu, select, bind: menuBind } = useContextMenu(menu, menuItems, handleSelect)
 
+/** Click on a task bar — open the task editor (managing roles only) */
+function onTaskBarEdit(id: number) {
+  if (!canManageTasks.value) return
+  openTaskEdit(id)
+}
+
 function openTaskEdit(id: number) {
   const task = findTask(id)
   if (task) {
@@ -487,7 +493,7 @@ const taskGroups = computed<PdfGanttGroup[]>(() =>
       @reorder="(p) => void planning.reorderTasks(p.processId, p.from, p.to)"
       @milestone-edit="openMilestoneEdit"
       @visible-range="onVisibleRange"
-      @open-comments="openComments"
+      @edit="onTaskBarEdit"
       @request-comments="(id) => planning.loadTaskComments(id, { fresh: false })"
     />
 

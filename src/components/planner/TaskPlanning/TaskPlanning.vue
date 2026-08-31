@@ -66,8 +66,8 @@ const emit = defineEmits<{
   reorder: [payload: { processId: number; from: number; to: number }]
   /** Visible timeline window (the "as on screen" period) — forwarded from TimelineGrid */
   'visible-range': [payload: { from: string; to: string; cellWidthPx: number; scale: number }]
-  /** Click on a task bar — open its comments */
-  'open-comments': [payload: number]
+  /** Click on a task bar — open the task editor */
+  'edit': [payload: number]
   /** Task tooltip opened — lazily load comments (cache) */
   'request-comments': [payload: number]
 }>()
@@ -235,7 +235,7 @@ function onGridCtx(p: { clientX: number; clientY: number; date: string | null; r
           @contextmenu="(p) => emit('contextmenu', p)"
           @reorder="(p) => emit('reorder', { processId: proc.id, ...p })"
           @milestone-edit="(id) => emit('milestone-edit', id)"
-          @open-comments="(id) => emit('open-comments', id)"
+          @edit="(id) => emit('edit', id)"
           @request-comments="(id) => emit('request-comments', id)"
         />
       </template>

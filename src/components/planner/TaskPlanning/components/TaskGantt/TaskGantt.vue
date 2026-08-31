@@ -21,7 +21,8 @@ const emit = defineEmits<{
   'milestone-edit': [payload: number]
   /** Vertical row drag: a task moved within its process group */
   reorder: [payload: { from: number; to: number }]
-  'open-comments': [payload: number]
+  /** Single click on a task bar — open the task editor */
+  'edit': [payload: number]
   /** Task tooltip opened — lazy-load the comments (cache) */
   'request-comments': [payload: number]
 }>()
@@ -89,7 +90,7 @@ function onMilestoneEdit(id: number) {
           :comments-by-task="commentsByTask"
           @change="(d) => onBarChange(item.id, d)"
           @contextmenu="(p) => onBarContextMenu(p, item.id)"
-          @open-comments="(id) => emit('open-comments', id)"
+          @edit="(id) => emit('edit', id)"
           @request-comments="(id) => emit('request-comments', id)"
         />
       </template>
