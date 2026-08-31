@@ -8,7 +8,9 @@ import { TimesheetGrid, stateBackground } from '../components/timesheet'
 import type { AssignPayload, ClearPayload } from '../components/timesheet'
 import { toDate } from '../components/planner/calendar'
 import type { PlanningUnit } from '../components/planner/calendar'
-import { useAuthStore, useRbacStore, useTimesheetStore } from '../store'
+import { useEmployeeFilters } from '../composables/useEmployeeFilters'
+import { useRoleAccess } from '../composables/useRoleAccess'
+import { useAppStore, useAuthStore, useRbacStore, useTimesheetStore } from '../store'
 
 const ts = useTimesheetStore()
 const auth = useAuthStore()
@@ -21,9 +23,34 @@ const rbac = useRbacStore()
 /** "All employees" — when worker visibility is not restricted (scope all). */
 const seesAllEmployees = computed(() => rbac.perm('worker', 'view') === 'all')
 
+const app = useAppStore()
+const { users, resources } = storeToRefs(app)
+
+const { role } = useRoleAccess()
+const isAdmin = computed(() => role.value === 'admin')
+
+/**
+ * Shared employee filters (search / manager / resource) — synchronized with the
+ * "Employees" page: the state is a single module-level source of truth.
+ */
+const {
+  search,
+  managerFilter,
+  resourceFilter,
+  managerFilterOptions,
+  resourceFilterOptions,
+  applyFilters,
+} = useEmployeeFilters()
+
+/** Rows shown in the grid: the roster filtered by the shared filters. */
+const visibleRows = computed(() => applyFilters(timesheetRows.value))
+
 onMounted(async () => {
   await ts.loadStates()
   await ts.loadEmployees()
+  // The filter options need the user/resource catalogs (cached in the app store)
+  if (isAdmin.value && !users.value.length) await app.loadUsers()
+  await app.ensureResourceMembers(false)
 })
 
 /** Lazy-load states on scroll/zoom (debounced) */
@@ -61,6 +88,20 @@ async function onClear(p: ClearPayload) {
       <span v-if="seesAllEmployees" class="tp-note">Все сотрудники</span>
     </div>
 
+    <div class="tp-filters">
+      <input v-model="search" type="search" class="tp-search" placeholder="Поиск по ФИО или должности" />
+      <select v-if="isAdmin" v-model="managerFilter" class="tp-filter">
+        <option value="">Все руководители</option>
+        <option value="none">Без руководителя</option>
+        <option v-for="u in managerFilterOptions" :key="u.id" :value="u.id">{{ u.name ?? `#${u.id}` }}</option>
+      </select>
+      <select v-if="resources.length" v-model="resourceFilter" class="tp-filter" title="Фильтр по ресурсу">
+        <option value="">Все ресурсы</option>
+        <option value="none">Без ресурса</option>
+        <option v-for="r in resourceFilterOptions" :key="r.id" :value="r.id">{{ r.code }} — {{ r.title }}</option>
+      </select>
+    </div>
+
     <PlannerStates :loading="loading" :error="null" :has-data="timesheetRows.length > 0 || (!loading && !error)">
       <TimelineGrid
         id="timesheet"
@@ -79,9 +120,9 @@ async function onClear(p: ClearPayload) {
             label strip instead of sliding right along the wide timeline content.
           -->
           <TimesheetGrid
-            v-if="timesheetRows.length"
+            v-if="timesheetRows.length && visibleRows.length"
             :t="t"
-            :employees="timesheetRows"
+            :employees="visibleRows"
             :states="states"
             :state-for-day="(id, iso) => ts.periodFor(id, iso)"
             :busy="busy"
@@ -97,7 +138,7 @@ async function onClear(p: ClearPayload) {
               width: t.viewportCells * t.cellPx + 'px',
             }"
           >
-            Нет данных о сотрудниках
+            {{ timesheetRows.length ? 'Ничего не найдено' : 'Нет данных о сотрудниках' }}
           </p>
         </template>
       </TimelineGrid>
@@ -114,8 +155,48 @@ async function onClear(p: ClearPayload) {
   display: flex;
   align-items: center;
   gap: 16px;
-  margin-bottom: 16px;
+  margin-bottom: 10px;
   flex-wrap: wrap;
+}
+.tp-filters {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.tp-search {
+  width: 240px;
+  box-sizing: border-box;
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius-sm);
+  padding: 9px 12px;
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--ui-text);
+  background: var(--ui-surface);
+  outline: none;
+  transition: border-color var(--ui-duration), box-shadow var(--ui-duration);
+}
+.tp-search:focus {
+  border-color: var(--ui-accent);
+  box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.12);
+}
+.tp-filter {
+  box-sizing: border-box;
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius-sm);
+  padding: 9px 12px;
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--ui-text);
+  background: var(--ui-surface);
+  outline: none;
+  transition: border-color var(--ui-duration), box-shadow var(--ui-duration);
+}
+.tp-filter:focus {
+  border-color: var(--ui-accent);
+  box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.12);
 }
 .tp-title {
   font-size: 24px;

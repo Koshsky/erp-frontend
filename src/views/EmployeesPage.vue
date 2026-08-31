@@ -1,15 +1,14 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { storeToRefs } from 'pinia'
-import { ContextMenu, ModalForm, ConfirmDialog } from '../components/common'
+import { ContextMenu, ModalForm } from '../components/common'
 import type { ContextMenuItem } from '../components/common/ContextMenu'
 import type { ModalField } from '../components/common/ModalForm'
-import { useConfirm } from '../composables/useConfirm'
 import { useContextMenu } from '../composables/useContextMenu'
 import { useEditModal } from '../composables/useEditModal'
 import { useRoleAccess } from '../composables/useRoleAccess'
+import { useEmployeeFilters } from '../composables/useEmployeeFilters'
 import { useAppStore, useTimesheetStore } from '../store'
-import { compareByName } from '../utils'
 import type { DtoResourceResponse, DtoUserResponse } from '@/api'
 
 const ts = useTimesheetStore()
@@ -19,9 +18,10 @@ const app = useAppStore()
 const { users } = storeToRefs(app)
 const { resources, resourcesError } = storeToRefs(app)
 
-// Edit/delete: admin can edit anyone, others (vp) — only their subordinates.
-// Creating employees is disabled (admin no longer creates from this page).
-const { role, userId, canEditEmployee } = useRoleAccess()
+// Edit/delete are NOT available here: an employee IS a system user, so profile
+// editing happens only on the admin "Пользователи" page (user-edit right).
+// This page only changes the employee's resource.
+const { role, userId } = useRoleAccess()
 const isAdmin = computed(() => role.value === 'admin')
 
 /**
@@ -40,28 +40,6 @@ const byResourceLabel = (a: DtoResourceResponse, b: DtoResourceResponse): number
 /** Resources the user can manage (admin — all, others — their own) */
 const manageableResources = computed<DtoResourceResponse[]>(() =>
   resources.value.filter((r) => isAdmin.value || r.owner_id === userId.value).sort(byResourceLabel),
-)
-
-/** All resources (for the filter select), sorted by code/title */
-const resourcesSorted = computed<DtoResourceResponse[]>(() => [...resources.value].sort(byResourceLabel))
-
-/**
- * Snapshot of the full employee roster (admin), taken while no manager filter
- * is active. DtoUserInfo (app.users) carries no manager_id, so "has
- * subordinates" must be computed from the worker list.
- */
-const managerPool = ref<DtoUserResponse[]>([])
-
-/** Non-worker users that have at least one direct subordinate in the roster */
-const managerFilterOptions = computed(() =>
-  users.value
-    .filter(
-      (u) =>
-        u.id != null &&
-        u.role !== 'worker' &&
-        managerPool.value.some((e) => e.manager_id === u.id),
-    )
-    .sort(compareByName),
 )
 
 /**
@@ -92,67 +70,23 @@ function managerLabel(managerId?: number | null): string {
   return u?.name ?? `#${managerId}`
 }
 
-/** Search by full name and position (case-insensitive) */
-const search = ref('')
-
-/** Filter by manager (manager_id): '' — all, 'none' — no manager (client-side), number — server-side filter */
-const managerFilter = ref<number | 'none' | ''>('')
-
-/** Filter by resource: '' — all, 'none' — no resource, number — a resource */
-const resourceFilter = ref<number | 'none' | ''>('')
-
 /**
- * Resource filter options depend on the selected manager filter (admin):
- * a manager → only the resources that contain at least one of his direct
- * subordinates (employees is already server-filtered by that manager);
- * 'none' → resources of employees without a manager; '' → all resources.
+ * Shared employee filters (search / manager / resource) — synchronized with the
+ * "Timesheet" page: the state is a single module-level source of truth.
  */
-const resourceFilterOptions = computed<DtoResourceResponse[]>(() => {
-  const m = managerFilter.value
-  if (m === '') return resourcesSorted.value
-  return resources.value
-    .filter((r) =>
-      employees.value.some((e) => {
-        if (e.id == null || app.resourceByUser[e.id]?.id !== r.id) return false
-        return m === 'none' ? e.manager_id == null : e.manager_id === m
-      }),
-    )
-    .sort(byResourceLabel)
-})
+const {
+  search,
+  managerFilter,
+  resourceFilter,
+  managerFilterOptions,
+  resourceFilterOptions,
+  applyFilters,
+} = useEmployeeFilters()
 
-const filteredEmployees = computed(() => {
-  let list = employeesWithTitles.value
-  const q = search.value.trim().toLowerCase()
-  if (q) {
-    list = list.filter((e) => `${e.name ?? ''} ${e.position ?? ''}`.toLowerCase().includes(q))
-  }
-  // Manager filter ('none' and numeric) is client-side: rendering always reads
-  // local data, so the numeric scope is applied here instead of the server.
-  if (managerFilter.value === 'none') {
-    list = list.filter((e) => e.manager_id == null)
-  } else if (typeof managerFilter.value === 'number') {
-    list = list.filter((e) => e.manager_id === managerFilter.value)
-  }
-  if (resourceFilter.value === 'none') {
-    list = list.filter((e) => e.id != null && !app.resourceByUser[e.id])
-  } else if (typeof resourceFilter.value === 'number') {
-    list = list.filter((e) => e.id != null && app.resourceByUser[e.id]?.id === resourceFilter.value)
-  }
-  return list
-})
+const filteredEmployees = computed(() => applyFilters(employeesWithTitles.value))
 
-// Changing the manager filter resets the resource filter, whose options depend
-// on the selected manager (no server reload — filtering is client-side now).
-watch(managerFilter, () => {
-  resourceFilter.value = ''
-})
-
-// Keep the roster snapshot current while no manager filter is active
-watch(employees, (list) => {
-  if (managerFilter.value === '') managerPool.value = list
-})
-
-// Right-click on a row: edit/delete (own employees only / admin)
+// Right-click on a row: only the resource change. The employee's profile is a
+// system user — editing it happens solely on the admin "Пользователи" page.
 interface MenuState {
   x: number
   y: number
@@ -160,81 +94,21 @@ interface MenuState {
 }
 const menu = ref<MenuState | null>(null)
 const menuItems = computed<ContextMenuItem[]>(() => [
-  { id: 'edit-employee', label: 'Редактировать' },
-  { id: 'delete-employee', label: 'Удалить сотрудника' },
+  { id: 'change-resource', label: 'Изменить ресурс' },
 ])
 
-// Delete confirmation dialog
-const { confirm: confirmDialog, ask, proceed, cancel } = useConfirm()
-
 type ModalMode = {
-  type: 'edit'
+  type: 'resource'
   id: number
-  lastName: string
-  firstName: string
-  middleName?: string
-  position?: string
-  managerId?: number | null
-  hireDate?: string
-  terminationDate?: string
   resourceId?: number | null
 }
 
-/** Manager options (users, excluding workers) + the "No manager" option */
-const managerOptions = computed<ModalField['options']>(() => [
-  { value: '', label: 'Без руководителя' },
-  ...users.value
-    .filter((u) => u.id != null && u.role !== 'worker')
-    .sort(compareByName)
-    .map((u) => ({ value: u.id as number, label: u.name ?? `#${u.id}` })),
-])
-
+/** The resource dialog: one select (manageable resources) + "No resource" */
 const { open: openModal, close: closeModal, submit: submitModal, bind: modalBind } = useEditModal<ModalMode>(
   (state) => {
-    const fields: ModalField[] = [
-      {
-        key: 'lastName',
-        label: 'Фамилия',
-        type: 'text',
-        value: state.lastName,
-        required: true,
-      },
-      {
-        key: 'firstName',
-        label: 'Имя',
-        type: 'text',
-        value: state.firstName,
-        required: true,
-      },
-      {
-        key: 'middleName',
-        label: 'Отчество',
-        type: 'text',
-        value: state.middleName ?? '',
-      },
-      {
-        key: 'position',
-        label: 'Должность',
-        type: 'text',
-        value: state.position ?? '',
-        placeholder: 'Свободный текст, например «Ведущий инженер»',
-      },
-    ]
-    fields.push(
-      { key: 'hireDate', label: 'Дата приёма', type: 'date', value: state.hireDate },
-      { key: 'terminationDate', label: 'Дата увольнения', type: 'date', value: state.terminationDate },
-    )
-    // Manager is chosen by admin only
-    if (isAdmin.value) {
-      fields.push({
-        key: 'managerId',
-        label: 'Руководитель',
-        type: 'select',
-        options: managerOptions.value,
-        value: state.managerId ?? '',
-      })
-    }
-    // Resource is changed only when editing and only by those who can manage it
+    const fields: ModalField[] = []
+    // Only those who can manage a resource (admin — all, others — their own)
+    // may change the employee's resource; the backend gates it the same way.
     if (manageableResources.value.length) {
       fields.push({
         key: 'resourceId',
@@ -253,62 +127,28 @@ const { open: openModal, close: closeModal, submit: submitModal, bind: modalBind
     return fields
   },
   async (state, values) => {
-    const payload: { last_name: string; first_name: string; middle_name?: string; role?: string; position?: string; manager_id?: number; hire_date?: string; termination_date?: string } = {
-      last_name: String(values.lastName ?? '').trim(),
-      first_name: String(values.firstName ?? '').trim(),
-      middle_name: String(values.middleName ?? '').trim() || undefined,
-    }
-    if (values.position != null) {
-      payload.position = String(values.position).trim()
-    }
-    if (values.hireDate) payload.hire_date = String(values.hireDate)
-    if (values.terminationDate) payload.termination_date = String(values.terminationDate)
-    // Send the manager only for admin and only when explicitly chosen (otherwise — unchanged)
-    if (isAdmin.value && values.managerId !== '' && values.managerId != null) {
-      payload.manager_id = Number(values.managerId)
-    }
-    const ok = await ts.updateEmployee(state.id, payload)
-    // Changing the employee's resource (only when it actually changed)
-    let resourceOk = true
-    let resourceError: string | null = null
-    if (state.type === 'edit' && ok) {
-      const toResourceId = values.resourceId === '' || values.resourceId == null ? null : Number(values.resourceId)
-      const fromResourceId = state.resourceId ?? null
-      if (fromResourceId !== toResourceId) {
-        resourceOk = await app.changeEmployeeResource(state.id, fromResourceId, toResourceId)
-        if (!resourceOk) {
-          resourceError = app.resourcesError ?? 'Не удалось изменить ресурс сотрудника'
-        }
-      }
-    }
-    if (!ok) return { ok, error: error.value }
-    if (!resourceOk) return { ok: false, error: resourceError }
+    const toResourceId = values.resourceId === '' || values.resourceId == null ? null : Number(values.resourceId)
+    const ok = await app.changeEmployeeResource(state.id, state.resourceId ?? null, toResourceId)
+    if (!ok) return { ok: false, error: app.resourcesError ?? 'Не удалось изменить ресурс сотрудника' }
     return { ok: true, error: null }
   },
-  () => 'Редактировать сотрудника',
+  () => 'Изменить ресурс',
   () => 'Сохранить',
 )
 
 function onRowContextMenu(e: MouseEvent, emp: DtoUserResponse) {
-  if (emp.id == null || !canEditEmployee(emp)) return
+  if (emp.id == null || !manageableResources.value.length) return
   openMenu({ x: e.clientX, y: e.clientY, employeeId: emp.id })
 }
 
 const { open: openMenu, close: closeMenu, select, bind: menuBind } = useContextMenu(menu, menuItems, handleSelect)
 
-function openEdit(id: number) {
+function openChangeResource(id: number) {
   const emp = employees.value.find((e) => e.id === id)
   if (emp) {
     openModal({
-      type: 'edit',
+      type: 'resource',
       id,
-      lastName: emp.last_name ?? '',
-      firstName: emp.first_name ?? '',
-      middleName: emp.middle_name ?? '',
-      position: emp.position ?? '',
-      managerId: emp.manager_id ?? null,
-      hireDate: emp.hire_date,
-      terminationDate: emp.termination_date,
       resourceId: resourceOf(emp.id)?.id ?? null,
     })
   }
@@ -316,20 +156,13 @@ function openEdit(id: number) {
 
 function handleSelect(id: string) {
   if (!menu.value) return
-  if (id === 'edit-employee') {
-    openEdit(menu.value.employeeId)
-  } else if (id === 'delete-employee') {
-    const employeeId = menu.value.employeeId
-    ask('Удалить сотрудника?', () => {
-      void ts.deleteEmployee(employeeId)
-    })
+  if (id === 'change-resource') {
+    openChangeResource(menu.value.employeeId)
   }
 }
 
 onMounted(async () => {
   if (!employees.value.length) await ts.loadEmployees()
-  // Roster snapshot for the manager filter (counts of direct subordinates)
-  managerPool.value = employees.value
   if (isAdmin.value && !users.value.length) await app.loadUsers()
   // Load resources and their members unconditionally: resources are often already in the store
   // (dashboard/planner load them earlier), but members — only here;
@@ -404,14 +237,6 @@ onMounted(async () => {
     </div>
 
     <ContextMenu v-bind="menuBind" @select="select" @close="closeMenu" />
-
-    <ConfirmDialog
-      :open="!!confirmDialog"
-      :message="confirmDialog?.message ?? ''"
-      :confirm-label="confirmDialog?.confirmLabel"
-      @confirm="proceed"
-      @close="cancel"
-    />
 
     <ModalForm v-bind="modalBind" @save="submitModal" @close="closeModal" />
   </section>
