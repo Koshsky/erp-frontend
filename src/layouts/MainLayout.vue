@@ -90,6 +90,9 @@ onBeforeUnmount(() => {
   min-height: 0;
   padding: 24px;
   overflow: auto; /* non-diagram pages scroll inside the frame, not the browser */
+  /* reserved gutter: pages with and without a scrollbar have the same content
+     width — nothing shifts when switching between lists and diagrams */
+  scrollbar-gutter: stable;
 }
 </style>
 

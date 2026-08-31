@@ -36,6 +36,15 @@ void Promise.race([
 <style>
 @import './styles/tokens.css';
 
+/* The app shell owns the full viewport: no browser-level scrollbar can ever
+   appear and shrink the app/header width — all scrolling happens inside the
+   layout containers (see MainLayout .ml-main, timeline .tg-scroll). */
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+}
+
 *,
 *::before,
 *::after {

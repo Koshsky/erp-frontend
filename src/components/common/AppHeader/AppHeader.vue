@@ -163,6 +163,7 @@ onBeforeUnmount(() => {
 @import '../../../styles/tokens.css';
 
 .ah {
+  width: 100%; /* the header width never depends on the page or scrollbars */
   background: var(--ui-surface);
   color: var(--ui-text);
   padding: 0 24px;
