@@ -45,6 +45,8 @@ function absenceLabel(a: DtoResourceAbsenceResponse): string {
 </template>
 
 <style scoped>
+@import "../../../styles/tokens.css";
+
 .ut {
   display: flex;
   align-items: center;
@@ -69,7 +71,7 @@ function absenceLabel(a: DtoResourceAbsenceResponse): string {
 }
 .ut-pct {
   font-weight: 400;
-  color: #999;
+  color: var(--ui-text-muted);
 }
 .ut-label {
   font-size: 11px;
@@ -79,14 +81,14 @@ function absenceLabel(a: DtoResourceAbsenceResponse): string {
   flex-direction: column;
   gap: 2px;
   padding-left: 6px;
-  border-left: 1px solid #e8e8e8;
+  border-left: 1px solid var(--ui-border);
 }
 .ut-absences-title {
   font-weight: 700;
   white-space: nowrap;
 }
 .ut-absence {
-  color: #666;
+  color: var(--ui-text-2);
   white-space: nowrap;
 }
 </style>

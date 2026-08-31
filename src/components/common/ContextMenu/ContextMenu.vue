@@ -99,13 +99,15 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+@import "../../../styles/tokens.css";
+
 .cm {
   z-index: 50000;
   min-width: 180px;
-  background: #fff;
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
+  box-shadow: var(--ui-shadow-md);
   padding: 4px;
 }
 .cm-item {
@@ -116,17 +118,17 @@ onBeforeUnmount(() => {
   background: transparent;
   padding: 8px 12px;
   font-size: 13px;
-  color: #333;
+  color: var(--ui-text);
   border-radius: 6px;
   cursor: pointer;
-  transition: background 0.12s, color 0.12s;
+  transition: background var(--ui-duration), color var(--ui-duration);
 }
 .cm-item:hover {
-  background: #e6faf7;
-  color: #00b3a6;
+  background: var(--ui-success-soft);
+  color: var(--ui-success);
 }
 .cm-item--active {
-  color: #00b3a6;
+  color: var(--ui-success);
   font-weight: 600;
 }
 .cm-check {

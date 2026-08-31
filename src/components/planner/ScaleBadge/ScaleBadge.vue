@@ -34,6 +34,7 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+@import "../../../styles/tokens.css";
 .sb {
   position: sticky;
   bottom: 12px;
@@ -49,7 +50,7 @@ onBeforeUnmount(() => {
   color: #fff;
   font-size: 13px;
   font-weight: 600;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  box-shadow: var(--ui-shadow-md);
   pointer-events: none;
 }
 .sb-label {
@@ -62,7 +63,7 @@ onBeforeUnmount(() => {
 }
 .sb-fade-enter-active,
 .sb-fade-leave-active {
-  transition: opacity 0.25s ease;
+  transition: opacity var(--ui-duration) ease;
 }
 .sb-fade-enter-from,
 .sb-fade-leave-to {

@@ -309,7 +309,12 @@ onMounted(async () => {
     <p v-if="error && !employees.length" class="ep-st er">{{ error }}</p>
     <p v-if="resourcesError" class="ep-st er">{{ resourcesError }}</p>
 
-    <div v-if="filteredEmployees.length" class="table">
+    <!--
+      The table frame (header included) stays visible even when the filters
+      leave no rows: the empty-state message is rendered inside the table
+      instead of replacing it, so the header and filter controls remain usable.
+    -->
+    <div v-if="employees.length || (!loading && !error)" class="table">
       <div class="tr th">
         <div>ФИО</div>
         <div>Должность</div>
@@ -317,26 +322,27 @@ onMounted(async () => {
         <div>Дата увольнения</div>
         <div>Руководитель</div>
       </div>
-      <div
-        v-for="emp in filteredEmployees"
-        :key="emp.id"
-        class="tr"
-        @contextmenu.prevent.stop="onRowContextMenu($event, emp)"
-      >
-        <div class="name-cell">
-          <span class="name">{{ emp.name }}</span>
-          <span v-if="resourceOf(emp.id)" class="ep-badge" :title="resourceOf(emp.id)?.title">
-            {{ resourceOf(emp.id)?.code }}
-          </span>
+      <template v-if="filteredEmployees.length">
+        <div
+          v-for="emp in filteredEmployees"
+          :key="emp.id"
+          class="tr"
+          @contextmenu.prevent.stop="onRowContextMenu($event, emp)"
+        >
+          <div class="name-cell">
+            <span class="name">{{ emp.name }}</span>
+            <span v-if="resourceOf(emp.id)" class="ep-badge" :title="resourceOf(emp.id)?.title">
+              {{ resourceOf(emp.id)?.code }}
+            </span>
+          </div>
+          <div>{{ emp.position || '—' }}</div>
+          <div>{{ fmtDate(emp.hire_date) }}</div>
+          <div>{{ fmtDate(emp.termination_date) }}</div>
+          <div>{{ managerLabel(emp.manager_id) }}</div>
         </div>
-        <div>{{ emp.position || '—' }}</div>
-        <div>{{ fmtDate(emp.hire_date) }}</div>
-        <div>{{ fmtDate(emp.termination_date) }}</div>
-        <div>{{ managerLabel(emp.manager_id) }}</div>
-      </div>
+      </template>
+      <p v-else class="ep-st">{{ employees.length ? 'Ничего не найдено' : 'Нет данных о сотрудниках' }}</p>
     </div>
-    <p v-else-if="!loading && !error && employees.length" class="ep-st">Ничего не найдено</p>
-    <p v-else-if="!loading && !error" class="ep-st">Нет данных о сотрудниках</p>
 
     <ContextMenu v-bind="menuBind" @select="select" @close="closeMenu" />
 
@@ -353,6 +359,8 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+@import '../styles/tokens.css';
+
 .ep-head {
   display: flex;
   align-items: center;
@@ -363,21 +371,21 @@ onMounted(async () => {
 .ep-title {
   font-size: 24px;
   font-weight: 700;
-  color: #2c3e50;
+  color: var(--ui-text);
 }
 .ep-add {
   border: none;
-  border-radius: 8px;
+  border-radius: var(--ui-radius-sm);
   padding: 9px 18px;
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
-  background: #1a73e8;
-  color: #fff;
-  transition: background 0.15s;
+  background: var(--ui-accent);
+  color: var(--ui-accent-on);
+  transition: background var(--ui-duration);
 }
 .ep-add:hover {
-  background: #1765cc;
+  background: color-mix(in srgb, var(--ui-accent) 88%, black);
 }
 .ep-actions {
   display: flex;
@@ -387,48 +395,48 @@ onMounted(async () => {
 .ep-search {
   width: 240px;
   box-sizing: border-box;
-  border: 1px solid #ddd;
-  border-radius: 8px;
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius-sm);
   padding: 9px 12px;
   font-size: 14px;
   font-family: inherit;
-  color: #333;
-  background: #fff;
+  color: var(--ui-text);
+  background: var(--ui-surface);
   outline: none;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition: border-color var(--ui-duration), box-shadow var(--ui-duration);
 }
 .ep-search:focus {
-  border-color: #1a73e8;
+  border-color: var(--ui-accent);
   box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.12);
 }
 .ep-filter {
   box-sizing: border-box;
-  border: 1px solid #ddd;
-  border-radius: 8px;
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius-sm);
   padding: 9px 12px;
   font-size: 14px;
   font-family: inherit;
-  color: #333;
-  background: #fff;
+  color: var(--ui-text);
+  background: var(--ui-surface);
   outline: none;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition: border-color var(--ui-duration), box-shadow var(--ui-duration);
 }
 .ep-filter:focus {
-  border-color: #1a73e8;
+  border-color: var(--ui-accent);
   box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.12);
 }
 .ep-st {
-  color: #666;
+  color: var(--ui-text-2);
   font-size: 14px;
   padding: 30px;
   text-align: center;
 }
-.er { color: #d93025; }
+.er { color: var(--ui-danger); }
 
 .table {
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.08);
+  background: var(--ui-surface);
+  border-radius: var(--ui-radius-md);
+  box-shadow: var(--ui-shadow-sm);
   overflow: hidden;
 }
 .tr {
@@ -436,21 +444,21 @@ onMounted(async () => {
   grid-template-columns: 1.4fr 1.3fr 110px 140px 1fr;
   gap: 8px;
   padding: 12px 20px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--ui-border);
   font-size: 14px;
 }
 .tr:last-child { border-bottom: none; }
 .tr:not(.th):hover {
-  background: #f6f8fa;
+  background: var(--ui-surface-3);
 }
 .th {
-  background: #f8f9fa;
+  background: var(--ui-surface-2);
   font-weight: 600;
-  color: #555;
+  color: var(--ui-text-2);
 }
 .name {
   font-weight: 700;
-  color: #1a3a6b;
+  color: var(--ui-text);
 }
 .name-cell {
   display: flex;
@@ -465,8 +473,8 @@ onMounted(async () => {
   font-size: 12px;
   font-weight: 700;
   line-height: 1.5;
-  background: #e8f0fe;
-  color: #1a73e8;
-  border: 1px solid #c6dafc;
+  background: var(--ui-accent-soft);
+  color: var(--ui-accent);
+  border: 1px solid color-mix(in srgb, var(--ui-accent) 25%, transparent);
 }
 </style>

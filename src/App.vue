@@ -11,19 +11,14 @@ import { isElectron } from './electron'
 </template>
 
 <style>
+@import './styles/tokens.css';
+
 *,
 *::before,
 *::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
-}
-
-body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
-    'Helvetica Neue', Arial, sans-serif;
-  background: #f4f6f9;
-  color: #2c3e50;
 }
 
 /* Fixed planner cell width, responsive to the screen.

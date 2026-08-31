@@ -528,6 +528,8 @@ const taskGroups = computed<PdfGanttGroup[]>(() =>
 </template>
 
 <style scoped>
+@import '../styles/tokens.css';
+
 .pp {
   --planner-max-height: calc(100vh - 112px);
 }

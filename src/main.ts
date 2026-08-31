@@ -3,11 +3,13 @@ import { createPinia, setActivePinia } from 'pinia'
 import App from './App.vue'
 import router from './router'
 import { setupHttp } from './http'
+import { initTheme } from './theme'
 import { initOfflineSync, ensureDesktopAutoSyncSession, startSessionMaintenance } from './offline/sync'
 import { startConnectivityMonitor } from './offline/state'
 import { isElectron } from './electron'
 
 setupHttp()
+initTheme()
 
 // Pinia is activated before touching the stores (auto re-login for the exe): otherwise
 // useXStore() outside setup would fail with "no active Pinia".

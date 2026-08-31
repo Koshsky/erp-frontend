@@ -78,11 +78,12 @@ function onBarContextMenu(p: { clientX: number; clientY: number }, id: number) {
 </template>
 
 <style scoped>
+@import "../../../../../styles/tokens.css";
 .pg-code {
   font-size: 16px;
   font-weight: 800;
   line-height: 1.2;
-  color: #1a73e8;
+  color: var(--ui-accent);
   letter-spacing: 0.3px;
   white-space: nowrap;
   max-width: 100%;
@@ -92,7 +93,7 @@ function onBarContextMenu(p: { clientX: number; clientY: number }, id: number) {
 .pg-dates {
   font-size: 10px;
   font-weight: 400;
-  color: #888;
+  color: var(--ui-text-muted);
   white-space: nowrap;
   max-width: 100%;
   overflow: hidden;

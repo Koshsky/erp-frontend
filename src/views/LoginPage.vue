@@ -18,12 +18,6 @@ const password = ref('')
 
 const localError = ref<string | null>(null)
 
-const features = [
-  { icon: '📈', label: 'Диаграммы Гантта', desc: 'Наглядное планирование проектов' },
-  { icon: '👥', label: 'Ресурсы', desc: 'Управление загрузкой команд' },
-  { icon: '🎯', label: 'Задачи', desc: 'Контроль сроков и статусов' },
-]
-
 const offline = computed(() => isElectron && isOffline.value)
 /** Server address to show on the login page (if set) */
 const serverBase = computed(() => getServerBase())
@@ -129,30 +123,16 @@ if (isElectron && isOffline.value && !username.value) {
 
 <template>
   <div class="lp">
-    <div class="lp-brand">
-      <div class="lp-logo">MVS</div>
-      <h1 class="lp-btitle">MVS ERP</h1>
-      <p class="lp-bsub">Система планирования проектов</p>
-
-      <ul class="lp-features">
-        <li v-for="f in features" :key="f.label" class="feature">
-          <span class="feature-icon">{{ f.icon }}</span>
-          <span class="feature-body">
-            <strong>{{ f.label }}</strong>
-            <em>{{ f.desc }}</em>
-          </span>
-        </li>
-      </ul>
-    </div>
-
     <div class="lp-form-side">
-      <h2 class="lp-title">Вход в систему</h2>
-      <p class="lp-subtitle">Введите учётные данные для продолжения</p>
+      <div class="lp-brand-head">
+        <h1 class="lp-btitle">MVS ERP</h1>
+        <p class="lp-bsub">Система планирования проектов</p>
+      </div>
 
       <form class="lp-form" @submit.prevent="onSubmit">
         <label class="lp-field">
           <span>Логин</span>
-          <input v-model="username" type="text" autocomplete="username" placeholder="например, ivanov" />
+          <input v-model="username" type="text" autocomplete="username" placeholder="ivanov" />
         </label>
 
         <PasswordField v-model="password" label="Пароль" autocomplete="current-password" placeholder="••••••••" />
@@ -188,4 +168,21 @@ if (isElectron && isOffline.value && !username.value) {
   </div>
 </template>
 
+<style scoped>
+@import '../styles/tokens.css';
+</style>
+
 <style src="./LoginPage.css" scoped></style>
+
+<style scoped>
+/* Login-only overrides: single-column centered card.
+   LoginPage.css stays untouched — it is shared with the server settings page. */
+.lp {
+  grid-template-columns: 1fr;
+  max-width: 420px;
+}
+
+.lp-brand-head .lp-bsub {
+  margin-bottom: 24px; /* tighten the gap before the form heading */
+}
+</style>

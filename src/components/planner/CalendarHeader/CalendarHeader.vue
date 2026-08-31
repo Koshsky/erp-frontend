@@ -84,11 +84,12 @@ const showWdRow = computed(() => props.t.unit === 'day' && props.t.cellPx >= CEL
 </template>
 
 <style scoped>
+@import '../../../styles/tokens.css';
 .tg-head {
   position: sticky;
   top: 0;
   z-index: 30;
-  background: #f8f9fa;
+  background: var(--ui-surface-2);
 }
 /* Corner — part of the side panel: sticks to the left and top edges, sits above
  * all side-panel layers (rows 65, merged labels 70, resource codes 80)
@@ -101,7 +102,7 @@ const showWdRow = computed(() => props.t.unit === 'day' && props.t.cellPx >= CEL
   top: 0;
   left: 0;
   width: 180px;
-  background: #f8f9fa;
+  background: var(--ui-surface-2);
   z-index: 90;
   display: flex;
   align-items: center;
@@ -109,9 +110,9 @@ const showWdRow = computed(() => props.t.unit === 'day' && props.t.cellPx >= CEL
   box-sizing: border-box;
   font-weight: 700;
   font-size: 12px;
-  color: #444;
-  border-right: 1px solid #e0e0e0;
-  border-bottom: 1px solid #e0e0e0;
+  color: var(--ui-text-2);
+  border-right: 1px solid var(--ui-border);
+  border-bottom: 1px solid var(--ui-border);
   cursor: default;
   user-select: none;
   -webkit-user-select: none;
@@ -122,13 +123,13 @@ const showWdRow = computed(() => props.t.unit === 'day' && props.t.cellPx >= CEL
   height: 18px;
   font-size: 11px;
   font-weight: 600;
-  color: #444;
+  color: var(--ui-text-2);
   overflow: hidden;
   white-space: nowrap;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #f8f9fa;
+  background: var(--ui-surface-2);
   cursor: default;
   user-select: none;
   -webkit-user-select: none;
@@ -138,12 +139,12 @@ const showWdRow = computed(() => props.t.unit === 'day' && props.t.cellPx >= CEL
   top: 20px;
   height: 18px;
   font-size: 10px;
-  color: #666;
+  color: var(--ui-text-2);
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  border-left: 1px solid #e6e6e6;
-  background: #f8f9fa;
+  border-left: 1px solid var(--ui-border);
+  background: var(--ui-surface-2);
   overflow: hidden;
   cursor: default;
   user-select: none;
@@ -154,12 +155,12 @@ const showWdRow = computed(() => props.t.unit === 'day' && props.t.cellPx >= CEL
   top: 38px;
   height: 18px;
   font-size: 10px;
-  color: #999;
+  color: var(--ui-text-muted);
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  border-left: 1px solid #e6e6e6;
-  background: #f8f9fa;
+  border-left: 1px solid var(--ui-border);
+  background: var(--ui-surface-2);
   overflow: hidden;
   cursor: default;
   user-select: none;

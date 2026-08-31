@@ -83,6 +83,17 @@ const router = createRouter({
           component: () => import('../views/UsersPage.vue'),
         },
         {
+          // Create / edit user — a dedicated page instead of a modal
+          path: 'users/new',
+          name: 'user-new',
+          component: () => import('../views/UserFormPage.vue'),
+        },
+        {
+          path: 'users/:id/edit',
+          name: 'user-edit',
+          component: () => import('../views/UserFormPage.vue'),
+        },
+        {
           path: 'structure',
           name: 'structure',
           component: () => import('../views/CompanyStructure.vue'),
@@ -101,6 +112,11 @@ const router = createRouter({
           path: 'profile',
           name: 'profile',
           component: () => import('../views/ProfilePage.vue'),
+        },
+        {
+          path: 'profile/edit',
+          name: 'profile-edit',
+          component: () => import('../views/ProfileEditPage.vue'),
         },
         {
           path: 'sync',
@@ -181,6 +197,8 @@ router.beforeEach(async (to) => {
     resources: ['resource', 'view'],
     statuses: ['state_admin', 'view'],
     users: ['user_admin', 'view'],
+    'user-new': ['user_admin', 'view'],
+    'user-edit': ['user_admin', 'view'],
     structure: ['org_structure', 'view'],
     'auto-create': ['rbac_config', 'view'],
     permissions: ['rbac_config', 'view'],
@@ -201,6 +219,7 @@ router.beforeEach(async (to) => {
   if (
     to.meta.requiresAuth &&
     to.name !== 'profile' &&
+    to.name !== 'profile-edit' &&
     to.name !== 'sync' &&
     !pagePerm[to.name as string] &&
     !rbac.can('project', 'view') &&

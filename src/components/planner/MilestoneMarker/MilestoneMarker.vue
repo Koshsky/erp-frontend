@@ -12,7 +12,7 @@ import { BarTooltip } from '../../common/Tooltips'
 import type { MilestoneMarkerProps } from './types'
 
 const props = withDefaults(defineProps<MilestoneMarkerProps>(), {
-  color: '#fbbc04',
+  color: 'var(--ui-milestone)',
   draggable: true,
   stripHeight: 20,
   groupStartDate: null,
@@ -110,7 +110,7 @@ function onDblClick() {
         <template #popup>
           <BarTooltip
             :title="title"
-            :accent="'#fbbc04'"
+            :accent="'var(--ui-milestone)'"
             :rows="[content, formattedDate].filter((x): x is string => Boolean(x))"
           />
         </template>
@@ -121,6 +121,7 @@ function onDblClick() {
 </template>
 
 <style scoped>
+@import "../../../styles/tokens.css";
 .ms {
   position: absolute;
   top: 0;
@@ -136,12 +137,12 @@ function onDblClick() {
   width: 50%;
   min-width: 4px;
   border-radius: 4px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--ui-shadow-sm);
   cursor: default;
   pointer-events: auto;
 }
 .ms-drag .ms-marker {
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
+  box-shadow: var(--ui-shadow-md);
 }
 .ms-marker :deep(.tt-trigger) {
   display: flex;

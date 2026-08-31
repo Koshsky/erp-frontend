@@ -22,24 +22,26 @@ withDefaults(defineProps<PlannerStatesProps>(), {
 </template>
 
 <style scoped>
+@import "../../../styles/tokens.css";
+
 .pg {
-  background: #fff;
+  background: var(--ui-surface);
   border-radius: 10px;
   padding: 12px;
-  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--ui-shadow-sm);
 }
 .st {
   text-align: center;
   padding: 30px;
-  color: #666;
+  color: var(--ui-text-2);
   font-size: 14px;
 }
 .pg-error {
-  color: #d93025;
+  color: var(--ui-danger);
   font-size: 13px;
   padding: 8px 4px;
 }
 .er {
-  color: #d93025;
+  color: var(--ui-danger);
 }
 </style>

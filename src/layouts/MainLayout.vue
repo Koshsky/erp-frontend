@@ -56,21 +56,23 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+@import '../styles/tokens.css';
+
 .ml {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background: #f4f6f9;
+  background: var(--ui-bg);
 }
 
 .ml-offline {
   padding: 8px 24px;
-  background: #fdecea;
-  color: #b23b2e;
+  background: var(--ui-danger-soft);
+  color: var(--ui-danger);
   font-size: 13px;
   font-weight: 600;
   text-align: center;
-  border-bottom: 1px solid #f3c4c1;
+  border-bottom: 1px solid var(--ui-border);
 }
 
 .ml-body {

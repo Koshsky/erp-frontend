@@ -166,9 +166,11 @@ function onSave() {
 <style src="./LoginPage.css" scoped></style>
 
 <style scoped>
+@import '../styles/tokens.css';
+
 /* Error with the success flag — in green */
 .lp-error.ok {
-  color: #188038;
+  color: var(--ui-success);
 }
 
 .ss-back {
@@ -176,7 +178,7 @@ function onSave() {
   text-align: center;
   margin-top: 12px;
   font-size: 13px;
-  color: #1a73e8;
+  color: var(--ui-accent);
   text-decoration: none;
 }
 
@@ -187,22 +189,22 @@ function onSave() {
   justify-content: space-between;
   gap: 12px;
   padding: 11px 14px;
-  border: 1px solid #e4e9f0;
+  border: 1px solid var(--ui-border);
   border-radius: 10px;
-  background: #fafbfc;
+  background: var(--ui-surface-2);
   margin-bottom: 10px;
   font-size: 13px;
 }
 
 .ss-label {
-  color: #888;
+  color: var(--ui-text-muted);
   font-weight: 600;
   white-space: nowrap;
 }
 
 .ss-value {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  color: #333;
+  color: var(--ui-text);
   word-break: break-all;
   text-align: right;
 }

@@ -644,10 +644,12 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+@import '../styles/tokens.css';
+
 .sp-title {
   font-size: 24px;
   font-weight: 700;
-  color: #2c3e50;
+  color: var(--ui-text);
   margin-bottom: 20px;
 }
 
@@ -672,35 +674,35 @@ onBeforeUnmount(() => {
 }
 
 .sp-card {
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.08);
+  background: var(--ui-surface);
+  border-radius: var(--ui-radius-md);
+  box-shadow: var(--ui-shadow-md);
   padding: 20px;
 }
 
 .sp-card-title {
   font-size: 18px;
   font-weight: 700;
-  color: #2c3e50;
+  color: var(--ui-text);
   margin: 0 0 16px;
 }
 
 .sp-card-inner {
   margin-top: 16px;
   padding-top: 14px;
-  border-top: 1px solid #eef0f4;
+  border-top: 1px solid var(--ui-border);
 }
 
 .sp-subtitle {
   font-size: 14px;
   font-weight: 700;
-  color: #2c3e50;
+  color: var(--ui-text);
   margin: 0 0 6px;
 }
 
 .sp-hint-pwd {
   font-size: 12px;
-  color: #888;
+  color: var(--ui-text-muted);
   margin: 4px 0 0;
 }
 
@@ -711,21 +713,21 @@ onBeforeUnmount(() => {
   margin-bottom: 14px;
   font-size: 13px;
   font-weight: 600;
-  color: #444;
+  color: var(--ui-text-2);
 }
 
 .sp-field input {
   padding: 11px 14px;
-  border: 1px solid #d0d4da;
-  border-radius: 8px;
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius-sm);
   font-size: 14px;
   font-weight: 400;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition: border-color var(--ui-duration), box-shadow var(--ui-duration);
 }
 
 .sp-field input:focus {
   outline: none;
-  border-color: #1a73e8;
+  border-color: var(--ui-accent);
   box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.15);
 }
 
@@ -735,22 +737,22 @@ onBeforeUnmount(() => {
   gap: 8px;
   margin: 6px 0;
   font-size: 13px;
-  color: #444;
+  color: var(--ui-text-2);
   cursor: pointer;
 }
 
 .sp-msg {
   font-size: 13px;
-  color: #d93025;
+  color: var(--ui-danger);
   margin: 10px 0 0;
 }
 
 .sp-msg.ok {
-  color: #188038;
+  color: var(--ui-success);
 }
 
 .sp-msg.warn {
-  color: #b26a00;
+  color: var(--ui-warning);
 }
 
 .sp-btn {
@@ -758,17 +760,17 @@ onBeforeUnmount(() => {
   width: 100%;
   padding: 12px;
   border: none;
-  border-radius: 8px;
-  background: #1a73e8;
-  color: #fff;
+  border-radius: var(--ui-radius-sm);
+  background: var(--ui-accent);
+  color: var(--ui-accent-on);
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.15s, opacity 0.15s;
+  transition: background var(--ui-duration), opacity var(--ui-duration);
 }
 
 .sp-btn:hover:not(:disabled) {
-  background: #1765cc;
+  background: color-mix(in srgb, var(--ui-accent) 88%, black);
 }
 
 .sp-btn:disabled {
@@ -777,28 +779,28 @@ onBeforeUnmount(() => {
 }
 
 .sp-btn.ghost {
-  background: #f2f2f2;
-  color: #444;
+  background: var(--ui-surface-3);
+  color: var(--ui-text-2);
 }
 
 .sp-btn.ghost:hover:not(:disabled) {
-  background: #e6e6e6;
+  background: var(--ui-border);
 }
 
 .sp-btn.accent {
-  background: #188038;
+  background: var(--ui-success);
 }
 
 .sp-btn.accent:hover:not(:disabled) {
-  background: #146b30;
+  background: color-mix(in srgb, var(--ui-success) 88%, black);
 }
 
 .sp-btn.danger {
-  background: #d93025;
+  background: var(--ui-danger);
 }
 
 .sp-btn.danger:hover:not(:disabled) {
-  background: #c5221f;
+  background: color-mix(in srgb, var(--ui-danger) 88%, black);
 }
 
 .sp-actions {
@@ -831,7 +833,7 @@ onBeforeUnmount(() => {
   display: flex;
   justify-content: space-between;
   padding: 9px 0;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--ui-border);
   font-size: 13px;
 }
 
@@ -840,34 +842,34 @@ onBeforeUnmount(() => {
 }
 
 .sp-label {
-  color: #888;
+  color: var(--ui-text-muted);
 }
 
 .sp-value {
   font-weight: 600;
-  color: #333;
+  color: var(--ui-text);
 }
 
 .sp-value.on {
-  color: #188038;
+  color: var(--ui-success);
 }
 
 .sp-value.off {
-  color: #b26a00;
+  color: var(--ui-warning);
 }
 
 .sp-errors {
   margin-top: 14px;
-  border: 1px solid #f3c4c1;
-  background: #fdf3f2;
-  border-radius: 8px;
+  border: 1px solid var(--ui-danger-soft);
+  background: var(--ui-danger-soft);
+  border-radius: var(--ui-radius-sm);
   padding: 10px 12px;
 }
 
 .sp-errors-head {
   font-size: 13px;
   font-weight: 700;
-  color: #b91c1c;
+  color: var(--ui-danger);
   margin-bottom: 6px;
 }
 
@@ -889,12 +891,12 @@ onBeforeUnmount(() => {
 
 .sp-errors-req {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  color: #7a1a17;
+  color: var(--ui-danger);
   word-break: break-all;
 }
 
 .sp-errors-msg {
-  color: #555;
+  color: var(--ui-text-2);
 }
 
 .sp-hint {
@@ -903,7 +905,7 @@ onBeforeUnmount(() => {
 }
 
 .sp-hint a {
-  color: #1a73e8;
+  color: var(--ui-accent);
   text-decoration: none;
 }
 
@@ -918,26 +920,26 @@ onBeforeUnmount(() => {
 .warm-bar {
   height: 8px;
   border-radius: 999px;
-  background: #e9edf2;
+  background: var(--ui-surface-3);
   overflow: hidden;
 }
 
 .warm-fill {
   height: 100%;
   border-radius: 999px;
-  background: #1a73e8;
-  transition: width 0.3s ease;
+  background: var(--ui-accent);
+  transition: width var(--ui-duration) ease;
 }
 
 .warm-fill--push {
-  background: #188038;
+  background: var(--ui-success);
 }
 
 .warm-label {
   display: block;
   margin-top: 6px;
   font-size: 12px;
-  color: #555;
+  color: var(--ui-text-2);
   text-align: right;
 }
 
@@ -954,14 +956,14 @@ onBeforeUnmount(() => {
   min-width: 22px;
   padding: 1px 8px;
   border-radius: 999px;
-  background: #f39c12;
-  color: #fff;
+  background: var(--ui-milestone);
+  color: #4a3d14;
   font-size: 12px;
   font-weight: 700;
 }
 
 .queue-hint {
-  color: #b26a00;
+  color: var(--ui-warning);
 }
 
 .queue-list {
@@ -974,10 +976,10 @@ onBeforeUnmount(() => {
 }
 
 .queue-item {
-  border: 1px solid #eef0f4;
-  border-radius: 8px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
   padding: 8px 10px;
-  background: #fafbfc;
+  background: var(--ui-surface-2);
 }
 
 .queue-item-head {
@@ -990,32 +992,32 @@ onBeforeUnmount(() => {
 .queue-op {
   padding: 1px 8px;
   border-radius: 999px;
-  color: #fff;
+  color: var(--ui-accent-on);
   font-weight: 600;
 }
 
 .queue-op--create {
-  background: #188038;
+  background: var(--ui-success);
 }
 
 .queue-op--update {
-  background: #1a73e8;
+  background: var(--ui-accent);
 }
 
 .queue-op--delete {
-  background: #d93025;
+  background: var(--ui-danger);
 }
 
 .queue-entity {
   font-weight: 700;
-  color: #333;
+  color: var(--ui-text);
 }
 
 .queue-error-badge {
   padding: 0 7px;
   border-radius: 999px;
-  background: #fdecea;
-  color: #c5221f;
+  background: var(--ui-danger-soft);
+  color: var(--ui-danger);
   font-size: 10px;
   font-weight: 700;
   white-space: nowrap;
@@ -1023,7 +1025,7 @@ onBeforeUnmount(() => {
 
 .queue-time {
   margin-left: auto;
-  color: #999;
+  color: var(--ui-text-faint);
   white-space: nowrap;
 }
 
@@ -1031,7 +1033,7 @@ onBeforeUnmount(() => {
   margin-top: 4px;
   font-size: 13px;
   font-weight: 600;
-  color: #333;
+  color: var(--ui-text);
 }
 
 .queue-details {
@@ -1040,37 +1042,37 @@ onBeforeUnmount(() => {
   flex-wrap: wrap;
   gap: 4px 14px;
   font-size: 12px;
-  color: #555;
+  color: var(--ui-text-2);
 }
 
 .queue-detail-key {
-  color: #888;
+  color: var(--ui-text-muted);
 }
 
 .queue-item {
   cursor: pointer;
-  transition: border-color 0.15s, background 0.15s;
+  transition: border-color var(--ui-duration), background var(--ui-duration);
 }
 
 .queue-item:hover {
-  border-color: #c9d6ef;
+  border-color: var(--ui-accent-soft);
 }
 
 .queue-item.open {
-  border-color: #1a73e8;
-  background: #f4f8ff;
+  border-color: var(--ui-accent);
+  background: var(--ui-accent-soft);
 }
 
 .queue-toggle {
   float: right;
   font-size: 11px;
   font-weight: 500;
-  color: #1a73e8;
+  color: var(--ui-accent);
 }
 
 .queue-info {
   margin-top: 8px;
-  border-top: 1px dashed #cfd8e6;
+  border-top: 1px dashed var(--ui-border-strong);
   padding-top: 8px;
 }
 
@@ -1089,22 +1091,22 @@ onBeforeUnmount(() => {
 
 .queue-info-label {
   flex: 0 0 92px;
-  color: #888;
+  color: var(--ui-text-muted);
   font-weight: 600;
 }
 
 .queue-info-value {
-  color: #333;
+  color: var(--ui-text);
   word-break: break-all;
 }
 
 .queue-info-url {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  color: #444;
+  color: var(--ui-text-2);
 }
 
 .queue-info-error {
-  color: #c5221f;
+  color: var(--ui-danger);
 }
 
 .queue-info-body-row {
@@ -1116,13 +1118,13 @@ onBeforeUnmount(() => {
   flex: 1;
   margin: 0;
   padding: 8px 10px;
-  background: #f2f5f9;
-  border: 1px solid #e4e9f0;
+  background: var(--ui-surface-3);
+  border: 1px solid var(--ui-border);
   border-radius: 6px;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 11px;
   line-height: 1.5;
-  color: #333;
+  color: var(--ui-text);
   white-space: pre-wrap;
   word-break: break-word;
   overflow-x: auto;

@@ -285,6 +285,8 @@ onMounted(() => {
 </template>
 
 <style scoped>
+@import '../styles/tokens.css';
+
 .pp-toolbar {
   display: flex;
   justify-content: flex-end;
@@ -293,17 +295,17 @@ onMounted(() => {
 .pp-fb {
   margin: 0 0 12px;
   padding: 8px 12px;
-  background: #e6f4ea;
-  color: #1e8e3e;
-  border: 1px solid #b7dfc0;
-  border-radius: 8px;
+  background: var(--ui-success-soft);
+  color: var(--ui-success);
+  border: 1px solid color-mix(in srgb, var(--ui-success) 30%, transparent);
+  border-radius: var(--ui-radius-sm);
   font-size: 13px;
 }
 .pp-st {
-  color: #666;
+  color: var(--ui-text-2);
   font-size: 14px;
   padding: 30px;
   text-align: center;
 }
-.er { color: #d93025; }
+.er { color: var(--ui-danger); }
 </style>

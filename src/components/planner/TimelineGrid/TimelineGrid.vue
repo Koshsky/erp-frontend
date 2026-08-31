@@ -261,6 +261,7 @@ function onContextMenu(e: MouseEvent) {
 </template>
 
 <style scoped>
+@import "../../../styles/tokens.css";
 .tg-scroll {
   overflow: auto;
   max-height: var(--planner-max-height, calc(100vh - 160px));
@@ -292,6 +293,6 @@ function onContextMenu(e: MouseEvent) {
   top: 0;
   bottom: 0;
   width: 1px;
-  background: #e4e6e8;
+  background: var(--ui-border);
 }
 </style>

@@ -198,64 +198,70 @@ onMounted(() => {
     <p v-if="resourcesLoading" class="rp-st">Загрузка...</p>
     <p v-if="resourcesError" class="rp-st er">{{ resourcesError }}</p>
 
-    <div v-if="filteredResources.length" class="table">
+    <!--
+      The table frame (header included) stays visible even when the filters
+      leave no rows: the empty-state message is rendered inside the table
+      instead of replacing it, so the header and filter controls remain usable.
+    -->
+    <div v-if="resources.length || (!resourcesLoading && !resourcesError)" class="table">
       <div class="tr th">
         <div>Код</div>
         <div>Название</div>
         <div>Сотрудников</div>
         <div>Владелец</div>
       </div>
-      <template v-for="res in filteredResources" :key="res.id">
-        <div
-          class="tr rp-row"
-          :class="{ 'rp-open': expandedId === res.id }"
-          @click="toggleExpanded(res)"
-          @contextmenu.prevent.stop="onRowContextMenu($event, res)"
-        >
-          <div class="code">{{ res.code }}</div>
-          <div>{{ res.title }}</div>
-          <div>{{ res.employees_count }}</div>
-          <div>{{ ownerLabel(res.owner_id) }}</div>
-        </div>
-        <div v-if="expandedId === res.id" class="rp-members">
-          <div class="rp-members-head">
-            <span class="rp-members-title">Пользователи ({{ membersFor(res.id ?? 0).length }})</span>
-            <div class="rp-members-add">
-              <select v-model="addMemberId" class="rp-filter">
-                <option value="">Добавить пользователя...</option>
-                <option v-for="w in workersNotIn(res.id ?? 0)" :key="w.id" :value="w.id">
-                  {{ w.name }}
-                </option>
-              </select>
-              <button
-                type="button"
-                class="rp-member-btn"
-                :disabled="!addMemberId"
-                @click="onAddMember(res.id ?? 0)"
-              >
-                Добавить
-              </button>
-            </div>
+      <template v-if="filteredResources.length">
+        <template v-for="res in filteredResources" :key="res.id">
+          <div
+            class="tr rp-row"
+            :class="{ 'rp-open': expandedId === res.id }"
+            @click="toggleExpanded(res)"
+            @contextmenu.prevent.stop="onRowContextMenu($event, res)"
+          >
+            <div class="code">{{ res.code }}</div>
+            <div>{{ res.title }}</div>
+            <div>{{ res.employees_count }}</div>
+            <div>{{ ownerLabel(res.owner_id) }}</div>
           </div>
-          <div v-if="membersFor(res.id ?? 0).length" class="rp-members-list">
-            <div v-for="m in membersFor(res.id ?? 0)" :key="m.id" class="rp-member">
-              <span class="rp-member-name">{{ m.name }}</span>
-              <span class="rp-member-pos">{{ m.position || '—' }}</span>
-              <button
-                type="button"
-                class="rp-member-btn rp-member-remove"
-                @click="onRemoveMember(res.id ?? 0, m.id ?? 0)"
-              >
-                Убрать
-              </button>
+          <div v-if="expandedId === res.id" class="rp-members">
+            <div class="rp-members-head">
+              <span class="rp-members-title">Пользователи ({{ membersFor(res.id ?? 0).length }})</span>
+              <div class="rp-members-add">
+                <select v-model="addMemberId" class="rp-filter">
+                  <option value="">Добавить пользователя...</option>
+                  <option v-for="w in workersNotIn(res.id ?? 0)" :key="w.id" :value="w.id">
+                    {{ w.name }}
+                  </option>
+                </select>
+                <button
+                  type="button"
+                  class="rp-member-btn"
+                  :disabled="!addMemberId"
+                  @click="onAddMember(res.id ?? 0)"
+                >
+                  Добавить
+                </button>
+              </div>
             </div>
+            <div v-if="membersFor(res.id ?? 0).length" class="rp-members-list">
+              <div v-for="m in membersFor(res.id ?? 0)" :key="m.id" class="rp-member">
+                <span class="rp-member-name">{{ m.name }}</span>
+                <span class="rp-member-pos">{{ m.position || '—' }}</span>
+                <button
+                  type="button"
+                  class="rp-member-btn rp-member-remove"
+                  @click="onRemoveMember(res.id ?? 0, m.id ?? 0)"
+                >
+                  Убрать
+                </button>
+              </div>
+            </div>
+            <p v-else class="rp-members-empty">Нет участников</p>
           </div>
-          <p v-else class="rp-members-empty">Нет участников</p>
-        </div>
+        </template>
       </template>
+      <p v-else class="rp-st">{{ resources.length ? 'Ничего не найдено' : 'Нет данных о ресурсах' }}</p>
     </div>
-    <p v-else-if="!resourcesLoading && !resourcesError && resources.length" class="rp-st">Ничего не найдено</p>
-    <p v-else-if="!resourcesLoading && !resourcesError" class="rp-st">Нет данных о ресурсах</p>
 
     <ContextMenu v-bind="menuBind" @select="select" @close="closeMenu" />
 
@@ -272,6 +278,8 @@ onMounted(() => {
 </template>
 
 <style scoped>
+@import '../styles/tokens.css';
+
 .rp-head {
   display: flex;
   align-items: center;
@@ -282,21 +290,21 @@ onMounted(() => {
 .rp-title {
   font-size: 24px;
   font-weight: 700;
-  color: #2c3e50;
+  color: var(--ui-text);
 }
 .rp-add {
   border: none;
-  border-radius: 8px;
+  border-radius: var(--ui-radius-sm);
   padding: 9px 18px;
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
-  background: #1a73e8;
-  color: #fff;
-  transition: background 0.15s;
+  background: var(--ui-accent);
+  color: var(--ui-accent-on);
+  transition: background var(--ui-duration);
 }
 .rp-add:hover {
-  background: #1765cc;
+  background: color-mix(in srgb, var(--ui-accent) 88%, black);
 }
 .rp-actions {
   display: flex;
@@ -305,32 +313,32 @@ onMounted(() => {
 }
 .rp-filter {
   box-sizing: border-box;
-  border: 1px solid #ddd;
-  border-radius: 8px;
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius-sm);
   padding: 9px 12px;
   font-size: 14px;
   font-family: inherit;
-  color: #333;
-  background: #fff;
+  color: var(--ui-text);
+  background: var(--ui-surface);
   outline: none;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition: border-color var(--ui-duration), box-shadow var(--ui-duration);
 }
 .rp-filter:focus {
-  border-color: #1a73e8;
+  border-color: var(--ui-accent);
   box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.12);
 }
 .rp-st {
-  color: #666;
+  color: var(--ui-text-muted);
   font-size: 14px;
   padding: 30px;
   text-align: center;
 }
-.er { color: #d93025; }
+.er { color: var(--ui-danger); }
 
 .table {
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.08);
+  background: var(--ui-surface);
+  border-radius: var(--ui-radius-md);
+  box-shadow: var(--ui-shadow-md);
   overflow: hidden;
 }
 .tr {
@@ -338,23 +346,23 @@ onMounted(() => {
   grid-template-columns: 120px 1fr 120px 1fr;
   gap: 8px;
   padding: 12px 20px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--ui-border);
   font-size: 14px;
 }
 .tr:last-child { border-bottom: none; }
 .tr:not(.th):hover {
-  background: #f6f8fa;
+  background: var(--ui-surface-3);
 }
 .rp-row {
   cursor: pointer;
 }
 .rp-open {
-  background: #f6f8fa;
+  background: var(--ui-surface-3);
 }
 .rp-members {
   padding: 12px 20px;
-  background: #fafbfc;
-  border-bottom: 1px solid #f0f0f0;
+  background: var(--ui-surface-2);
+  border-bottom: 1px solid var(--ui-border);
 }
 .rp-members-head {
   display: flex;
@@ -366,7 +374,7 @@ onMounted(() => {
 .rp-members-title {
   font-size: 13px;
   font-weight: 600;
-  color: #555;
+  color: var(--ui-text-2);
 }
 .rp-members-add {
   display: flex;
@@ -385,16 +393,16 @@ onMounted(() => {
   align-items: center;
   padding: 6px 8px;
   border-radius: 6px;
-  background: #fff;
-  border: 1px solid #ececec;
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
   font-size: 13px;
 }
 .rp-member-name {
   font-weight: 600;
-  color: #1a3a6b;
+  color: var(--ui-accent);
 }
 .rp-member-pos {
-  color: #667;
+  color: var(--ui-text-muted);
 }
 .rp-member-btn {
   border: none;
@@ -403,39 +411,39 @@ onMounted(() => {
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  background: #1a73e8;
-  color: #fff;
-  transition: background 0.15s;
+  background: var(--ui-accent);
+  color: var(--ui-accent-on);
+  transition: background var(--ui-duration);
 }
 .rp-member-btn:hover:not(:disabled) {
-  background: #1765cc;
+  background: color-mix(in srgb, var(--ui-accent) 88%, black);
 }
 .rp-member-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 .rp-member-remove {
-  background: #fff;
-  color: #b3261e;
-  border: 1px solid #e0e0e0;
+  background: var(--ui-surface);
+  color: var(--ui-danger);
+  border: 1px solid var(--ui-border);
 }
 .rp-member-remove:hover:not(:disabled) {
-  background: #fef2f1;
+  background: var(--ui-danger-soft);
 }
 .rp-members-empty {
   margin: 0;
   padding: 8px 0;
   font-size: 13px;
-  color: #888;
+  color: var(--ui-text-muted);
   text-align: center;
 }
 .th {
-  background: #f8f9fa;
+  background: var(--ui-surface-2);
   font-weight: 600;
-  color: #555;
+  color: var(--ui-text-2);
 }
 .code {
   font-weight: 700;
-  color: #1a73e8;
+  color: var(--ui-accent);
 }
 </style>

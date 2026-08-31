@@ -409,6 +409,8 @@ const labelsH = computed(() => props.employees.length * ROW_H)
 </template>
 
 <style scoped>
+@import '../../../styles/tokens.css';
+
 .ts {
   position: relative;
 }
@@ -419,7 +421,7 @@ const labelsH = computed(() => props.employees.length * ROW_H)
   position: sticky;
   left: 0;
   z-index: 80;
-  background: #fff;
+  background: var(--ui-surface);
   box-sizing: border-box;
   user-select: none;
   -webkit-user-select: none;
@@ -431,13 +433,13 @@ const labelsH = computed(() => props.employees.length * ROW_H)
   gap: 2px;
   padding: 0 8px;
   box-sizing: border-box;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--ui-border);
   overflow: hidden;
   cursor: default;
 }
 .ts-label-name {
   font-weight: 700;
-  color: #333;
+  color: var(--ui-text);
   font-size: 12px;
   line-height: 1.2;
   overflow: hidden;
@@ -446,7 +448,7 @@ const labelsH = computed(() => props.employees.length * ROW_H)
 }
 .ts-label-pos {
   font-size: 11px;
-  color: #667;
+  color: var(--ui-text-2);
   line-height: 1.2;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -458,7 +460,7 @@ const labelsH = computed(() => props.employees.length * ROW_H)
 .ts-row {
   position: relative;
   box-sizing: border-box;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--ui-border);
 }
 .ts-cell {
   position: absolute;
@@ -471,20 +473,20 @@ const labelsH = computed(() => props.employees.length * ROW_H)
 .ts-error {
   margin: 10px 0 0;
   font-size: 13px;
-  color: #d93025;
+  color: var(--ui-danger);
 }
 
 /* Live selection tooltip: same look as the regular popovers, but fixed at the cursor */
 .ts-range-tip {
   position: fixed;
-  background: #fff;
-  color: #333;
+  background: var(--ui-surface);
+  color: var(--ui-text);
   font-size: 12px;
   line-height: 1.45;
   padding: 6px 10px;
-  border-radius: 8px;
-  border: 1px solid #e0e0e0;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  border-radius: var(--ui-radius-sm);
+  border: 1px solid var(--ui-border);
+  box-shadow: var(--ui-shadow-md);
   white-space: nowrap;
   pointer-events: none;
   z-index: 900;
@@ -502,10 +504,10 @@ const labelsH = computed(() => props.employees.length * ROW_H)
   position: fixed;
   z-index: 1001;
   width: 200px;
-  background: #fff;
-  border-radius: 10px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
-  border: 1px solid #e0e0e0;
+  background: var(--ui-surface);
+  border-radius: var(--ui-radius-md);
+  box-shadow: var(--ui-shadow-lg);
+  border: 1px solid var(--ui-border);
   overflow: hidden;
 }
 .ts-panel-head {
@@ -513,19 +515,19 @@ const labelsH = computed(() => props.employees.length * ROW_H)
   align-items: center;
   gap: 6px;
   padding: 10px 12px;
-  background: #f8f9fa;
-  border-bottom: 1px solid #eee;
+  background: var(--ui-surface-2);
+  border-bottom: 1px solid var(--ui-border);
   font-size: 12px;
 }
 .ts-panel-title {
   font-weight: 700;
-  color: #1a3a6b;
+  color: var(--ui-accent);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .ts-panel-range {
-  color: #777;
+  color: var(--ui-text-2);
   flex: 1;
   text-align: right;
 }
@@ -534,12 +536,12 @@ const labelsH = computed(() => props.employees.length * ROW_H)
   background: transparent;
   font-size: 16px;
   line-height: 1;
-  color: #999;
+  color: var(--ui-text-muted);
   cursor: pointer;
   padding: 0 2px;
 }
 .ts-panel-close:hover {
-  color: #333;
+  color: var(--ui-text);
 }
 .ts-panel-states {
   display: flex;
@@ -554,16 +556,16 @@ const labelsH = computed(() => props.employees.length * ROW_H)
   align-items: center;
   gap: 8px;
   border: none;
-  background: #f7f8fa;
-  border-radius: 8px;
+  background: var(--ui-surface-2);
+  border-radius: var(--ui-radius-sm);
   padding: 8px 10px;
   font-size: 13px;
   text-align: left;
   cursor: pointer;
-  transition: background 0.15s;
+  transition: background var(--ui-duration);
 }
 .ts-state:hover:not(:disabled) {
-  background: #eef2f8;
+  background: var(--ui-surface-3);
 }
 .ts-state:disabled {
   opacity: 0.5;
@@ -573,7 +575,7 @@ const labelsH = computed(() => props.employees.length * ROW_H)
   width: 14px;
   height: 14px;
   border-radius: 4px;
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--ui-border-strong);
   flex-shrink: 0;
 }
 .ts-panel-actions {
@@ -581,16 +583,16 @@ const labelsH = computed(() => props.employees.length * ROW_H)
 }
 .ts-btn-clear {
   width: 100%;
-  border: 1px solid #e0e0e0;
-  background: #fff;
-  border-radius: 8px;
+  border: 1px solid var(--ui-border);
+  background: var(--ui-surface);
+  border-radius: var(--ui-radius-sm);
   padding: 8px;
   font-size: 13px;
-  color: #b3261e;
+  color: var(--ui-danger);
   cursor: pointer;
 }
 .ts-btn-clear:hover:not(:disabled) {
-  background: #fef2f1;
+  background: var(--ui-danger-soft);
 }
 .ts-btn-clear:disabled {
   opacity: 0.5;

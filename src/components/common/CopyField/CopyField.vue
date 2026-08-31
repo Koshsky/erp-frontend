@@ -95,6 +95,8 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+@import '../../../styles/tokens.css';
+
 .cf {
   display: flex;
   flex-direction: column;
@@ -103,15 +105,15 @@ onBeforeUnmount(() => {
 .cf-label {
   font-size: 13px;
   font-weight: 600;
-  color: #444;
+  color: var(--ui-text-2);
 }
 .cf-field {
   display: flex;
   align-items: center;
   gap: 8px;
-  background: #f6f8fa;
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
+  background: var(--ui-surface-2);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
   padding: 9px 8px 9px 12px;
   cursor: text;
   user-select: all;
@@ -121,7 +123,7 @@ onBeforeUnmount(() => {
   flex: 1;
   min-width: 0;
   overflow-wrap: anywhere;
-  color: #1a3a6b;
+  color: var(--ui-accent);
   font-size: 14px;
 }
 .cf-field--mono .cf-value {
@@ -135,24 +137,24 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid #d0d4da;
-  background: #fff;
-  border-radius: 7px;
-  color: #5f6b7a;
+  border: 1px solid var(--ui-border-strong);
+  background: var(--ui-surface);
+  border-radius: var(--ui-radius-sm);
+  color: var(--ui-text-muted);
   cursor: pointer;
-  transition: color 0.15s, background 0.15s, border-color 0.15s;
+  transition: color var(--ui-duration), background var(--ui-duration), border-color var(--ui-duration);
 }
 .cf-copy:hover:not(:disabled) {
-  color: #1a73e8;
-  background: #f1f4f9;
+  color: var(--ui-accent);
+  background: var(--ui-surface-3);
 }
 .cf-copy:disabled {
   opacity: 0.45;
   cursor: not-allowed;
 }
 .cf-copy--done {
-  color: #1e8e3e;
-  border-color: #b7e3c2;
-  background: #eef9f1;
+  color: var(--ui-success);
+  border-color: var(--ui-success-soft);
+  background: var(--ui-success-soft);
 }
 </style>

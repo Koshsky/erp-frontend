@@ -1,13 +1,14 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { storeToRefs } from 'pinia'
-import { ContextMenu, CopyField } from '../components/common'
+import { useRouter } from 'vue-router'
+import { ContextMenu, PasswordDialog } from '../components/common'
 import type { ContextMenuItem } from '../components/common/ContextMenu'
 import { useContextMenu } from '../composables/useContextMenu'
 import { useAppStore, useRbacStore } from '../store'
-import { compareByName, translitPhio } from '../utils'
-import type { DtoAdminUserResponse, DtoCreateUserRequest, DtoUpdateUserRequest } from '@/api'
+import type { DtoAdminUserResponse } from '@/api'
 
+const router = useRouter()
 const app = useAppStore()
 const rbac = useRbacStore()
 const { adminUsers, adminUsersLoading, adminUsersError, users } = storeToRefs(app)
@@ -102,147 +103,6 @@ function roleLabel(role?: string): string {
   return role ? (ROLE_LABELS[role] ?? role) : '—'
 }
 
-// === Create / edit user dialog ===
-const dialogOpen = ref(false)
-const dialogBusy = ref(false)
-const dialogError = ref<string | null>(null)
-/** The user being edited; null — the dialog creates a new user */
-const editingUser = ref<DtoAdminUserResponse | null>(null)
-
-const form = reactive({
-  lastName: '',
-  firstName: '',
-  middleName: '',
-  login: '',
-  role: 'worker',
-  managerId: '', // '' — no manager
-  position: '',
-  hireDate: '',
-  terminationDate: '',
-})
-/** The login field was edited manually — stop auto-filling from the full name */
-const loginTouched = ref(false)
-
-// Live default login (create mode only): translit of the full name, updated as ФИО is typed
-watch(
-  () => [form.lastName, form.firstName, form.middleName] as const,
-  () => {
-    if (loginTouched.value || editingUser.value) return
-    form.login = translitPhio(form.lastName, form.firstName, form.middleName)
-  },
-)
-
-/** Manager options: users with a non-worker role + "No manager" */
-const managerOptions = computed(() => [
-  { value: '', label: 'Без руководителя' },
-  ...users.value
-    .filter((u) => u.id != null && u.role !== 'worker')
-    .sort(compareByName)
-    .map((u) => ({ value: u.id as number, label: u.name ?? `#${u.id}` })),
-])
-
-function resetForm() {
-  form.lastName = ''
-  form.firstName = ''
-  form.middleName = ''
-  form.login = ''
-  form.role = 'worker'
-  form.managerId = ''
-  form.position = ''
-  form.hireDate = ''
-  form.terminationDate = ''
-  loginTouched.value = false
-}
-
-function openCreate() {
-  dialogError.value = null
-  editingUser.value = null
-  resetForm()
-  dialogOpen.value = true
-}
-
-function openEdit(u: DtoAdminUserResponse) {
-  dialogError.value = null
-  editingUser.value = u
-  form.lastName = u.last_name ?? ''
-  form.firstName = u.first_name ?? ''
-  form.middleName = u.middle_name ?? ''
-  form.login = u.username ?? ''
-  form.role = u.role ?? 'worker'
-  form.managerId = u.manager_id != null ? String(u.manager_id) : ''
-  form.position = u.position ?? ''
-  form.hireDate = u.hire_date ?? ''
-  form.terminationDate = u.termination_date ?? ''
-  // In edit mode the login is entered manually — no auto-fill
-  loginTouched.value = true
-  dialogOpen.value = true
-}
-
-const canSubmit = computed(() => {
-  if (dialogBusy.value) return false
-  if (form.lastName.trim() === '' || form.firstName.trim() === '') return false
-  if (editingUser.value && form.login.trim() === '') return false
-  return true
-})
-
-async function onSubmit() {
-  if (!canSubmit.value) return
-  dialogBusy.value = true
-  dialogError.value = null
-  try {
-    const common = {
-      last_name: form.lastName.trim(),
-      first_name: form.firstName.trim(),
-      role: form.role,
-    }
-    if (editingUser.value) {
-      const id = editingUser.value.id
-      if (id == null) return
-      // Empty strings clear the field (unlike undefined, which would keep it)
-      const patch: DtoUpdateUserRequest = {
-        ...common,
-        middle_name: form.middleName.trim(),
-        username: form.login.trim(),
-        position: form.position.trim(),
-      }
-      if (form.hireDate) patch.hire_date = form.hireDate
-      if (form.terminationDate) patch.termination_date = form.terminationDate
-      const ok = await app.updateUser(id, patch)
-      const prevManager = editingUser.value.manager_id ?? null
-      const nextManager = form.managerId === '' ? null : Number(form.managerId)
-      if (ok && nextManager !== prevManager) await app.updateManager(id, nextManager)
-      if (ok) {
-        dialogOpen.value = false
-        editingUser.value = null
-      } else {
-        dialogError.value = adminUsersError.value
-      }
-      return
-    }
-    const payload: DtoCreateUserRequest = {
-      ...common,
-      middle_name: form.middleName.trim() || undefined,
-      position: form.position.trim(),
-    }
-    const login = form.login.trim()
-    // Send the login only if entered; an empty one lets the backend generate it
-    // (transliteration of the last name, uniqueness ensured by a numeric suffix).
-    if (login) payload.username = login
-    if (form.hireDate) payload.hire_date = form.hireDate
-    if (form.terminationDate) payload.termination_date = form.terminationDate
-    if (form.managerId !== '') payload.manager_id = Number(form.managerId)
-    const res = await app.createUser(payload)
-    if (res && res.user) {
-      dialogOpen.value = false
-      showPassword(res.password, `Пользователь «${res.user.name}» создан`)
-    } else {
-      dialogError.value = adminUsersError.value
-    }
-  } finally {
-    dialogBusy.value = false
-  }
-}
-
 // === Row actions (context menu) ===
 interface RowMenuState {
   x: number
@@ -267,11 +127,27 @@ function handleSelect(id: string) {
   if (!menu.value) return
   const u = adminUsers.value.find((x) => x.id === menu.value?.userId)
   if (!u) return
-  if (id === 'edit-user') openEdit(u)
-  else if (id === 'reset-password') onResetPassword(u)
+  if (id === 'edit-user') {
+    goToEdit(u)
+  } else if (id === 'reset-password') onResetPassword(u)
 }
 
-// === Manager (for the label; editing is in the user dialog) ===
+/** Row click → the user's edit page (users/:id/edit) */
+function goToEdit(u: DtoAdminUserResponse) {
+  if (u.id == null) return
+  void router.push(`/users/${u.id}/edit`)
+}
+
+/** Keyboard activation of the row (Enter/Space), ignoring keys from inner controls */
+function onRowKeydown(e: KeyboardEvent, u: DtoAdminUserResponse) {
+  if (e.target !== e.currentTarget) return
+  if (e.key === 'Enter' || e.key === ' ') {
+    e.preventDefault()
+    goToEdit(u)
+  }
+}
+
+// === Manager (for the label; editing is on the user form page) ===
 function managerLabel(user: DtoAdminUserResponse): string {
   if (user.manager_id == null) return '—'
   return users.value.find((u) => u.id === user.manager_id)?.name ?? `#${user.manager_id}`
@@ -313,14 +189,19 @@ onMounted(() => {
     <div class="up-head">
       <h2 class="up-title">Пользователи</h2>
       <div class="up-actions">
-        <button type="button" class="up-add" @click="openCreate">Создать пользователя</button>
+        <button type="button" class="up-add" @click="router.push('/users/new')">Создать пользователя</button>
       </div>
     </div>
 
     <p v-if="adminUsersLoading && !adminUsers.length" class="up-st">Загрузка...</p>
     <p v-if="adminUsersError && !adminUsers.length" class="up-st er">{{ adminUsersError }}</p>
 
-    <div v-if="filteredUsers.length" class="table">
+    <!--
+      The table frame (header and the filter row) stays visible even when the
+      filters leave no rows: the empty-state message is rendered inside the
+      table instead of replacing it, so the filters remain editable.
+    -->
+    <div v-if="adminUsers.length || (!adminUsersLoading && !adminUsersError)" class="table">
       <div class="tr th th-sort">
         <button
           v-for="col in COLUMNS"
@@ -345,118 +226,53 @@ onMounted(() => {
         </select>
         <input v-model="fManager" type="search" class="th-filter" placeholder="по руководителю" />
       </div>
-      <div
-        v-for="u in filteredUsers"
-        :key="u.id"
-        class="tr"
-        @contextmenu.prevent.stop="onRowContextMenu($event, u)"
-      >
-        <div class="name">{{ u.name }}</div>
-        <div class="mono">{{ u.username }}</div>
-        <div>{{ fmtDate(u.created_at) }}</div>
-        <div>
-          <select class="up-role" :value="u.role" :disabled="roleChanging" @change="onChangeRole(u, $event)">
-            <option v-for="opt in roleOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-          </select>
+      <template v-if="filteredUsers.length">
+        <div
+          v-for="u in filteredUsers"
+          :key="u.id"
+          class="tr"
+          role="link"
+          tabindex="0"
+          :aria-label="`Редактировать пользователя «${u.name ?? u.username ?? ''}»`"
+          @click="goToEdit(u)"
+          @keydown="onRowKeydown($event, u)"
+          @contextmenu.prevent.stop="onRowContextMenu($event, u)"
+        >
+          <div class="name">{{ u.name }}</div>
+          <div class="mono">{{ u.username }}</div>
+          <div>{{ fmtDate(u.created_at) }}</div>
+          <div>
+            <select
+              class="up-role"
+              :value="u.role"
+              :disabled="roleChanging"
+              @click.stop
+              @change="onChangeRole(u, $event)"
+            >
+              <option v-for="opt in roleOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+            </select>
+          </div>
+          <div>{{ managerLabel(u) }}</div>
         </div>
-        <div>{{ managerLabel(u) }}</div>
-      </div>
+      </template>
+      <p v-else class="up-st">{{ adminUsers.length ? 'Ничего не найдено' : 'Нет данных' }}</p>
     </div>
-    <p v-else-if="!adminUsersLoading && !adminUsersError" class="up-st">
-      {{ adminUsers.length ? 'Ничего не найдено' : 'Нет данных' }}
-    </p>
 
     <ContextMenu v-bind="menuBind" @select="select" @close="closeMenu" />
 
-    <!-- Create / edit user dialog -->
-    <div v-if="dialogOpen" class="pw-overlay" @click.self="dialogOpen = false">
-      <div class="pw-card uc-card" role="dialog" aria-modal="true" :aria-label="editingUser ? 'Редактировать пользователя' : 'Создать пользователя'">
-        <div class="pw-caption">{{ editingUser ? 'Редактировать пользователя' : 'Создать пользователя' }}</div>
-
-        <label class="uc-field">
-          <span class="uc-label">Фамилия *</span>
-          <input v-model="form.lastName" type="text" class="uc-input" autocomplete="off" />
-        </label>
-        <label class="uc-field">
-          <span class="uc-label">Имя *</span>
-          <input v-model="form.firstName" type="text" class="uc-input" autocomplete="off" />
-        </label>
-        <label class="uc-field">
-          <span class="uc-label">Отчество</span>
-          <input v-model="form.middleName" type="text" class="uc-input" autocomplete="off" />
-        </label>
-        <label class="uc-field">
-          <span class="uc-label">Логин{{ editingUser ? ' *' : '' }}</span>
-          <input
-            v-model="form.login"
-            type="text"
-            class="uc-input"
-            autocomplete="off"
-            placeholder="Автозаполняется из ФИО"
-            @input="loginTouched = true"
-          />
-          <span v-if="!editingUser && !loginTouched" class="uc-hint">Заполняется автоматически по ФИО (транслит); можно изменить</span>
-        </label>
-        <label class="uc-field">
-          <span class="uc-label">Роль *</span>
-          <select v-model="form.role" class="uc-input uc-select">
-            <option v-for="opt in roleOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-          </select>
-        </label>
-        <label class="uc-field">
-          <span class="uc-label">Руководитель</span>
-          <select v-model="form.managerId" class="uc-input uc-select">
-            <option v-for="opt in managerOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-          </select>
-        </label>
-        <label class="uc-field">
-          <span class="uc-label">Должность</span>
-          <input v-model="form.position" type="text" class="uc-input" placeholder="Свободный текст, например «Ведущий инженер»" />
-        </label>
-        <div class="uc-row">
-          <label class="uc-field">
-            <span class="uc-label">Дата приёма</span>
-            <input v-model="form.hireDate" type="date" class="uc-input" />
-          </label>
-          <label class="uc-field">
-            <span class="uc-label">Дата увольнения</span>
-            <input v-model="form.terminationDate" type="date" class="uc-input" />
-          </label>
-        </div>
-
-        <p v-if="dialogError" class="uc-error">{{ dialogError }}</p>
-        <p v-if="!editingUser" class="uc-note">Пароль генерируется автоматически и будет показан один раз.</p>
-
-        <div class="uc-actions">
-          <button type="button" class="up-btn" @click="dialogOpen = false">Отмена</button>
-          <button type="button" class="up-add" :disabled="!canSubmit" @click="onSubmit">
-            {{
-              dialogBusy
-                ? editingUser
-                  ? 'Сохранение…'
-                  : 'Создание…'
-                : editingUser
-                  ? 'Сохранить'
-                  : 'Создать'
-            }}
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Showing the generated password -->
-    <div v-if="passwordModal" class="pw-overlay" @click.self="passwordModal = null">
-      <div class="pw-card">
-        <div class="pw-caption">{{ passwordModal.caption }}</div>
-        <CopyField :value="passwordModal.password" />
-        <p class="pw-note">Пароль показывается один раз. Скопируйте его и передайте пользователю.</p>
-        <button type="button" class="pw-close" @click="passwordModal = null">Закрыть</button>
-      </div>
-    </div>
+    <!-- Generated password shown once (after reset) -->
+    <PasswordDialog
+      :open="passwordModal !== null"
+      :password="passwordModal?.password ?? ''"
+      :caption="passwordModal?.caption ?? ''"
+      @close="passwordModal = null"
+    />
   </section>
 </template>
 
 <style scoped>
+@import '../styles/tokens.css';
+
 .up-head {
   display: flex;
   align-items: center;
@@ -468,7 +284,7 @@ onMounted(() => {
 .up-title {
   font-size: 24px;
   font-weight: 700;
-  color: #2c3e50;
+  color: var(--ui-text);
 }
 .up-actions {
   display: flex;
@@ -478,17 +294,17 @@ onMounted(() => {
 }
 .up-add {
   border: none;
-  border-radius: 8px;
+  border-radius: var(--ui-radius-sm);
   padding: 9px 18px;
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
-  background: #1a73e8;
-  color: #fff;
-  transition: background 0.15s, opacity 0.15s;
+  background: var(--ui-accent);
+  color: var(--ui-accent-on);
+  transition: background var(--ui-duration), opacity var(--ui-duration);
 }
 .up-add:hover:not(:disabled) {
-  background: #1765cc;
+  background: color-mix(in srgb, var(--ui-accent) 88%, black);
 }
 .up-add:disabled {
   opacity: 0.55;
@@ -496,46 +312,33 @@ onMounted(() => {
 }
 .up-role {
   box-sizing: border-box;
-  border: 1px solid #ddd;
-  border-radius: 8px;
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius-sm);
   padding: 6px 10px;
   font-size: 13px;
   font-family: inherit;
-  color: #333;
-  background: #fff;
+  color: var(--ui-text);
+  background: var(--ui-surface);
   outline: none;
 }
 .up-role:focus {
-  border-color: #1a73e8;
-}
-.up-btn {
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  background: #fff;
-  padding: 6px 12px;
-  font-size: 13px;
-  color: #1a73e8;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.up-btn:hover {
-  background: #eef4fd;
+  border-color: var(--ui-accent);
 }
 .up-st {
-  color: #666;
+  color: var(--ui-text-2);
   font-size: 14px;
   padding: 30px;
   text-align: center;
 }
-.er { color: #d93025; }
+.er { color: var(--ui-danger); }
 .mono {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 12px;
 }
 .table {
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.08);
+  background: var(--ui-surface);
+  border-radius: var(--ui-radius-md);
+  box-shadow: var(--ui-shadow-sm);
   overflow: hidden;
 }
 .tr {
@@ -543,16 +346,17 @@ onMounted(() => {
   grid-template-columns: 1.3fr 1fr 110px 1fr 1fr;
   gap: 8px;
   padding: 12px 20px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--ui-border);
   font-size: 14px;
   align-items: center;
 }
 .tr:last-child { border-bottom: none; }
-.tr:not(.th):hover { background: #f6f8fa; }
+.tr:not(.th):hover { background: var(--ui-surface-3); }
+.tr:not(.th) { cursor: pointer; }
 .th {
-  background: #f8f9fa;
+  background: var(--ui-surface-2);
   font-weight: 600;
-  color: #555;
+  color: var(--ui-text-2);
 }
 .th-sort {
   padding-top: 6px;
@@ -573,17 +377,17 @@ onMounted(() => {
   user-select: none;
 }
 .th-cell:hover {
-  color: #1a73e8;
+  color: var(--ui-accent);
 }
 .th-active {
-  color: #1a3a6b;
+  color: var(--ui-text);
 }
 .th-arrow {
   font-size: 10px;
   line-height: 1;
 }
 .th-filters {
-  background: #fafbfc;
+  background: var(--ui-surface-2);
   padding-top: 6px;
   padding-bottom: 6px;
 }
@@ -591,115 +395,20 @@ onMounted(() => {
   min-width: 0;
   width: 100%;
   box-sizing: border-box;
-  border: 1px solid #ddd;
+  border: 1px solid var(--ui-border-strong);
   border-radius: 6px;
   padding: 5px 8px;
   font-size: 12px;
   font-family: inherit;
-  color: #333;
-  background: #fff;
+  color: var(--ui-text);
+  background: var(--ui-surface);
   outline: none;
 }
 .th-filter:focus {
-  border-color: #1a73e8;
+  border-color: var(--ui-accent);
 }
 .name {
   font-weight: 700;
-  color: #1a3a6b;
-}
-
-/* Overlays sit above the app header (z 30000), like the other modals */
-.pw-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.4);
-  z-index: 40000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.pw-card {
-  background: #fff;
-  border-radius: 12px;
-  padding: 24px;
-  width: 420px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.pw-caption {
-  font-size: 16px;
-  font-weight: 700;
-  color: #2c3e50;
-}
-.pw-note {
-  font-size: 12px;
-  color: #888;
-  margin: 0;
-}
-.pw-close {
-  border: none;
-  border-radius: 8px;
-  padding: 9px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  background: #1a73e8;
-  color: #fff;
-}
-
-.uc-card {
-  max-height: calc(100vh - 48px);
-  overflow-y: auto;
-}
-.uc-field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.uc-label {
-  font-size: 13px;
-  color: #444;
-  font-weight: 500;
-}
-.uc-input {
-  width: 100%;
-  box-sizing: border-box;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  padding: 9px 12px;
-  font-size: 14px;
-  font-family: inherit;
-  color: #333;
-  background: #fff;
-  outline: none;
-}
-.uc-input:focus {
-  border-color: #1a73e8;
-  box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.12);
-}
-.uc-select {
-  cursor: pointer;
-}
-.uc-hint {
-  font-size: 12px;
-  color: #888;
-}
-.uc-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-.uc-error {
-  margin: 0;
-  font-size: 13px;
-  color: #d93025;
-}
-.uc-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  margin-top: 2px;
+  color: var(--ui-text);
 }
 </style>

@@ -14,7 +14,7 @@ import { useRbacStore } from '../store'
 import { useConfirm } from '../composables/useConfirm'
 
 const rbac = useRbacStore()
-const { roles, rules, matrix, routePolicies, loading, error, saving } = storeToRefs(rbac)
+const { roles, rules, matrix, loading, error, saving } = storeToRefs(rbac)
 
 /** Selected role (by default — the first one from the catalog, not admin). */
 const selected = ref('')
@@ -186,16 +186,14 @@ function roleTitle(code: string): string {
   return ROLE_TITLES[code] ?? code
 }
 
-/** Role list: admin + catalog (no duplicates). */
+/** Role tabs: the catalog without the admin bypass (admin is a code invariant, not an editable tab). */
 const roleList = computed(() => {
-  const names = ['admin']
+  const names: string[] = []
   for (const r of roles.value) {
-    if (r.name && !names.includes(r.name)) names.push(r.name)
+    if (r.name && r.name !== 'admin' && !names.includes(r.name)) names.push(r.name)
   }
   return names
 })
-
-const isAdminSelected = computed(() => selected.value === 'admin')
 
 /** Changed cells. */
 const staged = reactive<Record<string, string>>({})
@@ -262,16 +260,37 @@ function cancelDirty() {
 const { confirm: confirmDialog, ask, proceed, cancel } = useConfirm()
 
 // === Role management (catalog) ===
+
+/** Role name pattern: latin letters, digits, «-», «_» (mirrors the backend codec). */
+const ROLE_NAME_RE = /^[a-zA-Z0-9_-]+$/
 const newRoleName = ref('')
 const newRoleDesc = ref('')
 const roleMsg = ref<{ ok: boolean; text: string } | null>(null)
+/** Client-side validation error of the required role-name field (null = valid). */
+const newRoleNameError = ref<string | null>(null)
+const nameInput = ref<HTMLInputElement | null>(null)
+
+function failRoleName(message: string) {
+  newRoleNameError.value = message
+  nameInput.value?.focus()
+}
+
+/** Drop the highlight as soon as the user starts typing. */
+watch(newRoleName, () => {
+  newRoleNameError.value = null
+})
 
 async function onCreateRole() {
   const name = newRoleName.value.trim()
   if (!name) {
-    roleMsg.value = { ok: false, text: 'Укажите имя роли (латиница, цифры, «-», «_»)' }
+    failRoleName('Укажите имя роли (латиница, цифры, «-», «_»), описание можно не заполнять')
     return
   }
+  if (!ROLE_NAME_RE.test(name)) {
+    failRoleName('Имя роли: только латиница, цифры, «-», «_»')
+    return
+  }
+  newRoleNameError.value = null
   const ok = await rbac.createRole({ name, description: newRoleDesc.value.trim() })
   roleMsg.value = ok ? { ok: true, text: 'Роль создана' } : { ok: false, text: error.value ?? 'Не удалось создать роль' }
   if (ok) {
@@ -314,7 +333,7 @@ function onReset() {
 /** Select the default role after the catalog is loaded. */
 watch(roleList, (list) => {
   if ((!selected.value || !list.includes(selected.value)) && list.length) {
-    selected.value = list[0] === 'admin' ? (list[1] ?? 'admin') : list[0]
+    selected.value = list[0]
   }
 })
 
@@ -356,54 +375,46 @@ onMounted(() => {
           <span class="pm-role-name">
             {{ roleTitle(role) }}
           </span>
-          <span v-if="role === 'admin'" class="pm-role-lock" title="Полный доступ — инвариант в коде, не редактируется">заблокировано</span>
         </button>
       </nav>
 
       <!-- Editor of the selected role -->
       <div class="pm-editor">
-        <div v-if="isAdminSelected" class="pm-admin-note">
-          Администратор имеет полный доступ ко всем операциям и листингам — это защитный
-          инвариант в коде, значения не редактируются.
-        </div>
-
-        <template v-if="!isAdminSelected">
-          <div v-for="group in GROUPS" :key="group.key" class="pm-group">
-            <h3 class="pm-group-title">{{ group.title }}</h3>
-            <div v-for="resource in group.resources" :key="resource" class="pm-block">
-              <button
-                type="button"
-                class="pm-entity"
-                :class="{ open: isOpen(resource) }"
-                :aria-expanded="isOpen(resource)"
-                @click="toggleGroup(resource)"
+        <div v-for="group in GROUPS" :key="group.key" class="pm-group">
+          <h3 class="pm-group-title">{{ group.title }}</h3>
+          <div v-for="resource in group.resources" :key="resource" class="pm-block">
+            <button
+              type="button"
+              class="pm-entity"
+              :class="{ open: isOpen(resource) }"
+              :aria-expanded="isOpen(resource)"
+              @click="toggleGroup(resource)"
+            >
+              <span class="pm-entity-caret" aria-hidden="true">▸</span>
+              <span>{{ ENTITY_NAMES[resource] ?? resource }}</span>
+            </button>
+            <div v-if="isOpen(resource)" class="pm-entity-body">
+              <div
+                v-for="action in ACTIONS"
+                :key="action"
+                class="pm-row"
+                :class="{ dirty: staged[cellKey(selected, resource, action)] }"
               >
-                <span class="pm-entity-caret" aria-hidden="true">▸</span>
-                <span>{{ ENTITY_NAMES[resource] ?? resource }}</span>
-              </button>
-              <div v-if="isOpen(resource)" class="pm-entity-body">
-                <div
-                  v-for="action in ACTIONS"
-                  :key="action"
-                  class="pm-row"
-                  :class="{ dirty: staged[cellKey(selected, resource, action)] }"
+                <div class="pm-row-label">{{ ACTION_LABELS[action] }} {{ RESOURCE_LABELS[resource] }}</div>
+                <select
+                  class="pm-select"
+                  :value="cellValue(selected, resource, action)"
+                  @change="onCellChange(resource, action, ($event.target as HTMLSelectElement).value)"
                 >
-                  <div class="pm-row-label">{{ ACTION_LABELS[action] }} {{ RESOURCE_LABELS[resource] }}</div>
-                  <select
-                    class="pm-select"
-                    :value="cellValue(selected, resource, action)"
-                    @change="onCellChange(resource, action, ($event.target as HTMLSelectElement).value)"
-                  >
-                    <option v-for="opt in SCOPE_OPTIONS[resource]" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-                  </select>
-                </div>
+                  <option v-for="opt in SCOPE_OPTIONS[resource]" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+                </select>
               </div>
             </div>
-            <p v-if="group.key === 'planning'" class="pm-comment">
-              Комментарии к задачам: права определяются правами на задачу — видят и добавляют их те же, кому видна задача.
-            </p>
           </div>
-        </template>
+          <p v-if="group.key === 'planning'" class="pm-comment">
+            Комментарии к задачам: права определяются правами на задачу — видят и добавляют их те же, кому видна задача.
+          </p>
+        </div>
 
         <h3 class="pm-section-title">Роли</h3>
         <p class="pm-hint">
@@ -412,10 +423,25 @@ onMounted(() => {
         </p>
         <div class="pm-roles-editor">
           <div class="pm-role-create">
-            <input v-model="newRoleName" class="pm-input" maxlength="32" placeholder="имя роли, напр. auditor" />
-            <input v-model="newRoleDesc" class="pm-input" maxlength="80" placeholder="описание" />
+            <label class="pm-field">
+              <span class="pm-field-label">Имя роли<span class="pm-req" title="обязательное поле">*</span></span>
+              <input
+                ref="nameInput"
+                v-model="newRoleName"
+                class="pm-input"
+                :class="{ invalid: !!newRoleNameError }"
+                :aria-invalid="!!newRoleNameError"
+                maxlength="32"
+                placeholder="имя роли, напр. auditor"
+              />
+            </label>
+            <label class="pm-field">
+              <span class="pm-field-label">Описание</span>
+              <input v-model="newRoleDesc" class="pm-input" maxlength="80" placeholder="описание" />
+            </label>
             <button type="button" class="pm-btn primary" @click="onCreateRole">Создать роль</button>
           </div>
+          <p v-if="newRoleNameError" class="pm-field-error" role="alert">{{ newRoleNameError }}</p>
           <p v-if="roleMsg" class="pm-save-msg" :class="{ er: !roleMsg.ok }">{{ roleMsg.text }}</p>
           <div class="pm-role-list">
             <div v-for="r in roles" :key="r.name" class="pm-role-editable">
@@ -431,16 +457,7 @@ onMounted(() => {
           </div>
         </div>
 
-        <!-- Internal -->
-        <details class="pm-inspect">
-          <summary class="pm-inspect-summary">Служебное: маршрутные проверки (name → kind и параметры)</summary>
-          <div v-for="p in routePolicies" :key="p.name" class="pm-route">
-            <code class="pm-route-name">{{ p.name }}</code>
-            <span class="pm-route-kind">{{ p.kind }}</span>
-            <span class="pm-route-params">{{ JSON.stringify(p.params ?? {}) }}</span>
-          </div>
-        </details>
-      </div>
+        </div>
     </div>
 
     <!-- Save bar -->
@@ -471,33 +488,30 @@ onMounted(() => {
 </template>
 
 <style scoped>
-/* Unified palette:
-   - accent (interactive): #1a73e8; deep navy #1a3a6b only for headings;
-   - neutrals: borders #e3e8ef (hover #c7d2e0), subtle fills #f7f9fc / #fbfcfe;
-   - text: #2c3e50 primary, #66738a secondary, #94a0b4 tertiary;
-   - status: amber #e5a50a (dirty), green #2e7d4f (success), red #c0392b (error). */
+@import '../styles/tokens.css';
+
 .pm-head {
   margin-bottom: 18px;
 }
 .pm-title {
   font-size: 24px;
   font-weight: 700;
-  color: #1a3a6b;
+  color: var(--ui-text);
   margin: 0 0 6px;
 }
 .pm-note {
-  color: #66738a;
+  color: var(--ui-text-2);
   font-size: 13px;
   margin: 0;
   max-width: 900px;
   line-height: 1.55;
 }
 .pm-load {
-  color: #94a0b4;
+  color: var(--ui-text-faint);
   font-size: 13px;
 }
 .pm-load.er {
-  color: #c0392b;
+  color: var(--ui-danger);
 }
 .pm-layout {
   display: grid;
@@ -518,35 +532,35 @@ onMounted(() => {
   gap: 10px;
   text-align: left;
   padding: 11px 14px;
-  border: 1px solid #e3e8ef;
+  border: 1px solid var(--ui-border);
   border-radius: 10px;
-  background: #fff;
+  background: var(--ui-surface);
   cursor: pointer;
   font-size: 14px;
-  color: #2c3e50;
-  transition: border-color 0.15s, background 0.15s;
+  color: var(--ui-text);
+  transition: border-color var(--ui-duration), background var(--ui-duration);
 }
 .pm-role-btn:hover {
-  border-color: #c7d2e0;
-  background: #f7f9fc;
+  border-color: var(--ui-border-strong);
+  background: var(--ui-surface-3);
 }
 .pm-role-btn.active {
-  border-color: #1a73e8;
-  background: #1a73e8;
-  color: #fff;
+  border-color: var(--ui-accent);
+  background: var(--ui-accent);
+  color: var(--ui-accent-on);
 }
 .pm-role-btn.active .pm-role-code {
   background: rgba(255, 255, 255, 0.2);
-  color: #fff;
+  color: var(--ui-accent-on);
 }
 .pm-role-btn.active .pm-role-name {
-  color: #fff;
+  color: var(--ui-accent-on);
 }
 .pm-role-code {
   font-size: 11px;
   font-weight: 700;
-  background: #eef3fb;
-  color: #1a73e8;
+  background: var(--ui-accent-soft);
+  color: var(--ui-accent);
   border-radius: 999px;
   padding: 2px 9px;
   text-transform: uppercase;
@@ -556,25 +570,10 @@ onMounted(() => {
 }
 .pm-role-name {
   font-weight: 600;
-  color: #2c3e50;
-}
-.pm-role-lock {
-  margin-left: auto;
-  font-size: 11px;
-  color: #94a0b4;
-  font-weight: 500;
+  color: var(--ui-text);
 }
 .pm-editor {
   min-width: 0;
-}
-.pm-admin-note {
-  background: #f7f9fc;
-  border: 1px solid #e3e8ef;
-  border-radius: 10px;
-  padding: 12px 14px;
-  font-size: 13.5px;
-  color: #5a6b84;
-  line-height: 1.55;
 }
 .pm-group {
   margin-bottom: 26px;
@@ -582,23 +581,23 @@ onMounted(() => {
 .pm-group-title {
   font-size: 12px;
   font-weight: 700;
-  color: #94a0b4;
+  color: var(--ui-text-faint);
   text-transform: uppercase;
   letter-spacing: 0.6px;
   margin: 0 0 10px;
 }
 /* Entity = white card accordion */
 .pm-block {
-  background: #fff;
-  border: 1px solid #e3e8ef;
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
   border-radius: 10px;
   overflow: hidden;
   margin-bottom: 8px;
-  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
-  transition: border-color 0.15s, box-shadow 0.15s;
+  box-shadow: var(--ui-shadow-sm);
+  transition: border-color var(--ui-duration), box-shadow var(--ui-duration);
 }
 .pm-block:hover {
-  border-color: #c7d2e0;
+  border-color: var(--ui-border-strong);
 }
 .pm-entity {
   display: flex;
@@ -608,21 +607,21 @@ onMounted(() => {
   text-align: left;
   font-size: 14px;
   font-weight: 600;
-  color: #2c3e50;
+  color: var(--ui-text);
   background: transparent;
   border: none;
   border-radius: 0;
   padding: 11px 14px;
   cursor: pointer;
   user-select: none;
-  transition: background 0.15s;
+  transition: background var(--ui-duration);
 }
 .pm-entity:hover,
 .pm-entity.open {
-  background: #f7f9fc;
+  background: var(--ui-surface-3);
 }
 .pm-entity.open {
-  border-bottom: 1px solid #eef1f6;
+  border-bottom: 1px solid var(--ui-border);
 }
 .pm-entity-caret {
   flex: none;
@@ -632,11 +631,11 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   border-radius: 6px;
-  background: #eef3fb;
-  color: #1a73e8;
+  background: var(--ui-accent-soft);
+  color: var(--ui-accent);
   font-size: 11px;
   line-height: 1;
-  transition: transform 0.15s;
+  transition: transform var(--ui-duration);
 }
 .pm-entity.open .pm-entity-caret {
   transform: rotate(90deg);
@@ -650,88 +649,54 @@ onMounted(() => {
   justify-content: space-between;
   gap: 12px;
   padding: 8px 12px;
-  background: #fff;
-  border-radius: 8px;
+  background: var(--ui-surface);
+  border-radius: var(--ui-radius-sm);
   margin-bottom: 2px;
   font-size: 13.5px;
-  transition: background 0.15s;
+  transition: background var(--ui-duration);
 }
 .pm-row:hover {
-  background: #f7f9fc;
+  background: var(--ui-surface-3);
 }
 .pm-row.dirty {
-  background: #fdf6e3;
-  outline: 1px solid #e5a50a;
+  background: var(--ui-warning-soft);
+  outline: 1px solid var(--ui-warning);
   outline-offset: -1px;
 }
 .pm-row-label {
-  color: #2c3e50;
+  color: var(--ui-text);
 }
 .pm-select {
   font-size: 13.5px;
   padding: 5px 10px;
-  border: 1px solid #d3dbe6;
+  border: 1px solid var(--ui-border-strong);
   border-radius: 7px;
-  background: #fff;
-  color: #2c3e50;
+  background: var(--ui-surface);
+  color: var(--ui-text);
   cursor: pointer;
   min-width: 210px;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition: border-color var(--ui-duration), box-shadow var(--ui-duration);
 }
 .pm-select:focus {
-  border-color: #1a73e8;
+  border-color: var(--ui-accent);
   box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.12);
   outline: none;
 }
 .pm-comment {
   font-size: 12.5px;
-  color: #66738a;
+  color: var(--ui-text-2);
   padding: 8px 0 4px 2px;
   line-height: 1.5;
-}
-.pm-inspect {
-  margin-top: 18px;
-  border: 1px solid #e3e8ef;
-  border-radius: 10px;
-  background: #fbfcfe;
-  padding: 10px 14px;
-}
-.pm-inspect-summary {
-  font-size: 13px;
-  font-weight: 600;
-  color: #1a73e8;
-  cursor: pointer;
-}
-.pm-route {
-  display: flex;
-  gap: 10px;
-  align-items: baseline;
-  font-size: 12.5px;
-  padding: 4px 0;
-  border-top: 1px solid #eef1f6;
-  margin-top: 4px;
-}
-.pm-route-name {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  min-width: 190px;
-}
-.pm-route-kind {
-  color: #66738a;
-  min-width: 90px;
-}
-.pm-route-params {
-  color: #66738a;
-  word-break: break-all;
 }
 .pm-savebar {
   position: sticky;
   bottom: 12px;
   margin-top: 18px;
-  background: #fff;
-  border: 1px solid #e3e8ef;
-  border-left: 4px solid #e5a50a;
-  border-radius: 12px;
-  box-shadow: 0 10px 30px rgba(16, 24, 40, 0.1);
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-left: 4px solid var(--ui-warning);
+  border-radius: var(--ui-radius-md);
+  box-shadow: var(--ui-shadow-lg);
   padding: 12px 16px;
   display: flex;
   gap: 18px;
@@ -741,7 +706,7 @@ onMounted(() => {
 .pm-savebar-info {
   flex: 1;
   font-size: 13px;
-  color: #2c3e50;
+  color: var(--ui-text);
 }
 .pm-savebar-info ul {
   margin: 6px 0 0;
@@ -759,53 +724,53 @@ onMounted(() => {
 .pm-btn {
   font-size: 13px;
   font-weight: 600;
-  border: 1px solid #d3dbe6;
-  background: #fff;
-  color: #2c3e50;
-  border-radius: 8px;
+  border: 1px solid var(--ui-border-strong);
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  border-radius: var(--ui-radius-sm);
   padding: 7px 14px;
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
+  transition: background var(--ui-duration), border-color var(--ui-duration);
 }
 .pm-btn:hover:not(:disabled) {
-  background: #f7f9fc;
+  background: var(--ui-surface-3);
 }
 .pm-btn:disabled {
   opacity: 0.5;
   cursor: default;
 }
 .pm-btn.primary {
-  background: #1a73e8;
-  border-color: #1a73e8;
-  color: #fff;
+  background: var(--ui-accent);
+  border-color: var(--ui-accent);
+  color: var(--ui-accent-on);
 }
 .pm-btn.primary:hover:not(:disabled) {
-  background: #1765cc;
-  border-color: #1765cc;
+  background: color-mix(in srgb, var(--ui-accent) 88%, black);
+  border-color: color-mix(in srgb, var(--ui-accent) 88%, black);
 }
 .pm-btn.danger {
-  color: #c0392b;
-  border-color: #e6b8b3;
+  color: var(--ui-danger);
+  border-color: color-mix(in srgb, var(--ui-danger) 45%, transparent);
 }
 .pm-btn.danger:hover:not(:disabled) {
-  background: #fdf1f0;
+  background: var(--ui-danger-soft);
 }
 .pm-save-msg {
   font-size: 13px;
-  color: #2e7d4f;
+  color: var(--ui-success);
   margin: 12px 0;
 }
 .pm-save-msg.er {
-  color: #c0392b;
+  color: var(--ui-danger);
 }
 .pm-section-title {
   font-size: 18px;
   font-weight: 700;
-  color: #1a3a6b;
+  color: var(--ui-text);
   margin: 22px 0 8px;
 }
 .pm-hint {
-  color: #66738a;
+  color: var(--ui-text-2);
   font-size: 13px;
   margin: 0 0 10px;
   line-height: 1.5;
@@ -818,20 +783,48 @@ onMounted(() => {
   gap: 8px;
   margin-bottom: 10px;
   flex-wrap: wrap;
+  align-items: flex-end;
+}
+.pm-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 180px;
+}
+.pm-field-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ui-text-2);
+}
+.pm-req {
+  color: var(--ui-danger);
+  margin-left: 2px;
+}
+.pm-input.invalid {
+  border-color: var(--ui-danger);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ui-danger) 18%, transparent);
+  background: var(--ui-danger-soft);
+}
+.pm-field-error {
+  margin: 0 0 10px;
+  color: var(--ui-danger);
+  font-size: 12.5px;
+  font-weight: 500;
 }
 .pm-input {
   font-size: 13px;
   padding: 6px 10px;
-  border: 1px solid #d3dbe6;
+  border: 1px solid var(--ui-border-strong);
   border-radius: 7px;
-  background: #fff;
-  color: #2c3e50;
+  background: var(--ui-surface);
+  color: var(--ui-text);
   flex: 1;
   min-width: 180px;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition: border-color var(--ui-duration), box-shadow var(--ui-duration);
 }
 .pm-input:focus {
-  border-color: #1a73e8;
+  border-color: var(--ui-accent);
   box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.12);
   outline: none;
 }
@@ -846,13 +839,13 @@ onMounted(() => {
   justify-content: space-between;
   gap: 12px;
   padding: 10px 12px;
-  background: #fff;
-  border: 1px solid #e3e8ef;
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
   border-radius: 10px;
-  transition: border-color 0.15s;
+  transition: border-color var(--ui-duration);
 }
 .pm-role-editable:hover {
-  border-color: #c7d2e0;
+  border-color: var(--ui-border-strong);
 }
 .pm-role-editable-main {
   display: flex;
@@ -861,7 +854,7 @@ onMounted(() => {
   min-width: 0;
 }
 .pm-role-editable-desc {
-  color: #66738a;
+  color: var(--ui-text-2);
   font-size: 13px;
   overflow: hidden;
   text-overflow: ellipsis;

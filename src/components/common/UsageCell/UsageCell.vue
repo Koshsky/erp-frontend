@@ -42,6 +42,8 @@ const displayText = computed(() =>
 </template>
 
 <style scoped>
+@import "../../../styles/tokens.css";
+
 /* Tooltip trigger fills the cell (the class is forwarded to the TooltipCell root) */
 .uc {
   display: flex;
@@ -65,7 +67,7 @@ const displayText = computed(() =>
   padding: 0 1px;
   overflow: hidden;
   white-space: nowrap;
-  transition: background 0.15s, color 0.15s;
+  transition: background var(--ui-duration), color var(--ui-duration);
 }
 
 /* Narrow cells: text hidden, cell twice as thin */
@@ -73,33 +75,33 @@ const displayText = computed(() =>
   min-height: 9px;
 }
 
-/* 1. Normal — load ≤ 100% (base: original green #aacfcf) */
+/* 1. Normal — load ≤ 100% (base: original green) */
 .normal {
-  background: #aacfcf;
-  color: #333;
+  background: var(--ui-usage-ok);
+  color: var(--ui-usage-ok-text);
 }
 
 /* 2. Overload — 100–160% (yellow, mutated from green into the same tone) */
 .warn {
-  background: #e6d488;
-  color: #333;
+  background: var(--ui-usage-warn);
+  color: var(--ui-usage-warn-text);
 }
 
 /* 3. Critical overload — >160% (red, mutated from green into the same tone) */
 .critical {
-  background: #e09a9a;
-  color: #333;
+  background: var(--ui-usage-crit);
+  color: var(--ui-usage-crit-text);
 }
 
 /* 4. Weekend — like a regular table cell (do not highlight) */
 .weekend {
-  background: #f0f0f0;
-  color: #999;
+  background: var(--ui-usage-weekend);
+  color: var(--ui-usage-weekend-text);
 }
 
 /* 5. No availability data (outside the ±1-year load window) — neutral cell */
 .unknown {
-  background: #fff;
-  color: #b0b0b0;
+  background: var(--ui-usage-unknown);
+  color: var(--ui-usage-unknown-text);
 }
 </style>

@@ -123,13 +123,15 @@ const labelsH = computed(() => resourceCells.value.length * rowH.value)
 </template>
 
 <style scoped>
+@import "../../../styles/tokens.css";
+
 /* Resource code layer — side panel: sticks to the left and top edges (below the
  * calendar header), sits above the current-date line (25). Height and negative margin
  * are set inline so the cell block is not shifted. */
 .rs-labels {
   position: sticky;
   left: 0;
-  background: #fff;
+  background: var(--ui-surface);
   z-index: 80;
   box-sizing: border-box;
 }
@@ -143,7 +145,7 @@ const labelsH = computed(() => resourceCells.value.length * rowH.value)
   cursor: default;
   user-select: none;
   -webkit-user-select: none;
-  border-bottom: 1px solid #e8e8e8;
+  border-bottom: 1px solid var(--ui-border);
 }
 .rs-label--compact {
   height: 9px;
@@ -158,12 +160,12 @@ const labelsH = computed(() => resourceCells.value.length * rowH.value)
 .rs-block {
   position: sticky;
   z-index: 20;
-  background: #fff;
+  background: var(--ui-surface);
 }
 .rs-row {
   position: relative;
   height: 18px;
-  background: #fff;
+  background: var(--ui-surface);
 }
 /* Text hidden (narrow cells) — the resource row is twice as thin, only the fill remains */
 .rs-row--compact {
@@ -174,6 +176,6 @@ const labelsH = computed(() => resourceCells.value.length * rowH.value)
   top: 0;
   bottom: 0;
   padding: 0;
-  background: #fff;
+  background: var(--ui-surface);
 }
 </style>

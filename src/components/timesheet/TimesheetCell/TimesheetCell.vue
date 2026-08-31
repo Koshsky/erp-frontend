@@ -17,7 +17,7 @@ const props = withDefaults(defineProps<TimesheetCellProps>(), {
 const bg = computed<string>(() => {
   const s = props.state
   if (!s) {
-    return props.isWeekend ? '#f0f0f0' : 'transparent'
+    return props.isWeekend ? 'var(--ui-usage-weekend)' : 'transparent'
   }
   return stateBackground(s.state_code, s.is_available, s.state_id)
 })
@@ -77,6 +77,8 @@ const emptyLabel = computed(() => (props.isWeekend ? 'Выходной' : 'Ра�
 </template>
 
 <style scoped>
+@import '../../../styles/tokens.css';
+
 .tsc {
   display: flex;
   width: 100%;
@@ -92,7 +94,7 @@ const emptyLabel = computed(() => (props.isWeekend ? 'Выходной' : 'Ра�
   box-sizing: border-box;
 }
 .tsc--selected {
-  outline: 2px solid #1a73e8;
+  outline: 2px solid var(--ui-accent);
   outline-offset: -2px;
   z-index: 2;
 }

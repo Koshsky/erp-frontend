@@ -7,6 +7,7 @@ import type { NavCategory } from '../../../composables/useNavigation'
 import { isElectron } from '../../../electron'
 import { isOffline } from '../../../offline/state'
 import { pendingCount } from '../../../offline/outbox'
+import { resolvedScheme, toggleScheme } from '../../../theme'
 
 const props = withDefaults(defineProps<{ brand?: string }>(), { brand: 'MVS ERP' })
 
@@ -28,6 +29,9 @@ const { visibleCategories, activeCategory } = useNavigation()
 // so identity comparison openCategory === cat works.
 const openCategory = shallowRef<NavCategory | null>(null)
 const navEl = ref<HTMLElement | null>(null)
+
+// Theme toggle label (Russian UI copy)
+const themeLabel = computed(() => (resolvedScheme.value === 'dark' ? 'Светлая' : 'Тёмная'))
 
 function toggleCategory(cat: NavCategory) {
   openCategory.value = openCategory.value === cat ? null : cat
@@ -112,6 +116,10 @@ onBeforeUnmount(() => {
           {{ pending }}
         </span>
       </RouterLink>
+      <!-- Color scheme toggle -->
+      <button type="button" class="ah-theme" :title="'Переключить тему (сейчас ' + themeLabel.toLowerCase() + ')'" @click="toggleScheme">
+        {{ themeLabel }}
+      </button>
       <!-- Logout is unavailable offline: logout clears the outbox, which must be kept until the network is back -->
       <button
         type="button"
@@ -128,15 +136,18 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+@import '../../../styles/tokens.css';
+
 .ah {
-  background: #1a73e8;
-  color: #fff;
+  background: var(--ui-surface);
+  color: var(--ui-text);
   padding: 0 24px;
-  height: 56px;
+  height: 60px;
   display: flex;
   align-items: center;
   gap: 32px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--ui-shadow-sm);
+  border-bottom: 1px solid var(--ui-border);
   position: sticky;
   top: 0;
   /* Header and its dropdown menus sit above page content; modal dialogs
@@ -146,24 +157,25 @@ onBeforeUnmount(() => {
 
 .ah-brand {
   font-size: 20px;
-  font-weight: 700;
-  letter-spacing: 0.5px;
+  font-weight: 750;
+  letter-spacing: 0.2px;
+  color: var(--ui-text);
   white-space: nowrap;
 }
 
 .ah-nav {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
 }
 
 .ah-link,
 .ah-cat {
-  color: rgba(255, 255, 255, 0.85);
+  color: var(--ui-text-2);
   text-decoration: none;
   font-size: 14px;
-  padding: 6px 12px;
-  border-radius: 6px;
+  padding: 8px 12px;
+  border-radius: var(--ui-radius-sm);
   border: none;
   background: transparent;
   font-family: inherit;
@@ -171,25 +183,25 @@ onBeforeUnmount(() => {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  transition: background 0.15s, color 0.15s;
+  transition: background var(--ui-duration), color var(--ui-duration);
 }
 
 .ah-link:hover,
 .ah-cat:hover {
-  background: rgba(255, 255, 255, 0.15);
-  color: #fff;
+  background: var(--ui-surface-3);
+  color: var(--ui-text);
 }
 
 .ah-cat.active,
 .ah-link.active {
-  background: rgba(255, 255, 255, 0.22);
-  color: #fff;
+  background: var(--ui-accent-soft);
+  color: var(--ui-accent);
   font-weight: 600;
 }
 
 .ah-caret {
   font-size: 10px;
-  opacity: 0.8;
+  opacity: 0.75;
 }
 
 .ah-sync-badge {
@@ -200,8 +212,8 @@ onBeforeUnmount(() => {
   height: 18px;
   padding: 0 6px;
   border-radius: 999px;
-  background: #f39c12;
-  color: #fff;
+  background: var(--ui-milestone);
+  color: #4a3d14;
   font-size: 11px;
   font-weight: 700;
   line-height: 1;
@@ -216,10 +228,10 @@ onBeforeUnmount(() => {
   top: calc(100% + 8px);
   left: 0;
   min-width: 200px;
-  background: #fff;
-  border-radius: 10px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
-  border: 1px solid #e8e8e8;
+  background: var(--ui-surface);
+  border-radius: var(--ui-radius-md);
+  box-shadow: var(--ui-shadow-lg);
+  border: 1px solid var(--ui-border);
   padding: 6px;
   display: flex;
   flex-direction: column;
@@ -231,20 +243,20 @@ onBeforeUnmount(() => {
   display: block;
   padding: 9px 12px;
   border-radius: 7px;
-  color: #333;
+  color: var(--ui-text);
   text-decoration: none;
   font-size: 14px;
-  transition: background 0.15s, color 0.15s;
+  transition: background var(--ui-duration), color var(--ui-duration);
 }
 
 .ah-menu-item:hover {
-  background: #f2f6fc;
-  color: #1a73e8;
+  background: var(--ui-surface-3);
+  color: var(--ui-accent);
 }
 
 .ah-menu-item.active {
-  background: #e8f0fe;
-  color: #1a73e8;
+  background: var(--ui-accent-soft);
+  color: var(--ui-accent);
   font-weight: 600;
 }
 
@@ -255,23 +267,40 @@ onBeforeUnmount(() => {
 .ah-actions {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
+}
+
+.ah-theme {
+  background: transparent;
+  color: var(--ui-text-2);
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius-sm);
+  padding: 6px 12px;
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: background var(--ui-duration), color var(--ui-duration), border-color var(--ui-duration);
+}
+
+.ah-theme:hover {
+  background: var(--ui-surface-3);
+  color: var(--ui-text);
 }
 
 .ah-logout {
-  background: rgba(255, 255, 255, 0.15);
-  color: #fff;
-  border: 1px solid rgba(255, 255, 255, 0.35);
-  border-radius: 6px;
+  background: transparent;
+  color: var(--ui-text-2);
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius-sm);
   padding: 6px 14px;
   font-size: 13px;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+  transition: background var(--ui-duration), color var(--ui-duration), border-color var(--ui-duration);
 }
 
 .ah-logout:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.28);
-  color: #fff;
+  background: var(--ui-danger-soft);
+  border-color: var(--ui-danger);
+  color: var(--ui-danger);
 }
 
 .ah-logout:disabled,

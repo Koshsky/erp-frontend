@@ -5,7 +5,7 @@ import { DAY_MS } from '../../../utils'
 import type { TodayLineProps } from './types'
 
 const props = withDefaults(defineProps<TodayLineProps>(), {
-  color: '#e53935',
+  color: 'var(--ui-today)',
   width: 2,
   offset: 0,
 })
@@ -52,6 +52,7 @@ const lineStyle = computed<Record<string, string> | null>(() =>
 </template>
 
 <style scoped>
+@import "../../../styles/tokens.css";
 .tl-line {
   position: absolute;
   top: 0;

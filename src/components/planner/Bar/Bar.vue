@@ -11,7 +11,7 @@ const slots = useSlots()
 const props = withDefaults(defineProps<BarProps>(), {
   title: '',
   projectCode: '',
-  color: '#34a853',
+  color: 'var(--ui-gantt-task)',
   opacity: 0.75,
   tooltip: '',
   height: 24,
@@ -240,6 +240,7 @@ function onContextMenu(e: MouseEvent) {
 </template>
 
 <style scoped>
+@import "../../../styles/tokens.css";
 .gantt-bar {
   position: absolute;
   border-radius: 5px;
@@ -247,7 +248,7 @@ function onContextMenu(e: MouseEvent) {
   align-items: center;
   overflow: hidden;
   box-sizing: border-box;
-  transition: opacity 0.15s;
+  transition: opacity var(--ui-duration);
 }
 .gantt-bar :deep(.tt-trigger) {
   display: flex;
@@ -268,7 +269,7 @@ function onContextMenu(e: MouseEvent) {
   opacity: 0.95 !important;
 }
 .gb-shadow {
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--ui-shadow-sm);
 }
 .gb-handle {
   position: absolute;
@@ -292,7 +293,7 @@ function onContextMenu(e: MouseEvent) {
 .lb-title {
   font-size: 12px;
   font-weight: 700;
-  color: #fff;
+  color: var(--ui-accent-on);
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
   white-space: nowrap;
   pointer-events: none;
@@ -318,7 +319,7 @@ function onContextMenu(e: MouseEvent) {
   margin-bottom: 2px;
 }
 .lb-tt-row {
-  color: #666;
+  color: var(--ui-text-2);
   white-space: nowrap;
 }
 </style>

@@ -29,9 +29,9 @@ export function usagePercent(used: number, available: number | null): number | n
 
 /** State color (cell background) and label — for the usage tooltip */
 export const USAGE_STATE_META: Record<UsageState, { label: string; color: string }> = {
-  normal: { label: 'Норма', color: '#aacfcf' },
-  warn: { label: 'Перегруз', color: '#e6d488' },
-  critical: { label: 'Критично', color: '#e09a9a' },
-  unknown: { label: 'Нет данных', color: '#b0b0b0' },
-  weekend: { label: 'Выходной', color: '#f0f0f0' },
+  normal: { label: 'Норма', color: 'var(--ui-usage-ok)' },
+  warn: { label: 'Перегруз', color: 'var(--ui-usage-warn)' },
+  critical: { label: 'Критично', color: 'var(--ui-usage-crit)' },
+  unknown: { label: 'Нет данных', color: 'var(--ui-usage-unknown)' },
+  weekend: { label: 'Выходной', color: 'var(--ui-usage-weekend)' },
 }

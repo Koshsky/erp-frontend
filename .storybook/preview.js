@@ -1,3 +1,4 @@
+import '../src/styles/tokens.css'
 import { withCustomTheme } from './decorators/withCustomTheme'
 import { withColorScheme } from './decorators/withColorScheme'
 

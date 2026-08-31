@@ -108,17 +108,19 @@ function onClose() {
 </template>
 
 <style scoped>
+@import '../styles/tokens.css';
+
 .sync-toast {
   position: fixed;
   bottom: 20px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 1001;
-  background: #16a34a;
-  color: #fff;
+  background: var(--ui-success);
+  color: var(--ui-accent-on);
   padding: 10px 30px 10px 18px;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgb(0 0 0 / 0.2);
+  border-radius: var(--ui-radius-sm);
+  box-shadow: var(--ui-shadow-md);
   font-size: 14px;
   max-width: 90vw;
   min-width: 300px;
@@ -126,7 +128,7 @@ function onClose() {
 }
 
 .sync-toast.error {
-  background: #b91c1c;
+  background: var(--ui-danger);
 }
 
 .sync-toast__close {
@@ -135,7 +137,7 @@ function onClose() {
   right: 8px;
   background: transparent;
   border: none;
-  color: rgb(255 255 255 / 0.85);
+  color: color-mix(in srgb, var(--ui-accent-on) 85%, transparent);
   font-size: 18px;
   line-height: 1;
   cursor: pointer;
@@ -144,8 +146,8 @@ function onClose() {
 }
 
 .sync-toast__close:hover {
-  background: rgb(0 0 0 / 0.15);
-  color: #fff;
+  background: color-mix(in srgb, var(--ui-accent-on) 15%, transparent);
+  color: var(--ui-accent-on);
 }
 
 .sync-toast__head {
@@ -164,7 +166,7 @@ function onClose() {
 }
 
 .sync-toast__item {
-  background: rgb(0 0 0 / 0.18);
+  background: color-mix(in srgb, var(--ui-accent-on) 18%, transparent);
   border-radius: 6px;
   padding: 5px 8px;
   display: flex;
@@ -190,8 +192,8 @@ function onClose() {
 }
 
 .sync-btn {
-  background: #fff;
-  color: #b91c1c;
+  background: var(--ui-accent-on);
+  color: var(--ui-danger);
   border: none;
   border-radius: 6px;
   padding: 6px 14px;
@@ -207,8 +209,8 @@ function onClose() {
 
 .sync-btn--ghost {
   background: transparent;
-  color: #fff;
-  border: 1px solid rgb(255 255 255 / 0.6);
+  color: var(--ui-accent-on);
+  border: 1px solid color-mix(in srgb, var(--ui-accent-on) 60%, transparent);
 }
 
 .toast-fade-enter-active,

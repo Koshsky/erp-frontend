@@ -250,16 +250,18 @@ onMounted(() => {
 </template>
 
 <style scoped>
+@import '../styles/tokens.css';
+
 .pp-toolbar {
   display: flex;
   justify-content: flex-end;
   margin-bottom: 12px;
 }
 .pp-st {
-  color: #666;
+  color: var(--ui-text-2);
   font-size: 14px;
   padding: 30px;
   text-align: center;
 }
-.er { color: #d93025; }
+.er { color: var(--ui-danger); }
 </style>

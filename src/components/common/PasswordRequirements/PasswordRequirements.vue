@@ -53,6 +53,8 @@ const allOk = computed(() => validatePassword(props.modelValue ?? '', props.rule
 </template>
 
 <style scoped>
+@import '../../../styles/tokens.css';
+
 .pwr {
   list-style: none;
   margin: 0;
@@ -61,18 +63,18 @@ const allOk = computed(() => validatePassword(props.modelValue ?? '', props.rule
   flex-direction: column;
   gap: 4px;
   font-size: 12.5px;
-  color: #8a93a3;
+  color: var(--ui-text-faint);
 }
 
 .pwr-item {
   display: flex;
   align-items: center;
   gap: 7px;
-  transition: color 0.15s;
+  transition: color var(--ui-duration);
 }
 
 .pwr-item.done {
-  color: #188038;
+  color: var(--ui-success);
 }
 
 .pwr-mark {

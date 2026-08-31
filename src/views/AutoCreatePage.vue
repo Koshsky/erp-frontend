@@ -371,38 +371,40 @@ async function onSave() {
 </template>
 
 <style scoped>
+@import '../styles/tokens.css';
+
 .ac-head {
   margin-bottom: 20px;
 }
 .ac-title {
   font-size: 24px;
   font-weight: 700;
-  color: #2c3e50;
+  color: var(--ui-text);
   margin: 0 0 6px;
 }
 .ac-hint {
   margin: 0;
   font-size: 13px;
-  color: #888;
+  color: var(--ui-text-muted);
 }
 .ac-st {
-  color: #666;
+  color: var(--ui-text-muted);
   font-size: 14px;
   padding: 30px;
   text-align: center;
 }
 .ac-st.ac-er {
-  color: #d93025;
+  color: var(--ui-danger);
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 12px;
 }
 .ac-retry {
-  border: 1px solid #f3c4c1;
-  background: #fef2f1;
-  color: #d93025;
-  border-radius: 8px;
+  border: 1px solid var(--ui-danger-soft);
+  background: var(--ui-danger-soft);
+  color: var(--ui-danger);
+  border-radius: var(--ui-radius-sm);
   padding: 7px 18px;
   font-size: 13px;
   cursor: pointer;
@@ -418,11 +420,11 @@ async function onSave() {
   gap: 8px;
   font-size: 14px;
   font-weight: 600;
-  color: #333;
+  color: var(--ui-text);
 }
 .ac-preview {
-  background: #f8f9fa;
-  border: 1px dashed #cfd4da;
+  background: var(--ui-surface-2);
+  border: 1px dashed var(--ui-border-strong);
   border-radius: 10px;
   padding: 10px 14px;
 }
@@ -432,18 +434,18 @@ async function onSave() {
   padding: 0;
   font-size: 13px;
   font-weight: 600;
-  color: #1a73e8;
+  color: var(--ui-accent);
   cursor: pointer;
   font-family: inherit;
 }
 .ac-preview-caret {
   margin-left: 4px;
-  color: #888;
+  color: var(--ui-text-muted);
 }
 .ac-preview-off {
   margin-top: 8px;
   font-size: 12px;
-  color: #b26a00;
+  color: var(--ui-warning);
   font-weight: 600;
 }
 .ac-preview-tree {
@@ -454,11 +456,11 @@ async function onSave() {
   font-size: 13px;
 }
 .ac-preview-empty {
-  color: #888;
+  color: var(--ui-text-muted);
 }
 .ac-preview-p {
   font-weight: 600;
-  color: #333;
+  color: var(--ui-text);
 }
 .ac-preview-task {
   display: flex;
@@ -467,16 +469,16 @@ async function onSave() {
   padding-left: 14px;
 }
 .ac-preview-t {
-  color: #444;
+  color: var(--ui-text-2);
 }
 .ac-preview-res {
-  color: #888;
+  color: var(--ui-text-muted);
   font-size: 12px;
 }
 .ac-process {
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.08);
+  background: var(--ui-surface);
+  border-radius: var(--ui-radius-md);
+  box-shadow: var(--ui-shadow-md);
   padding: 16px;
 }
 .ac-process-head {
@@ -494,18 +496,18 @@ async function onSave() {
 .ac-owner-hint {
   margin: -6px 0 10px;
   font-size: 12px;
-  color: #888;
+  color: var(--ui-text-muted);
 }
 .ac-tasks {
   display: flex;
   flex-direction: column;
   gap: 8px;
   padding-left: 8px;
-  border-left: 2px solid #eef0f2;
+  border-left: 2px solid var(--ui-border);
 }
 .ac-task {
-  background: #f8f9fa;
-  border-radius: 8px;
+  background: var(--ui-surface-2);
+  border-radius: var(--ui-radius-sm);
   padding: 10px;
 }
 .ac-task-head {
@@ -517,10 +519,10 @@ async function onSave() {
   flex: 1;
 }
 .ac-move {
-  border: 1px solid #ddd;
+  border: 1px solid var(--ui-border-strong);
   border-radius: 6px;
-  background: #fff;
-  color: #666;
+  background: var(--ui-surface);
+  color: var(--ui-text-muted);
   font-size: 12px;
   line-height: 1;
   cursor: pointer;
@@ -550,25 +552,25 @@ async function onSave() {
 }
 .ac-input {
   box-sizing: border-box;
-  border: 1px solid #ddd;
-  border-radius: 8px;
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius-sm);
   padding: 8px 10px;
   font-size: 13px;
   font-family: inherit;
-  color: #333;
-  background: #fff;
+  color: var(--ui-text);
+  background: var(--ui-surface);
   outline: none;
 }
 .ac-input:focus {
-  border-color: #1a73e8;
+  border-color: var(--ui-accent);
   box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.12);
 }
 .ac-add,
 .ac-add-sm {
-  border: 1px solid #cfe0fb;
-  background: #eef4fd;
-  color: #1a73e8;
-  border-radius: 8px;
+  border: 1px solid var(--ui-accent-soft);
+  background: var(--ui-accent-soft);
+  color: var(--ui-accent);
+  border-radius: var(--ui-radius-sm);
   padding: 7px 14px;
   font-size: 13px;
   cursor: pointer;
@@ -581,7 +583,7 @@ async function onSave() {
 .ac-del {
   border: none;
   background: transparent;
-  color: #d93025;
+  color: var(--ui-danger);
   font-size: 15px;
   line-height: 1;
   cursor: pointer;
@@ -589,7 +591,7 @@ async function onSave() {
   border-radius: 6px;
 }
 .ac-del:hover {
-  background: #fef2f1;
+  background: var(--ui-danger-soft);
 }
 .ac-actions {
   display: flex;
@@ -599,25 +601,25 @@ async function onSave() {
 }
 .ac-save {
   border: none;
-  border-radius: 8px;
+  border-radius: var(--ui-radius-sm);
   padding: 9px 22px;
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
-  background: #1a73e8;
-  color: #fff;
+  background: var(--ui-accent);
+  color: var(--ui-accent-on);
 }
 .ac-save:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
 .ac-cancel {
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  background: #fff;
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius-sm);
+  background: var(--ui-surface);
   padding: 8px 16px;
   font-size: 14px;
-  color: #555;
+  color: var(--ui-text-2);
   cursor: pointer;
 }
 .ac-msg {
@@ -625,9 +627,9 @@ async function onSave() {
   font-size: 14px;
 }
 .ac-msg.ok {
-  color: #1e8e3e;
+  color: var(--ui-success);
 }
 .ac-msg.er {
-  color: #d93025;
+  color: var(--ui-danger);
 }
 </style>

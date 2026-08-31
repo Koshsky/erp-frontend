@@ -115,6 +115,7 @@ function onMilestoneEdit(id: number) {
 </template>
 
 <style scoped>
+@import "../../../../../styles/tokens.css";
 .tg-task-group {
   position: relative;
   box-sizing: border-box;
@@ -124,7 +125,7 @@ function onMilestoneEdit(id: number) {
   position: sticky;
   left: 0;
   height: 20px;
-  background: #fff;
+  background: var(--ui-surface);
   /* Side panel — above the today line (25) */
   z-index: 65;
   margin-top: -20px;
@@ -136,7 +137,7 @@ function onMilestoneEdit(id: number) {
   font-size: 16px;
   font-weight: 800;
   line-height: 1.2;
-  color: #1a73e8;
+  color: var(--ui-accent);
   letter-spacing: 0.3px;
   white-space: nowrap;
   max-width: 100%;
@@ -146,7 +147,7 @@ function onMilestoneEdit(id: number) {
 .gl-title {
   font-size: 12px;
   font-weight: 600;
-  color: #555;
+  color: var(--ui-text-2);
   white-space: nowrap;
   max-width: 100%;
   overflow: hidden;
@@ -155,7 +156,7 @@ function onMilestoneEdit(id: number) {
 .gl-dates {
   font-size: 10px;
   font-weight: 400;
-  color: #888;
+  color: var(--ui-text-muted);
   white-space: nowrap;
   max-width: 100%;
   overflow: hidden;

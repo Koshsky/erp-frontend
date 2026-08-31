@@ -117,6 +117,7 @@ function fmt(d: string | Date | number | null | undefined): string {
 </template>
 
 <style scoped>
+@import "../../../styles/tokens.css";
 .gg-group {
   position: relative;
 }
@@ -131,14 +132,14 @@ function fmt(d: string | Date | number | null | undefined): string {
   left: 180px;
   right: 0;
   height: 1px;
-  background: #e0e0e0;
+  background: var(--ui-border);
   z-index: 3;
 }
 .gg-overlay {
   position: absolute;
   top: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.04);
+  background: var(--ui-overlay);
   pointer-events: none;
   z-index: 0;
 }
@@ -146,7 +147,7 @@ function fmt(d: string | Date | number | null | undefined): string {
   position: sticky;
   left: 0;
   width: 180px;
-  background: #fff;
+  background: var(--ui-surface);
   /* Side panel — above the today line (25) */
   z-index: 70;
   display: flex;
@@ -156,8 +157,8 @@ function fmt(d: string | Date | number | null | undefined): string {
   gap: 4px;
   padding: 4px 12px;
   box-sizing: border-box;
-  border-right: 1px solid #f0f0f0;
-  border-bottom: 1px solid #e0e0e0;
+  border-right: 1px solid var(--ui-border);
+  border-bottom: 1px solid var(--ui-border);
   cursor: default;
   user-select: none;
   -webkit-user-select: none;
@@ -170,7 +171,7 @@ function fmt(d: string | Date | number | null | undefined): string {
   left: 0;
   width: 180px;
   height: 100%;
-  background: #fff;
+  background: var(--ui-surface);
   /* Side panel — above the today line (25) */
   z-index: 65;
   display: flex;
@@ -179,10 +180,10 @@ function fmt(d: string | Date | number | null | undefined): string {
   justify-content: center;
   font-size: 12px;
   font-weight: 500;
-  color: #333;
+  color: var(--ui-text);
   padding: 1px 8px;
-  border-right: 1px solid #f0f0f0;
-  border-bottom: 1px solid #e8e8e8;
+  border-right: 1px solid var(--ui-border);
+  border-bottom: 1px solid var(--ui-border);
   box-sizing: border-box;
   overflow: hidden;
   cursor: default;
@@ -192,7 +193,7 @@ function fmt(d: string | Date | number | null | undefined): string {
 .item-title {
   font-weight: 400;
   font-size: 11px;
-  color: #444;
+  color: var(--ui-text-2);
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -200,7 +201,7 @@ function fmt(d: string | Date | number | null | undefined): string {
 }
 .item-dates {
   font-size: 9px;
-  color: #999;
+  color: var(--ui-text-muted);
   font-weight: 400;
   margin-top: 1px;
 }
@@ -214,7 +215,7 @@ function fmt(d: string | Date | number | null | undefined): string {
   left: 0;
   right: 0;
   height: 2px;
-  background: #1a73e8;
+  background: var(--ui-drop);
   z-index: 12;
   pointer-events: none;
 }

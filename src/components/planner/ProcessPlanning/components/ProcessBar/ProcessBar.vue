@@ -6,7 +6,7 @@ import type { ProcessBarProps } from './types'
 const props = withDefaults(defineProps<ProcessBarProps>(), {
   projectCode: '',
   ownerName: '',
-  color: '#1a73e8',
+  color: 'var(--ui-gantt-process)',
   opacity: 0.85,
   draggable: true,
   groupStartDate: null,
@@ -48,7 +48,7 @@ const emit = defineEmits<{
       <slot name="tooltip">
         <BarTooltip
           :title="title"
-          :accent="'#1a73e8'"
+          :accent="'var(--ui-gantt-process)'"
           :rows="[ownerName ? `Владелец: ${ownerName}` : '', dateRange].filter(Boolean)"
         />
       </slot>

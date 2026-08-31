@@ -311,7 +311,12 @@ export function useInfiniteTimeline(
     void nextTick().then(() => {
       if (stored) {
         el.scrollLeft = stored.scrollLeft
-        el.scrollTop = stored.scrollTop
+        // The table may have changed size since the state was saved: a vertical
+        // position beyond the current scrollable range would be silently clamped
+        // by the browser to the bottom, pinning the last rows into view with no
+        // user scroll. A stale position is meaningless — open at the top.
+        const maxScroll = el.scrollHeight - el.clientHeight
+        el.scrollTop = stored.scrollTop <= maxScroll ? stored.scrollTop : 0
         sync()
       } else {
         el.scrollLeft = leftPad.value * cellPx.value

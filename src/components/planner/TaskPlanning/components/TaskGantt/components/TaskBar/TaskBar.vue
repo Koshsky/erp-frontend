@@ -223,7 +223,7 @@ watch(
     <template #tooltip="{ dateRange }">
       <BarTooltip
         :title="task.title"
-        :accent="'#34a853'"
+        :accent="'var(--ui-gantt-task)'"
         :rows="tooltipRows(dateRange)"
         :resources="(task.resources || []).map((r) => ({ label: r.title || r.code, quantity: r.quantity }))"
         :comments="tooltipComments"
@@ -233,6 +233,7 @@ watch(
 </template>
 
 <style scoped>
+@import "../../../../../../../styles/tokens.css";
 .tb-content {
   display: flex;
   align-items: center;
@@ -244,7 +245,7 @@ watch(
   min-width: 0;
   font-size: 12px;
   font-weight: 700;
-  color: #fff;
+  color: var(--ui-accent-on);
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
   white-space: nowrap;
   overflow: hidden;
@@ -292,7 +293,7 @@ watch(
   font-weight: 700;
   line-height: 1.6;
   color: #fff;
-  background: #d93025;
+  background: var(--ui-danger);
   border: 1px solid rgba(255, 255, 255, 0.55);
   border-radius: 10px;
   padding: 0 7px;

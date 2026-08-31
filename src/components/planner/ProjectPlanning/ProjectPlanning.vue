@@ -102,19 +102,20 @@ function onGridCtx(p: { clientX: number; clientY: number; date: string | null; r
 </template>
 
 <style scoped>
+@import '../../../styles/tokens.css';
 .pp-big {
   display: block;
   margin: 24px auto;
   padding: 16px 36px;
-  background: #1a73e8;
-  color: #fff;
+  background: var(--ui-accent);
+  color: var(--ui-accent-on);
   border: none;
   border-radius: 10px;
   font-size: 16px;
   cursor: pointer;
 }
 .pp-big:hover {
-  background: #1765cc;
+  background: color-mix(in srgb, var(--ui-accent) 88%, black);
 }
 </style>
 

@@ -922,7 +922,6 @@ export const useAppStore = defineStore('app', () => {
 // === Timesheet (employee states, page for vp/admin) ===
 export const useTimesheetStore = defineStore('timesheet', () => {
   const app = useAppStore()
-  const auth = useAuthStore()
 
   // States load window: by default "180 days back / 360 days forward"; with
   // infinite scroll the timeline is extended via ensureRange (loading new ranges).
@@ -948,19 +947,12 @@ export const useTimesheetStore = defineStore('timesheet', () => {
     ),
   )
 
-  /** Current user as a timesheet row (everyone sees themselves) */
-  const selfEmployee = computed<DtoUserResponse | null>(() => {
-    const u = auth.user
-    if (u?.id == null) return null
-    return { id: u.id, name: u.name ?? '', username: u.username, role: u.role, position: '' }
-  })
-
-  /** Timesheet rows: the user themselves + their direct subordinates */
-  const timesheetRows = computed<DtoUserResponse[]>(() => {
-    const rows = [...employeesWithTitles.value]
-    if (selfEmployee.value) rows.unshift(selfEmployee.value)
-    return rows
-  })
+  /**
+   * Timesheet rows: the employees visible to the current user (direct subordinates;
+   * admin — everyone). The current user is intentionally not a row — the roster
+   * mirrors the "Employees" page.
+   */
+  const timesheetRows = computed<DtoUserResponse[]>(() => employeesWithTitles.value)
 
   /** Date YYYY-MM-DD n days from an ISO date (local timezone) */
   function shiftDate(iso: string, days: number): string {
