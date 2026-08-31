@@ -3,15 +3,23 @@ import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import { PasswordDialog } from '../components/common'
-import { useAppStore, useRbacStore } from '../store'
+import { useAppStore, useAuthStore, useRbacStore } from '../store'
 import { compareByName, translitPhio } from '../utils'
 import type { DtoAdminUserResponse, DtoCreateUserRequest, DtoUpdateUserRequest } from '@/api'
 
 const route = useRoute()
 const router = useRouter()
 const app = useAppStore()
+const auth = useAuthStore()
 const rbac = useRbacStore()
 const { adminUsers, adminUsersError, users } = storeToRefs(app)
+
+/**
+ * Role assignment is an admin-only business rule (service-enforced): a
+ * non-admin holder of the user-edit right sees no role field, and the payload
+ * never submits a role change — otherwise the backend would reject the save.
+ */
+const isAdmin = computed(() => auth.user?.role === 'admin')
 
 /**
  * Dedicated route page for both create (users/new) and edit (users/:id/edit)
@@ -159,8 +167,7 @@ async function onSubmit() {
     const common = {
       last_name: form.lastName.trim(),
       first_name: form.firstName.trim(),
-      role: form.role,
-    }
+    } as const
     if (isEdit.value) {
       const id = editingUserId.value
       if (id == null) return
@@ -171,6 +178,9 @@ async function onSubmit() {
         username: form.login.trim(),
         position: form.position.trim(),
       }
+      // Role changes are admin-only (service-enforced); non-admin holders of
+      // the user-edit right must not submit the role at all.
+      if (isAdmin.value) patch.role = form.role
       if (form.hireDate) patch.hire_date = form.hireDate
       if (form.terminationDate) patch.termination_date = form.terminationDate
       const ok = await app.updateUser(id, patch)
@@ -186,6 +196,8 @@ async function onSubmit() {
     const payload: DtoCreateUserRequest = {
       ...common,
       middle_name: form.middleName.trim() || undefined,
+      // Non-admin user_admin.create holders may only create workers.
+      role: isAdmin.value ? form.role : 'worker',
       position: form.position.trim(),
     }
     const login = form.login.trim()
@@ -251,7 +263,7 @@ async function onSubmit() {
         />
         <span v-if="!isEdit && !loginTouched" class="ufp-hint">Заполняется автоматически по ФИО (транслит); можно изменить</span>
       </label>
-      <label class="ufp-field">
+      <label v-if="isAdmin" class="ufp-field">
         <span class="ufp-label">Роль *</span>
         <select v-model="form.role" class="ufp-input ufp-select">
           <option v-for="opt in roleOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
