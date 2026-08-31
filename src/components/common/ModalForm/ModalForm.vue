@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { reactive, ref, watch, computed } from 'vue'
 import type { ModalFormProps, ModalField } from './types'
+import ColorField from '../ColorField/ColorField.vue'
 
 const props = withDefaults(defineProps<ModalFormProps>(), {
   submitLabel: 'Сохранить',
@@ -14,7 +15,7 @@ const emit = defineEmits<{
   close: []
 }>()
 
-/** Локальное состояние формы; инициализируется из fields при открытии */
+/** Local form state; initialized from fields on open */
 const values = reactive<Record<string, any>>({})
 const formEl = ref<HTMLElement | null>(null)
 
@@ -68,13 +69,20 @@ function onKeydown(e: KeyboardEvent) {
         <slot v-if="$slots.default" />
 
         <form v-else class="mf-form" @submit.prevent="onSubmit">
-          <label v-for="f in fields" :key="f.key" class="mf-field">
+          <!-- A label is invalid around an interactive color trigger: the color
+               field renders as a plain div, everything else keeps <label> -->
+          <component :is="f.type === 'color' ? 'div' : 'label'" v-for="f in fields" :key="f.key" class="mf-field">
             <span class="mf-label">
               {{ f.label }}
               <span v-if="f.required" class="mf-req">*</span>
             </span>
+            <ColorField
+              v-if="f.type === 'color'"
+              v-model="values[f.key]"
+              :label="f.label"
+            />
             <textarea
-              v-if="f.type === 'textarea'"
+              v-else-if="f.type === 'textarea'"
               v-model="values[f.key]"
               class="mf-input mf-textarea"
               rows="3"
@@ -115,7 +123,7 @@ function onKeydown(e: KeyboardEvent) {
               type="text"
               :placeholder="f.placeholder"
             />
-          </label>
+          </component>
 
           <p v-if="error" class="mf-error">{{ error }}</p>
 
@@ -133,6 +141,8 @@ function onKeydown(e: KeyboardEvent) {
 </template>
 
 <style scoped>
+@import "../../../styles/tokens.css";
+
 .mf-overlay {
   position: fixed;
   inset: 0;
@@ -146,9 +156,9 @@ function onKeydown(e: KeyboardEvent) {
 .mf {
   width: 100%;
   max-width: 420px;
-  background: #fff;
+  background: var(--ui-surface);
   border-radius: 10px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--ui-shadow-md);
   overflow: hidden;
 }
 .mf-head {
@@ -156,12 +166,12 @@ function onKeydown(e: KeyboardEvent) {
   align-items: center;
   justify-content: space-between;
   padding: 14px 16px;
-  border-bottom: 1px solid #e8e8e8;
+  border-bottom: 1px solid var(--ui-border);
 }
 .mf-title {
   font-size: 16px;
   font-weight: 700;
-  color: #2c3e50;
+  color: var(--ui-text);
   margin: 0;
 }
 .mf-close {
@@ -169,14 +179,14 @@ function onKeydown(e: KeyboardEvent) {
   background: transparent;
   font-size: 22px;
   line-height: 1;
-  color: #999;
+  color: var(--ui-text-muted);
   cursor: pointer;
   padding: 2px 6px;
   border-radius: 6px;
 }
 .mf-close:hover {
-  background: #f2f2f2;
-  color: #333;
+  background: var(--ui-surface-2);
+  color: var(--ui-text);
 }
 .mf-form {
   padding: 16px;
@@ -191,27 +201,27 @@ function onKeydown(e: KeyboardEvent) {
 }
 .mf-label {
   font-size: 13px;
-  color: #444;
+  color: var(--ui-text-2);
   font-weight: 500;
 }
 .mf-req {
-  color: #d93025;
+  color: var(--ui-danger);
 }
 .mf-input {
   width: 100%;
   box-sizing: border-box;
-  border: 1px solid #ddd;
-  border-radius: 8px;
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius-sm);
   padding: 9px 12px;
   font-size: 14px;
   font-family: inherit;
-  color: #333;
-  background: #fff;
+  color: var(--ui-text);
+  background: var(--ui-surface);
   outline: none;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition: border-color var(--ui-duration), box-shadow var(--ui-duration);
 }
 .mf-input:focus {
-  border-color: #1a73e8;
+  border-color: var(--ui-accent);
   box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.12);
 }
 .mf-textarea {
@@ -221,7 +231,7 @@ function onKeydown(e: KeyboardEvent) {
 .mf-error {
   margin: 0;
   font-size: 13px;
-  color: #d93025;
+  color: var(--ui-danger);
 }
 .mf-actions {
   display: flex;
@@ -231,29 +241,29 @@ function onKeydown(e: KeyboardEvent) {
 }
 .mf-btn {
   border: none;
-  border-radius: 8px;
+  border-radius: var(--ui-radius-sm);
   padding: 9px 18px;
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.15s, opacity 0.15s;
+  transition: background var(--ui-duration), opacity var(--ui-duration);
 }
 .mf-cancel {
-  background: #f2f2f2;
-  color: #444;
+  background: var(--ui-surface-2);
+  color: var(--ui-text-2);
 }
 .mf-cancel:hover {
-  background: #e6e6e6;
+  background: var(--ui-border);
 }
 .mf-save {
-  background: #1a73e8;
-  color: #fff;
+  background: var(--ui-accent);
+  color: var(--ui-accent-on);
   display: inline-flex;
   align-items: center;
   gap: 8px;
 }
 .mf-save:hover:not(:disabled) {
-  background: #1765cc;
+  background: color-mix(in srgb, var(--ui-accent) 88%, black);
 }
 .mf-save:disabled {
   opacity: 0.55;
@@ -263,7 +273,7 @@ function onKeydown(e: KeyboardEvent) {
   width: 14px;
   height: 14px;
   border: 2px solid rgba(255, 255, 255, 0.4);
-  border-top-color: #fff;
+  border-top-color: var(--ui-accent-on);
   border-radius: 50%;
   animation: mf-spin 0.7s linear infinite;
 }

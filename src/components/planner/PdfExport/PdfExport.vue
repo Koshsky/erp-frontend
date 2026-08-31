@@ -20,7 +20,7 @@ const props = withDefaults(defineProps<PdfExportProps>(), {
   calendar: () => [],
 })
 
-/** Мин/макс даты по данным — фолбэк периода, если видимое окно страницы ещё не пришло */
+/** Min/max dates from the data — period fallback until the page's visible window arrives */
 const dataRange = computed(() => {
   let min = ''
   let max = ''
@@ -44,7 +44,7 @@ const dataRange = computed(() => {
   return { from: min, to: max }
 })
 
-/** Период печати: видимое окно страницы; фолбэк — диапазон данных */
+/** Print period: the page's visible window; fallback — the data range */
 function resolvePeriod(): { from: string; to: string } {
   const { periodFrom, periodTo } = props
   if (periodFrom && periodTo && periodFrom <= periodTo) {
@@ -53,25 +53,25 @@ function resolvePeriod(): { from: string; to: string } {
   return dataRange.value
 }
 
-/** Период пришёл с видимого окна страницы (а не фолбэк по данным) */
+/** The period came from the page's visible window (not the data fallback) */
 const periodFromPage = computed(
   () => Boolean(props.periodFrom && props.periodTo && props.periodFrom <= props.periodTo),
 )
 
-/** Читаемая строка периода для модалки (дд.мм.гггг — дд.мм.гггг) */
+/** Human-readable period string for the modal (dd.mm.yyyy — dd.mm.yyyy) */
 const periodLabel = computed(() => {
   const p = resolvePeriod()
   return `${toDate(p.from).toLocaleDateString('ru')} — ${toDate(p.to).toLocaleDateString('ru')}`
 })
 
-/** Фолбэк-подсказка: период со страницы не определён, но данные для печати есть */
+/** Fallback hint: no period from the page, but there is data to print */
 const periodFallbackHint = computed(
   () => open.value && !previewLoading.value && !periodFromPage.value && visibleGroups.value.length > 0,
 )
 
 /**
- * Настройки печати: фильтры процессов и внешний вид; персистентны в сессии.
- * Период приходит со страницы (пропсы periodFrom/periodTo).
+ * Print settings: process filters and appearance; persisted in the session.
+ * The period comes from the page (periodFrom/periodTo props).
  */
 const settings = ref({
   onlyMine: false,
@@ -81,15 +81,15 @@ const settings = ref({
   showTodayLine: false,
   showResources: true,
   style: 'color' as 'color' | 'mono',
-  // Толщина бара (px): строка автоматически = бар + 2px; старт от пропа rowHeight
+  // Bar thickness (px): the row automatically = bar + 2px; starts from the rowHeight prop
   barThickness: (props.rowHeight ?? 26) - 2,
 })
 
-/** Раскрытость списков фильтров (UI-состояние) */
+/** Filter list expansion state (UI state) */
 const projectsOpen = ref(false)
 const namesOpen = ref(false)
 
-/** Уникальные проекты из групп/строк (для фильтра «Скрыть проекты») */
+/** Unique projects from groups/rows (for the "Hide projects" filter) */
 const projects = computed(() => {
   const seen = new Map<number, string>()
   const add = (id?: number, code?: string) => {
@@ -103,24 +103,24 @@ const projects = computed(() => {
   return [...seen.entries()].map(([id, code]) => ({ id, code })).sort((a, b) => a.code.localeCompare(b.code, 'ru'))
 })
 
-/** Подпись фильтра имён: одинаковый для задач и процессов */
+/** Name filter label: same for tasks and processes */
 const nameFilterLabel = 'Процессы'
 
-/** Скоуп-зависимая конфигурация модалки печати.
- *  Печать не зависит от RBAC-прав: опции выводятся из данных.
- *  «Только мои процессы» актуален, когда среди печатаемых есть чужие
- *  процессы (owner_id != текущий пользователь); при включённом «только
- *  мои» фильтр по именам не нужен. */
+/** Scope-dependent print modal configuration.
+ *  Printing does not depend on RBAC rights: the options are derived from the data.
+ *  "Only my processes" matters when the printed set includes foreign
+ *  processes (owner_id != current user); with "only mine" enabled the
+ *  name filter is not needed. */
 const hasForeignProcesses = computed(() =>
   (props.groups ?? []).some((g) => g.owner_id != null && g.owner_id !== props.ownerId),
 )
 const showNameFilter = computed(() => props.scope !== 'projects' && !settings.value.onlyMine)
 const showMilestonesOption = computed(() => props.scope === 'tasks')
 const showResourcesOption = computed(() => props.scope === 'tasks')
-/** Уровень фильтрации имён/проекта: задачи — группы, процессы/проекты — строки */
+/** Name/project filter level: tasks — groups, processes/projects — rows */
 const filterLevel = computed<'group' | 'row'>(() => (props.scope === 'tasks' ? 'group' : 'row'))
 
-/** Варианты фильтра имён: названия групп (задачи) или строк (процессы/проекты) */
+/** Name filter options: group titles (tasks) or row titles (processes/projects) */
 const nameOptions = computed(() => {
   const names = new Set<string>()
   if (filterLevel.value === 'row') {
@@ -132,14 +132,14 @@ const nameOptions = computed(() => {
 })
 
 /**
- * Группы, попадающие в печать: фильтры применяются по цепочке.
- * Уровень фильтрации («группы» для задач, «строки» для процессов/проектов)
- * выводится из скоупа.
+ * Groups included in the print: filters are applied in a chain.
+ * The filter level ("groups" for tasks, "rows" for processes/projects)
+ * is derived from the scope.
  */
 const visibleGroups = computed(() => {
   let list = props.groups ?? []
   const level = filterLevel.value
-  // «Только мои процессы» (виден только vp): по владельцу группы или строки
+  // "Only my processes" (only vp sees it): by group or row owner
   if (settings.value.onlyMine && props.ownerId != null) {
     if (level === 'group') {
       list = list.filter((g) => g.owner_id === props.ownerId)
@@ -149,7 +149,7 @@ const visibleGroups = computed(() => {
         .filter((g) => (g.rows?.length ?? 0) > 0)
     }
   }
-  // «Скрыть проекты»: убираем группы проекта и строки проекта
+  // "Hide projects": remove project groups and project rows
   if (settings.value.hiddenProjects.length) {
     const hidden = new Set(settings.value.hiddenProjects)
     list = list.filter((g) => g.project_id == null || !hidden.has(g.project_id))
@@ -160,7 +160,7 @@ const visibleGroups = computed(() => {
       }))
     }
   }
-  // Фильтр по названиям (мультивыбор): группы или строки (кроме скоупа проектов)
+  // Name filter (multi-select): groups or rows (except the projects scope)
   if (showNameFilter.value && settings.value.selectedNames.length) {
     const sel = new Set(settings.value.selectedNames)
     if (level === 'group') {
@@ -174,7 +174,7 @@ const visibleGroups = computed(() => {
   return list
 })
 
-/** Отфильтровано всё — предпросмотр пуст, печать недоступна */
+/** Everything filtered out — preview is empty, printing unavailable */
 const previewEmpty = computed(
   () => !previewLoading.value && !previewError.value && visibleGroups.value.length === 0,
 )
@@ -191,28 +191,28 @@ const filename = computed(() => `gantt-${fmtDate(new Date())}.pdf`)
 const previewEl = ref<HTMLElement | null>(null)
 let previewHandle: PdfPreviewHandle | null = null
 
-/** Параметры последнего успешного рендера (чтобы не перегенерировать зря) */
+/** Params of the last successful render (to avoid regenerating needlessly) */
 let renderedParams = ''
 let genToken = 0
 let genTimer: ReturnType<typeof setTimeout> | null = null
 
-/** Ключ текущего рендера: фильтры + период/ширина со страницы */
+/** Current render key: filters + period/width from the page */
 function renderKey(): string {
   const p = resolvePeriod()
   return JSON.stringify({ ...settings.value, from: p.from, to: p.to })
 }
 
 /**
- * Тёплая загрузка тяжёлых модулей предпросмотра (pdfRenderer + pdf.js/воркер,
- * ~2.8 МБ): запускается по первому клику и грузит чанки ПАРАЛЛЕЛЬНО, чтобы
- * первое открытие не ждало последовательную загрузку каждого чанка.
- * Идемпотентно: повторные вызовы возвращают тот же промис.
+ * Warm loading of the heavy preview modules (pdfRenderer + pdf.js/worker,
+ * ~2.8 MB): starts on the first click and loads chunks IN PARALLEL, so the
+ * first open does not wait for each chunk to load sequentially.
+ * Idempotent: repeated calls return the same promise.
  */
 let warmupPromise: Promise<unknown> | null = null
 function warmup(): Promise<unknown> {
   if (!warmupPromise) {
     const p = Promise.all([import('./pdfRenderer'), preloadPdfPreview()])
-    // Не даём отклониться «незахваченной» ошибке до того, как её заберёт generate()
+    // Prevent an "unhandled" rejection before generate() picks it up
     p.catch(() => {})
     warmupPromise = p
   }
@@ -220,12 +220,12 @@ function warmup(): Promise<unknown> {
 }
 
 /**
- * Генерация предпросмотра: один генератор в полёте (single-flight).
- * Повторные вызовы generate() во время работы не начинают новый рендер,
- * а ставят флаг «переделать» — после завершения текущего рендера он
- * выполняется ещё раз с актуальными настройками. Это исключает гонки
- * токенов (когда отложенный вызов инвалидировал свежий предпросмотр и
- * оставлял застрявшую заглушку «Готовим предпросмотр…»).
+ * Preview generation: one generator in flight (single-flight).
+ * Repeated generate() calls while running do not start a new render —
+ * they set a "redo" flag: after the current render finishes, it runs
+ * again with the up-to-date settings. This rules out token races
+ * (when a deferred call invalidated a fresh preview and left a stuck
+ * "Preparing preview…" placeholder).
  */
 let runInProgress = false
 let runPending = false
@@ -256,13 +256,13 @@ async function runAll(force: boolean) {
   }
 }
 
-/** Один прогон: фильтры → pdf-lib → рендер страниц предпросмотра */
+/** One pass: filters → pdf-lib → preview page rendering */
 async function generateOnce(force: boolean) {
   const params = renderKey()
-  // Параметры не менялись — рендер не нужен. Ранний выход БЕЗ смены токена:
-  // текущий рендер (если идёт) должен спокойно завершиться.
+  // Params did not change — no render needed. Early exit WITHOUT a token change:
+  // the current render (if running) should finish calmly.
   if (!force && params === renderedParams && currentBytes.value) return
-  // Все данные отфильтрованы — предпросмотр пуст, печать недоступна
+  // All data filtered out — preview is empty, printing unavailable
   if (visibleGroups.value.length === 0) {
     previewError.value = null
     pageCount.value = 0
@@ -273,8 +273,8 @@ async function generateOnce(force: boolean) {
   previewError.value = null
   const token = ++genToken
   try {
-    // Модули грузятся параллельно (по первому клику — warmup); повторные
-    // вызовы застают их в кэше и не ждут загрузки.
+    // Modules load in parallel (on the first click — warmup); repeated
+    // calls find them cached and do not wait for loading.
     await warmup()
     const { renderGanttPdf } = await import('./pdfRenderer')
     const period = resolvePeriod()
@@ -284,12 +284,12 @@ async function generateOnce(force: boolean) {
       origin: props.origin,
       unit: props.unit,
       pageTitle: props.pageTitle,
-      // Вехи и занятость ресурсов — только для скоупа задач
+      // Milestones and resource usage — only for the tasks scope
       showMilestones: showMilestonesOption.value ? settings.value.showMilestones : false,
       showTodayLine: settings.value.showTodayLine,
       style: settings.value.style,
       scale: Number(props.scale) || 1,
-      // Строка = бар + 2px: рендерер вычислит бар = rowHeight − 2 = barThickness
+      // Row = bar + 2px: the renderer will compute bar = rowHeight − 2 = barThickness
       rowHeight: settings.value.barThickness + 2,
       resources: showResourcesOption.value && settings.value.showResources
         ? (props.resources ?? [])
@@ -336,7 +336,7 @@ async function generateOnce(force: boolean) {
   }
 }
 
-/** Живое обновление предпросмотра (дебаунс) при изменении настроек */
+/** Live preview update (debounced) on settings changes */
 function scheduleGenerate() {
   if (genTimer != null) clearTimeout(genTimer)
   genTimer = setTimeout(() => {
@@ -348,9 +348,9 @@ function scheduleGenerate() {
 watch(settings, scheduleGenerate, { deep: true })
 
 /**
- * Период/ширина со страницы приходят с дебаунсом (эмит visible-range ~150 мс):
- * если модалка открыта сразу после прокрутки, генерация на открытии могла уйти
- * со старыми значениями — перегенерируем предпросмотр, когда пропсы «доехали».
+ * The period/width from the page arrive debounced (visible-range emit ~150 ms):
+ * if the modal is opened right after scrolling, generation on open could have
+ * used stale values — regenerate the preview once the props arrive.
  */
 watch(
   () => [props.periodFrom, props.periodTo] as const,
@@ -361,7 +361,7 @@ watch(
 
 function openDialog() {
   if (busy.value) return
-  // Фильтры процессов персистентны в сессии; период и ширина — со страницы.
+  // Process filters persist in the session; the period and width come from the page.
   renderedParams = ''
   previewError.value = null
   pageCount.value = 0
@@ -386,7 +386,7 @@ function closeDialog() {
 }
 
 function download(bytes: Uint8Array, name: string) {
-  // Копия в отдельный ArrayBuffer: TS не позволяет Blob-часть из Uint8Array<ArrayBufferLike>
+  // Copy into a separate ArrayBuffer: TS does not allow a Blob part from Uint8Array<ArrayBufferLike>
   const copy = new Uint8Array(bytes.byteLength)
   copy.set(bytes)
   const blob = new Blob([copy.buffer], { type: 'application/pdf' })
@@ -400,7 +400,7 @@ function download(bytes: Uint8Array, name: string) {
   setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
-/** Скачивает файл, соответствующий текущему предпросмотру (без повторной генерации) */
+/** Downloads the file matching the current preview (without regenerating) */
 async function onDownload() {
   if (busy.value || previewEmpty.value) return
   const params = renderKey()
@@ -419,7 +419,7 @@ async function onDownload() {
   closeDialog()
 }
 
-/** Печатает PDF через браузерный диалог: скрытый iframe с blob-URL + contentWindow.print() */
+/** Prints the PDF via the browser dialog: hidden iframe with blob URL + contentWindow.print() */
 function printBytes(bytes: Uint8Array) {
   const copy = new Uint8Array(bytes.byteLength)
   copy.set(bytes)
@@ -437,7 +437,7 @@ function printBytes(bytes: Uint8Array) {
   }
   window.addEventListener('afterprint', cleanup)
   iframe.addEventListener('load', () => {
-    // Даём встроенному просмотрщику PDF время открыть документ, затем вызываем печать
+    // Give the built-in PDF viewer time to open the document, then trigger printing
     setTimeout(() => {
       try {
         iframe.contentWindow?.print()
@@ -448,7 +448,7 @@ function printBytes(bytes: Uint8Array) {
   })
 }
 
-/** Подготовка к печати: генерирует PDF и отправляет его в браузерный диалог печати */
+/** Prepares printing: generates the PDF and sends it to the browser print dialog */
 async function onPrint() {
   if (busy.value || previewEmpty.value) return
   const params = renderKey()
@@ -471,7 +471,7 @@ function onKeydown(e: KeyboardEvent) {
   if (e.key === 'Escape' && open.value) closeDialog()
 }
 
-/** Глобальный Ctrl/Cmd+P/S (перехвачен в MainLayout) — открыть модалку подготовки к печати */
+/** Global Ctrl/Cmd+P/S (intercepted in MainLayout) — open the print preparation modal */
 function onPrintRequest() {
   if (!open.value) openDialog()
 }
@@ -652,7 +652,7 @@ onBeforeUnmount(() => {
   cursor: not-allowed;
 }
 
-/* === Модалка === */
+/* === Modal === */
 .pe-overlay {
   position: fixed;
   inset: 0;
@@ -710,7 +710,7 @@ onBeforeUnmount(() => {
   flex: 1;
 }
 
-/* === Настройки === */
+/* === Settings === */
 .pe-settings {
   flex: 0 0 260px;
   display: flex;
@@ -793,7 +793,7 @@ onBeforeUnmount(() => {
   flex-shrink: 0;
 }
 
-/* === Фильтры процессов === */
+/* === Process filters === */
 .pe-filters-toggle {
   display: flex;
   align-items: center;
@@ -895,7 +895,7 @@ onBeforeUnmount(() => {
   border-bottom: 1px solid #fde68a;
 }
 
-/* === Предпросмотр === */
+/* === Preview === */
 .pe-preview-area {
   flex: 1;
   min-width: 0;
@@ -962,7 +962,7 @@ onBeforeUnmount(() => {
   }
 }
 
-/* === Действия === */
+/* === Actions === */
 .pe-actions {
   display: flex;
   justify-content: flex-end;
@@ -1026,7 +1026,7 @@ onBeforeUnmount(() => {
 }
 </style>
 
-<!-- Страницы предпросмотра создаются скриптом вне Vue — стили не скрываются под scoped -->
+<!-- Preview pages are created by script outside Vue — styles are not hidden under scoped -->
 <style>
 .pe-page {
   position: relative;

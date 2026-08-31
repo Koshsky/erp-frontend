@@ -1,12 +1,12 @@
 import type { TimelineCtx } from '../../../composables/timeline-context'
 
 export interface TodayLineProps {
-  /** Контекст бесконечной шкалы */
+  /** Infinite timeline context */
   timeline: TimelineCtx
-  /** Цвет луча (по умолчанию красный) */
+  /** Ray color (default red) */
   color?: string
-  /** Ширина луча, px */
+  /** Ray width, px */
   width?: number
-  /** Смещение луча вправо от границы «вчера/сегодня», px */
+  /** Ray offset to the right of the "yesterday/today" boundary, px */
   offset?: number
 }

@@ -1,21 +1,21 @@
 import type { TimelineCtx } from '../../../composables/timeline-context'
 
 export interface MilestoneMarkerProps {
-  /** Контекст бесконечной шкалы */
+  /** Infinite timeline context */
   timeline: TimelineCtx
-  /** Дата вехи — одна точка на шкале (позиция флажка) */
+  /** Milestone date — a single point on the timeline (flag position) */
   date: string | Date | number
-  /** Заголовок вехи — первая строка тултипа */
+  /** Milestone title — first tooltip row */
   title: string
-  /** Описание вехи — вторая строка тултипа */
+  /** Milestone description — second tooltip row */
   content?: string
-  /** Цвет флажка и древка */
+  /** Flag and pole color */
   color?: string
-  /** Высота полосы вех (px), в которой стоит флажок; ниже — луч вниз до конца группы */
+  /** Milestone strip height (px) the flag sits in; below it — a ray down to the group end */
   stripHeight?: number
-  /** Разрешить перетаскивание вехи (сдвиг по ячейкам; на отпускание — @change) */
+  /** Allow dragging the milestone (snap by cells; on release — @change) */
   draggable?: boolean
-  /** Границы процесса — веха не перетаскивается за их пределы */
+  /** Process bounds — the milestone cannot be dragged beyond them */
   groupStartDate?: string | Date | number | null
   groupEndDate?: string | Date | number | null
 }

@@ -9,6 +9,7 @@ import { toDate } from '../../../calendar'
 
 const props = withDefaults(defineProps<TaskGanttProps>(), {
   canManage: true,
+  reorderable: false,
   users: null,
   commentsByTask: null,
 })
@@ -18,14 +19,17 @@ const emit = defineEmits<{
   'milestone-change': [payload: { id: number; date: string }]
   contextmenu: [payload: { clientX: number; clientY: number; date: string; rowIndex: number; processId?: number; taskId?: number; milestoneId?: number }]
   'milestone-edit': [payload: number]
-  'open-comments': [payload: number]
-  /** Тултип задачи открылся — лениво подгрузить комментарии (кэш) */
+  /** Vertical row drag: a task moved within its process group */
+  reorder: [payload: { from: number; to: number }]
+  /** Single click on a task bar — open the task editor */
+  'edit': [payload: number]
+  /** Task tooltip opened — lazy-load the comments (cache) */
   'request-comments': [payload: number]
 }>()
 
 const groupItems = computed(() => props.tasks)
 
-/** Мин. высота объединённого лейбла: код (19px) + имя (14px) + даты (11px) + отступы ≈ 60px */
+/** Min merged label height: code (19px) + name (14px) + dates (11px) + padding ≈ 60px */
 const MS_MIN_LABEL_HEIGHT = 64
 
 function fmtDate(d: string | Date | number | null | undefined): string {
@@ -51,7 +55,7 @@ function onMilestoneEdit(id: number) {
 
 <template>
   <div class="tg-task-group">
-    <!-- Непрозрачная липкая ячейка колонки названий для строки вех (иначе сквозь неё видны бары) -->
+    <!-- Opaque sticky label-column cell for the milestone row (otherwise bars show through) -->
     <div class="tg-ms-label" :style="{ width: LABEL_WIDTH + 'px' }" />
     <GroupGantt
       :timeline="timeline"
@@ -61,7 +65,9 @@ function onMilestoneEdit(id: number) {
       :groupId="processId"
       :minLabelHeight="MS_MIN_LABEL_HEIGHT"
       :minRows="3"
+      :reorderable="reorderable"
       mergedLabel
+      @reorder="(p) => emit('reorder', p)"
     >
       <template #label>
         <div v-if="projectCode" class="gl-code">{{ projectCode }}</div>
@@ -71,7 +77,7 @@ function onMilestoneEdit(id: number) {
         </div>
       </template>
 
-      <template #bar="{ item }">
+      <template #bar="{ item, startReorder }">
         <TaskBar
           :timeline="timeline"
           :task="item"
@@ -79,11 +85,12 @@ function onMilestoneEdit(id: number) {
           :groupStartDate="groupStartDate"
           :groupEndDate="groupEndDate"
           :draggable="canManage"
+          :start-row-reorder="reorderable ? startReorder : null"
           :users="users"
           :comments-by-task="commentsByTask"
           @change="(d) => onBarChange(item.id, d)"
           @contextmenu="(p) => onBarContextMenu(p, item.id)"
-          @open-comments="(id) => emit('open-comments', id)"
+          @edit="(id) => emit('edit', id)"
           @request-comments="(id) => emit('request-comments', id)"
         />
       </template>
@@ -109,6 +116,7 @@ function onMilestoneEdit(id: number) {
 </template>
 
 <style scoped>
+@import "../../../../../styles/tokens.css";
 .tg-task-group {
   position: relative;
   box-sizing: border-box;
@@ -118,8 +126,8 @@ function onMilestoneEdit(id: number) {
   position: sticky;
   left: 0;
   height: 20px;
-  background: #fff;
-  /* Боковая панель — выше линии текущей даты (25) */
+  background: var(--ui-surface);
+  /* Side panel — above the today line (25) */
   z-index: 65;
   margin-top: -20px;
   cursor: default;
@@ -130,7 +138,7 @@ function onMilestoneEdit(id: number) {
   font-size: 16px;
   font-weight: 800;
   line-height: 1.2;
-  color: #1a73e8;
+  color: var(--ui-accent);
   letter-spacing: 0.3px;
   white-space: nowrap;
   max-width: 100%;
@@ -140,7 +148,7 @@ function onMilestoneEdit(id: number) {
 .gl-title {
   font-size: 12px;
   font-weight: 600;
-  color: #555;
+  color: var(--ui-text-2);
   white-space: nowrap;
   max-width: 100%;
   overflow: hidden;
@@ -149,7 +157,7 @@ function onMilestoneEdit(id: number) {
 .gl-dates {
   font-size: 10px;
   font-weight: 400;
-  color: #888;
+  color: var(--ui-text-muted);
   white-space: nowrap;
   max-width: 100%;
   overflow: hidden;

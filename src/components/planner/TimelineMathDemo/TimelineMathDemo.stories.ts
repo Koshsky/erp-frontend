@@ -25,7 +25,7 @@ const fmtRange = (a: Date, b: Date) => {
   return `${aM}–${bM}`
 }
 
-/** Проверка согласованности: для каждой ячейки её диапазон должен содержать ровно себя */
+/** Consistency check: each cell's range must contain exactly itself */
 function consistency(origin: string, unit: PlanningUnit, from: number, count: number): boolean {
   const cells = windowCells(origin, unit, from, count)
   return cells.every((c) => {
@@ -35,7 +35,7 @@ function consistency(origin: string, unit: PlanningUnit, from: number, count: nu
   })
 }
 
-/** Цвет месяца для наглядности календарной привязки декад */
+/** Month color for visual clarity of the decade calendar alignment */
 function monthColor(d: Date): string {
   const palette = ['#e3f2fd', '#fff3e0', '#e8f5e9', '#fce4ec', '#ede7f6', '#e0f7fa']
   return palette[((d.getFullYear() * 12 + d.getMonth()) % 6 + 6) % 6]

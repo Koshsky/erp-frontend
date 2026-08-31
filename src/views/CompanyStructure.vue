@@ -26,7 +26,7 @@ interface TreeNode {
   childrenCount: number
 }
 
-/** Пользователи, сгруппированные по руководителю (manager_id), по ФИО на каждом уровне */
+/** Users grouped by their manager (manager_id), sorted by full name at each level */
 const childrenOf = computed(() => {
   const map = new Map<number, DtoAdminUserResponse[]>()
   for (const u of adminUsers.value) {
@@ -39,12 +39,12 @@ const childrenOf = computed(() => {
   return map
 })
 
-/** Плоский иерархический список с отступами (обход от корней, защита от циклов) */
+/** Flat hierarchical list with indentation (walk from the roots, cycle protection) */
 const tree = computed<TreeNode[]>(() => {
   const byId = new Map<number, DtoAdminUserResponse>()
   for (const u of adminUsers.value) if (u.id != null) byId.set(u.id, u)
 
-  // Подсчёт подчинённых (включая вложенных), с защитой от циклов
+  // Count subordinates (including nested ones), with cycle protection
   const countChildren = (id: number, seen: Set<number>): number => {
     if (seen.has(id)) return 0
     seen.add(id)
@@ -72,14 +72,14 @@ const tree = computed<TreeNode[]>(() => {
   for (const root of childrenOf.value.get(0) ?? []) {
     if (root.id != null) visit(root.id, 0, new Set())
   }
-  // Защитный показ: неохваченные обходом (циклы/битые данные) показываем корнями
+  // Fallback display: users not reached by the walk (cycles/broken data) are shown as roots
   for (const u of adminUsers.value) {
     if (u.id != null && !visited.has(u.id)) visit(u.id, 0, new Set())
   }
   return out
 })
 
-/** Все прямые и косвенные потомки пользователя (циклоустойчиво) */
+/** All direct and indirect descendants of a user (cycle-safe) */
 function descendantsOf(id: number): Set<number> {
   const out = new Set<number>()
   const stack = [...(childrenOf.value.get(id) ?? [])]
@@ -95,7 +95,7 @@ function descendantsOf(id: number): Set<number> {
 const saving = ref(false)
 const saveError = ref<string | null>(null)
 
-/** Варианты руководителя: все пользователи, кроме самого и его потомков, по ФИО */
+/** Manager options: all users except the user itself and its descendants, sorted by name */
 function managerOptions(user: DtoAdminUserResponse) {
   const excluded = user.id != null ? descendantsOf(user.id) : new Set<number>()
   if (user.id != null) excluded.add(user.id)
@@ -121,7 +121,7 @@ async function onChangeManager(user: DtoAdminUserResponse, event: Event) {
 }
 
 onMounted(() => {
-  void app.loadAdminUsers(false)
+  void app.loadAdminUsers()
   if (!users.value.length) void app.loadUsers()
 })
 </script>
@@ -137,75 +137,84 @@ onMounted(() => {
     <p v-if="adminUsersLoading && !tree.length" class="cs-st">Загрузка...</p>
     <p v-if="adminUsersError && !tree.length" class="cs-st er">{{ adminUsersError }}</p>
 
-    <div v-if="tree.length" class="table">
+    <!--
+      The table frame (header included) stays visible even when there is no
+      data: the empty-state message is rendered inside the table instead of
+      replacing it.
+    -->
+    <div v-if="tree.length || (!adminUsersLoading && !adminUsersError)" class="table">
       <div class="tr th">
         <div class="col-name">Сотрудник</div>
         <div>Роль</div>
         <div class="col-mgr">Руководитель</div>
         <div>Подчинённых</div>
       </div>
-      <div v-for="node in tree" :key="node.user.id" class="tr">
-        <div class="col-name" :style="{ paddingLeft: node.depth * 22 + 'px' }">
-          <span class="depth-tick" v-if="node.depth > 0">↳</span>
-          <span class="name">{{ node.user.name }}</span>
-          <span class="mono">{{ node.user.username }}</span>
+      <template v-if="tree.length">
+        <div v-for="node in tree" :key="node.user.id" class="tr">
+          <div class="col-name" :style="{ paddingLeft: node.depth * 22 + 'px' }">
+            <span class="depth-tick" v-if="node.depth > 0">↳</span>
+            <span class="name">{{ node.user.name }}</span>
+            <span class="mono">{{ node.user.username }}</span>
+          </div>
+          <div>{{ roleLabel(node.user.role) }}</div>
+          <div class="col-mgr">
+            <select
+              class="cs-mgr"
+              :value="node.user.manager_id ?? ''"
+              :disabled="saving"
+              @change="onChangeManager(node.user, $event)"
+            >
+              <option v-for="opt in managerOptions(node.user)" :key="String(opt.value)" :value="opt.value">{{ opt.label }}</option>
+            </select>
+          </div>
+          <div>{{ node.childrenCount }}</div>
         </div>
-        <div>{{ roleLabel(node.user.role) }}</div>
-        <div class="col-mgr">
-          <select
-            class="cs-mgr"
-            :value="node.user.manager_id ?? ''"
-            :disabled="saving"
-            @change="onChangeManager(node.user, $event)"
-          >
-            <option v-for="opt in managerOptions(node.user)" :key="String(opt.value)" :value="opt.value">{{ opt.label }}</option>
-          </select>
-        </div>
-        <div>{{ node.childrenCount }}</div>
-      </div>
+      </template>
+      <p v-else class="cs-st">Нет данных</p>
     </div>
-    <p v-else-if="!adminUsersLoading && !adminUsersError" class="cs-st">Нет данных</p>
   </section>
 </template>
 
 <style scoped>
+@import '../styles/tokens.css';
+
 .cs-head {
   margin-bottom: 20px;
 }
 .cs-title {
   font-size: 24px;
   font-weight: 700;
-  color: #2c3e50;
+  color: var(--ui-text);
   margin: 0 0 6px;
 }
 .cs-hint {
   margin: 0;
   font-size: 13px;
-  color: #888;
+  color: var(--ui-text-muted);
 }
 .cs-st {
-  color: #666;
+  color: var(--ui-text-muted);
   font-size: 14px;
   padding: 30px;
   text-align: center;
 }
-.er { color: #d93025; }
+.er { color: var(--ui-danger); }
 .cs-save-error {
-  background: #fef2f1;
-  border: 1px solid #f3c1bd;
-  border-radius: 8px;
+  background: var(--ui-danger-soft);
+  border: 1px solid var(--ui-danger-soft);
+  border-radius: var(--ui-radius-sm);
   margin-bottom: 12px;
 }
 .mono {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 12px;
-  color: #999;
+  color: var(--ui-text-faint);
   margin-left: 8px;
 }
 .table {
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.08);
+  background: var(--ui-surface);
+  border-radius: var(--ui-radius-md);
+  box-shadow: var(--ui-shadow-md);
   overflow: hidden;
 }
 .tr {
@@ -213,16 +222,16 @@ onMounted(() => {
   grid-template-columns: 2fr 1fr 1.6fr 120px;
   gap: 8px;
   padding: 12px 20px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--ui-border);
   font-size: 14px;
   align-items: center;
 }
 .tr:last-child { border-bottom: none; }
-.tr:not(.th):hover { background: #f6f8fa; }
+.tr:not(.th):hover { background: var(--ui-surface-3); }
 .th {
-  background: #f8f9fa;
+  background: var(--ui-surface-2);
   font-weight: 600;
-  color: #555;
+  color: var(--ui-text-2);
 }
 .col-name {
   display: flex;
@@ -232,25 +241,25 @@ onMounted(() => {
 }
 .name {
   font-weight: 700;
-  color: #1a3a6b;
+  color: var(--ui-accent);
 }
 .depth-tick {
-  color: #bbb;
+  color: var(--ui-text-faint);
   margin-right: 6px;
 }
 .cs-mgr {
   box-sizing: border-box;
   width: 100%;
-  border: 1px solid #ddd;
-  border-radius: 8px;
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius-sm);
   padding: 6px 10px;
   font-size: 13px;
   font-family: inherit;
-  color: #333;
-  background: #fff;
+  color: var(--ui-text);
+  background: var(--ui-surface);
   outline: none;
 }
 .cs-mgr:focus {
-  border-color: #1a73e8;
+  border-color: var(--ui-accent);
 }
 </style>

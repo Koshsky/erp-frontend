@@ -1,11 +1,11 @@
 /**
- * Минимальная promise-обёртка над IndexedDB (без внешних зависимостей).
- * Одна БД `erp-offline` со стораджами:
- *  - `cache`  — кэш ответов API (GET);
- *  - `outbox` — очередь мутаций для офлайн-записи (создание/изменение/удаление);
- *  - `idmap`  — персистентный маппинг временных (отрицательных) id созданных
- *    офлайн сущностей на реальные id, чтобы записи-зависимости после
- *    прерываний синхронизации отправлялись с настоящим id, а не фейковым.
+ * Minimal promise wrapper over IndexedDB (no external dependencies).
+ * A single `erp-offline` database with stores:
+ *  - `cache`  — API response cache (GET);
+ *  - `outbox` — mutation queue for offline writes (create/update/delete);
+ *  - `idmap`  — persistent mapping of temporary (negative) ids of created
+ *    offline entities to real ids, so dependent records are sent with the
+ *    real id (not a fake one) after sync interruptions.
  */
 
 const DB_NAME = 'erp-offline'
@@ -99,7 +99,7 @@ export async function idbCount(store: string): Promise<number> {
 
 export const IDMAP_STORE_NAME = IDMAP_STORE
 
-/** Запись маппинга временного (отрицательного) id офлайн-создания на реальный id сервера */
+/** Mapping of a temporary (negative) offline-creation id to the real server id */
 export interface IdMapEntry {
   temp: number
   real: number

@@ -38,7 +38,7 @@ function withProject(props: Record<string, any>): Story['render'] {
   })
 }
 
-// Варианты дат на первом квартале
+// Date variants in the first quarter
 const d = {
   full: { startDate: iso(day(1, 1)), endDate: iso(day(3, 31)) },
   mid: { startDate: iso(day(1, 12)), endDate: iso(day(3, 10)) },

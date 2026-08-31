@@ -5,25 +5,25 @@ import { DAY_MS } from '../../../utils'
 import type { TodayLineProps } from './types'
 
 const props = withDefaults(defineProps<TodayLineProps>(), {
-  color: '#e53935',
+  color: 'var(--ui-today)',
   width: 2,
   offset: 0,
 })
 
-/** Абсолютный индекс ячейки, содержащей сегодняшний день */
+/** Absolute index of the cell containing today */
 const todayIdx = computed(() =>
   cellIndexForDate(props.timeline.origin, props.timeline.unit, new Date()),
 )
-/** Луч скрывается вне видимого окна (±запас, как у баров) */
+/** The ray hides outside the visible window (±margin, like bars) */
 const visible = computed(() => {
   const t = props.timeline
   return todayIdx.value > t.windowStart - 4 && todayIdx.value < t.windowStart + t.viewportCells + 4
 })
 
 /**
- * Позиция границы «вчера/сегодня» в content-пикселях:
- * день — левый край ячейки «сегодня» (граница суток); декада — дробная
- * позиция текущего дня внутри ячейки-декады.
+ * Position of the "yesterday/today" boundary in content pixels:
+ * day — the left edge of the "today" cell (day boundary); decade — the fractional
+ * position of the current day inside the decade cell.
  */
 const left = computed<number | null>(() => {
   if (!visible.value) return null
@@ -52,14 +52,15 @@ const lineStyle = computed<Record<string, string> | null>(() =>
 </template>
 
 <style scoped>
+@import "../../../styles/tokens.css";
 .tl-line {
   position: absolute;
   top: 0;
   bottom: 0;
-  /* Свой уровень: над контентом (бары 2, вехи 3) и ячейками ресурсов (20),
-     но под календарной шапкой (30) и боковой панелью (65+): шапка, коды
-     ресурсов, merged/строчные лейблы, полоса вех и корнер остаются поверх
-     линии текущей даты */
+  /* Its own level: above the content (bars 2, milestones 3) and resource cells (20),
+     but below the calendar header (30) and the side panel (65+): the header, resource
+     codes, merged/row labels, the milestone strip and the corner stay on top of
+     the today line */
   z-index: 25;
   pointer-events: none;
 }

@@ -18,7 +18,7 @@ const unit = ref<PlanningUnit>('day')
 const origin = ref(toDate(new Date()))
 
 const rbac = useRbacStore()
-/** «Все сотрудники» — когда видимость работников не ограничена (scope all). */
+/** "All employees" — when worker visibility is not restricted (scope all). */
 const seesAllEmployees = computed(() => rbac.perm('worker', 'view') === 'all')
 
 onMounted(async () => {
@@ -26,7 +26,7 @@ onMounted(async () => {
   await ts.loadEmployees()
 })
 
-/** Дозагрузка состояний при прокрутке/зуме (с дебаунсом) */
+/** Lazy-load states on scroll/zoom (debounced) */
 let rangeTimer: number | null = null
 function onRange(p: { startDate: string; endDate: string }) {
   if (rangeTimer != null) clearTimeout(rangeTimer)
@@ -61,9 +61,8 @@ async function onClear(p: ClearPayload) {
       <span v-if="seesAllEmployees" class="tp-note">Все сотрудники</span>
     </div>
 
-    <PlannerStates :loading="loading" :error="null" :has-data="timesheetRows.length > 0">
+    <PlannerStates :loading="loading" :error="null" :has-data="timesheetRows.length > 0 || (!loading && !error)">
       <TimelineGrid
-        v-if="timesheetRows.length"
         id="timesheet"
         :origin="origin"
         :unit="unit"
@@ -71,7 +70,16 @@ async function onClear(p: ClearPayload) {
       >
         <template #default="{ t }">
           <CalendarHeader :t="t" />
+          <!--
+            Like on the "Employees" page: when the roster is empty, the calendar
+            header stays visible and the message is rendered inside the table.
+            The box is constrained to the visible window (t.gridLeft +
+            viewportCells * cellPx — the coordinates of the visible day cells),
+            so the text stays centered in the grid area right of the sticky
+            label strip instead of sliding right along the wide timeline content.
+          -->
           <TimesheetGrid
+            v-if="timesheetRows.length"
             :t="t"
             :employees="timesheetRows"
             :states="states"
@@ -81,6 +89,16 @@ async function onClear(p: ClearPayload) {
             @clear="onClear"
             @range="onRange"
           />
+          <p
+            v-else
+            class="tp-empty"
+            :style="{
+              marginLeft: t.gridLeft + 'px',
+              width: t.viewportCells * t.cellPx + 'px',
+            }"
+          >
+            Нет данных о сотрудниках
+          </p>
         </template>
       </TimelineGrid>
     </PlannerStates>
@@ -90,6 +108,8 @@ async function onClear(p: ClearPayload) {
 </template>
 
 <style scoped>
+@import '../styles/tokens.css';
+
 .tp-head {
   display: flex;
   align-items: center;
@@ -100,7 +120,7 @@ async function onClear(p: ClearPayload) {
 .tp-title {
   font-size: 24px;
   font-weight: 700;
-  color: #2c3e50;
+  color: var(--ui-text);
   margin: 0;
 }
 .tp-legend {
@@ -113,22 +133,29 @@ async function onClear(p: ClearPayload) {
   align-items: center;
   gap: 6px;
   font-size: 12px;
-  color: #555;
+  color: var(--ui-text-muted);
 }
 .tp-swatch {
   width: 14px;
   height: 14px;
   border-radius: 4px;
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--ui-border);
 }
 .tp-note {
   margin-left: auto;
   font-size: 12px;
-  color: #888;
+  color: var(--ui-text-faint);
 }
 .tp-error {
   margin: 12px 0 0;
   font-size: 13px;
-  color: #d93025;
+  color: var(--ui-danger);
+}
+.tp-empty {
+  color: var(--ui-text-2);
+  font-size: 14px;
+  padding: 40px 12px;
+  text-align: center;
+  box-sizing: border-box;
 }
 </style>

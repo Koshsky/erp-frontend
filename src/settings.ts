@@ -1,10 +1,10 @@
 import { ref } from 'vue'
 
 /**
- * Настройки синхронизации (экран «Синхронизация»). Хранятся в localStorage
- * под ключами mvs_erp_sync_*. Логин/пароль здесь не хранятся: сессия
- * живёт в access-токене (в памяти, AD-05) и HttpOnly refresh-куке; после
- * перезагрузки восстановление идёт через /auth/refresh.
+ * Sync settings (the "Sync" screen). Stored in localStorage
+ * under the mvs_erp_sync_* keys. Login/password are not stored here: the session
+ * lives in the access token (in memory, AD-05) and the HttpOnly refresh cookie; after
+ * a reload, restoration happens via /auth/refresh.
  */
 
 const AUTO_SYNC_KEY = 'mvs_erp_auto_sync'
@@ -18,19 +18,19 @@ function readBool(key: string, fallback: boolean): boolean {
   }
 }
 
-/** Автосинхронизация: PUSH при запуске и при возврате сети */
+/** Auto-sync: PUSH at startup and when the network returns */
 export const autoSync = ref(readBool(AUTO_SYNC_KEY, true))
 
-/** Сохраняет текущие значения настроек в localStorage */
+/** Saves the current setting values to localStorage */
 export function saveSyncSettings(): void {
   try {
     localStorage.setItem(AUTO_SYNC_KEY, autoSync.value ? '1' : '0')
   } catch {
-    // настройки не критичны
+    // settings are not critical
   }
 }
 
-/** Реактивная проверка автосинхронизации (для sync.ts, читается «на лету») */
+/** Reactive auto-sync check (for sync.ts, read on the fly) */
 export function shouldAutoSync(): boolean {
   return autoSync.value
 }

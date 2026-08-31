@@ -9,8 +9,8 @@ import {
 import { CELL_WIDTH, LABEL_WIDTH } from './layout'
 
 /**
- * Демо-контекст бесконечной шкалы для Storybook: фиксированные параметры,
- * без скролл-контейнера (бары позиционируются от левого края, без колонки названий).
+ * Demo infinite-timeline context for Storybook: fixed parameters,
+ * no scroll container (bars are positioned from the left edge, no label column).
  */
 export function makeDemoTimeline(
   origin: string | Date,

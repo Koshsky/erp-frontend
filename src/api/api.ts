@@ -62,6 +62,10 @@ export interface DtoAddMemberRequest {
     'user_id'?: number;
 }
 export interface DtoAdminUserResponse {
+    /**
+     * Account registration time (email/username created at).
+     */
+    'created_at'?: string;
     'first_name'?: string;
     'hire_date'?: string;
     'id'?: number;
@@ -90,6 +94,11 @@ export interface DtoAuthResponse {
 export interface DtoAutoCreateConfig {
     'enabled'?: boolean;
     'processes'?: Array<DtoProcessTemplate>;
+}
+export interface DtoAutoCreatedCounts {
+    'assignments'?: number;
+    'processes'?: number;
+    'tasks'?: number;
 }
 export interface DtoAvailabilityPeriod {
     'available'?: number;
@@ -124,17 +133,19 @@ export interface DtoCreateAssignmentRequest {
 export interface DtoCreateCommentRequest {
     'content'?: string;
     /**
-     * Ответ на другой комментарий той же задачи; пусто — корневой комментарий.
+     * Reply to another comment of the same task; empty means a root comment.
      */
     'parent_id'?: number;
 }
 export interface DtoCreateMilestoneRequest {
+    'color'?: string;
     'content'?: string;
     'date'?: string;
     'process_id'?: number;
     'title'?: string;
 }
 export interface DtoCreateProcessRequest {
+    'color'?: string;
     'end_date'?: string;
     'owner_id'?: number;
     'project_id'?: number;
@@ -143,13 +154,25 @@ export interface DtoCreateProcessRequest {
 }
 export interface DtoCreateProjectRequest {
     'code'?: string;
+    'color'?: string;
     'end_date'?: string;
+    'owner_id'?: number;
+    'priority'?: number;
+    'start_date'?: string;
+}
+export interface DtoCreateProjectResponse {
+    'auto_created'?: DtoAutoCreatedCounts;
+    'code'?: string;
+    'color'?: string;
+    'end_date'?: string;
+    'id'?: number;
     'owner_id'?: number;
     'priority'?: number;
     'start_date'?: string;
 }
 export interface DtoCreateResourceRequest {
     'code'?: string;
+    'color'?: string;
     'owner_id'?: number;
     'title'?: string;
 }
@@ -159,6 +182,7 @@ export interface DtoCreateStateRequest {
     'name'?: string;
 }
 export interface DtoCreateTaskRequest {
+    'color'?: string;
     'end_date'?: string;
     'owner_id'?: number;
     'process_id'?: number;
@@ -182,9 +206,14 @@ export interface DtoCreateUserResult {
     'user'?: DtoUserResponse;
 }
 export interface DtoDetailedProcess {
+    'color'?: string;
     'end_date'?: string;
     'id'?: number;
     'milestones'?: Array<DtoMilestone>;
+    /**
+     * Order of the process within its project (ascending display order).
+     */
+    'order'?: number;
     'owner_id'?: number;
     'project_code'?: string;
     'project_id'?: number;
@@ -193,6 +222,7 @@ export interface DtoDetailedProcess {
     'title'?: string;
 }
 export interface DtoDetailedProject {
+    'color'?: string;
     'end_date'?: string;
     'id'?: number;
     'owner_id'?: number;
@@ -202,12 +232,17 @@ export interface DtoDetailedProject {
     'start_date'?: string;
 }
 export interface DtoDetailedTask {
+    'color'?: string;
     /**
-     * Количество активных комментариев задачи (для бейджа на диаграмме).
+     * Number of active comments on the task (for the badge on the diagram).
      */
     'comments_count'?: number;
     'end_date'?: string;
     'id'?: number;
+    /**
+     * Order of the task within its process (ascending display order).
+     */
+    'order'?: number;
     'owner_id'?: number;
     'process_id'?: number;
     'resources'?: Array<DtoResource>;
@@ -229,6 +264,7 @@ export interface DtoMatrixCell {
     'scope'?: string;
 }
 export interface DtoMilestone {
+    'color'?: string;
     'content'?: string;
     'date'?: string;
     'id'?: number;
@@ -236,6 +272,7 @@ export interface DtoMilestone {
     'title'?: string;
 }
 export interface DtoMilestoneResponse {
+    'color'?: string;
     'content'?: string;
     'date'?: string;
     'id'?: number;
@@ -248,8 +285,13 @@ export interface DtoPermission {
     'scope'?: string;
 }
 export interface DtoProcess {
+    'color'?: string;
     'end_date'?: string;
     'id'?: number;
+    /**
+     * Order of the process within its project (ascending display order).
+     */
+    'order'?: number;
     'owner_id'?: number;
     'project_code'?: string;
     'project_id'?: number;
@@ -260,19 +302,26 @@ export interface DtoProcessPlanning {
     'projects'?: Array<DtoDetailedProject>;
 }
 export interface DtoProcessResponse {
+    'color'?: string;
     'end_date'?: string;
     'id'?: number;
+    /**
+     * Order of the process within its project (ascending display order).
+     */
+    'order'?: number;
     'owner_id'?: number;
     'project_id'?: number;
     'start_date'?: string;
     'title'?: string;
 }
 export interface DtoProcessTemplate {
+    'color'?: string;
     'owner_id'?: number;
     'tasks'?: Array<DtoTaskTemplate>;
     'title'?: string;
 }
 export interface DtoProject {
+    'color'?: string;
     'end_date'?: string;
     'id'?: number;
     'owner_id'?: number;
@@ -285,11 +334,20 @@ export interface DtoProjectPlanning {
 }
 export interface DtoProjectResponse {
     'code'?: string;
+    'color'?: string;
     'end_date'?: string;
     'id'?: number;
     'owner_id'?: number;
     'priority'?: number;
     'start_date'?: string;
+}
+export interface DtoReorderProcessRequest {
+    'ids'?: Array<number>;
+    'project_id'?: number;
+}
+export interface DtoReorderTaskRequest {
+    'ids'?: Array<number>;
+    'process_id'?: number;
 }
 export interface DtoResetPasswordResponse {
     'password'?: string;
@@ -297,6 +355,7 @@ export interface DtoResetPasswordResponse {
 export interface DtoResource {
     'assignment_id'?: number;
     'code'?: string;
+    'color'?: string;
     'id'?: number;
     'quantity'?: number;
     'title'?: string;
@@ -331,6 +390,7 @@ export interface DtoResourceMemberResponse {
 }
 export interface DtoResourceResponse {
     'code'?: string;
+    'color'?: string;
     'employees_count'?: number;
     'id'?: number;
     'owner_id'?: number;
@@ -387,14 +447,20 @@ export interface DtoTaskPlanning {
     'processes'?: Array<DtoDetailedProcess>;
 }
 export interface DtoTaskResponse {
+    'color'?: string;
     'end_date'?: string;
     'id'?: number;
+    /**
+     * Order of the task within its process (ascending display order).
+     */
+    'order'?: number;
     'owner_id'?: number;
     'process_id'?: number;
     'start_date'?: string;
     'title'?: string;
 }
 export interface DtoTaskTemplate {
+    'color'?: string;
     'resources'?: Array<DtoResourceBinding>;
     'title'?: string;
 }
@@ -407,12 +473,14 @@ export interface DtoUpdateManagerRequest {
     'manager_id'?: number;
 }
 export interface DtoUpdateMilestoneRequest {
+    'color'?: string;
     'content'?: string;
     'date'?: string;
     'process_id'?: number;
     'title'?: string;
 }
 export interface DtoUpdateProcessRequest {
+    'color'?: string;
     'end_date'?: string;
     'owner_id'?: number;
     'project_id'?: number;
@@ -421,6 +489,7 @@ export interface DtoUpdateProcessRequest {
 }
 export interface DtoUpdateProjectRequest {
     'code'?: string;
+    'color'?: string;
     'end_date'?: string;
     'owner_id'?: number;
     'priority'?: number;
@@ -428,6 +497,7 @@ export interface DtoUpdateProjectRequest {
 }
 export interface DtoUpdateResourceRequest {
     'code'?: string;
+    'color'?: string;
     'owner_id'?: number;
     'title'?: string;
 }
@@ -437,6 +507,7 @@ export interface DtoUpdateStateRequest {
     'name'?: string;
 }
 export interface DtoUpdateTaskRequest {
+    'color'?: string;
     'end_date'?: string;
     'owner_id'?: number;
     'process_id'?: number;
@@ -471,7 +542,7 @@ export interface DtoUserResponse {
     'manager_id'?: number;
     'middle_name'?: string;
     /**
-     * Полное ФИО «Фамилия Имя Отчество» (готовое, для отображения).
+     * Full name \"Last First Middle\" (pre-composed, for display).
      */
     'name'?: string;
     'position'?: string;
@@ -556,8 +627,12 @@ export interface ProjectGet200ResponseAllOfData {
     'offset'?: number;
     'total'?: number;
 }
-export interface ProjectPost201Response {
+export interface ProjectIdGet200Response {
     'data'?: DtoProjectResponse;
+    'error'?: object;
+}
+export interface ProjectPost201Response {
+    'data'?: DtoCreateProjectResponse;
     'error'?: object;
 }
 export interface RbacExplainGet200Response {
@@ -2414,6 +2489,44 @@ export const ProcessesApiAxiosParamCreator = function (configuration?: Configura
             };
         },
         /**
+         * Rewrite the order of all active processes of a project (the request carries the complete ordered id list)
+         * @summary Reorder processes
+         * @param {DtoReorderProcessRequest} order New process order
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        processOrderPut: async (order: DtoReorderProcessRequest, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'order' is not null or undefined
+            assertParamExists('processOrderPut', 'order', order)
+            const localVarPath = `/process/order`;
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'PUT', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication ApiKeyAuth required
+            await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
+
+            localVarHeaderParameter['Content-Type'] = 'application/json';
+            localVarHeaderParameter['Accept'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+            localVarRequestOptions.data = serializeDataIfNeeded(order, localVarRequestOptions, configuration)
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
          * Create a new process
          * @summary Create process
          * @param {DtoCreateProcessRequest} process Process data
@@ -2516,6 +2629,19 @@ export const ProcessesApiFp = function(configuration?: Configuration) {
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
+         * Rewrite the order of all active processes of a project (the request carries the complete ordered id list)
+         * @summary Reorder processes
+         * @param {DtoReorderProcessRequest} order New process order
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async processOrderPut(order: DtoReorderProcessRequest, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<void>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.processOrderPut(order, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['ProcessesApi.processOrderPut']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
          * Create a new process
          * @summary Create process
          * @param {DtoCreateProcessRequest} process Process data
@@ -2581,6 +2707,16 @@ export const ProcessesApiFactory = function (configuration?: Configuration, base
             return localVarFp.processIdPut(id, body, options).then((request) => request(axios, basePath));
         },
         /**
+         * Rewrite the order of all active processes of a project (the request carries the complete ordered id list)
+         * @summary Reorder processes
+         * @param {DtoReorderProcessRequest} order New process order
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        processOrderPut(order: DtoReorderProcessRequest, options?: RawAxiosRequestConfig): AxiosPromise<void> {
+            return localVarFp.processOrderPut(order, options).then((request) => request(axios, basePath));
+        },
+        /**
          * Create a new process
          * @summary Create process
          * @param {DtoCreateProcessRequest} process Process data
@@ -2642,6 +2778,17 @@ export class ProcessesApi extends BaseAPI {
      */
     public processIdPut(id: number, body: DtoUpdateProcessRequest, options?: RawAxiosRequestConfig) {
         return ProcessesApiFp(this.configuration).processIdPut(id, body, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * Rewrite the order of all active processes of a project (the request carries the complete ordered id list)
+     * @summary Reorder processes
+     * @param {DtoReorderProcessRequest} order New process order
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    public processOrderPut(order: DtoReorderProcessRequest, options?: RawAxiosRequestConfig) {
+        return ProcessesApiFp(this.configuration).processOrderPut(order, options).then((request) => request(this.axios, this.basePath));
     }
 
     /**
@@ -2909,7 +3056,7 @@ export const ProjectsApiFp = function(configuration?: Configuration) {
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async projectIdGet(id: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<ProjectPost201Response>> {
+        async projectIdGet(id: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<ProjectIdGet200Response>> {
             const localVarAxiosArgs = await localVarAxiosParamCreator.projectIdGet(id, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
             const localVarOperationServerBasePath = operationServerMap['ProjectsApi.projectIdGet']?.[localVarOperationServerIndex]?.url;
@@ -2923,7 +3070,7 @@ export const ProjectsApiFp = function(configuration?: Configuration) {
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async projectIdPut(id: number, body: DtoUpdateProjectRequest, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<ProjectPost201Response>> {
+        async projectIdPut(id: number, body: DtoUpdateProjectRequest, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<ProjectIdGet200Response>> {
             const localVarAxiosArgs = await localVarAxiosParamCreator.projectIdPut(id, body, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
             const localVarOperationServerBasePath = operationServerMap['ProjectsApi.projectIdPut']?.[localVarOperationServerIndex]?.url;
@@ -2980,7 +3127,7 @@ export const ProjectsApiFactory = function (configuration?: Configuration, baseP
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        projectIdGet(id: number, options?: RawAxiosRequestConfig): AxiosPromise<ProjectPost201Response> {
+        projectIdGet(id: number, options?: RawAxiosRequestConfig): AxiosPromise<ProjectIdGet200Response> {
             return localVarFp.projectIdGet(id, options).then((request) => request(axios, basePath));
         },
         /**
@@ -2991,7 +3138,7 @@ export const ProjectsApiFactory = function (configuration?: Configuration, baseP
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        projectIdPut(id: number, body: DtoUpdateProjectRequest, options?: RawAxiosRequestConfig): AxiosPromise<ProjectPost201Response> {
+        projectIdPut(id: number, body: DtoUpdateProjectRequest, options?: RawAxiosRequestConfig): AxiosPromise<ProjectIdGet200Response> {
             return localVarFp.projectIdPut(id, body, options).then((request) => request(axios, basePath));
         },
         /**
@@ -4409,6 +4556,44 @@ export const TasksApiAxiosParamCreator = function (configuration?: Configuration
             };
         },
         /**
+         * Rewrite the order of all active tasks of a process (the request carries the complete ordered id list)
+         * @summary Reorder tasks
+         * @param {DtoReorderTaskRequest} order New task order
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        taskOrderPut: async (order: DtoReorderTaskRequest, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'order' is not null or undefined
+            assertParamExists('taskOrderPut', 'order', order)
+            const localVarPath = `/task/order`;
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'PUT', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication ApiKeyAuth required
+            await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
+
+            localVarHeaderParameter['Content-Type'] = 'application/json';
+            localVarHeaderParameter['Accept'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+            localVarRequestOptions.data = serializeDataIfNeeded(order, localVarRequestOptions, configuration)
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
          * Create a new task
          * @summary Create a new task
          * @param {DtoCreateTaskRequest} task Task
@@ -4552,6 +4737,19 @@ export const TasksApiFp = function(configuration?: Configuration) {
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
+         * Rewrite the order of all active tasks of a process (the request carries the complete ordered id list)
+         * @summary Reorder tasks
+         * @param {DtoReorderTaskRequest} order New task order
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async taskOrderPut(order: DtoReorderTaskRequest, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<void>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.taskOrderPut(order, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['TasksApi.taskOrderPut']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
          * Create a new task
          * @summary Create a new task
          * @param {DtoCreateTaskRequest} task Task
@@ -4647,6 +4845,16 @@ export const TasksApiFactory = function (configuration?: Configuration, basePath
          */
         taskIdPut(id: number, task: DtoUpdateTaskRequest, options?: RawAxiosRequestConfig): AxiosPromise<TaskPost201Response> {
             return localVarFp.taskIdPut(id, task, options).then((request) => request(axios, basePath));
+        },
+        /**
+         * Rewrite the order of all active tasks of a process (the request carries the complete ordered id list)
+         * @summary Reorder tasks
+         * @param {DtoReorderTaskRequest} order New task order
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        taskOrderPut(order: DtoReorderTaskRequest, options?: RawAxiosRequestConfig): AxiosPromise<void> {
+            return localVarFp.taskOrderPut(order, options).then((request) => request(axios, basePath));
         },
         /**
          * Create a new task
@@ -4745,6 +4953,17 @@ export class TasksApi extends BaseAPI {
      */
     public taskIdPut(id: number, task: DtoUpdateTaskRequest, options?: RawAxiosRequestConfig) {
         return TasksApiFp(this.configuration).taskIdPut(id, task, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * Rewrite the order of all active tasks of a process (the request carries the complete ordered id list)
+     * @summary Reorder tasks
+     * @param {DtoReorderTaskRequest} order New task order
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    public taskOrderPut(order: DtoReorderTaskRequest, options?: RawAxiosRequestConfig) {
+        return TasksApiFp(this.configuration).taskOrderPut(order, options).then((request) => request(this.axios, this.basePath));
     }
 
     /**
@@ -6083,7 +6302,7 @@ export const UsersApiAxiosParamCreator = function (configuration?: Configuration
          * @param {number} [limit] Page size (default 50, max 500)
          * @param {string} [role] Filter by role (e.g. worker)
          * @param {number} [managerId] Filter by manager (admin)
-         * @param {boolean} [includeHash] Включить password_hash (только admin)
+         * @param {boolean} [includeHash] Include password_hash (admin only)
          * @param {number} [offset] Page offset
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
@@ -6557,7 +6776,7 @@ export const UsersApiFp = function(configuration?: Configuration) {
          * @param {number} [limit] Page size (default 50, max 500)
          * @param {string} [role] Filter by role (e.g. worker)
          * @param {number} [managerId] Filter by manager (admin)
-         * @param {boolean} [includeHash] Включить password_hash (только admin)
+         * @param {boolean} [includeHash] Include password_hash (admin only)
          * @param {number} [offset] Page offset
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
@@ -6727,7 +6946,7 @@ export const UsersApiFactory = function (configuration?: Configuration, basePath
          * @param {number} [limit] Page size (default 50, max 500)
          * @param {string} [role] Filter by role (e.g. worker)
          * @param {number} [managerId] Filter by manager (admin)
-         * @param {boolean} [includeHash] Включить password_hash (только admin)
+         * @param {boolean} [includeHash] Include password_hash (admin only)
          * @param {number} [offset] Page offset
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
@@ -6867,7 +7086,7 @@ export class UsersApi extends BaseAPI {
      * @param {number} [limit] Page size (default 50, max 500)
      * @param {string} [role] Filter by role (e.g. worker)
      * @param {number} [managerId] Filter by manager (admin)
-     * @param {boolean} [includeHash] Включить password_hash (только admin)
+     * @param {boolean} [includeHash] Include password_hash (admin only)
      * @param {number} [offset] Page offset
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}

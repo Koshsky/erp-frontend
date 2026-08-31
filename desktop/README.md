@@ -1,122 +1,127 @@
-# MVS ERP — настольная обвязка (Electron)
+# MVS ERP — desktop wrapper (Electron)
 
-Оборачивает собранный vite-фронтенд (`dist/`) в нативное десктоп-приложение
-(Windows / macOS / Linux). Приложение работает онлайн и офлайн (IndexedDB +
-локальный http), подключается к внешнему бэкенду по API_URL (задаётся на
-экране «Синхронизация» или в настройках до входа).
+Wraps the built vite frontend (`dist/`) into a native desktop application
+(Windows / macOS / Linux). The app works online and offline (IndexedDB +
+local http) and connects to an external backend via API_URL (set on the
+"Synchronization" screen or in the pre-login settings).
 
-## Как это работает
+## How it works
 
-- `main.js` (main-процесс) поднимает локальный HTTP-сервер на `127.0.0.1`,
-  отдающий `../dist` (собранный фронтенд). Это нужно, потому что фронтенд
-  жёстко использует корневые пути `/precache-manifest.json`, `/assets/*` —
-  через `http` они работают без правок кода (в отличие от `file://`).
-- `preload.js` через `contextBridge` отдаёт renderer'у минимальный API
-  `window.erpDesktop` (флаг `isElectron` + доступ к safeStorage для пароля).
-- Service Worker отсутствует (в проекте вырезан): офлайн в приложении даёт
-  локальный http + IndexedDB (кэш данных и очередь изменений).
+- `main.js` (main process) starts a local HTTP server on `127.0.0.1` serving
+  `../dist` (the built frontend). This is required because the frontend relies
+  on root paths `/precache-manifest.json`, `/assets/*` — over `http` they work
+  without code changes (unlike `file://`).
+- `preload.js` exposes a minimal `window.erpDesktop` API to the renderer via
+  `contextBridge` (the `isElectron` flag + safeStorage access for the password).
+- There is no Service Worker (it was removed from the project): offline support
+  comes from the local http server + IndexedDB (data cache and mutation queue).
 
-## Сборка
+## Building
 
-Предварительно собрать фронтенд:
+Build the frontend first:
 
 ```bash
 cd ../            # services/frontend
 npm run build     # → dist/
 ```
 
-Затем собрать установщики (из `desktop/`):
+Then build the installers (from `desktop/`):
 
 ```bash
-npm install        # electron + electron-builder (уже в devDependencies)
-npm run dist       # все платформы
-npm run dist:win   # только Windows (NSIS .exe)
+npm install        # electron + electron-builder (already in devDependencies)
+npm run dist       # all platforms
+npm run dist:win   # Windows only (NSIS .exe)
 npm run dist:mac   # macOS (dmg + zip)
 npm run dist:linux # Linux (AppImage + deb)
 ```
 
-Готовые файлы — в `release/` (прямые `npm run dist` пишут в корень `release/`);
-скрипт `build-portable.sh` дополнительно раскладывает каждый релиз по
-**директории конкретной версии** `release/<версия>/`.
+Ready artifacts go to `release/` (plain `npm run dist` writes to the `release/`
+root); `build-portable.sh` additionally lays out each release into a
+**per-version directory** `release/<version>/`.
 
-### Portable + единый файл — Windows и Linux
+### Portable + single-file — Windows and Linux
 
-Скрипт `build-portable.sh` собирает релиз с **версией**. Все артефакты одной
-версии лежат в одной директории `release/<версия>/`, например:
+`build-portable.sh` builds a release with a **version**. All artifacts of one
+version live in a single directory `release/<version>/`, e.g.:
 
 ```
 release/1.0.2/
-├── MVS ERP-1.0.2-linux-x86_64.AppImage   # Linux единый файл
-├── MVS ERP-1.0.2-win-x64.exe             # Windows единый self-contained .exe
-├── MVS ERP-1.0.2-win-x64.zip             # Windows portable-архив
-├── linux-unpacked/                       # Linux portable-папка
-└── win-unpacked/                         # Windows portable-папка
+├── MVS ERP-1.0.2-linux-x86_64.AppImage   # Linux single file
+├── MVS ERP-1.0.2-win-x64.exe             # Windows single self-contained .exe
+├── MVS ERP-1.0.2-win-x64.zip             # Windows portable archive
+├── linux-unpacked/                       # Linux portable folder
+└── win-unpacked/                         # Windows portable folder
 ```
 
-Каждая из **4 частей** релиза включается своим флагом; **Linux по умолчанию
-включён, Windows — выключен**. Явные флаги добавляют части к Linux-дефолту:
+Each of the **4 parts** of a release is toggled by its own flag; **Linux is
+enabled by default, Windows disabled**. Explicit flags add parts to the Linux
+default:
 
-| Часть | Артефакты | Флаг | По умолчанию |
+| Part | Artifacts | Flag | Default |
 |---|---|---|---|
-| Linux portable | `linux-unpacked/` | `--linux-portable` | вкл |
-| Linux единый | `*-linux-x86_64.AppImage` | `--linux-appimage` | вкл |
-| Windows portable | `win-unpacked/` + `*-win-x64.zip` | `--win-portable` | выкл |
-| Windows единый | `*-win-x64.exe` (best-effort) | `--win-exe` | выкл |
+| Linux portable | `linux-unpacked/` | `--linux-portable` | on |
+| Linux single-file | `*-linux-x86_64.AppImage` | `--linux-appimage` | on |
+| Windows portable | `win-unpacked/` + `*-win-x64.zip` | `--win-portable` | off |
+| Windows single-file | `*-win-x64.exe` (best-effort) | `--win-exe` | off |
 
-Сокращения: `--win` = `--win-portable --win-exe`; `--linux` = оба Linux-флага.
+Shorthands: `--win` = `--win-portable --win-exe`; `--linux` = both Linux flags.
 
-**Версия** берётся из `desktop/package.json` (semver) и по умолчанию
-**инкрементируется** на каждой сборке (patch):
-
-```bash
-./build-portable.sh                 # Linux (обе части), версия = bump patch
-./build-portable.sh --win           # Linux + обе Windows-части
-./build-portable.sh --win-portable  # Linux + Windows portable (zip + папка)
-./build-portable.sh --win-exe       # Linux + единый Windows .exe
-./build-portable.sh --version 2.1.0 # собрать именно 2.1.0
-./build-portable.sh --bump minor    # инкремент minor
-./build-portable.sh --no-bump       # текущая версия без изменений
-./build-portable.sh --build-web     # принудительно пересобрать dist/
-./build-portable.sh --clean         # очистить release/ перед сборкой
-```
-
-Версия прокидывается в веб-сборку (`APP_VERSION` → `__APP_VERSION__` и
-`precache-manifest.json`), поэтому «Версия приложения/сборки» на экране
-«Синхронизация» совпадает с версией артефактов. Скрипт версию не коммитит —
-инкремент фиксируйте отдельным коммитом (`chore(desktop): release vX.Y.Z`).
-
-Portable-таргеты не требуют wine: `zip`/`dir`/portable/AppImage собираются на
-Linux-хосте. Единый Windows-`.exe` (таргет `portable`) собирается отдельным
-вызовом; если среда не даёт его собрать, скрипт продолжает с zip и печатает
-предупреждение. (NSIS-`.exe`-установщик — НЕ portable, ему на Linux нужны wine
-+ makensis; это отдельный `npm run dist:win`.)
-
-Запуск в dev (без упаковки):
+The **version** is taken from `desktop/package.json` (semver) and by default
+is **incremented** on each build (patch):
 
 ```bash
-npm start          # открывает Electron-окно с локально поданным dist/
+./build-portable.sh                 # Linux (both parts), version = patch bump
+./build-portable.sh --win           # Linux + both Windows parts
+./build-portable.sh --win-portable  # Linux + Windows portable (zip + folder)
+./build-portable.sh --win-exe       # Linux + single-file Windows .exe
+./build-portable.sh --version 2.1.0 # build exactly 2.1.0
+./build-portable.sh --bump minor    # increment minor
+./build-portable.sh --no-bump       # current version unchanged
+./build-portable.sh --build-web     # force rebuild of dist/
+./build-portable.sh --clean         # clean release/ before building
 ```
 
-## Пароль автосинка
+The version is passed into the web build (`APP_VERSION` → `__APP_VERSION__` and
+`precache-manifest.json`), so "App/build version" on the "Synchronization"
+screen matches the artifact version. The script does not commit the version —
+commit the increment separately (`chore(desktop): release vX.Y.Z`).
 
-Пароль для автосинхронизации хранится **не в браузере**, а в main-процессе
-через `safeStorage` (шифрование на уровне ОС, файл в `userData`), и доступен
-renderer'у только через IPC (`window.erpDesktop.password.get/set/clear`).
-В обычном браузере (не Electron) пароль не хранится вовсе.
+Portable targets do not need wine: `zip`/`dir`/portable/AppImage are built on
+a Linux host. The single-file Windows `.exe` (the `portable` target) is built
+in a separate invocation; if the environment cannot build it, the script
+continues with zip and prints a warning. (The NSIS `.exe` installer is NOT
+portable; it needs wine + makensis on Linux — that is a separate
+`npm run dist:win`.)
 
-Креды автосинка **сохраняются автоматически при входе** (на странице логина):
-логин — в localStorage, пароль — в safeStorage; отдельного ввода на экране
-«Синхронизация» нет. При запуске приложение автоматически восстанавливает
-сессию по сохранённым креденшелам (`ensureDesktopAutoSyncSession` в
-`src/offline/sync.ts`), если автосинк включён и сессия отсутствует, — и
-выполняет синхронизацию без ручного входа. После явного «Выйти» автосинк не
-входит до следующего ручного входа. Без сети страница логина предлагает
-«Войти офлайн» — локальную сессию с кэшем и очередью изменений.
+Dev run (without packaging):
 
-## Требования
+```bash
+npm start          # opens an Electron window with the locally served dist/
+```
 
-- Node.js ≥ 20 (для сборки/упаковки).
-- Для сборки macOS-установщика нужен macOS; Windows .exe удобнее собирать
-  на Windows (electron-builder умеет и кросс-сборку с ограничениями).
-- safeStorage работает там, где ОС даёт шифрование (macOS Keychain, Windows
-  DPAPI, Linux — keyring); если ключа нет, пароль просто не сохраняется.
+## Auto-sync password
+
+The auto-sync password is stored **not in the browser** but in the main
+process via `safeStorage` (OS-level encryption, file in `userData`), and the
+renderer can only access it over IPC
+(`window.erpDesktop.password.get/set/clear`). In a plain browser (non-Electron)
+the password is not stored at all.
+
+Auto-sync credentials **are saved automatically at login** (on the login page):
+the login to localStorage, the password to safeStorage; there is no separate
+input on the "Synchronization" screen. On startup the app automatically
+restores the session from the saved credentials
+(`ensureDesktopAutoSyncSession` in `src/offline/sync.ts`) if auto-sync is
+enabled and no session exists — and syncs without a manual login. After an
+explicit "Log out", auto-sync does not log in again until the next manual
+login. Without a network, the login page offers "Log in offline" — a local
+session with cache and a mutation queue.
+
+## Requirements
+
+- Node.js ≥ 20 (for build/packaging).
+- Building the macOS installer requires macOS; the Windows .exe is easier to
+  build on Windows (electron-builder can cross-build with limitations).
+- safeStorage works where the OS provides encryption (macOS Keychain, Windows
+  DPAPI, Linux — keyring); if no key is available, the password is simply not
+  saved.

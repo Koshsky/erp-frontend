@@ -1,11 +1,11 @@
 <script setup lang="ts">
 /**
- * Права доступа — роль-центричный редактор.
- * Слева — роли, справа — возможности выбранной роли по разделам.
- * Зоны переведены в человеческий язык в контексте ресурса
- * («в своих процессах», «в своих проектах», «только свои», «все»).
- * Источник истины — матрица на бэкенде (/api/v1/rbac/*), правки
- * применяются сразу (upsert; «нет доступа» = мягкое удаление).
+ * Access permissions — a role-centric editor.
+ * Roles on the left, capabilities of the selected role by section on the right.
+ * Scopes are rendered in human language in the resource context
+ * ("in own processes", "in own projects", "own only", "all").
+ * Source of truth — the matrix on the backend (/api/v1/rbac/*); edits are
+ * applied immediately (upsert; "no access" = soft delete).
  */
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
@@ -14,12 +14,12 @@ import { useRbacStore } from '../store'
 import { useConfirm } from '../composables/useConfirm'
 
 const rbac = useRbacStore()
-const { roles, rules, matrix, routePolicies, loading, error, saving } = storeToRefs(rbac)
+const { roles, rules, matrix, loading, error, saving } = storeToRefs(rbac)
 
-/** Выбранная роль (по умолчанию — первая из каталога, не admin). */
+/** Selected role (by default — the first one from the catalog, not admin). */
 const selected = ref('')
 
-/** Коды ресурсов и действий (зеркалит кодеки бэкенда). */
+/** Resource and action codes (mirror the backend codecs). */
 const ACTION_LABELS: Record<string, string> = {
   view: 'Просмотр',
   create: 'Создание',
@@ -27,7 +27,7 @@ const ACTION_LABELS: Record<string, string> = {
   delete: 'Удаление',
 }
 
-// Ресурс → человекопонятное имя (родительный падеж для фраз «Просмотр …»).
+// Resource → human-readable name (genitive case for phrases like "View …").
 const RESOURCE_LABELS: Record<string, string> = {
   project: 'проектов',
   process: 'процессов',
@@ -41,10 +41,38 @@ const RESOURCE_LABELS: Record<string, string> = {
   rbac_config: 'настроек администрирования',
 }
 
+/** Entity names (nominative) for the collapsible group headers. */
+const ENTITY_NAMES: Record<string, string> = {
+  project: 'Проекты',
+  process: 'Процессы',
+  task: 'Задачи',
+  milestone: 'Вехи',
+  assignment: 'Назначения ресурсов',
+  state: 'Статусы',
+  resource: 'Ресурсы табеля',
+  worker: 'Сотрудники',
+  user_catalog: 'Каталог пользователей',
+  rbac_config: 'Настройки администрирования',
+}
+
+/** Collapsed by default; the header click expands/collapses an entity group */
+const openEntities = ref<Set<string>>(new Set())
+
+function isOpen(resource: string): boolean {
+  return openEntities.value.has(resource)
+}
+
+function toggleGroup(resource: string) {
+  const next = new Set(openEntities.value)
+  if (next.has(resource)) next.delete(resource)
+  else next.add(resource)
+  openEntities.value = next
+}
+
 /**
- * Доступные зоны с человеческими подписями в контексте ресурса.
- * Набор зон — зеркало policies.ScopeApplicable на бэкенде; сами формулировки
- * объясняют владельца («в своих процессах» = владелец процесса и т.п.).
+ * Available scopes with human-readable labels in the resource context.
+ * The scope set mirrors policies.ScopeApplicable on the backend; the wording
+ * itself explains the owner ("in own processes" = process owner, etc.).
  */
 const SCOPE_OPTIONS: Record<string, { value: string; label: string }[]> = {
   project: [
@@ -102,7 +130,7 @@ const SCOPE_OPTIONS: Record<string, { value: string; label: string }[]> = {
   ],
 }
 
-/** Разделы страницы. */
+/** Page sections. */
 const GROUPS = [
   { key: 'planning', title: 'Планирование', resources: ['project', 'process', 'task', 'milestone', 'assignment'] },
   { key: 'timesheet', title: 'Табель', resources: ['state', 'resource', 'worker'] },
@@ -111,7 +139,7 @@ const GROUPS = [
 
 const ACTIONS = ['view', 'create', 'update', 'delete'] as const
 
-/** Эффективная зона ячейки из матрицы (нет правила = «нет доступа»). */
+/** Effective cell scope from the matrix (no rule = "no access"). */
 const effective = computed<Record<string, string>>(() => {
   const map: Record<string, string> = {}
   for (const cell of matrix.value) {
@@ -121,7 +149,7 @@ const effective = computed<Record<string, string>>(() => {
   return map
 })
 
-/** id правила для удаления. */
+/** Rule id for deletion. */
 const ruleIdByCell = computed<Record<string, number>>(() => {
   const map: Record<string, number> = {}
   for (const rule of rules.value) {
@@ -139,13 +167,13 @@ function cellValue(role: string, resource: string, action: string): string {
   return staged[cellKey(role, resource, action)] ?? effective.value[cellKey(role, resource, action)] ?? 'none'
 }
 
-/** Человеческая подпись зоны в контексте ресурса. */
+/** Human-readable scope label in the resource context. */
 function scopeLabel(resource: string, scope: string): string {
   const opt = SCOPE_OPTIONS[resource]?.find((o) => o.value === scope)
   return opt?.label ?? 'Нет доступа'
 }
 
-/** Человеческие имена известных ролей (каталог из БД держит описания на английском). */
+/** Human-readable names of known roles (the DB catalog keeps descriptions in English). */
 const ROLE_TITLES: Record<string, string> = {
   admin: 'Администратор',
   dp: 'Директор проектов',
@@ -158,24 +186,22 @@ function roleTitle(code: string): string {
   return ROLE_TITLES[code] ?? code
 }
 
-/** Список ролей: admin + каталог (без дублей). */
+/** Role tabs: the catalog without the admin bypass (admin is a code invariant, not an editable tab). */
 const roleList = computed(() => {
-  const names = ['admin']
+  const names: string[] = []
   for (const r of roles.value) {
-    if (r.name && !names.includes(r.name)) names.push(r.name)
+    if (r.name && r.name !== 'admin' && !names.includes(r.name)) names.push(r.name)
   }
   return names
 })
 
-const isAdminSelected = computed(() => selected.value === 'admin')
-
-/** Изменённые ячейки. */
+/** Changed cells. */
 const staged = reactive<Record<string, string>>({})
 const dirtyKeys = computed<string[]>(() =>
   Object.keys(staged).filter((key) => staged[key] !== (effective.value[key] ?? 'none')),
 )
 
-/** Описания изменений для панели сохранения. */
+/** Change descriptions for the save bar. */
 const dirtyChanges = computed(() =>
   dirtyKeys.value.map((key) => {
     const [role, resource, action] = key.split('|')
@@ -230,20 +256,41 @@ function cancelDirty() {
   saveMsg.value = null
 }
 
-// Сброс к дефолтам.
+// Reset to defaults.
 const { confirm: confirmDialog, ask, proceed, cancel } = useConfirm()
 
-// === Управление ролями (каталог) ===
+// === Role management (catalog) ===
+
+/** Role name pattern: latin letters, digits, «-», «_» (mirrors the backend codec). */
+const ROLE_NAME_RE = /^[a-zA-Z0-9_-]+$/
 const newRoleName = ref('')
 const newRoleDesc = ref('')
 const roleMsg = ref<{ ok: boolean; text: string } | null>(null)
+/** Client-side validation error of the required role-name field (null = valid). */
+const newRoleNameError = ref<string | null>(null)
+const nameInput = ref<HTMLInputElement | null>(null)
+
+function failRoleName(message: string) {
+  newRoleNameError.value = message
+  nameInput.value?.focus()
+}
+
+/** Drop the highlight as soon as the user starts typing. */
+watch(newRoleName, () => {
+  newRoleNameError.value = null
+})
 
 async function onCreateRole() {
   const name = newRoleName.value.trim()
   if (!name) {
-    roleMsg.value = { ok: false, text: 'Укажите имя роли (латиница, цифры, «-», «_»)' }
+    failRoleName('Укажите имя роли (латиница, цифры, «-», «_»), описание можно не заполнять')
     return
   }
+  if (!ROLE_NAME_RE.test(name)) {
+    failRoleName('Имя роли: только латиница, цифры, «-», «_»')
+    return
+  }
+  newRoleNameError.value = null
   const ok = await rbac.createRole({ name, description: newRoleDesc.value.trim() })
   roleMsg.value = ok ? { ok: true, text: 'Роль создана' } : { ok: false, text: error.value ?? 'Не удалось создать роль' }
   if (ok) {
@@ -283,10 +330,10 @@ function onReset() {
   }, 'Сбросить')
 }
 
-/** Выбор роли по умолчанию после загрузки каталога. */
+/** Select the default role after the catalog is loaded. */
 watch(roleList, (list) => {
   if ((!selected.value || !list.includes(selected.value)) && list.length) {
-    selected.value = list[0] === 'admin' ? (list[1] ?? 'admin') : list[0]
+    selected.value = list[0]
   }
 })
 
@@ -314,7 +361,7 @@ onMounted(() => {
     <p v-if="error && !rules.length" class="pm-load er">{{ error }}</p>
 
     <div v-if="rules.length && roleList.length" class="pm-layout">
-      <!-- Роли -->
+      <!-- Roles -->
       <nav class="pm-roles">
         <button
           v-for="role in roleList"
@@ -328,23 +375,31 @@ onMounted(() => {
           <span class="pm-role-name">
             {{ roleTitle(role) }}
           </span>
-          <span v-if="role === 'admin'" class="pm-role-lock" title="Полный доступ — инвариант в коде, не редактируется">заблокировано</span>
         </button>
       </nav>
 
-      <!-- Редактор выбранной роли -->
+      <!-- Editor of the selected role -->
       <div class="pm-editor">
-        <div v-if="isAdminSelected" class="pm-admin-note">
-          Администратор имеет полный доступ ко всем операциям и листингам — это защитный
-          инвариант в коде, значения не редактируются.
-        </div>
-
-        <template v-if="!isAdminSelected">
-          <div v-for="group in GROUPS" :key="group.key" class="pm-group">
-            <h3 class="pm-group-title">{{ group.title }}</h3>
-            <div v-for="resource in group.resources" :key="resource" class="pm-block">
-              <h4 class="pm-entity">Просмотр — удаление · {{ RESOURCE_LABELS[resource] }}</h4>
-              <div v-for="action in ACTIONS" :key="action" class="pm-row" :class="{ dirty: staged[cellKey(selected, resource, action)] }">
+        <div v-for="group in GROUPS" :key="group.key" class="pm-group">
+          <h3 class="pm-group-title">{{ group.title }}</h3>
+          <div v-for="resource in group.resources" :key="resource" class="pm-block">
+            <button
+              type="button"
+              class="pm-entity"
+              :class="{ open: isOpen(resource) }"
+              :aria-expanded="isOpen(resource)"
+              @click="toggleGroup(resource)"
+            >
+              <span class="pm-entity-caret" aria-hidden="true">▸</span>
+              <span>{{ ENTITY_NAMES[resource] ?? resource }}</span>
+            </button>
+            <div v-if="isOpen(resource)" class="pm-entity-body">
+              <div
+                v-for="action in ACTIONS"
+                :key="action"
+                class="pm-row"
+                :class="{ dirty: staged[cellKey(selected, resource, action)] }"
+              >
                 <div class="pm-row-label">{{ ACTION_LABELS[action] }} {{ RESOURCE_LABELS[resource] }}</div>
                 <select
                   class="pm-select"
@@ -355,11 +410,11 @@ onMounted(() => {
                 </select>
               </div>
             </div>
-            <p v-if="group.key === 'planning'" class="pm-comment">
-              Комментарии к задачам: права определяются правами на задачу — видят и добавляют их те же, кому видна задача.
-            </p>
           </div>
-        </template>
+          <p v-if="group.key === 'planning'" class="pm-comment">
+            Комментарии к задачам: права определяются правами на задачу — видят и добавляют их те же, кому видна задача.
+          </p>
+        </div>
 
         <h3 class="pm-section-title">Роли</h3>
         <p class="pm-hint">
@@ -368,10 +423,25 @@ onMounted(() => {
         </p>
         <div class="pm-roles-editor">
           <div class="pm-role-create">
-            <input v-model="newRoleName" class="pm-input" maxlength="32" placeholder="имя роли, напр. auditor" />
-            <input v-model="newRoleDesc" class="pm-input" maxlength="80" placeholder="описание" />
+            <label class="pm-field">
+              <span class="pm-field-label">Имя роли<span class="pm-req" title="обязательное поле">*</span></span>
+              <input
+                ref="nameInput"
+                v-model="newRoleName"
+                class="pm-input"
+                :class="{ invalid: !!newRoleNameError }"
+                :aria-invalid="!!newRoleNameError"
+                maxlength="32"
+                placeholder="имя роли, напр. auditor"
+              />
+            </label>
+            <label class="pm-field">
+              <span class="pm-field-label">Описание</span>
+              <input v-model="newRoleDesc" class="pm-input" maxlength="80" placeholder="описание" />
+            </label>
             <button type="button" class="pm-btn primary" @click="onCreateRole">Создать роль</button>
           </div>
+          <p v-if="newRoleNameError" class="pm-field-error" role="alert">{{ newRoleNameError }}</p>
           <p v-if="roleMsg" class="pm-save-msg" :class="{ er: !roleMsg.ok }">{{ roleMsg.text }}</p>
           <div class="pm-role-list">
             <div v-for="r in roles" :key="r.name" class="pm-role-editable">
@@ -387,19 +457,10 @@ onMounted(() => {
           </div>
         </div>
 
-        <!-- Служебное -->
-        <details class="pm-inspect">
-          <summary class="pm-inspect-summary">Служебное: маршрутные проверки (name → kind и параметры)</summary>
-          <div v-for="p in routePolicies" :key="p.name" class="pm-route">
-            <code class="pm-route-name">{{ p.name }}</code>
-            <span class="pm-route-kind">{{ p.kind }}</span>
-            <span class="pm-route-params">{{ JSON.stringify(p.params ?? {}) }}</span>
-          </div>
-        </details>
-      </div>
+        </div>
     </div>
 
-    <!-- Панель сохранения -->
+    <!-- Save bar -->
     <div v-if="dirtyKeys.length" class="pm-savebar">
       <div class="pm-savebar-info">
         <strong>Изменения ({{ dirtyKeys.length }}):</strong>
@@ -427,28 +488,30 @@ onMounted(() => {
 </template>
 
 <style scoped>
+@import '../styles/tokens.css';
+
 .pm-head {
-  margin-bottom: 16px;
+  margin-bottom: 18px;
 }
 .pm-title {
   font-size: 24px;
   font-weight: 700;
-  color: #2c3e50;
+  color: var(--ui-text);
   margin: 0 0 6px;
 }
 .pm-note {
-  color: #666;
+  color: var(--ui-text-2);
   font-size: 13px;
   margin: 0;
   max-width: 900px;
-  line-height: 1.5;
+  line-height: 1.55;
 }
 .pm-load {
-  color: #888;
+  color: var(--ui-text-faint);
   font-size: 13px;
 }
 .pm-load.er {
-  color: #c0392b;
+  color: var(--ui-danger);
 }
 .pm-layout {
   display: grid;
@@ -469,29 +532,35 @@ onMounted(() => {
   gap: 10px;
   text-align: left;
   padding: 11px 14px;
-  border: 1px solid #dfe4ec;
+  border: 1px solid var(--ui-border);
   border-radius: 10px;
-  background: #fff;
+  background: var(--ui-surface);
   cursor: pointer;
   font-size: 14px;
+  color: var(--ui-text);
+  transition: border-color var(--ui-duration), background var(--ui-duration);
 }
 .pm-role-btn:hover {
-  border-color: #b7c3d6;
+  border-color: var(--ui-border-strong);
+  background: var(--ui-surface-3);
 }
 .pm-role-btn.active {
-  border-color: #1a3a6b;
-  background: #1a3a6b;
-  color: #fff;
+  border-color: var(--ui-accent);
+  background: var(--ui-accent);
+  color: var(--ui-accent-on);
 }
 .pm-role-btn.active .pm-role-code {
-  background: rgba(255, 255, 255, 0.18);
-  color: #fff;
+  background: rgba(255, 255, 255, 0.2);
+  color: var(--ui-accent-on);
+}
+.pm-role-btn.active .pm-role-name {
+  color: var(--ui-accent-on);
 }
 .pm-role-code {
   font-size: 11px;
   font-weight: 700;
-  background: #eef2f8;
-  color: #1a3a6b;
+  background: var(--ui-accent-soft);
+  color: var(--ui-accent);
   border-radius: 999px;
   padding: 2px 9px;
   text-transform: uppercase;
@@ -501,124 +570,133 @@ onMounted(() => {
 }
 .pm-role-name {
   font-weight: 600;
-}
-.pm-role-lock {
-  margin-left: auto;
-  font-size: 11px;
-  color: #999;
-  font-weight: 500;
+  color: var(--ui-text);
 }
 .pm-editor {
   min-width: 0;
 }
-.pm-admin-note {
-  background: #f2f5fa;
-  border: 1px solid #e0e6f0;
-  border-radius: 10px;
-  padding: 12px 14px;
-  font-size: 13.5px;
-  color: #4a5a72;
-  line-height: 1.5;
-}
 .pm-group {
-  margin-bottom: 22px;
+  margin-bottom: 26px;
 }
 .pm-group-title {
-  font-size: 15px;
+  font-size: 12px;
   font-weight: 700;
-  color: #7a8699;
+  color: var(--ui-text-faint);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.6px;
   margin: 0 0 10px;
 }
+/* Entity = white card accordion */
 .pm-block {
-  margin-bottom: 14px;
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 8px;
+  box-shadow: var(--ui-shadow-sm);
+  transition: border-color var(--ui-duration), box-shadow var(--ui-duration);
+}
+.pm-block:hover {
+  border-color: var(--ui-border-strong);
 }
 .pm-entity {
-  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  font-size: 14px;
   font-weight: 600;
-  color: #8a96a8;
-  margin: 0 0 6px;
+  color: var(--ui-text);
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 11px 14px;
+  cursor: pointer;
+  user-select: none;
+  transition: background var(--ui-duration);
+}
+.pm-entity:hover,
+.pm-entity.open {
+  background: var(--ui-surface-3);
+}
+.pm-entity.open {
+  border-bottom: 1px solid var(--ui-border);
+}
+.pm-entity-caret {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background: var(--ui-accent-soft);
+  color: var(--ui-accent);
+  font-size: 11px;
+  line-height: 1;
+  transition: transform var(--ui-duration);
+}
+.pm-entity.open .pm-entity-caret {
+  transform: rotate(90deg);
+}
+.pm-entity-body {
+  padding: 8px 10px 10px;
 }
 .pm-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 7px 14px;
-  background: #fff;
-  border: 1px solid #eef1f6;
-  border-radius: 8px;
-  margin-bottom: 4px;
-  font-size: 14px;
+  padding: 8px 12px;
+  background: var(--ui-surface);
+  border-radius: var(--ui-radius-sm);
+  margin-bottom: 2px;
+  font-size: 13.5px;
+  transition: background var(--ui-duration);
 }
 .pm-row:hover {
-  border-color: #d4dce8;
+  background: var(--ui-surface-3);
 }
 .pm-row.dirty {
-  border-color: #e8b10a;
-  background: #fffbe6;
+  background: var(--ui-warning-soft);
+  outline: 1px solid var(--ui-warning);
+  outline-offset: -1px;
 }
 .pm-row-label {
-  color: #2c3e50;
+  color: var(--ui-text);
 }
 .pm-select {
   font-size: 13.5px;
-  padding: 5px 8px;
-  border: 1px solid #cdd5e1;
-  border-radius: 6px;
-  background: #fff;
-  color: #2c3e50;
+  padding: 5px 10px;
+  border: 1px solid var(--ui-border-strong);
+  border-radius: 7px;
+  background: var(--ui-surface);
+  color: var(--ui-text);
   cursor: pointer;
   min-width: 210px;
+  transition: border-color var(--ui-duration), box-shadow var(--ui-duration);
+}
+.pm-select:focus {
+  border-color: var(--ui-accent);
+  box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.12);
+  outline: none;
 }
 .pm-comment {
   font-size: 12.5px;
-  color: #78849a;
-  padding: 8px 0 8px 2px;
-}
-.pm-inspect {
-  margin-top: 18px;
-  border: 1px solid #e4e8ef;
-  border-radius: 10px;
-  background: #fbfcfe;
-  padding: 10px 14px;
-}
-.pm-inspect-summary {
-  font-size: 13px;
-  font-weight: 600;
-  color: #1a3a6b;
-  cursor: pointer;
-}
-.pm-route {
-  display: flex;
-  gap: 10px;
-  align-items: baseline;
-  font-size: 12.5px;
-  padding: 4px 0;
-  border-top: 1px solid #eef1f6;
-  margin-top: 4px;
-}
-.pm-route-name {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  min-width: 190px;
-}
-.pm-route-kind {
-  color: #555;
-  min-width: 90px;
-}
-.pm-route-params {
-  color: #666;
-  word-break: break-all;
+  color: var(--ui-text-2);
+  padding: 8px 0 4px 2px;
+  line-height: 1.5;
 }
 .pm-savebar {
   position: sticky;
   bottom: 12px;
   margin-top: 18px;
-  background: #fff;
-  border: 1px solid #e8b10a;
-  border-radius: 12px;
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-left: 4px solid var(--ui-warning);
+  border-radius: var(--ui-radius-md);
+  box-shadow: var(--ui-shadow-lg);
   padding: 12px 16px;
   display: flex;
   gap: 18px;
@@ -628,7 +706,7 @@ onMounted(() => {
 .pm-savebar-info {
   flex: 1;
   font-size: 13px;
-  color: #333;
+  color: var(--ui-text);
 }
 .pm-savebar-info ul {
   margin: 6px 0 0;
@@ -646,41 +724,145 @@ onMounted(() => {
 .pm-btn {
   font-size: 13px;
   font-weight: 600;
-  border: 1px solid #cdd5e1;
-  background: #fff;
-  color: #2c3e50;
-  border-radius: 8px;
+  border: 1px solid var(--ui-border-strong);
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  border-radius: var(--ui-radius-sm);
   padding: 7px 14px;
   cursor: pointer;
+  transition: background var(--ui-duration), border-color var(--ui-duration);
+}
+.pm-btn:hover:not(:disabled) {
+  background: var(--ui-surface-3);
 }
 .pm-btn:disabled {
   opacity: 0.5;
   cursor: default;
 }
 .pm-btn.primary {
-  background: #1a3a6b;
-  border-color: #1a3a6b;
-  color: #fff;
+  background: var(--ui-accent);
+  border-color: var(--ui-accent);
+  color: var(--ui-accent-on);
+}
+.pm-btn.primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--ui-accent) 88%, black);
+  border-color: color-mix(in srgb, var(--ui-accent) 88%, black);
 }
 .pm-btn.danger {
-  color: #c0392b;
-  border-color: #e6b8b3;
+  color: var(--ui-danger);
+  border-color: color-mix(in srgb, var(--ui-danger) 45%, transparent);
+}
+.pm-btn.danger:hover:not(:disabled) {
+  background: var(--ui-danger-soft);
 }
 .pm-save-msg {
   font-size: 13px;
-  color: #1d6b2f;
+  color: var(--ui-success);
   margin: 12px 0;
 }
 .pm-save-msg.er {
-  color: #c0392b;
+  color: var(--ui-danger);
 }
-.pm-section-title { font-size: 18px; font-weight: 700; color: #1a3a6b; margin: 18px 0 8px; }
-.pm-roles-editor { margin-bottom: 14px; }
-.pm-role-create { display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
-.pm-input { font-size: 13px; padding: 6px 10px; border: 1px solid #cdd5e1; border-radius: 6px; flex: 1; min-width: 180px; }
-.pm-role-list { display: flex; flex-direction: column; gap: 6px; }
-.pm-role-editable { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px; background: #fff; border: 1px solid #eef1f6; border-radius: 8px; }
-.pm-role-editable-main { display: flex; align-items: center; gap: 10px; min-width: 0; }
-.pm-role-editable-desc { color: #666; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pm-role-editable-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.pm-section-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--ui-text);
+  margin: 22px 0 8px;
+}
+.pm-hint {
+  color: var(--ui-text-2);
+  font-size: 13px;
+  margin: 0 0 10px;
+  line-height: 1.5;
+}
+.pm-roles-editor {
+  margin-bottom: 14px;
+}
+.pm-role-create {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+.pm-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 180px;
+}
+.pm-field-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ui-text-2);
+}
+.pm-req {
+  color: var(--ui-danger);
+  margin-left: 2px;
+}
+.pm-input.invalid {
+  border-color: var(--ui-danger);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ui-danger) 18%, transparent);
+  background: var(--ui-danger-soft);
+}
+.pm-field-error {
+  margin: 0 0 10px;
+  color: var(--ui-danger);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+.pm-input {
+  font-size: 13px;
+  padding: 6px 10px;
+  border: 1px solid var(--ui-border-strong);
+  border-radius: 7px;
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  flex: 1;
+  min-width: 180px;
+  transition: border-color var(--ui-duration), box-shadow var(--ui-duration);
+}
+.pm-input:focus {
+  border-color: var(--ui-accent);
+  box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.12);
+  outline: none;
+}
+.pm-role-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.pm-role-editable {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-radius: 10px;
+  transition: border-color var(--ui-duration);
+}
+.pm-role-editable:hover {
+  border-color: var(--ui-border-strong);
+}
+.pm-role-editable-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.pm-role-editable-desc {
+  color: var(--ui-text-2);
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pm-role-editable-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
 </style>

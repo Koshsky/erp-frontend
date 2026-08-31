@@ -1,6 +1,6 @@
 import type { TimelineCtx } from '@/composables/timeline-context'
 
 export interface CalendarHeaderProps {
-  /** Контекст бесконечной шкалы */
+  /** Infinite timeline context */
   t: TimelineCtx
 }

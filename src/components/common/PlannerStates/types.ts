@@ -1,10 +1,10 @@
 export interface PlannerStatesProps {
-  /** Идёт загрузка данных */
+  /** Data is loading */
   loading: boolean
-  /** Текст ошибки (показывается баннером; при отсутствии данных — и по центру) */
+  /** Error text (shown as a banner; also centered when there is no data) */
   error: string | null
-  /** Есть ли данные для отрисовки слота (грида) */
+  /** Whether there is data to render the slot (grid) */
   hasData: boolean
-  /** Текст пустого состояния; по умолчанию «Нет данных» */
+  /** Empty state text; defaults to "No data" */
   emptyText?: string
 }

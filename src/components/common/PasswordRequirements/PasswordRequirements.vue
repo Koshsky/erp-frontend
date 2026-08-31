@@ -7,7 +7,7 @@ const props = withDefaults(
   defineProps<{
     modelValue?: string
     rules?: PasswordRule[]
-    /** Показывать правила как «все выполнены» до ввода */
+    /** Show rules as "all met" before any input */
     showIdle?: boolean
   }>(),
   {
@@ -17,7 +17,7 @@ const props = withDefaults(
   },
 )
 
-/** Выполненность каждого правила для текущего значения */
+/** Whether each rule is met for the current value */
 const status = computed<{ rule: PasswordRule; ok: boolean }[]>(() =>
   props.rules.map((rule) => ({ rule, ok: rule.test(props.modelValue ?? '') })),
 )
@@ -53,6 +53,8 @@ const allOk = computed(() => validatePassword(props.modelValue ?? '', props.rule
 </template>
 
 <style scoped>
+@import '../../../styles/tokens.css';
+
 .pwr {
   list-style: none;
   margin: 0;
@@ -61,18 +63,18 @@ const allOk = computed(() => validatePassword(props.modelValue ?? '', props.rule
   flex-direction: column;
   gap: 4px;
   font-size: 12.5px;
-  color: #8a93a3;
+  color: var(--ui-text-faint);
 }
 
 .pwr-item {
   display: flex;
   align-items: center;
   gap: 7px;
-  transition: color 0.15s;
+  transition: color var(--ui-duration);
 }
 
 .pwr-item.done {
-  color: #188038;
+  color: var(--ui-success);
 }
 
 .pwr-mark {

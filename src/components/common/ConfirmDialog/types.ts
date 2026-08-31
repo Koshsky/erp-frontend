@@ -1,12 +1,12 @@
 export interface ConfirmDialogProps {
-  /** Видимость диалога */
+  /** Dialog visibility */
   open: boolean
-  /** Заголовок окна */
+  /** Dialog title */
   title?: string
-  /** Текст подтверждения (что именно удаляем) */
+  /** Confirmation text (what exactly is being deleted) */
   message: string
-  /** Текст кнопки подтверждения; по умолчанию «Удалить» */
+  /** Confirmation button text; defaults to "Delete" */
   confirmLabel?: string
-  /** Опасное действие: кнопка подтверждения красная; по умолчанию true */
+  /** Dangerous action: confirmation button is red; defaults to true */
   danger?: boolean
 }

@@ -81,7 +81,7 @@ export const MultipleProjects: Story = {
   },
 }
 
-/** Декады — процессы растянуты на несколько декад */
+/** Decades — processes stretch across several decades */
 export const YearDecades: Story = {
   args: {
     processes: [

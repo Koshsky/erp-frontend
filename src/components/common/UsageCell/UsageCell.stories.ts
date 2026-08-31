@@ -10,7 +10,7 @@ const meta: Meta<typeof UsageCell> = {
 export default meta
 type Story = StoryObj<typeof meta>
 
-// Все состояния UsageCell на одной странице с подписями
+// All UsageCell states on a single page with captions
 export const AllStates: Story = {
   render: () => ({
     components: { UsageCell },

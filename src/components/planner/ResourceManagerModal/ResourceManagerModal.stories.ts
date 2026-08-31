@@ -30,17 +30,17 @@ const meta: Meta<typeof ResourceManagerModal> = {
 export default meta
 type Story = StoryObj<typeof meta>
 
-/** Задача с назначенными ресурсами — список и форма добавления */
+/** Task with assigned resources — the list and the add form */
 export const WithAssigned: Story = {}
 
-/** Пустой список назначенных — пустое состояние «Ресурсы не назначены» */
+/** Empty assigned list — the "No resources assigned" empty state */
 export const Empty: Story = {
   args: {
     assigned: [],
   },
 }
 
-/** Все ресурсы уже заняты — выпадающий список добавления пуст */
+/** All resources are already assigned — the add dropdown is empty */
 export const AllResourcesAssigned: Story = {
   args: {
     assigned: resources.map((r, i) => ({
@@ -53,21 +53,21 @@ export const AllResourcesAssigned: Story = {
   },
 }
 
-/** Ошибка от бэкенда показывается внутри окна */
+/** A backend error is shown inside the window */
 export const WithError: Story = {
   args: {
     error: 'Не удалось назначить ресурс: конфликт с существующим назначением',
   },
 }
 
-/** Идёт запрос — кнопки и форма заблокированы */
+/** Request in flight — buttons and form are disabled */
 export const Busy: Story = {
   args: {
     busy: true,
   },
 }
 
-/** У назначенного ресурса нет названия — показывается код или «Ресурс #id» */
+/** An assigned resource has no title — the code or "Resource #id" is shown */
 export const AssignedWithoutTitle: Story = {
   args: {
     assigned: [

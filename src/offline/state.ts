@@ -4,13 +4,13 @@ import { isElectron } from '@/electron'
 import { getApiUrl } from '@/config'
 
 /**
- * Реактивное состояние сети. Обновляется событиями window online/offline и
- * фоновым пингом API (startConnectivityMonitor). Используется, чтобы офлайн
- * не выбрасывало на /login (refresh токена) и для баннера «офлайн-режим».
+ * Reactive network state. Updated by window online/offline events and a
+ * background API ping (startConnectivityMonitor). Used so that being offline
+ * does not bounce the user to /login (token refresh) and for the "offline mode" banner.
  *
- * Офлайн-режим существует ТОЛЬКО в настольной (Electron) сборке. В вебе
- * фронтенд считается строго онлайн: isOffline всегда false, монитор и
- * window-слушатели не активируются.
+ * Offline mode exists ONLY in the desktop (Electron) build. On the web the
+ * frontend is considered strictly online: isOffline is always false, the monitor and
+ * window listeners are not activated.
  */
 export const isOffline: Ref<boolean> = ref(
   isElectron && typeof navigator !== 'undefined' && navigator.onLine === false,
@@ -30,13 +30,13 @@ const PROBE_TIMEOUT_MS = 4000
 let probeTimer: number | null = null
 let probed = false
 
-/** URL liveness-пробы: реальный эндпоинт бэкенда /api/v1/health. */
+/** Liveness probe URL: the real backend endpoint /api/v1/health. */
 function probeUrl(): string | null {
   const base = getApiUrl()
   return base ? `${base.replace(/\/+$/, '')}/health` : null
 }
 
-/** Жив ли бэкенд: любой статус <500 = достижим, сетевая ошибка/5xx = нет */
+/** Whether the backend is alive: any status <500 = reachable, network error/5xx = not */
 export async function probeBackend(): Promise<boolean> {
   const url = probeUrl()
   if (!url) return false
@@ -55,21 +55,21 @@ export async function probeBackend(): Promise<boolean> {
 }
 
 /**
- * Фоновый мониторинг доступности бэкенда. navigator.onLine врёт («мёртвый
- * WiFi»), а при прогретых данных запросы к API не ходят — http-интерцептор не
- * срабатывает и isOffline остаётся false. Поэтому периодически пингуем
- * настоящий эндпоинт /api/v1/health, чтобы оранжевый баннер офлайна висел
- * всегда, пока бэкенд недоступен (даже когда кэш прогреты).
+ * Background monitoring of backend availability. navigator.onLine lies ("dead
+ * WiFi"), and with warmed data no API requests are made — the http interceptor
+ * does not fire and isOffline stays false. So we periodically ping the
+ * real endpoint /api/v1/health so the orange offline banner stays up
+ * while the backend is unreachable (even when the cache is warmed).
  */
 export function startConnectivityMonitor(): void {
-  // В браузерной (web) сборке офлайн-режима нет — монитор не запускаем.
+  // The web build has no offline mode — don't start the monitor.
   if (!isElectron) return
   if (probeTimer != null) return
   const tick = () => {
     void probeBackend().then((reachable) => {
       const wasOffline = isOffline.value
       isOffline.value = !reachable
-      // Лог только на первый результат — для проверки работы монитора.
+      // Log only the first result — to verify the monitor works.
       if (!probed) {
         probed = true
         console.log(`[offline] probe: reachable=${reachable} → isOffline=${isOffline.value}`)

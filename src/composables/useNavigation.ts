@@ -6,18 +6,18 @@ export interface NavItem {
   label: string
   to: string
   name: string
-  /** Роли, которым виден пункт; null — всем авторизованным */
+  /** Roles that can see the item; null — all authenticated users */
   roles?: string[] | null
 }
 
 export interface NavCategory {
   label: string
-  /** Роли, которым видна категория целиком; null — всем авторизованным */
+  /** Roles that can see the whole category; null — all authenticated users */
   roles: string[] | null
   items: NavItem[]
 }
 
-/** Категории бокового меню: подкатегории открываются во всплывающем оверлее */
+/** Sidebar menu categories; subcategories open in a popup overlay */
 export const NAV_CATEGORIES: NavCategory[] = [
   {
     label: 'Планировщик',
@@ -50,17 +50,12 @@ export const NAV_CATEGORIES: NavCategory[] = [
   },
 ]
 
-/** Прямые ссылки в шапке (вне категорий) */
-export const STANDALONE_NAV: NavItem[] = [
-  { label: 'Дашборд', to: '/', name: 'dashboard', roles: ['admin', 'dp', 'rp', 'vp'] },
-]
-
-/** Навигация с учётом роли текущего пользователя */
+/** Navigation aware of the current user's role */
 export function useNavigation() {
   const auth = useAuthStore()
   const route = useRoute()
 
-  /** Категории с учётом роли: скрываются и закрытые для роли пункты, и опустевшие категории */
+  /** Role-filtered categories: both items hidden for the role and emptied categories are dropped */
   const visibleCategories = computed(() =>
     NAV_CATEGORIES.filter((c) => !c.roles || c.roles.includes(auth.user?.role ?? ''))
       .map((c) => ({
@@ -70,15 +65,10 @@ export function useNavigation() {
       .filter((c) => c.items.length > 0),
   )
 
-  /** Категория, которой принадлежит текущий маршрут (для подсветки) */
+  /** Category that owns the current route (for highlighting) */
   const activeCategory = computed(() =>
     visibleCategories.value.find((c) => c.items.some((i) => i.name === route.name)),
   )
 
-  /** Прямые ссылки с учётом роли (например, дашборд скрыт от worker) */
-  const standalone = computed(() =>
-    STANDALONE_NAV.filter((i) => !i.roles || i.roles.includes(auth.user?.role ?? '')),
-  )
-
-  return { visibleCategories, activeCategory, standalone }
+  return { visibleCategories, activeCategory }
 }

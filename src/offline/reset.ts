@@ -13,9 +13,9 @@ function deleteDb(): Promise<void> {
 }
 
 /**
- * Полный сброс локальных данных: токены + очередь outbox + кэш данных
- * (IndexedDB). После очистки перезагружаем приложение — удалённую БД создаёт
- * заново первый вызов db.ts, а стора/прочее получают чистое состояние.
+ * Full reset of local data: tokens + outbox queue + data cache (IndexedDB).
+ * After clearing we reload the app — the first db.ts call recreates the
+ * deleted database, and stores/other state start clean.
  */
 export async function clearLocalData(): Promise<void> {
   await clearOutbox().catch(() => {})

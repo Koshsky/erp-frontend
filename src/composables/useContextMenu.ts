@@ -2,17 +2,17 @@ import { computed } from 'vue'
 import type { ComputedRef, Ref } from 'vue'
 import type { ContextMenuItem, ContextMenuProps } from '../components/common/ContextMenu'
 
-/** Базовое состояние меню: координаты; страница расширяет своими id-полями */
+/** Base menu state: coordinates; the page extends it with its own id fields */
 export interface ContextMenuState {
   x: number
   y: number
 }
 
 /**
- * Меню-машина ПКМ: состояние + готовые пропсы для <ContextMenu>.
- * menu — внешний ref (страница может строить items по его полям), items —
- * реактивный список пунктов, onSelect — обработчик выбора (читает menu.value
- * и диспатчит по id; закрытие меню происходит автоматически).
+ * Right-click menu machine: state + ready-made props for <ContextMenu>.
+ * menu — external ref (the page can build items from its fields), items —
+ * reactive list of entries, onSelect — selection handler (reads menu.value
+ * and dispatches by id; menu closing happens automatically).
  */
 export function useContextMenu<T extends ContextMenuState>(
   menu: Ref<T | null>,

@@ -4,10 +4,11 @@ import type { TooltipCellProps } from './types'
 
 const props = withDefaults(defineProps<TooltipCellProps>(), {
   multiline: false,
+  disabled: false,
 })
 
 const emit = defineEmits<{
-  /** Поповер стал видимым (после задержки наведения) — для ленивой подгрузки контента */
+  /** Popover became visible (after the hover delay) — for lazy content loading */
   open: []
 }>()
 
@@ -21,7 +22,7 @@ const slots = useSlots()
 
 const PAD = 12
 
-/** Позиция поповера у курсора: справа-снизу, с зажимом в пределы окна */
+/** Position the popover at the cursor: below-right, clamped to the window bounds */
 function positionAt(e: MouseEvent) {
   let left = e.clientX + PAD
   let top = e.clientY + PAD
@@ -36,6 +37,8 @@ function positionAt(e: MouseEvent) {
 }
 
 function onMouseEnter(e: MouseEvent) {
+  // Disabled (e.g. during a range drag): do not open the popup at all
+  if (props.disabled) return
   positionAt(e)
   showTimer = setTimeout(() => {
     visible.value = true
@@ -84,22 +87,24 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+@import "../../../styles/tokens.css";
+
 .tt-popup {
   position: fixed;
-  background: #fff;
-  color: #333;
+  background: var(--ui-surface);
+  color: var(--ui-text);
   font-size: 12px;
   line-height: 1.45;
   padding: 8px 12px;
-  border-radius: 8px;
-  border: 1px solid #e0e0e0;
+  border-radius: var(--ui-radius-sm);
+  border: 1px solid var(--ui-border);
   white-space: nowrap;
   pointer-events: none;
   z-index: 9999;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  box-shadow: var(--ui-shadow-md);
 }
 .tt-popup--multiline {
-  /* Растягиваем подложку под весь контент (строки nowrap не должны вылезать за край) */
+  /* Stretch the backdrop to fit all content (nowrap lines must not overflow the edge) */
   width: max-content;
   max-width: none;
   white-space: normal;

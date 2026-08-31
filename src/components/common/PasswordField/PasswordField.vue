@@ -7,9 +7,9 @@ const props = withDefaults(
     label?: string
     placeholder?: string
     autocomplete?: string
-    /** Скрывать кнопку переключения видимости */
+    /** Hide the visibility toggle button */
     toggle?: boolean
-    /** Общий атрибут id для label */
+    /** Common id attribute for the label */
     id?: string
   }>(),
   {
@@ -87,17 +87,19 @@ function toggle() {
 </template>
 
 <style scoped>
+@import '../../../styles/tokens.css';
+
 .pwf {
   display: flex;
   flex-direction: column;
   gap: 6px;
   font-size: 13px;
   font-weight: 600;
-  color: #444;
+  color: var(--ui-text-2);
 }
 
 .pwf-label {
-  color: #444;
+  color: var(--ui-text-2);
 }
 
 .pwf-input-wrap {
@@ -110,22 +112,23 @@ function toggle() {
   width: 100%;
   padding: 12px 14px;
   padding-right: 46px;
-  border: 1px solid #d0d4da;
-  border-radius: 10px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-md);
   font-size: 14px;
   font-weight: 400;
-  color: #2c3e50;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  color: var(--ui-text);
+  background: var(--ui-surface);
+  transition: border-color var(--ui-duration), box-shadow var(--ui-duration);
 }
 
 .pwf-input::placeholder {
-  color: #bbb;
+  color: var(--ui-text-faint);
 }
 
 .pwf-input:focus {
   outline: none;
-  border-color: #1a73e8;
-  box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.15);
+  border-color: var(--ui-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ui-accent) 15%, transparent);
 }
 
 .pwf-eye {
@@ -138,14 +141,14 @@ function toggle() {
   justify-content: center;
   border: none;
   background: transparent;
-  color: #7a8699;
+  color: var(--ui-text-muted);
   cursor: pointer;
-  border-radius: 8px;
-  transition: color 0.15s, background 0.15s;
+  border-radius: var(--ui-radius-sm);
+  transition: color var(--ui-duration), background var(--ui-duration);
 }
 
 .pwf-eye:hover {
-  color: #1a73e8;
-  background: #f1f4f9;
+  color: var(--ui-accent);
+  background: var(--ui-surface-3);
 }
 </style>

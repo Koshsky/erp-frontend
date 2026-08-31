@@ -1,31 +1,31 @@
 import type { PlanningUnit } from './calendar'
 
-/** Ширина левой колонки с названиями (px) — общая для сетки планировщика и слоя-оверлея */
+/** Width of the left label column (px) — shared by the planner grid and the overlay layer */
 export const LABEL_WIDTH = 180
 
-/** Ширина ячейки календаря (px) по умолчанию/фолбэк. Адаптивные значения задаются
- *  CSS-переменной --cell-width на :root (см. App.vue); треки грида используют
- *  var(--cell-width, ${CELL_WIDTH}px), поэтому в Storybook (где App.vue не грузится)
- *  срабатывает этот фолбэк. Треки всегда фиксированной ширины и не зависят от контента. */
+/** Default/fallback calendar cell width (px). Responsive values are set
+ *  via the --cell-width CSS variable on :root (see App.vue); grid tracks use
+ *  var(--cell-width, ${CELL_WIDTH}px), so in Storybook (where App.vue is not loaded)
+ *  this fallback takes effect. Tracks always have a fixed width and don't depend on content. */
 export const CELL_WIDTH = 32
 
-/** Высота календарного заголовка (px): день — 3 строки (месяц/число/день недели), декада — 2 строки */
+/** Calendar header height (px): day — 3 rows (month/day-of-month/weekday), decade — 2 rows */
 export const HEADER_HEIGHT_DAY = 56
 export const HEADER_HEIGHT_DECADE = 38
 
-/** Высоты сжатых состояний шапки (px): только месяц, месяц + числа */
+/** Collapsed header heights (px): month only, month + day numbers */
 export const HEADER_HEIGHT_MONTH = 20
 export const HEADER_HEIGHT_DAY_NUM = 38
 
-/** Пороги ширины ячейки (px), ниже которых строки шапки скрываются */
+/** Cell width thresholds (px) below which header rows are hidden */
 export const CELL_PX_NUM_DAY = 6
 export const CELL_PX_WD_DAY = 10
 export const CELL_PX_NUM_DECADE = 14
 
 /**
- * Высота календарного заголовка для единицы ячейки. При переданной ширине
- * ячейки (cellPx) шапка каскадно сжимается: числа/дни недели скрываются,
- * когда ячейка слишком узкая, чтобы их прочитать.
+ * Calendar header height for a cell unit. Given a cell width (cellPx),
+ * the header collapses progressively: day numbers/weekday names are hidden
+ * when the cell is too narrow to read them.
  */
 export function headerHeight(unit: PlanningUnit, cellPx?: number): number {
   if (unit === 'day') {

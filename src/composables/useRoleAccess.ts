@@ -2,9 +2,9 @@ import { computed } from 'vue'
 import { useAuthStore, usePlanningStore, useRbacStore } from '../store'
 
 /**
- * Возможности определяются правами из матрицы RBAC (/permissions/me),
- * а не хардкод-списком ролей: фронт показывает действие, если есть право
- * (и владение объектом там, где скоуп не «все»).
+ * Capabilities are driven by permissions from the RBAC matrix (/permissions/me),
+ * not by a hardcoded role list: the frontend shows an action when the permission
+ * exists (plus object ownership where the scope is not "all").
  */
 export function useRoleAccess() {
   const auth = useAuthStore()
@@ -14,49 +14,49 @@ export function useRoleAccess() {
   const role = computed(() => auth.user?.role)
   const userId = computed(() => auth.user?.id)
 
-  /** Просмотр/листинг проектов: по праву project.view */
+  /** View/list projects: based on the project.view permission */
   const canViewProjects = computed(() => rbac.can('project', 'view'))
 
-  /** CRUD ресурсов табеля: по правам resource.create/update */
+  /** Timesheet resource CRUD: based on resource.create/update permissions */
   const canManageResources = computed(() => rbac.can('resource', 'create') || rbac.can('resource', 'update'))
 
-  /** Создание сотрудников — только admin (worker.create): vp управляет своими подчинёнными, но не создаёт */
+  /** Employee creation — admin only (worker.create): vp manages its subordinates but cannot create */
   const canCreateEmployee = computed(() => rbac.can('worker', 'create'))
 
-  /** Процессы (страница и управление): по правам process.create/update */
+  /** Processes (page and management): based on process.create/update permissions */
   const canManageProcesses = computed(() => rbac.can('process', 'create') || rbac.can('process', 'update'))
 
-  /** Задачи/вехи/назначения: управление по task.create/update */
+  /** Tasks/milestones/assignments: management via task.create/update */
   const canManageTasks = computed(() => rbac.can('task', 'create') || rbac.can('task', 'update'))
 
-  /** Просмотр задач (диаграмма и комментарии): task.view */
+  /** View tasks (diagram and comments): task.view */
   const canViewTasks = computed(() => rbac.can('task', 'view'))
 
-  /** Создание проекта: project.create */
+  /** Create project: project.create */
   const canCreateProject = computed(() => rbac.can('project', 'create'))
 
-  /** Смена приоритетов проектов: project.update */
+  /** Reorder project priorities: project.update */
   const canReorderProjects = computed(() => rbac.can('project', 'update'))
 
-  /** Редактирование проекта: право project.update + владение (own) */
+  /** Edit project: project.update permission + ownership (own) */
   function canManageProject(projectId: number): boolean {
     const project = planning.projectPlanning?.projects?.find((p: any) => p.id === projectId)
     return rbac.canOwn('project', 'update', { projectOwner: project?.owner_id ?? null })
   }
 
-  /** Удаление проекта: право project.delete + владение (own) */
+  /** Delete project: project.delete permission + ownership (own) */
   function canDeleteProject(projectId: number): boolean {
     const project = planning.projectPlanning?.projects?.find((p: any) => p.id === projectId)
     return rbac.canOwn('project', 'delete', { projectOwner: project?.owner_id ?? null })
   }
 
-  /** Вкладка «Сотрудники»: worker.view */
+  /** "Employees" tab: worker.view */
   const canManageEmployees = computed(() => rbac.can('worker', 'view'))
 
-  /** Страница «Статусы» (управление): state.create/update */
+  /** "Statuses" page (management): state.create/update */
   const canManageStates = computed(() => rbac.can('state', 'create') || rbac.can('state', 'update'))
 
-  /** Право изменить сотрудника: worker.update + владение (own: manager_id) */
+  /** Permission to edit an employee: worker.update + ownership (own: manager_id) */
   function canEditEmployee(emp: { manager_id?: number | null }): boolean {
     return rbac.canOwn('worker', 'update', { owner: emp.manager_id ?? null })
   }

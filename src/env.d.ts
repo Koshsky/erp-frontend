@@ -1,10 +1,10 @@
 /// <reference types="vite/client" />
 
-/** Версия запущенного бандла (инжектится на build через define) */
+/** Version of the running bundle (injected at build time via define) */
 declare const __APP_VERSION__: string
 
 interface ImportMetaEnv {
-  /** Базовый URL API (по умолчанию /api/v1) */
+  /** Base API URL (default /api/v1) */
   readonly VITE_API_URL?: string
 }
 
@@ -18,15 +18,15 @@ declare module '*.vue' {
   export default component
 }
 
-/** Воркер pdf.js импортируется на главном потоке (fake worker) ради полифилов */
+/** pdf.js worker imported on the main thread (fake worker) for polyfills */
 declare module 'pdfjs-dist/build/pdf.worker.min.mjs' {
   const workerModule: unknown
   export default workerModule
 }
 
 /**
- * Мост Electron, инжектируемый preload (services/desktop/preload.js).
- * В браузере отсутствует — приложение продолжает работать как обычный PWA.
+ * Electron bridge injected by preload (services/desktop/preload.js).
+ * Absent in the browser — the app keeps working as a regular PWA.
  */
 interface ErpDesktopPassword {
   get: () => Promise<string | null>

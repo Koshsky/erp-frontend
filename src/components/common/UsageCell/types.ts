@@ -1,8 +1,8 @@
 export interface UsageCellProps {
-  /** Сколько ресурса занято (по назначениям) */
+  /** How much of the resource is used (by assignments) */
   used: number
-  /** Сколько ресурса доступно (из /timesheet/calendar); null — ячейка вне окна загрузки */
+  /** How much of the resource is available (from /timesheet/calendar); null — cell outside the load window */
   available: number | null
-  /** Выходной ли день */
+  /** Whether the day is a weekend */
   isWeekend: boolean
 }

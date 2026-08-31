@@ -1,18 +1,18 @@
 import type { ComputedRef, Ref } from 'vue'
 import { CELL_WIDTH } from '../components/planner/layout'
 
-/** Шаг расширения диапазона в ячейках: на столько растёт диапазон за раз,
- *  чтобы rebase при левой прокрутке происходил не на каждую ячейку */
+/** Range growth step in cells: how much the range grows per single expansion,
+ *  so that rebase on left scroll does not happen on every cell */
 export function growStep(viewportCells: number): number {
   return Math.max(Math.ceil(viewportCells * 0.5), 12)
 }
 
-/** Абсолютный индекс ячейки у левого края шкалы по позиции прокрутки */
+/** Absolute cell index at the left edge of the timeline from the scroll position */
 export function windowStartFor(scrollLeft: number, cellPx: number, leftPad: number): number {
   return Math.floor(scrollLeft / cellPx - leftPad)
 }
 
-/** Адаптивный дефолт ширины ячейки из :root --cell-width (фолбэк CELL_WIDTH) */
+/** Adaptive default cell width from :root --cell-width (falls back to CELL_WIDTH) */
 export function readRootCellWidth(): number {
   const rootVar = getComputedStyle(document.documentElement)
     .getPropertyValue('--cell-width')
@@ -21,7 +21,7 @@ export function readRootCellWidth(): number {
   return Number.isFinite(rootPx) && rootPx > 0 ? rootPx : CELL_WIDTH
 }
 
-/** Ссылки диапазона шкалы, которыми управляет ensureRange */
+/** Timeline range refs managed by ensureRange */
 export interface TimelineRange {
   leftPad: Ref<number>
   rightCells: Ref<number>
@@ -30,10 +30,10 @@ export interface TimelineRange {
 }
 
 /**
- * Расширяет диапазон под видимую позицию vs: вправо растёт rightCells, влево —
- * leftPad (сдвиг видимой области в начало). adjust(step) вызывается при левом
- * расширении, чтобы компенсировать nsl/scrollLeft на шаг (мультипликатор у
- * каждого вызова свой: px, px*scale и т.п.).
+ * Extends the range to cover the visible position vs: to the right rightCells grows, to the left —
+ * leftPad (shifting the visible area toward the start). adjust(step) is called on left
+ * expansion to compensate nsl/scrollLeft by the step (the multiplier varies per
+ * call site: px, px*scale, etc.).
  */
 export function ensureRange(
   vs: number,

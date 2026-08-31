@@ -1,20 +1,20 @@
 /**
- * Electron-интеграция фронтенда.
+ * Electron integration for the frontend.
  *
- * В настольной обвязке (services/desktop) renderer получает мост
- * `window.erpDesktop` через preload. Здесь — единая точка определения
- * окружения и безопасного хранения пароля:
- *  - Electron: пароль хранит main-процесс через safeStorage (шифрование на
- *    уровне ОС, файл в userData); renderer к сырому значению не имеет доступа.
- *  - Браузер: safeStorage недоступен, поэтому пароль не храним вовсе
- *    (как раньше) — методы возвращают null/false.
+ * In the desktop wrapper (services/desktop) the renderer gets the
+ * `window.erpDesktop` bridge via preload. This is the single place that
+ * detects the environment and safely stores the password:
+ *  - Electron: the main process stores the password via safeStorage (OS-level
+ *    encryption, file in userData); the renderer has no access to the raw value.
+ *  - Browser: safeStorage is unavailable, so the password is not stored at all
+ *    (as before) — the methods return null/false.
  */
 
 export const isElectron = Boolean(
   typeof window !== 'undefined' && window.erpDesktop?.isElectron === true,
 )
 
-/** Версия настольного приложения (Electron), либо null в браузере */
+/** Desktop app version (Electron), or null in the browser */
 export async function desktopAppVersion(): Promise<{ version: string; electron: string } | null> {
   if (!isElectron || !window.erpDesktop) return null
   try {
@@ -25,8 +25,8 @@ export async function desktopAppVersion(): Promise<{ version: string; electron: 
 }
 
 /**
- * Получить сохранённый пароль автосинка.
- * Только Electron (safeStorage); в браузере всегда null.
+ * Get the stored autosync password.
+ * Electron only (safeStorage); always null in the browser.
  */
 export async function getDesktopPassword(): Promise<string | null> {
   if (!isElectron || !window.erpDesktop) return null
@@ -38,8 +38,8 @@ export async function getDesktopPassword(): Promise<string | null> {
 }
 
 /**
- * Сохранён ли пароль автосинка (для UI-статуса «креды сохранены»).
- * В браузере всегда false.
+ * Whether the autosync password is stored (for the "credentials saved" UI status).
+ * Always false in the browser.
  */
 export async function hasDesktopPassword(): Promise<boolean> {
   const p = await getDesktopPassword()
@@ -47,8 +47,8 @@ export async function hasDesktopPassword(): Promise<boolean> {
 }
 
 /**
- * Сохранить/удалить пароль автосинка.
- * В Electron — через safeStorage; в браузере всегда false (не умеем).
+ * Save/delete the autosync password.
+ * In Electron — via safeStorage; in the browser always false (not supported).
  */
 export async function setDesktopPassword(value: string): Promise<boolean> {
   if (!isElectron || !window.erpDesktop) return false
@@ -59,7 +59,7 @@ export async function setDesktopPassword(value: string): Promise<boolean> {
   }
 }
 
-/** Удалить сохранённый пароль автосинка. */
+/** Delete the stored autosync password. */
 export async function clearDesktopPassword(): Promise<boolean> {
   if (!isElectron || !window.erpDesktop) return false
   try {

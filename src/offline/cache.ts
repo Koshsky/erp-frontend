@@ -3,10 +3,10 @@ import { idbGet, idbKeys, idbPut } from './db'
 const CACHE_STORE = 'cache'
 
 /**
- * Кэш ответов API в IndexedDB. Ключ — полный URL GET-запроса (axios.getUri).
- * Онлайн никогда не читает кэш (network-first), он используется только как
- * фолбэк, когда сеть недоступна, поэтому TTL не применяется — устаревшие
- * данные лучше, чем ничего.
+ * Cache of API responses in IndexedDB. The key is the full URL of the GET request (axios.getUri).
+ * Online never reads the cache (network-first); it is only used as a
+ * fallback when the network is unavailable, so no TTL is applied — stale
+ * data is better than nothing.
  */
 
 export interface CachedEntry<T> {
@@ -19,7 +19,7 @@ export async function cachePut<T>(key: string, data: T): Promise<void> {
     const entry: CachedEntry<T> = { ts: Date.now(), data }
     await idbPut(CACHE_STORE, key, entry)
   } catch {
-    // Кэш — не критичный слой: ошибки записи игнорируем
+    // The cache is not a critical layer: write errors are ignored
   }
 }
 
@@ -36,16 +36,16 @@ function pathnameOf(key: string): string | null {
   try {
     return new URL(key).pathname
   } catch {
-    // относительный ключ (без base) — берём всё до «?», как в cacheApply
+    // relative key (no base) — take everything up to '?', as in cacheApply
     return key.split('?')[0]
   }
 }
 
 /**
- * Возвращает самый свежий кэш-ответ по pathname (эндпоинту), игнорируя
- * query-параметры. Нужен для GET с дата-окнами (календарь, табель, отсутствия),
- * чей полный URL зависит от «сегодня» и после воспроизводки отличается от
- * прогретого: точный ключ не совпадает, но данные эндпоинта в кэше есть.
+ * Returns the freshest cached response by pathname (endpoint), ignoring
+ * query parameters. Needed for GETs with date windows (calendar, timesheet, absences)
+ * whose full URL depends on "today" and after replay differs from the
+ * warmed one: the exact key does not match, but the endpoint data is in the cache.
  */
 export async function cacheGetByPath<T>(pathname: string): Promise<T | null> {
   try {

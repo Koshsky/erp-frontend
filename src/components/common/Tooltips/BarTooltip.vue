@@ -9,7 +9,7 @@ const props = withDefaults(defineProps<BarTooltipProps>(), {
   accent: '',
 })
 
-/** Сколько записей лога показываем до свёртки */
+/** How many log entries to show before collapsing */
 const MAX_COMMENTS = 4
 
 const shownComments = computed(() => props.comments.slice(0, MAX_COMMENTS))
@@ -44,6 +44,8 @@ const moreComments = computed(() => props.comments.length - shownComments.value.
 </template>
 
 <style scoped>
+@import "../../../styles/tokens.css";
+
 .bt {
   font-size: 12px;
   line-height: 1.5;
@@ -54,13 +56,13 @@ const moreComments = computed(() => props.comments.length - shownComments.value.
   margin-bottom: 2px;
 }
 .bt-row {
-  color: #666;
+  color: var(--ui-text-2);
   white-space: nowrap;
 }
 .bt-resources {
   margin-top: 4px;
   padding-top: 4px;
-  border-top: 1px solid #e8e8e8;
+  border-top: 1px solid var(--ui-border);
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -78,17 +80,17 @@ const moreComments = computed(() => props.comments.length - shownComments.value.
   flex-shrink: 0;
 }
 .bt-res-qty {
-  color: #999;
+  color: var(--ui-text-muted);
 }
 .bt-comments {
   margin-top: 4px;
   padding-top: 4px;
-  border-top: 1px solid #e8e8e8;
+  border-top: 1px solid var(--ui-border);
 }
 .bt-comments-title {
   font-size: 11px;
   font-weight: 700;
-  color: #777;
+  color: var(--ui-text-2);
   text-transform: uppercase;
   letter-spacing: 0.3px;
   margin-bottom: 3px;
@@ -101,9 +103,9 @@ const moreComments = computed(() => props.comments.length - shownComments.value.
   overflow-y: auto;
 }
 .bt-comment {
-  border: 1px solid #ececec;
+  border: 1px solid var(--ui-border);
   border-radius: 6px;
-  background: #fafafa;
+  background: var(--ui-surface);
   padding: 4px 7px;
 }
 .bt-c-head {
@@ -114,17 +116,17 @@ const moreComments = computed(() => props.comments.length - shownComments.value.
 .bt-c-author {
   font-size: 11px;
   font-weight: 700;
-  color: #174ea6;
+  color: var(--ui-accent);
 }
 .bt-c-date {
   font-size: 10px;
-  color: #999;
+  color: var(--ui-text-muted);
 }
 .bt-c-text {
   margin-top: 1px;
   font-size: 11px;
   line-height: 1.4;
-  color: #444;
+  color: var(--ui-text-2);
   white-space: normal;
   word-break: break-word;
   display: -webkit-box;
@@ -134,7 +136,7 @@ const moreComments = computed(() => props.comments.length - shownComments.value.
 }
 .bt-c-more {
   font-size: 11px;
-  color: #888;
+  color: var(--ui-text-muted);
   font-style: italic;
   padding-left: 2px;
 }

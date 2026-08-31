@@ -1,18 +1,21 @@
+@import '../styles/tokens.css';
+
 .lp {
   width: 860px;
   max-width: calc(100vw - 32px);
   display: grid;
   grid-template-columns: 1fr 1fr;
-  background: #fff;
-  border-radius: 16px;
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-lg);
   overflow: hidden;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--ui-shadow-lg);
 }
 
-/* === Левая брендовая панель === */
+/* === Left brand panel (Soft UI: soft accent tint, no gradient) === */
 .lp-brand {
-  background: linear-gradient(160deg, #1a73e8 0%, #0d47a1 100%);
-  color: #fff;
+  background: var(--ui-accent-soft);
+  color: var(--ui-text);
   padding: 44px 36px;
   display: flex;
   flex-direction: column;
@@ -21,8 +24,9 @@
 .lp-logo {
   width: 48px;
   height: 48px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.18);
+  border-radius: var(--ui-radius-md);
+  background: var(--ui-accent);
+  color: var(--ui-accent-on);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -36,12 +40,13 @@
   font-size: 30px;
   font-weight: 800;
   line-height: 1.2;
+  color: var(--ui-accent);
   margin-bottom: 6px;
 }
 
 .lp-bsub {
   font-size: 15px;
-  opacity: 0.85;
+  color: var(--ui-text-muted);
   margin-bottom: 36px;
 }
 
@@ -62,6 +67,7 @@
 .feature-icon {
   font-size: 22px;
   line-height: 1.2;
+  color: var(--ui-accent);
 }
 
 .feature-body {
@@ -72,15 +78,16 @@
 .feature-body strong {
   font-size: 14px;
   font-weight: 600;
+  color: var(--ui-text);
 }
 
 .feature-body em {
   font-style: normal;
   font-size: 13px;
-  opacity: 0.8;
+  color: var(--ui-text-muted);
 }
 
-/* === Правая форма === */
+/* === Right form === */
 .lp-form-side {
   padding: 40px 44px;
   display: flex;
@@ -91,23 +98,23 @@
 .lp-title {
   font-size: 22px;
   font-weight: 700;
-  color: #1a73e8;
+  color: var(--ui-accent);
   margin-bottom: 6px;
 }
 
 .lp-subtitle {
-  color: #888;
+  color: var(--ui-text-muted);
   margin-bottom: 28px;
   font-size: 14px;
 }
 
-/* === Вкладки === */
+/* === Tabs (token-ready; currently no tab markup in the template) === */
 .lp-tabs {
   display: flex;
   gap: 6px;
   margin-bottom: 20px;
-  background: #f1f4f9;
-  border-radius: 10px;
+  background: var(--ui-surface-2);
+  border-radius: var(--ui-radius-md);
   padding: 4px;
 }
 
@@ -115,19 +122,19 @@
   flex: 1;
   padding: 9px 10px;
   border: none;
-  border-radius: 8px;
+  border-radius: var(--ui-radius-sm);
   background: transparent;
   font-size: 13px;
   font-weight: 600;
-  color: #666;
+  color: var(--ui-text-muted);
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+  transition: background var(--ui-duration), color var(--ui-duration);
 }
 
 .lp-tab.active {
-  background: #fff;
-  color: #1a73e8;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+  background: var(--ui-surface);
+  color: var(--ui-accent);
+  box-shadow: var(--ui-shadow-sm);
 }
 
 .lp-form {
@@ -142,63 +149,84 @@
   gap: 6px;
   font-size: 13px;
   font-weight: 600;
-  color: #444;
+  color: var(--ui-text-2);
 }
 
 .lp-field input {
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-md);
   padding: 12px 14px;
-  border: 1px solid #d0d4da;
-  border-radius: 10px;
   font-size: 14px;
   font-weight: 400;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition: border-color var(--ui-duration), box-shadow var(--ui-duration);
 }
 
 .lp-field input::placeholder {
-  color: #bbb;
+  color: var(--ui-text-faint);
 }
 
 .lp-field input:focus {
   outline: none;
-  border-color: #1a73e8;
-  box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.15);
+  border-color: var(--ui-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ui-accent) 18%, var(--ui-surface));
 }
 
-.lp-input-wrap {
-  position: relative;
+/* PasswordField child component — token-aligned from here via :deep(),
+   keeping its own .pwf scoped styles but winning on specificity. */
+.lp-form :deep(.pwf) {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ui-text-2);
 }
 
-.lp-input-wrap input {
-  width: 100%;
+.lp-form :deep(.pwf-label) {
+  color: var(--ui-text-2);
+}
+
+.lp-form :deep(.pwf-input) {
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-md);
+  font-size: 14px;
+  font-weight: 400;
+  padding: 12px 14px;
   padding-right: 46px;
+  color: var(--ui-text);
+  transition: border-color var(--ui-duration), box-shadow var(--ui-duration);
 }
 
-.lp-eye {
-  position: absolute;
-  right: 6px;
-  width: 36px;
-  height: 36px;
-  border: none;
-  background: transparent;
-  font-size: 16px;
-  cursor: pointer;
-  border-radius: 8px;
+.lp-form :deep(.pwf-input::placeholder) {
+  color: var(--ui-text-faint);
 }
 
-.lp-eye:hover {
-  background: #f1f4f9;
+.lp-form :deep(.pwf-input:focus) {
+  outline: none;
+  border-color: var(--ui-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ui-accent) 18%, var(--ui-surface));
+}
+
+.lp-form :deep(.pwf-eye) {
+  color: var(--ui-text-muted);
+  transition: color var(--ui-duration), background var(--ui-duration);
+}
+
+.lp-form :deep(.pwf-eye:hover) {
+  color: var(--ui-accent);
+  background: var(--ui-surface-2);
 }
 
 .lp-error {
-  color: #d93025;
+  color: var(--ui-danger);
   font-size: 13px;
 }
 
 .lp-warn,
 .lp-offline-hint {
-  color: #b26a00;
+  color: var(--ui-warning);
   font-size: 13px;
 }
 
@@ -206,17 +234,17 @@
   margin-top: 4px;
   padding: 13px;
   border: none;
-  border-radius: 10px;
-  background: #1a73e8;
-  color: #fff;
+  border-radius: var(--ui-radius-md);
+  background: var(--ui-accent);
+  color: var(--ui-accent-on);
   font-size: 15px;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.15s, transform 0.1s;
+  transition: background var(--ui-duration), transform 0.1s;
 }
 
 .lp-btn:hover:not(:disabled) {
-  background: #1765cc;
+  background: color-mix(in srgb, var(--ui-accent) 88%, black);
 }
 
 .lp-btn:active:not(:disabled) {
@@ -233,7 +261,7 @@
   text-align: center;
   margin-top: 14px;
   font-size: 13px;
-  color: #1a73e8;
+  color: var(--ui-accent);
   text-decoration: none;
 }
 
@@ -241,7 +269,7 @@
   text-decoration: underline;
 }
 
-/* === Строка «Сервер: …» + пинг (символ-кнопка с сигнализатором) === */
+/* === "Server: …" row + ping (symbol-button with status indicator) === */
 .lp-server-row {
   display: flex;
   align-items: center;
@@ -249,7 +277,7 @@
   gap: 6px;
   margin-top: 14px;
   font-size: 13px;
-  color: #888;
+  color: var(--ui-text-muted);
 }
 
 .lp-server {
@@ -259,36 +287,36 @@
   white-space: nowrap;
 }
 
-/* Символ-кнопка пинга: без рамок/фона/тени — просто «ссылка»-символ */
+/* Ping symbol-button: no border/background/shadow — just a "link"-style symbol */
 .lp-ping {
   border: none;
   background: transparent;
   padding: 0 2px;
   font-size: 15px;
   line-height: 1;
-  color: #999;
+  color: var(--ui-text-faint);
   cursor: pointer;
-  transition: color 0.15s;
+  transition: color var(--ui-duration);
 }
 
 .lp-ping:hover:not(:disabled) {
-  color: #1a73e8;
+  color: var(--ui-accent);
 }
 
 .lp-ping:disabled {
   cursor: default;
 }
 
-/* Сигнализатор соединения: цвет символа = состояние */
+/* Connection indicator: symbol color = state */
 .lp-ping.ping-ok {
-  color: #188038;
+  color: var(--ui-success);
 }
 
 .lp-ping.ping-fail {
-  color: #d93025;
+  color: var(--ui-danger);
 }
 
-/* Настройки сразу под строкой сервера — компактно, одной группой */
+/* Settings right below the server row — compact, as one group */
 .lp-server-row + .lp-settings-link {
   margin-top: 4px;
 }

@@ -10,10 +10,10 @@ import {
   type TimelineRange,
 } from './timelineHelpers'
 
-/** Верхняя граница зума ширины ячейки (px). Минимум не ограничен —
- *  ячейки могут сжиматься как угодно (технический пол 1px). */
+/** Upper bound for cell-width zoom (px). The minimum is unbounded —
+ *  cells can shrink arbitrarily (technical floor of 1px). */
 const ZOOM_MAX = 100
-/** Границы CSS-зума таблицы (zoom на .tg-content) */
+/** Bounds of the table CSS zoom (zoom on .tg-content) */
 const SCALE_MIN = 0.5
 const SCALE_MAX = 2
 
@@ -31,20 +31,20 @@ export interface TimelineZoomOptions {
 }
 
 /**
- * Зум бесконечной шкалы: два независимых масштаба — общий CSS-zoom таблицы
- * (applyTableScale) и ширина ячейки (zoomTo). Оба центрируются на точке под
- * курсором; диапазон расширяется сразу по новой шкале, чтобы scrollLeft не
- * зажался в старую ширину контента. Ctrl+колесо — общий зум, Ctrl+Shift —
- * ширина ячейки, двойной клик — сброс.
+ * Zoom of the infinite timeline: two independent scales — the table-wide CSS zoom
+ * (applyTableScale) and the cell width (zoomTo). Both center on the point under
+ * the cursor; the range is extended immediately at the new scale so scrollLeft is
+ * not clamped to the old content width. Ctrl+wheel — overall zoom, Ctrl+Shift —
+ * cell width, double click — reset.
  */
 export function useTimelineZoom(opts: TimelineZoomOptions) {
   const { container, contentEl, cellPx, leftPad, rightCells, windowStart, tableScale, scaleBump, viewportCells, sync } = opts
   const range: TimelineRange = { leftPad, rightCells, cellPx, viewportCells }
 
   /**
-   * Зум ширины ячейки (только горизонтальный масштаб): меняет ширину ячейки,
-   * оставляя ячейку под anchorX (локальная, немасштабированная координата внутри
-   * контейнера) на месте — курсор — центр зума.
+   * Cell-width zoom (horizontal scale only): changes the cell width while keeping
+   * the cell under anchorX (local, unscaled coordinate inside the container) in
+   * place — the cursor is the zoom center.
    */
   function zoomTo(newPx: number, anchorX: number, persist = true) {
     const el = container.value
@@ -74,10 +74,10 @@ export function useTimelineZoom(opts: TimelineZoomOptions) {
   }
 
   /**
-   * Масштабирование таблицы целиком (ячейки, строки, шрифты, бары) CSS-zoom'ом
-   * на .tg-content. Якорь зума: по горизонтали — точка под курсором (vpX),
-   * по вертикали — самый верх контейнера (scrollTop масштабируется, верхний край
-   * остаётся на месте). scrollLeft/scrollTop — в масштабированных px.
+   * Scale the whole table (cells, rows, fonts, bars) with a CSS zoom on
+   * .tg-content. Zoom anchor: horizontally — the point under the cursor (vpX),
+   * vertically — the very top of the container (scrollTop scales, the top edge
+   * stays in place). scrollLeft/scrollTop are in scaled px.
    */
   function applyTableScale(newScale: number, vpX: number) {
     const el = container.value
@@ -86,18 +86,18 @@ export function useTimelineZoom(opts: TimelineZoomOptions) {
     if (s === tableScale.value) return
     const old = tableScale.value
     scaleBump.value++
-    // Локальные content-координаты под курсором (в px) до смены масштаба;
-    // по вертикали якорь — верх контейнера (y = scrollTop/old), не курсор.
+    // Local content coordinates under the cursor (in px) before the scale change;
+    // vertically the anchor is the container top (y = scrollTop/old), not the cursor.
     const x = (el.scrollLeft + vpX) / old
     const y = el.scrollTop / old
     tableScale.value = s
     if (contentEl.value) contentEl.value.style.zoom = String(s)
-    // Новые scrollLeft/scrollTop в масштабированных px, чтобы якорь
-    // (мышь по X, верх по Y) не сдвинулся.
+    // New scrollLeft/scrollTop in scaled px so the anchor
+    // (mouse on X, top on Y) does not move.
     let nsl = x * s - vpX
     const nst = y * s
-    // Расширяем диапазон под новый scrollLeft до flush, иначе браузер зажмёт
-    // его в меньшую ширину контента и якорь потеряется.
+    // Extend the range for the new scrollLeft before flush, otherwise the browser
+    // clamps it to the smaller content width and the anchor is lost.
     const vs = windowStartFor(nsl / s, cellPx.value, leftPad.value)
     ensureRange(vs, range, (step) => {
       nsl += step * cellPx.value * s
@@ -111,8 +111,8 @@ export function useTimelineZoom(opts: TimelineZoomOptions) {
   }
 
   /**
-   * Сброс к начальным масштабам (scale → 1, ширина ячейки → адаптивный дефолт
-   * из :root --cell-width); точка под курсором неподвижна.
+   * Reset to the initial scales (scale → 1, cell width → the responsive default
+   * from :root --cell-width); the point under the cursor stays fixed.
    */
   function resetAll(vpX: number) {
     const el = container.value
@@ -141,9 +141,9 @@ export function useTimelineZoom(opts: TimelineZoomOptions) {
   }
 
   /**
-   * Ctrl+колесо — масштабирование всей таблицы вокруг курсора (якорь по X — мышь,
-   * по Y — верх контейнера); Ctrl+Shift+колесо — зум ширины ячеек вокруг курсора;
-   * иначе обычная прокрутка.
+   * Ctrl+wheel — scale the whole table around the cursor (X anchor — mouse,
+   * Y anchor — container top); Ctrl+Shift+wheel — zoom cell width around the
+   * cursor; otherwise regular scrolling.
    */
   function onWheel(e: WheelEvent) {
     if (!e.ctrlKey && !e.metaKey) return
@@ -152,7 +152,7 @@ export function useTimelineZoom(opts: TimelineZoomOptions) {
     e.preventDefault()
     const rect = el.getBoundingClientRect()
     const vpX = e.clientX - rect.left
-    // Шаг зума: ровно ±10% на один щелчок колеса (deltaY = 120), не более 10% за событие
+    // Zoom step: exactly ±10% per wheel click (deltaY = 120), at most 10% per event
     const factor = Math.pow(1.1, clamp(e.deltaY / 120, -1, 1))
     if (e.shiftKey) {
       const local = clamp(vpX / tableScale.value, LABEL_WIDTH, rect.width / tableScale.value)
@@ -162,7 +162,7 @@ export function useTimelineZoom(opts: TimelineZoomOptions) {
     applyTableScale(tableScale.value * factor, vpX)
   }
 
-  /** Двойной клик по пустому месту шкалы — сброс обоих масштабов */
+  /** Double click on empty timeline space — reset both scales */
   function onDblClick(e: MouseEvent) {
     const target = e.target as HTMLElement
     if (target.closest(DBLCLICK_IGNORE_SELECTOR)) {

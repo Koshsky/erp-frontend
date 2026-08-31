@@ -1,8 +1,8 @@
 /**
- * Краткое ФИО «Фамилия И.О.» (фамилия + инициалы).
- * Строится из структурированных полей (last_name/first_name/middle_name), а при их
- * отсутствии — из готовой строки полного имени («Фамилия Имя Отчество»).
- * Пример: «Серебренников Вячеслав Алексеевич» → «Серебренников В.А.»
+ * Short name "Surname I.O." (surname + initials).
+ * Built from structured fields (last_name/first_name/middle_name), or, when
+ * they are absent, from an existing full-name string ("Surname First Middle").
+ * Example: "Ivanov Ivan Ivanovich" → "Ivanov I.I."
  */
 export function shortName(u?: {
   name?: string | null

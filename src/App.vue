@@ -11,6 +11,8 @@ import { isElectron } from './electron'
 </template>
 
 <style>
+@import './styles/tokens.css';
+
 *,
 *::before,
 *::after {
@@ -19,15 +21,8 @@ import { isElectron } from './electron'
   padding: 0;
 }
 
-body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
-    'Helvetica Neue', Arial, sans-serif;
-  background: #f4f6f9;
-  color: #2c3e50;
-}
-
-/* Фиксированная ширина ячейки планировщика, адаптивная под экран.
-   Задаётся на :root, треки грида используют var(--cell-width). */
+/* Fixed planner cell width, responsive to the screen.
+   Set on :root, grid tracks use var(--cell-width). */
 :root {
   --cell-width: 32px;
 }

@@ -1,10 +1,10 @@
 import { computed, type Ref } from 'vue'
 
-/** Одно правило валидации пароля. Расширяется добавлением правила в passwordRules. */
+/** A single password validation rule. Extended by adding a rule to passwordRules. */
 export interface PasswordRule {
   id: string
   label: string
-  /** Проверка пароля; true — правило выполнено */
+  /** Password check; true — rule satisfied */
   test: (value: string) => boolean
 }
 
@@ -16,17 +16,17 @@ const DEFAULT_RULES: PasswordRule[] = [
   { id: 'special', label: 'спецсимволы', test: (v) => /[^\p{L}\p{N}]/u.test(v) },
 ]
 
-/** Набор правил пароля (по умолчанию: длина, регистры, цифры, спецсимволы). */
+/** Password rule set (default: length, cases, digits, special characters). */
 export function passwordRules(custom?: PasswordRule[]): PasswordRule[] {
   return custom && custom.length ? custom : DEFAULT_RULES
 }
 
-/** Валидация пароля против набора правил. */
+/** Validate a password against a rule set. */
 export function validatePassword(value: string, rules: PasswordRule[]): boolean {
   return rules.every((r) => r.test(value))
 }
 
-/** Проверка пароля с реактивным списком выполненности правил. */
+/** Password check with a reactive list of satisfied rules. */
 export function usePasswordValidation(
   value: Ref<string>,
   rules: Ref<PasswordRule[]> | PasswordRule[] = DEFAULT_RULES,

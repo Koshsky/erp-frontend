@@ -4,17 +4,17 @@ import AppHeader from '../components/common/AppHeader/AppHeader.vue'
 import { useRbacStore } from '../store'
 import { isOffline } from '../offline/state'
 
-// Локальный computed поверх импортированного ref — гарантированная реактивность в шаблоне
+// Local computed over the imported ref — guaranteed reactivity in the template
 const offline = computed(() => isOffline.value)
 
 /**
- * Глобальный перехват Ctrl/Cmd+P и Ctrl/Cmd+S: браузерные «Печать страницы»
- * и «Сохранить страницу» глушим на всём приложении (они перекрывают модалки),
- * а открытие модалки подготовки к печати делает слушатель события
- * app:print-request (PdfExport на странице «Задачи»).
- * Сопоставление идёт по e.code (физическая клавиша, не зависит от раскладки —
- * при русской ЙЦУКЕН e.key для P/S даёт «з»/«ы»), e.key — как fallback.
- * Слушаем на window в фазе capture: самое раннее перехватывание до браузера.
+ * Global Ctrl/Cmd+P and Ctrl/Cmd+S interception: the browser's "Print page"
+ * and "Save page" are suppressed across the whole app (they cover modals),
+ * while opening the print-preparation modal is done by the
+ * app:print-request event listener (PdfExport on the "Tasks" page).
+ * Matching goes by e.code (physical key, independent of the layout —
+ * on the Russian ЙЦУКЕН layout e.key for P/S yields «з»/«ы»), e.key as a fallback.
+ * We listen on window in the capture phase: the earliest interception before the browser.
  */
 function onPrintHotkey(e: KeyboardEvent) {
   if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey) {
@@ -43,7 +43,7 @@ onBeforeUnmount(() => {
 <template>
   <div class="ml">
     <AppHeader />
-    <!-- Глобальный индикатор офлайна (Desktop): данные из кэша, изменения копятся в очереди -->
+    <!-- Global offline indicator (Desktop): data from cache, changes accumulate in the queue -->
     <div v-if="offline" class="ml-offline" role="status">
       Офлайн-режим: данные из кэша, изменения копятся в очереди
     </div>
@@ -56,21 +56,23 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+@import '../styles/tokens.css';
+
 .ml {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background: #f4f6f9;
+  background: var(--ui-bg);
 }
 
 .ml-offline {
   padding: 8px 24px;
-  background: #fdecea;
-  color: #b23b2e;
+  background: var(--ui-danger-soft);
+  color: var(--ui-danger);
   font-size: 13px;
   font-weight: 600;
   text-align: center;
-  border-bottom: 1px solid #f3c4c1;
+  border-bottom: 1px solid var(--ui-border);
 }
 
 .ml-body {

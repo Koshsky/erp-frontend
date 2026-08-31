@@ -4,8 +4,6 @@ import type { GroupGanttProps } from './types'
 import { cellRangeForSpan, toDate } from '../calendar'
 import { LABEL_WIDTH } from '../layout'
 import { useRowReorder } from '../../../composables/useRowReorder'
-import { TooltipCell } from '../../common/TooltipCell'
-import { InfoTooltip } from '../../common/Tooltips'
 
 const props = withDefaults(defineProps<GroupGanttProps>(), {
   reorderable: false,
@@ -24,7 +22,7 @@ const emit = defineEmits<{
   reorder: [payload: { from: number; to: number }]
 }>()
 
-/** Подложка границ группы на шкале (одна на группу, за строками) */
+/** Group bounds backdrop on the timeline (one per group, behind the rows) */
 const overlayStyle = computed(() => {
   const span = cellRangeForSpan(
     props.timeline.origin,
@@ -40,20 +38,20 @@ const overlayStyle = computed(() => {
   }
 })
 
-/** Сколько строк рисуется в группе: не меньше minRows (пустые строки-заглушки) */
+/** How many rows are rendered in the group: at least minRows (empty placeholder rows) */
 const displayCount = computed(() => Math.max(props.items.length, props.minRows))
 
-/** Сколько пустых строк-заглушек добавить до displayCount */
+/** How many empty placeholder rows to add up to displayCount */
 const emptyCount = computed(() => displayCount.value - props.items.length)
 
-/** Высота объединённого лейбла = вся группа (строки фиксированной высоты),
- *  но не меньше minLabelHeight — чтобы при 0–1 строках код/имя/даты не сжимались */
+/** Merged label height = the whole group (rows of fixed height),
+ *  but not less than minLabelHeight — so the code/name/dates do not shrink with 0-1 rows */
 const mergedHeight = computed(() =>
   Math.max(displayCount.value * props.rowHeight, props.minLabelHeight) + 'px',
 )
 
-// === Вертикальный драг строк (reorder) ===
-const { draggingFrom, dropStyle, rowDragCursor, startRowDrag } = useRowReorder(
+// === Vertical row drag (reorder): started from the row's bar (see #bar slot) ===
+const { dropStyle, startRowDrag } = useRowReorder(
   () => props.items.length,
   () => props.reorderable,
   groupEl,
@@ -63,7 +61,8 @@ const { draggingFrom, dropStyle, rowDragCursor, startRowDrag } = useRowReorder(
 defineSlots<{
   label(): any
   row(props: { item: any; index: number }): any
-  bar(props: { item: any; index: number; count: number }): any
+  /** startReorder — begin row reordering with the bar's pointerdown event */
+  bar(props: { item: any; index: number; count: number; startReorder: (e: PointerEvent) => void }): any
 }>()
 
 function fmt(d: string | Date | number | null | undefined): string {
@@ -75,7 +74,8 @@ function fmt(d: string | Date | number | null | undefined): string {
   <div ref="groupEl" class="gg-group" :data-group="groupId ?? ''" :data-rows="displayCount" :style="{ minHeight: mergedHeight }">
     <div v-if="overlayStyle" class="gg-overlay" :style="overlayStyle" />
 
-    <!-- Объединённый лейбл группы (код объекта + процесс): липкий слева, на всю высоту -->
+    <!-- Merged group label (object code + process): sticky left, full height.
+         Reordering is started by dragging the bar row itself (see #bar slot). -->
     <div
       v-if="mergedLabel"
       class="gg-merged"
@@ -86,30 +86,25 @@ function fmt(d: string | Date | number | null | undefined): string {
 
     <template v-for="(item, index) in items" :key="'gi' + item.id">
       <div class="gg-row" :style="{ height: rowHeight + 'px' }" :data-row-index="index">
-        <div v-if="!mergedLabel" class="gg-label" :class="{ 'with-handle': reorderable }">
-          <TooltipCell
-            v-if="reorderable"
-            class="row-handle"
-            :class="{ 'is-grabbing': rowDragCursor && draggingFrom === index }"
-            :multiline="true"
-            @pointerdown.stop="startRowDrag($event, index)"
-          >⠿
-            <template #popup>
-              <InfoTooltip :lines="['Перетащить для смены приоритета']" />
-            </template>
-          </TooltipCell>
+        <div v-if="!mergedLabel" class="gg-label">
           <slot name="row" :item="item" :index="index">
             <span class="item-title">{{ item.title }}</span>
             <div class="item-dates">{{ fmt(item.start_date) }} — {{ fmt(item.end_date) }}</div>
           </slot>
         </div>
         <div class="gg-bars">
-          <slot name="bar" :item="item" :index="index" :count="items.length" />
+          <slot
+            name="bar"
+            :item="item"
+            :index="index"
+            :count="items.length"
+            :start-reorder="(e: PointerEvent) => startRowDrag(e, index)"
+          />
         </div>
       </div>
     </template>
 
-    <!-- Пустые строки-заглушки до minRows: тот же фон группы, без баров -->
+    <!-- Empty placeholder rows up to minRows: same group background, no bars -->
     <template v-for="i in emptyCount" :key="'ge' + (items.length + i)">
       <div class="gg-row" :style="{ height: rowHeight + 'px' }" :data-row-index="items.length + i - 1">
         <div v-if="!mergedLabel" class="gg-label" />
@@ -122,13 +117,14 @@ function fmt(d: string | Date | number | null | undefined): string {
 </template>
 
 <style scoped>
+@import "../../../styles/tokens.css";
 .gg-group {
   position: relative;
 }
-/* Разделитель групп по всей ширине таймлайна. Начинается сразу за боковой
- * панелью (180px = LABEL_WIDTH): в колонке названий линия уже есть (нижние
- * границы .gg-merged/.gg-label), так что без двойных границ получается ровная
- * линия. Абсолютное позиционирование не добавляет высоту группам. */
+/* Group divider across the full timeline width. Starts right after the side
+ * panel (180px = LABEL_WIDTH): in the label column the line already exists (bottom
+ * borders of .gg-merged/.gg-label), so without double borders a straight
+ * line results. Absolute positioning does not add height to the groups. */
 .gg-group::after {
   content: '';
   position: absolute;
@@ -136,14 +132,14 @@ function fmt(d: string | Date | number | null | undefined): string {
   left: 180px;
   right: 0;
   height: 1px;
-  background: #e0e0e0;
+  background: var(--ui-border);
   z-index: 3;
 }
 .gg-overlay {
   position: absolute;
   top: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.04);
+  background: var(--ui-overlay);
   pointer-events: none;
   z-index: 0;
 }
@@ -151,8 +147,8 @@ function fmt(d: string | Date | number | null | undefined): string {
   position: sticky;
   left: 0;
   width: 180px;
-  background: #fff;
-  /* Боковая панель — выше линии текущей даты (25) */
+  background: var(--ui-surface);
+  /* Side panel — above the today line (25) */
   z-index: 70;
   display: flex;
   flex-direction: column;
@@ -161,8 +157,8 @@ function fmt(d: string | Date | number | null | undefined): string {
   gap: 4px;
   padding: 4px 12px;
   box-sizing: border-box;
-  border-right: 1px solid #f0f0f0;
-  border-bottom: 1px solid #e0e0e0;
+  border-right: 1px solid var(--ui-border);
+  border-bottom: 1px solid var(--ui-border);
   cursor: default;
   user-select: none;
   -webkit-user-select: none;
@@ -175,8 +171,8 @@ function fmt(d: string | Date | number | null | undefined): string {
   left: 0;
   width: 180px;
   height: 100%;
-  background: #fff;
-  /* Боковая панель — выше линии текущей даты (25) */
+  background: var(--ui-surface);
+  /* Side panel — above the today line (25) */
   z-index: 65;
   display: flex;
   flex-direction: column;
@@ -184,46 +180,20 @@ function fmt(d: string | Date | number | null | undefined): string {
   justify-content: center;
   font-size: 12px;
   font-weight: 500;
-  color: #333;
+  color: var(--ui-text);
   padding: 1px 8px;
-  border-right: 1px solid #f0f0f0;
-  border-bottom: 1px solid #e8e8e8;
+  border-right: 1px solid var(--ui-border);
+  border-bottom: 1px solid var(--ui-border);
   box-sizing: border-box;
   overflow: hidden;
   cursor: default;
   user-select: none;
   -webkit-user-select: none;
 }
-.gg-label.with-handle {
-  padding-left: 24px;
-}
-.row-handle {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 2px;
-  display: flex;
-  align-items: center;
-  color: #bbb;
-  font-size: 14px;
-  padding: 0 3px;
-  cursor: grab;
-  touch-action: none;
-  user-select: none;
-  -webkit-user-select: none;
-}
-.row-handle:hover {
-  color: #1a73e8;
-  background: rgba(26, 115, 232, 0.08);
-}
-.row-handle.is-grabbing {
-  cursor: grabbing;
-  color: #1a73e8;
-}
 .item-title {
   font-weight: 400;
   font-size: 11px;
-  color: #444;
+  color: var(--ui-text-2);
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -231,7 +201,7 @@ function fmt(d: string | Date | number | null | undefined): string {
 }
 .item-dates {
   font-size: 9px;
-  color: #999;
+  color: var(--ui-text-muted);
   font-weight: 400;
   margin-top: 1px;
 }
@@ -245,7 +215,7 @@ function fmt(d: string | Date | number | null | undefined): string {
   left: 0;
   right: 0;
   height: 2px;
-  background: #1a73e8;
+  background: var(--ui-drop);
   z-index: 12;
   pointer-events: none;
 }

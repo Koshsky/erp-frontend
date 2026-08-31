@@ -7,10 +7,10 @@ import { resolve } from 'node:path'
 import { execSync } from 'node:child_process'
 
 /**
- * Версия сборки: при заданной env APP_VERSION (билд-скрипт desktop передаёт
- * версию из desktop/package.json) используется она — UI («Версия приложения»
- * на SyncPage) совпадает с версией артефактов. Без env — короткий git-хэш +
- * время сборки (уникальная версия каждого релиза, как раньше).
+ * Build version: when the APP_VERSION env var is set (the desktop build script
+ * passes the version from desktop/package.json) it is used — the UI ("App version"
+ * on the SyncPage) then matches the artifact version. Without env — short git hash +
+ * build time (a unique version for every release, as before).
  */
 function buildVersion(root: string): string {
   const injected = process.env.APP_VERSION?.trim()
@@ -19,16 +19,16 @@ function buildVersion(root: string): string {
   try {
     hash = execSync('git rev-parse --short HEAD', { cwd: root }).toString().trim() || 'dev'
   } catch {
-    // вне git-репозитория — остаёмся на 'dev'
+    // outside a git repository — stay on 'dev'
   }
   return `${hash}-${Date.now().toString(36)}`
 }
 
 /**
- * Пишет dist/precache-manifest.json: { version, assets }. Файл используется
- * приложением: версия сборки в UI профиля и проверка доступности сервера
- * (outbox/state). Service Worker отсутствует (не используется), поэтому
- * precache-manifest — это только источник версии, а не список для SW.
+ * Writes dist/precache-manifest.json: { version, assets }. The file is used
+ * by the app: the build version in the profile UI and server availability
+ * checks (outbox/state). There is no Service Worker (not used), so
+ * precache-manifest is just a version source, not a list for the SW.
  */
 function versionManifest(version: string): Plugin {
   let root = process.cwd()
@@ -49,7 +49,7 @@ function versionManifest(version: string): Plugin {
           .map((f) => `/assets/${f}`)
           .sort()
       } catch {
-        // каталога ассетов нет (пустая сборка) — оставляем пустой список
+        // no assets directory (empty build) — keep the list empty
       }
       const dest = resolve(root, outDir, 'precache-manifest.json')
       const payload = { version, assets }
@@ -59,15 +59,15 @@ function versionManifest(version: string): Plugin {
 }
 
 export default defineConfig(({ mode }) => {
-  // Загрузка переменных окружения из .env (VITE_* и т.п.)
+  // Load environment variables from .env (VITE_* etc.)
   const env = loadEnv(mode, process.cwd(), '')
 
-  // Адрес бэкенда для dev-прокси (по умолчанию http://localhost:8080)
+  // Backend address for the dev proxy (default http://localhost:8080)
   const apiTarget = env.VITE_API_PROXY_TARGET || 'http://localhost:8080'
 
-  // Версия сборки вычисляется ОДИН раз: она должна быть идентична и в бандле
-  // (__APP_VERSION__), и в precache-manifest.json, иначе сравнение версий в
-  // профиле всегда показывало бы «разные» сборки.
+  // The build version is computed ONCE: it must be identical both in the bundle
+  // (__APP_VERSION__) and in precache-manifest.json, otherwise version comparison
+  // in the profile would always show "different" builds.
   const appVersion = buildVersion(process.cwd())
 
   return {

@@ -5,6 +5,8 @@
 </template>
 
 <style scoped>
+@import '../styles/tokens.css';
+
 .al {
   min-height: 100vh;
   display: flex;
@@ -12,9 +14,9 @@
   justify-content: center;
   padding: 24px;
   background:
-    radial-gradient(circle at 15% 20%, rgba(255, 255, 255, 0.12), transparent 35%),
-    radial-gradient(circle at 85% 80%, rgba(255, 255, 255, 0.10), transparent 40%),
-    linear-gradient(135deg, #1a73e8 0%, #0d47a1 100%);
+    radial-gradient(circle at 15% 20%, color-mix(in srgb, var(--ui-accent-on) 14%, transparent), transparent 35%),
+    radial-gradient(circle at 85% 80%, color-mix(in srgb, var(--ui-accent-on) 12%, transparent), transparent 40%),
+    var(--ui-accent);
   overflow: hidden;
 }
 </style>

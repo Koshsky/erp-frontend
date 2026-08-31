@@ -5,7 +5,7 @@ import type { ProcessItem } from './components/ProcessGantt/types'
 export interface ProcessPlanningProject {
   id: number
   project_code: string
-  /** Собственные временные границы проекта */
+  /** Own temporal bounds of the project */
   start_date: string
   end_date: string
   owner_id?: number
@@ -17,9 +17,9 @@ export interface ProcessPlanningProps {
   projects?: DtoDetailedProject[] | null
   loading?: boolean
   error?: string | null
-  /** Якорь шкалы: ячейка с индексом 0 (начальная позиция) */
+  /** Timeline anchor: cell with index 0 (starting position) */
   origin?: string | Date
-  /** Единица ячейки: день или декада */
+  /** Cell unit: day or decade */
   unit?: PlanningUnit
 }
 

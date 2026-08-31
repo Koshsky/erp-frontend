@@ -3,21 +3,23 @@ import { createPinia, setActivePinia } from 'pinia'
 import App from './App.vue'
 import router from './router'
 import { setupHttp } from './http'
+import { initTheme } from './theme'
 import { initOfflineSync, ensureDesktopAutoSyncSession, startSessionMaintenance } from './offline/sync'
 import { startConnectivityMonitor } from './offline/state'
 import { isElectron } from './electron'
 
 setupHttp()
+initTheme()
 
-// Pinia активируем до обращения к сторам (авторелогin для exe): иначе
-// useXStore() вне setup упадёт «no active Pinia».
+// Pinia is activated before touching the stores (auto re-login for the exe): otherwise
+// useXStore() outside setup would fail with "no active Pinia".
 const pinia = createPinia()
 setActivePinia(pinia)
 
-// В Electron при старте пробуем тихо восстановить сессию по сохранённым
-// (safeStorage) логину+паролю, чтобы автосинк работал без ручного входа.
-// Офлайн-механизм (очередь, кэш, монитор сети) и фоновая поддержка сессии —
-// только в настольной сборке.
+// In Electron, at startup we try to silently restore the session from the saved
+// (safeStorage) login+password so auto-sync works without manual login.
+// The offline machinery (queue, cache, network monitor) and background session
+// support are only in the desktop build.
 if (isElectron) {
   await ensureDesktopAutoSyncSession()
   await initOfflineSync()

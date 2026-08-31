@@ -1,28 +1,15 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useAuthStore } from '../store'
-import { PasswordField, PasswordRequirements } from '../components/common'
-import { passwordRules, validatePassword } from '../composables/usePasswordValidation'
 
 const auth = useAuthStore()
-
-const oldPassword = ref('')
-const newPassword = ref('')
-const confirmPassword = ref('')
-const changeMsg = ref<string | null>(null)
-const changeOk = ref(false)
-
-const passwordChecks = passwordRules()
-
-const newPasswordValid = computed(() => validatePassword(newPassword.value, passwordChecks))
-const passwordConfirmed = computed(() => confirmPassword.value === newPassword.value)
 
 interface ProfileField {
   label: string
   value: string
 }
 
-// Реальный профиль текущего пользователя, полученный из API (auth.user)
+// Real profile of the current user, fetched from the API (auth.user)
 const profile = computed<ProfileField[]>(() => {
   const u = auth.user
   return [
@@ -37,38 +24,35 @@ onMounted(() => {
   const id = auth.user?.id
   if (id != null) auth.fetchProfile(id)
 })
-
-async function onChangePassword() {
-  changeMsg.value = null
-  changeOk.value = false
-  if (!oldPassword.value || !newPassword.value || !confirmPassword.value) {
-    changeMsg.value = 'Заполните все поля'
-    return
-  }
-  if (!newPasswordValid.value) {
-    changeMsg.value = 'Новый пароль не соответствует требованиям'
-    return
-  }
-  if (!passwordConfirmed.value) {
-    changeMsg.value = 'Новый пароль не совпадает с подтверждением'
-    return
-  }
-  const ok = await auth.changePassword(oldPassword.value, newPassword.value)
-  if (ok) {
-    changeMsg.value = 'Пароль успешно изменён'
-    changeOk.value = true
-    oldPassword.value = ''
-    newPassword.value = ''
-    confirmPassword.value = ''
-  } else {
-    changeMsg.value = auth.error ?? 'Не удалось изменить пароль'
-  }
-}
 </script>
 
 <template>
   <section class="pf">
-    <h2 class="pf-title">Профиль</h2>
+    <div class="pf-head">
+      <h2 class="pf-title">Профиль</h2>
+      <!-- Square icon button → the "Редактирование профиля" page -->
+      <RouterLink
+        to="/profile/edit"
+        class="pf-edit"
+        title="Редактировать профиль"
+        aria-label="Редактировать профиль"
+      >
+        <!-- Pencil icon (line style, matches the CopyField/PasswordField icons) -->
+        <svg
+          viewBox="0 0 24 24"
+          width="20"
+          height="20"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.8"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+        </svg>
+      </RouterLink>
+    </div>
 
     <div class="pf-cards">
       <div class="pf-card">
@@ -77,34 +61,30 @@ async function onChangePassword() {
           <span class="pf-value">{{ field.value }}</span>
         </div>
       </div>
-
-      <div class="pf-card pw-form">
-        <h3 class="pf-title sm">Смена пароля</h3>
-        <form @submit.prevent="onChangePassword">
-          <div class="pw-fields">
-            <PasswordField v-model="oldPassword" label="Старый пароль" autocomplete="current-password" placeholder="••••••••" />
-            <PasswordField v-model="newPassword" label="Новый пароль" autocomplete="new-password" placeholder="Придумайте новый пароль" />
-            <PasswordField v-model="confirmPassword" label="Подтверждение пароля" autocomplete="new-password" placeholder="Повторите пароль" />
-            <PasswordRequirements :model-value="newPassword" :rules="passwordChecks" />
-          </div>
-
-          <p v-if="changeMsg" class="pf-msg" :class="{ ok: changeOk }">{{ changeMsg }}</p>
-
-          <button type="submit" class="pf-btn" :disabled="auth.loading">
-            {{ auth.loading ? 'Сохранение…' : 'Сменить пароль' }}
-          </button>
-        </form>
-      </div>
     </div>
   </section>
 </template>
 
 <style scoped>
+@import '../styles/tokens.css';
+
 .pf-title {
   font-size: 24px;
   font-weight: 700;
-  color: #2c3e50;
+  color: var(--ui-text);
   margin-bottom: 20px;
+}
+
+/* Header row: title + square edit button */
+.pf-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.pf-head .pf-title {
+  margin-bottom: 0;
 }
 
 .pf-cards {
@@ -115,9 +95,9 @@ async function onChangePassword() {
 }
 
 .pf-card {
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.08);
+  background: var(--ui-surface);
+  border-radius: var(--ui-radius-md);
+  box-shadow: var(--ui-shadow-sm);
   overflow: hidden;
 }
 
@@ -125,101 +105,41 @@ async function onChangePassword() {
   display: flex;
   justify-content: space-between;
   padding: 14px 20px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--ui-border);
   font-size: 14px;
 }
 .pf-row:last-child { border-bottom: none; }
 
 .pf-label {
-  color: #888;
+  color: var(--ui-text-faint);
 }
 .pf-value {
   font-weight: 600;
-  color: #333;
+  color: var(--ui-text);
 }
 
-.pf-title.sm {
-  font-size: 18px;
-  margin: 0 0 16px;
-}
-
-.pw-form {
-  padding: 20px;
-}
-
-.pw-fields {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.pf-field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  font-size: 13px;
-  font-weight: 600;
-  color: #444;
-}
-
-.pf-field input {
-  padding: 11px 14px;
-  border: 1px solid #d0d4da;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 400;
-  transition: border-color 0.15s, box-shadow 0.15s;
-}
-
-.pf-field input:focus {
-  outline: none;
-  border-color: #1a73e8;
-  box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.15);
-}
-
-.pf-msg {
-  font-size: 13px;
-  color: #d93025;
-}
-.pf-msg.ok {
-  color: #188038;
-}
-.pf-msg.warn {
-  color: #b26a00;
-  margin-bottom: 4px;
-}
-
-.pf-btn {
-  margin-top: 18px;
-  width: 100%;
-  padding: 12px;
-  border: none;
-  border-radius: 8px;
-  background: #1a73e8;
-  color: #fff;
-  font-size: 14px;
-  font-weight: 600;
+/* Square icon button → the edit page */
+.pf-edit {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius-sm);
+  background: var(--ui-surface);
+  color: var(--ui-text-muted);
   cursor: pointer;
-  transition: background 0.15s;
+  transition: background var(--ui-duration), color var(--ui-duration), transform 0.1s;
 }
-.pf-btn:hover:not(:disabled) {
-  background: #1765cc;
+
+.pf-edit:hover {
+  background: var(--ui-surface-3);
+  color: var(--ui-accent);
 }
-.pf-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-.pf-btn.ghost {
-  background: #f2f2f2;
-  color: #444;
-}
-.pf-btn.ghost:hover:not(:disabled) {
-  background: #e6e6e6;
-}
-.pf-btn.accent {
-  background: #188038;
-}
-.pf-btn.accent:hover:not(:disabled) {
-  background: #146b30;
+
+.pf-edit:active {
+  transform: scale(0.96);
 }
 </style>
