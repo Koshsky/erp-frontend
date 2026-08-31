@@ -65,6 +65,7 @@ const displayProjects = computed(() =>
       .map((p) => ({
         id: p.id ?? 0,
         title: p.title ?? '',
+        color: p.color ?? '',
         start_date: p.start_date ?? '',
         end_date: p.end_date ?? '',
         owner_id: p.owner_id,

@@ -22,7 +22,7 @@ const emit = defineEmits<{
     :startDate="startDate"
     :endDate="endDate"
     :title="projectCode"
-    :color="color"
+    :color="color || 'var(--ui-gantt-project)'"
     :opacity="opacity"
     :height="40"
     :top="6"
@@ -35,7 +35,7 @@ const emit = defineEmits<{
     <template #tooltip="{ dateRange }">
       <BarTooltip
         :title="projectCode"
-        :accent="'var(--ui-gantt-project)'"
+        :accent="color || 'var(--ui-gantt-project)'"
         :rows="[
           priority != null ? `Приоритет: ${priority}` : '',
           ownerName ? `Владелец: ${ownerName}` : '',

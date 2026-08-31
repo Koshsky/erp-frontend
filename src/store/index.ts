@@ -1535,7 +1535,7 @@ export const usePlanningStore = defineStore('planning', () => {
 
   async function updateProjectMeta(
     id: number,
-    patch: { code?: string; owner_id?: number },
+    patch: { code?: string; owner_id?: number; color?: string },
   ): Promise<boolean> {
     return runMutation({
       entity: 'project',
@@ -1557,7 +1557,7 @@ export const usePlanningStore = defineStore('planning', () => {
 
   async function updateProcessMeta(
     id: number,
-    patch: { title?: string; owner_id?: number },
+    patch: { title?: string; owner_id?: number; color?: string },
   ): Promise<boolean> {
     return runMutation({
       entity: 'process',
@@ -1575,7 +1575,7 @@ export const usePlanningStore = defineStore('planning', () => {
     })
   }
 
-  async function updateTaskMeta(id: number, patch: { title?: string; owner_id?: number }): Promise<boolean> {
+  async function updateTaskMeta(id: number, patch: { title?: string; owner_id?: number; color?: string }): Promise<boolean> {
     return runMutation({
       entity: 'task',
       call: () => new TasksApi(apiConfig()).taskIdPut(id, patch),
@@ -1594,7 +1594,7 @@ export const usePlanningStore = defineStore('planning', () => {
 
   async function updateMilestoneMeta(
     id: number,
-    patch: { title?: string; content?: string },
+    patch: { title?: string; content?: string; color?: string },
   ): Promise<boolean> {
     return runMutation({
       entity: 'milestone',
@@ -1628,6 +1628,7 @@ export const usePlanningStore = defineStore('planning', () => {
       start_date: string
       end_date: string
       priority?: number
+      color?: string
     },
   ): Promise<{ ok: boolean; autoCreated: DtoAutoCreatedCounts | null }> {
     const tempId = nextTempId()
@@ -1650,6 +1651,7 @@ export const usePlanningStore = defineStore('planning', () => {
           end_date?: string
           priority?: number
           owner_id?: number
+          color?: string
           auto_created?: DtoAutoCreatedCounts
         }
         const ac = d.auto_created
@@ -1661,6 +1663,7 @@ export const usePlanningStore = defineStore('planning', () => {
           end_date: d.end_date ?? payload.end_date,
           priority: d.priority ?? 100,
           owner_id: d.owner_id,
+          color: d.color,
         }
         const app = useAppStore()
         insertAt(projectPlanning.value?.projects, undefined, item)
@@ -1674,6 +1677,7 @@ export const usePlanningStore = defineStore('planning', () => {
           end_date: payload.end_date,
           priority: payload.priority ?? 100,
           owner_id: undefined,
+          color: payload.color,
         }
         const app = useAppStore()
         insertAt(projectPlanning.value?.projects, undefined, item)
@@ -1692,6 +1696,7 @@ export const usePlanningStore = defineStore('planning', () => {
       project_id: number
       start_date: string
       end_date: string
+      color?: string
     },
     index?: number,
   ): Promise<boolean> {
@@ -1707,7 +1712,7 @@ export const usePlanningStore = defineStore('planning', () => {
       },
       apply: (dto) => {
         if (!dto) return
-        const d = dto as { id?: number; title?: string; start_date?: string; end_date?: string }
+        const d = dto as { id?: number; title?: string; start_date?: string; end_date?: string; color?: string }
         const project = processPlanning.value?.projects?.find((p: any) => p.id === payload.project_id)
         insertAt(project?.processes, index, {
           id: d.id ?? 0,
@@ -1715,6 +1720,7 @@ export const usePlanningStore = defineStore('planning', () => {
           start_date: d.start_date ?? payload.start_date,
           end_date: d.end_date ?? payload.end_date,
           project_id: payload.project_id,
+          color: d.color ?? payload.color,
         })
       },
       optimistic: () => {
@@ -1725,6 +1731,7 @@ export const usePlanningStore = defineStore('planning', () => {
           start_date: payload.start_date,
           end_date: payload.end_date,
           project_id: payload.project_id,
+          color: payload.color,
         })
       },
       onError: (m) => {
@@ -1739,6 +1746,7 @@ export const usePlanningStore = defineStore('planning', () => {
       process_id: number
       start_date: string
       end_date: string
+      color?: string
     },
     index?: number,
   ): Promise<boolean> {
@@ -1754,7 +1762,7 @@ export const usePlanningStore = defineStore('planning', () => {
       },
       apply: (dto) => {
         if (!dto) return
-        const d = dto as { id?: number; title?: string; start_date?: string; end_date?: string }
+        const d = dto as { id?: number; title?: string; start_date?: string; end_date?: string; color?: string }
         const proc = taskPlanning.value?.processes?.find((p: any) => p.id === payload.process_id)
         insertAt(proc?.tasks, index, {
           id: d.id ?? 0,
@@ -1762,6 +1770,7 @@ export const usePlanningStore = defineStore('planning', () => {
           start_date: d.start_date ?? payload.start_date,
           end_date: d.end_date ?? payload.end_date,
           resources: [],
+          color: d.color ?? payload.color,
         })
       },
       optimistic: () => {
@@ -1772,6 +1781,7 @@ export const usePlanningStore = defineStore('planning', () => {
           start_date: payload.start_date,
           end_date: payload.end_date,
           resources: [],
+          color: payload.color,
         })
       },
       onError: (m) => {
@@ -1785,6 +1795,7 @@ export const usePlanningStore = defineStore('planning', () => {
     content?: string
     process_id: number
     date: string
+    color?: string
   }): Promise<boolean> {
     const tempId = nextTempId()
     return runMutation({
@@ -1798,13 +1809,14 @@ export const usePlanningStore = defineStore('planning', () => {
       },
       apply: (dto) => {
         if (!dto) return
-        const d = dto as { id?: number; title?: string; content?: string; date?: string }
+        const d = dto as { id?: number; title?: string; content?: string; date?: string; color?: string }
         const proc = taskPlanning.value?.processes?.find((p: any) => p.id === payload.process_id)
         proc?.milestones?.push({
           id: d.id ?? 0,
           title: d.title ?? payload.title,
           content: d.content ?? payload.content ?? '',
           date: d.date ?? payload.date,
+          color: d.color ?? payload.color,
         })
       },
       optimistic: () => {
@@ -1814,6 +1826,7 @@ export const usePlanningStore = defineStore('planning', () => {
           title: payload.title,
           content: payload.content ?? '',
           date: payload.date,
+          color: payload.color,
         })
       },
       onError: (m) => {
@@ -1958,7 +1971,7 @@ export const usePlanningStore = defineStore('planning', () => {
         if (!t) return
         const resources = t.resources ?? []
         if (!resources.some((r: any) => r.id === resourceId)) {
-          // Code/title fields are needed for the resource badge offline (code from the reference)
+          // Code/title/color fields are needed for the resource badge offline (from the reference)
           const meta = useAppStore().resources.find((r: any) => r.id === resourceId)
           resources.push({
             id: resourceId,
@@ -1966,6 +1979,7 @@ export const usePlanningStore = defineStore('planning', () => {
             quantity,
             code: meta?.code,
             title: meta?.title,
+            color: meta?.color,
           })
         }
       },

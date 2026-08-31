@@ -114,16 +114,18 @@ const ownerOptions = computed(() =>
     .map((u) => ({ value: u.id ?? 0, label: u.name ?? '' })),
 )
 
-// Project edit modal (code, owner)
+// Project edit modal (code, owner, color)
 interface EditState {
   id: number
   code: string
   ownerId?: number
+  color?: string
 }
 const { open: openEdit, close: closeEdit, submit: submitEdit, bind: editBind } = useEditModal<EditState>(
   (state) => {
     const fields: ModalField[] = [
       { key: 'code', label: 'Код проекта', type: 'text', value: state.code, required: true },
+      { key: 'color', label: 'Цвет', type: 'color', value: state.color ?? '' },
     ]
     // The project owner cannot be changed: the field is hidden for rp, admin sees it
     if (role.value === 'admin') {
@@ -138,7 +140,9 @@ const { open: openEdit, close: closeEdit, submit: submitEdit, bind: editBind } =
     return fields
   },
   async (state, values) => {
-    const patch: { code: string; owner_id?: number } = { code: String(values.code ?? '') }
+    const patch: { code: string; owner_id?: number; color?: string } = { code: String(values.code ?? '') }
+    // '' means "no custom color" → the backend stores NULL (standard color)
+    patch.color = String(values.color ?? '')
     // The project owner cannot be changed: owner_id is sent only for admin
     if (role.value === 'admin' && values.owner_id !== '' && values.owner_id != null) {
       patch.owner_id = Number(values.owner_id)
@@ -172,7 +176,7 @@ const { open: openMenu, close: closeMenu, select, bind: menuBind } = useContextM
 function openProjectEdit(id: number) {
   const p = findProject(id)
   if (p) {
-    openEdit({ id, code: p.project_code ?? '', ownerId: p.owner_id })
+    openEdit({ id, code: p.project_code ?? '', ownerId: p.owner_id, color: p.color ?? '' })
   }
 }
 

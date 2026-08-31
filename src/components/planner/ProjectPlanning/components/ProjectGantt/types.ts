@@ -3,6 +3,8 @@ import type { TimelineCtx } from '@/composables/timeline-context'
 export interface ProjectGanttItem {
   id: number
   project_code: string
+  /** Custom bar color (#RRGGBB); empty — the standard token */
+  color?: string
   start_date: string
   end_date: string
   priority?: number

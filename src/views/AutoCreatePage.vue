@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import { useAppStore } from '../store'
-import { ConfirmDialog } from '../components/common'
+import { ColorField, ConfirmDialog } from '../components/common'
 import { useConfirm } from '../composables/useConfirm'
 import type { DtoAutoCreateConfig } from '@/api'
 
@@ -13,11 +13,13 @@ interface LocalResource {
 }
 interface LocalTask {
   title: string
+  color: string
   resources: LocalResource[]
 }
 interface LocalProcess {
   title: string
   owner_id: number | null
+  color: string
   tasks: LocalTask[]
 }
 
@@ -79,8 +81,10 @@ function resetForm() {
   form.processes = (cfg?.processes ?? []).map((p) => ({
     title: p.title ?? '',
     owner_id: p.owner_id ?? null,
+    color: p.color ?? '',
     tasks: (p.tasks ?? []).map((t) => ({
       title: t.title ?? '',
+      color: t.color ?? '',
       resources: (t.resources ?? []).map((r) => ({ resource_id: r.resource_id ?? 0, quantity: r.quantity ?? 1 })),
     })),
   }))
@@ -139,7 +143,7 @@ onBeforeRouteLeave((_to, _from, next) => {
 })
 
 function addProcess() {
-  form.processes.push({ title: '', owner_id: null, tasks: [] })
+  form.processes.push({ title: '', owner_id: null, color: '', tasks: [] })
   dirty.value = true
 }
 
@@ -169,7 +173,7 @@ function moveProcess(i: number, dir: -1 | 1) {
 }
 
 function addTask(p: LocalProcess) {
-  p.tasks.push({ title: '', resources: [] })
+  p.tasks.push({ title: '', color: '', resources: [] })
   dirty.value = true
 }
 
@@ -259,8 +263,10 @@ async function onSave() {
     processes: form.processes.map((p) => ({
       title: p.title.trim(),
       owner_id: p.owner_id ?? undefined,
+      color: p.color || undefined,
       tasks: p.tasks.map((t) => ({
         title: t.title.trim(),
+        color: t.color || undefined,
         resources: t.resources.map((r) => ({ resource_id: r.resource_id, quantity: r.quantity })),
       })),
     })),
@@ -319,6 +325,7 @@ async function onSave() {
           <button type="button" class="ac-move" :disabled="pi === 0" @click="moveProcess(pi, -1)" aria-label="Переместить процесс вверх">↑</button>
           <button type="button" class="ac-move" :disabled="pi === form.processes.length - 1" @click="moveProcess(pi, 1)" aria-label="Переместить процесс вниз">↓</button>
           <input v-model="p.title" type="text" class="ac-input ac-title-input" placeholder="Название процесса" aria-label="Название процесса" @input="dirty = true" />
+          <ColorField v-model="p.color" size="sm" label="Цвет процесса" class="ac-color" @update:model-value="dirty = true" />
           <select v-model="p.owner_id" class="ac-input ac-owner" aria-label="Владелец процесса" @change="dirty = true">
             <option :value="null">Владелец не выбран</option>
             <option v-for="opt in ownerOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
@@ -333,6 +340,7 @@ async function onSave() {
               <button type="button" class="ac-move" :disabled="ti === 0" @click="moveTask(pi, ti, -1)" aria-label="Переместить задачу вверх">↑</button>
               <button type="button" class="ac-move" :disabled="ti === p.tasks.length - 1" @click="moveTask(pi, ti, 1)" aria-label="Переместить задачу вниз">↓</button>
               <input v-model="t.title" type="text" class="ac-input" placeholder="Название задачи" aria-label="Название задачи" @input="dirty = true" />
+              <ColorField v-model="t.color" size="sm" label="Цвет задачи" class="ac-color" @update:model-value="dirty = true" />
               <button type="button" class="ac-del" @click="removeTask(p, ti)">×</button>
             </div>
             <div v-if="t.resources.length" class="ac-resources">

@@ -128,10 +128,10 @@ const menuItems = computed<ContextMenuItem[]>(() => {
   ]
 })
 
-// Edit modal for a task (title, assignee) or a milestone (title + content)
+// Edit modal for a task (title, assignee, color) or a milestone (title + content, color)
 type EditState =
-  | { type: 'task'; id: number; title: string; ownerId?: number }
-  | { type: 'milestone'; id: number; title: string; content: string }
+  | { type: 'task'; id: number; title: string; ownerId?: number; color?: string }
+  | { type: 'milestone'; id: number; title: string; content: string; color?: string }
 
 /** Candidates for task "assignee" — own employees only (direct subordinates) */
 const ownerOptions = computed(() =>
@@ -149,14 +149,17 @@ const { open: openEdit, close: closeEdit, submit: submitEdit, bind: editBind } =
       value: state.title,
       required: true,
     }
+    const colorField: ModalField = { key: 'color', label: 'Цвет', type: 'color', value: state.color ?? '' }
     if (state.type === 'milestone') {
       return [
         base,
+        colorField,
         { key: 'content', label: 'Контент', type: 'textarea', value: state.content },
       ]
     }
     return [
       base,
+      colorField,
       // The assignee is chosen from own employees. The owner cannot be removed
       // (set null); if none is selected from the list — the owner_id field is not sent.
       {
@@ -170,14 +173,16 @@ const { open: openEdit, close: closeEdit, submit: submitEdit, bind: editBind } =
   },
   async (state, values) => {
     const title = String(values.title ?? '')
+    const color = String(values.color ?? '')
     if (state.type === 'task') {
       // Empty value (no employee selected) — the owner is not changed: the field is not sent.
       const ownerId = values.owner_id === '' ? undefined : Number(values.owner_id)
-      const ok = await planning.updateTaskMeta(state.id, { title, owner_id: ownerId })
+      const ok = await planning.updateTaskMeta(state.id, { title, color, owner_id: ownerId })
       return { ok, error: ok ? null : planning.error }
     }
     const ok = await planning.updateMilestoneMeta(state.id, {
       title,
+      color,
       content: String(values.content ?? ''),
     })
     return { ok, error: ok ? null : planning.error }
@@ -210,6 +215,7 @@ function openTaskEdit(id: number) {
       id,
       title: task.title ?? '',
       ownerId: task.owner_id ?? undefined,
+      color: task.color ?? '',
     })
   }
 }
@@ -217,7 +223,7 @@ function openTaskEdit(id: number) {
 function openMilestoneEdit(id: number) {
   const ms = findMilestone(id)
   if (ms) {
-    openEdit({ type: 'milestone', id, title: ms.title ?? '', content: ms.content ?? '' })
+    openEdit({ type: 'milestone', id, title: ms.title ?? '', content: ms.content ?? '', color: ms.color ?? '' })
   }
 }
 

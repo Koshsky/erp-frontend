@@ -3,6 +3,7 @@ import type { TimelineCtx } from '@/composables/timeline-context'
 export interface ProcessItem {
   id: number
   title: string
+  color?: string
   start_date: string
   end_date: string
   owner_id?: number

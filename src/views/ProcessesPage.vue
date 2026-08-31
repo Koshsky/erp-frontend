@@ -119,20 +119,26 @@ const ownerOptions = computed(() =>
     .map((u) => ({ value: u.id ?? 0, label: u.name ?? '' })),
 )
 
-// Process edit modal (title, owner)
+// Process edit modal (title, owner, color)
 interface EditState {
   id: number
   title: string
   ownerId?: number
+  color?: string
 }
 const { open: openEdit, close: closeEdit, submit: submitEdit, bind: editBind } = useEditModal<EditState>(
   (state) => [
     { key: 'title', label: 'Название', type: 'text', value: state.title, required: true },
+    { key: 'color', label: 'Цвет', type: 'color', value: state.color ?? '' },
     { key: 'owner_id', label: 'Владелец', type: 'select', value: state.ownerId, options: ownerOptions.value },
   ],
   async (state, values) => {
     const ownerId = values.owner_id !== '' ? Number(values.owner_id) : undefined
-    const ok = await store.updateProcessMeta(state.id, { title: String(values.title ?? ''), owner_id: ownerId })
+    const ok = await store.updateProcessMeta(state.id, {
+      title: String(values.title ?? ''),
+      color: String(values.color ?? ''),
+      owner_id: ownerId,
+    })
     return { ok, error: ok ? null : store.error }
   },
   () => 'Редактировать процесс',
@@ -156,7 +162,7 @@ const { open: openMenu, close: closeMenu, select, bind: menuBind } = useContextM
 function openProcessEdit(id: number) {
   const proc = findProcess(id)
   if (proc) {
-    openEdit({ id, title: proc.title ?? '', ownerId: proc.owner_id })
+    openEdit({ id, title: proc.title ?? '', ownerId: proc.owner_id, color: proc.color ?? '' })
   }
 }
 

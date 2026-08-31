@@ -7,11 +7,15 @@ export interface TaskResource {
   quantity: number
   code: string
   title?: string
+  /** Resource color (#RRGGBB) — colors the resource badge on the bar */
+  color?: string
 }
 
 export interface Task {
   id: number
   title: string
+  /** Custom bar color (#RRGGBB); empty — the standard token */
+  color?: string
   start_date: string
   end_date: string
   resources: TaskResource[]
@@ -30,6 +34,8 @@ export interface TaskBarProps {
   task: Task
   /** Project code — displayed as a badge right after the task title */
   projectCode?: string
+  /** Custom task color (#RRGGBB); empty — the standard token */
+  color?: string
   draggable?: boolean
   /** Process bounds — restrict dragging of the task */
   groupStartDate?: string | Date | number | null

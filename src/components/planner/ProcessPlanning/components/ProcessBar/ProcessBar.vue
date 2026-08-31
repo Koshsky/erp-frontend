@@ -31,7 +31,7 @@ const emit = defineEmits<{
     :groupEndDate="groupEndDate"
     :title="title"
     :projectCode="projectCode"
-    :color="color"
+    :color="color || 'var(--ui-gantt-process)'"
     :opacity="opacity"
     :height="height"
     :top="top"
@@ -48,7 +48,7 @@ const emit = defineEmits<{
       <slot name="tooltip">
         <BarTooltip
           :title="title"
-          :accent="'var(--ui-gantt-process)'"
+          :accent="color || 'var(--ui-gantt-process)'"
           :rows="[ownerName ? `Владелец: ${ownerName}` : '', dateRange].filter(Boolean)"
         />
       </slot>

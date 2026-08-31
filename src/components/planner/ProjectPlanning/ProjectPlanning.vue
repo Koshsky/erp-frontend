@@ -59,6 +59,7 @@ const displayProjects = computed(() =>
   (props.projects || []).map((dto) => ({
     id: dto.id ?? 0,
     project_code: dto.project_code ?? '',
+    color: dto.color ?? '',
     start_date: dto.start_date ?? '',
     end_date: dto.end_date ?? '',
     priority: dto.priority,

@@ -12,6 +12,8 @@ const props = withDefaults(
     timeline: TimelineCtx
     task: Task
     projectCode?: string
+    /** Custom task color (#RRGGBB); empty — the standard token */
+    color?: string
     draggable?: boolean
     /** Vertical row reorder: pressing the bar body and dragging vertically calls
      *  this with the pointerdown event (horizontal drags keep changing dates). */
@@ -26,6 +28,7 @@ const props = withDefaults(
   }>(),
   {
     projectCode: '',
+    color: '',
     draggable: true,
     groupStartDate: null,
     groupEndDate: null,
@@ -182,6 +185,7 @@ watch(
     :groupStartDate="groupStartDate"
     :groupEndDate="groupEndDate"
     :title="task.title"
+    :color="color || task.color || 'var(--ui-gantt-task)'"
     :draggable="draggable"
     :start-row-reorder="startRowReorder"
     @change="(d) => emit('change', d)"
@@ -201,6 +205,7 @@ watch(
           v-for="r in task.resources"
           :key="r.resource_id"
           class="tb-badge"
+          :style="r.color ? { background: r.color } : undefined"
         >{{ badgeLabel(r) }}×{{ r.quantity }}</span>
       </span>
       <span v-if="hasComments" class="tb-comments" :title="`Комментарии: ${task.comments_count}`">
@@ -223,7 +228,7 @@ watch(
     <template #tooltip="{ dateRange }">
       <BarTooltip
         :title="task.title"
-        :accent="'var(--ui-gantt-task)'"
+        :accent="color || task.color || 'var(--ui-gantt-task)'"
         :rows="tooltipRows(dateRange)"
         :resources="(task.resources || []).map((r) => ({ label: r.title || r.code, quantity: r.quantity }))"
         :comments="tooltipComments"

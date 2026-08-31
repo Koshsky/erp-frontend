@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { reactive, ref, watch, computed } from 'vue'
 import type { ModalFormProps, ModalField } from './types'
+import ColorField from '../ColorField/ColorField.vue'
 
 const props = withDefaults(defineProps<ModalFormProps>(), {
   submitLabel: 'Сохранить',
@@ -68,13 +69,20 @@ function onKeydown(e: KeyboardEvent) {
         <slot v-if="$slots.default" />
 
         <form v-else class="mf-form" @submit.prevent="onSubmit">
-          <label v-for="f in fields" :key="f.key" class="mf-field">
+          <!-- A label is invalid around an interactive color trigger: the color
+               field renders as a plain div, everything else keeps <label> -->
+          <component :is="f.type === 'color' ? 'div' : 'label'" v-for="f in fields" :key="f.key" class="mf-field">
             <span class="mf-label">
               {{ f.label }}
               <span v-if="f.required" class="mf-req">*</span>
             </span>
+            <ColorField
+              v-if="f.type === 'color'"
+              v-model="values[f.key]"
+              :label="f.label"
+            />
             <textarea
-              v-if="f.type === 'textarea'"
+              v-else-if="f.type === 'textarea'"
               v-model="values[f.key]"
               class="mf-input mf-textarea"
               rows="3"
@@ -115,7 +123,7 @@ function onKeydown(e: KeyboardEvent) {
               type="text"
               :placeholder="f.placeholder"
             />
-          </label>
+          </component>
 
           <p v-if="error" class="mf-error">{{ error }}</p>
 

@@ -65,6 +65,7 @@ function onBarContextMenu(p: { clientX: number; clientY: number }, id: number) {
         :title="item.title"
         :projectCode="projectCode"
         :ownerName="item.owner_name"
+        :color="item.color"
         :groupStartDate="groupStartDate"
         :groupEndDate="groupEndDate"
         :draggable="canManage"

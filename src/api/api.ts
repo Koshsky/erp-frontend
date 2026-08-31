@@ -138,12 +138,14 @@ export interface DtoCreateCommentRequest {
     'parent_id'?: number;
 }
 export interface DtoCreateMilestoneRequest {
+    'color'?: string;
     'content'?: string;
     'date'?: string;
     'process_id'?: number;
     'title'?: string;
 }
 export interface DtoCreateProcessRequest {
+    'color'?: string;
     'end_date'?: string;
     'owner_id'?: number;
     'project_id'?: number;
@@ -152,6 +154,7 @@ export interface DtoCreateProcessRequest {
 }
 export interface DtoCreateProjectRequest {
     'code'?: string;
+    'color'?: string;
     'end_date'?: string;
     'owner_id'?: number;
     'priority'?: number;
@@ -160,6 +163,7 @@ export interface DtoCreateProjectRequest {
 export interface DtoCreateProjectResponse {
     'auto_created'?: DtoAutoCreatedCounts;
     'code'?: string;
+    'color'?: string;
     'end_date'?: string;
     'id'?: number;
     'owner_id'?: number;
@@ -168,6 +172,7 @@ export interface DtoCreateProjectResponse {
 }
 export interface DtoCreateResourceRequest {
     'code'?: string;
+    'color'?: string;
     'owner_id'?: number;
     'title'?: string;
 }
@@ -177,6 +182,7 @@ export interface DtoCreateStateRequest {
     'name'?: string;
 }
 export interface DtoCreateTaskRequest {
+    'color'?: string;
     'end_date'?: string;
     'owner_id'?: number;
     'process_id'?: number;
@@ -200,6 +206,7 @@ export interface DtoCreateUserResult {
     'user'?: DtoUserResponse;
 }
 export interface DtoDetailedProcess {
+    'color'?: string;
     'end_date'?: string;
     'id'?: number;
     'milestones'?: Array<DtoMilestone>;
@@ -215,6 +222,7 @@ export interface DtoDetailedProcess {
     'title'?: string;
 }
 export interface DtoDetailedProject {
+    'color'?: string;
     'end_date'?: string;
     'id'?: number;
     'owner_id'?: number;
@@ -224,6 +232,7 @@ export interface DtoDetailedProject {
     'start_date'?: string;
 }
 export interface DtoDetailedTask {
+    'color'?: string;
     /**
      * Number of active comments on the task (for the badge on the diagram).
      */
@@ -255,6 +264,7 @@ export interface DtoMatrixCell {
     'scope'?: string;
 }
 export interface DtoMilestone {
+    'color'?: string;
     'content'?: string;
     'date'?: string;
     'id'?: number;
@@ -262,6 +272,7 @@ export interface DtoMilestone {
     'title'?: string;
 }
 export interface DtoMilestoneResponse {
+    'color'?: string;
     'content'?: string;
     'date'?: string;
     'id'?: number;
@@ -274,6 +285,7 @@ export interface DtoPermission {
     'scope'?: string;
 }
 export interface DtoProcess {
+    'color'?: string;
     'end_date'?: string;
     'id'?: number;
     /**
@@ -290,6 +302,7 @@ export interface DtoProcessPlanning {
     'projects'?: Array<DtoDetailedProject>;
 }
 export interface DtoProcessResponse {
+    'color'?: string;
     'end_date'?: string;
     'id'?: number;
     /**
@@ -302,11 +315,13 @@ export interface DtoProcessResponse {
     'title'?: string;
 }
 export interface DtoProcessTemplate {
+    'color'?: string;
     'owner_id'?: number;
     'tasks'?: Array<DtoTaskTemplate>;
     'title'?: string;
 }
 export interface DtoProject {
+    'color'?: string;
     'end_date'?: string;
     'id'?: number;
     'owner_id'?: number;
@@ -319,6 +334,7 @@ export interface DtoProjectPlanning {
 }
 export interface DtoProjectResponse {
     'code'?: string;
+    'color'?: string;
     'end_date'?: string;
     'id'?: number;
     'owner_id'?: number;
@@ -339,6 +355,7 @@ export interface DtoResetPasswordResponse {
 export interface DtoResource {
     'assignment_id'?: number;
     'code'?: string;
+    'color'?: string;
     'id'?: number;
     'quantity'?: number;
     'title'?: string;
@@ -373,6 +390,7 @@ export interface DtoResourceMemberResponse {
 }
 export interface DtoResourceResponse {
     'code'?: string;
+    'color'?: string;
     'employees_count'?: number;
     'id'?: number;
     'owner_id'?: number;
@@ -429,6 +447,7 @@ export interface DtoTaskPlanning {
     'processes'?: Array<DtoDetailedProcess>;
 }
 export interface DtoTaskResponse {
+    'color'?: string;
     'end_date'?: string;
     'id'?: number;
     /**
@@ -441,6 +460,7 @@ export interface DtoTaskResponse {
     'title'?: string;
 }
 export interface DtoTaskTemplate {
+    'color'?: string;
     'resources'?: Array<DtoResourceBinding>;
     'title'?: string;
 }
@@ -453,12 +473,14 @@ export interface DtoUpdateManagerRequest {
     'manager_id'?: number;
 }
 export interface DtoUpdateMilestoneRequest {
+    'color'?: string;
     'content'?: string;
     'date'?: string;
     'process_id'?: number;
     'title'?: string;
 }
 export interface DtoUpdateProcessRequest {
+    'color'?: string;
     'end_date'?: string;
     'owner_id'?: number;
     'project_id'?: number;
@@ -467,6 +489,7 @@ export interface DtoUpdateProcessRequest {
 }
 export interface DtoUpdateProjectRequest {
     'code'?: string;
+    'color'?: string;
     'end_date'?: string;
     'owner_id'?: number;
     'priority'?: number;
@@ -474,6 +497,7 @@ export interface DtoUpdateProjectRequest {
 }
 export interface DtoUpdateResourceRequest {
     'code'?: string;
+    'color'?: string;
     'owner_id'?: number;
     'title'?: string;
 }
@@ -483,6 +507,7 @@ export interface DtoUpdateStateRequest {
     'name'?: string;
 }
 export interface DtoUpdateTaskRequest {
+    'color'?: string;
     'end_date'?: string;
     'owner_id'?: number;
     'process_id'?: number;

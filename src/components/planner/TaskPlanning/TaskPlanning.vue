@@ -94,6 +94,7 @@ const displayProcesses = computed<Process[]>(() =>
         return {
           id: t.id ?? 0,
           title: t.title ?? '',
+          color: t.color ?? '',
           start_date: t.start_date ?? '',
           end_date: t.end_date ?? '',
           owner_id: t.owner_id ?? null,
@@ -106,6 +107,7 @@ const displayProcesses = computed<Process[]>(() =>
             quantity: r.quantity ?? 0,
             code: r.code ?? '',
             title: r.title ?? '',
+            color: r.color ?? '',
           })),
         }
       }),
@@ -113,6 +115,7 @@ const displayProcesses = computed<Process[]>(() =>
       id: m.id ?? 0,
       title: m.title ?? '',
       content: m.content,
+      color: m.color ?? '',
       date: m.date ?? '',
     })),
   })),

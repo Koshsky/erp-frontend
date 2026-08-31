@@ -48,7 +48,7 @@ const { confirm: confirmDialog, ask, proceed, cancel } = useConfirm()
 
 type ModalMode =
   | { type: 'create' }
-  | { type: 'edit'; id: number; code: string; title: string; ownerId?: number }
+  | { type: 'edit'; id: number; code: string; title: string; ownerId?: number; color?: string }
 
 /** Owner options (users, excluding workers) */
 const ownerOptions = computed<ModalField['options']>(() =>
@@ -72,6 +72,12 @@ const { open: openModal, close: closeModal, submit: submitModal, bind: modalBind
     const fields: ModalField[] = [
       { key: 'code', label: 'Код', type: 'text', value: state.type === 'create' ? '' : state.code, required: true },
       { key: 'title', label: 'Название', type: 'text', value: state.type === 'create' ? '' : state.title },
+      {
+        key: 'color',
+        label: 'Цвет',
+        type: 'color',
+        value: state.type === 'create' ? '' : (state.color ?? ''),
+      },
     ]
     // The owner is chosen by admin only (owner_id is required); vp creates resources in their own ownership
     if (isAdmin.value) {
@@ -86,10 +92,12 @@ const { open: openModal, close: closeModal, submit: submitModal, bind: modalBind
     return fields
   },
   async (state, values) => {
-    const payload: { code: string; title: string; owner_id?: number } = {
+    const payload: { code: string; title: string; color?: string; owner_id?: number } = {
       code: String(values.code ?? '').trim(),
       title: String(values.title ?? '').trim(),
     }
+    // '' means "no custom color" → the backend stores NULL (standard color)
+    payload.color = String(values.color ?? '')
     if (isAdmin.value && values.ownerId != null) {
       payload.owner_id = Number(values.ownerId)
     }
@@ -117,7 +125,7 @@ function openCreate() {
 function openEdit(id: number) {
   const res = resources.value.find((r) => r.id === id)
   if (res) {
-    openModal({ type: 'edit', id, code: res.code ?? '', title: res.title ?? '', ownerId: res.owner_id ?? undefined })
+    openModal({ type: 'edit', id, code: res.code ?? '', title: res.title ?? '', ownerId: res.owner_id ?? undefined, color: res.color ?? '' })
   }
 }
 

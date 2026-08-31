@@ -45,6 +45,19 @@ const manageableResources = computed<DtoResourceResponse[]>(() =>
 /** All resources (for the filter select), sorted by code/title */
 const resourcesSorted = computed<DtoResourceResponse[]>(() => [...resources.value].sort(byResourceLabel))
 
+/**
+ * Badge style of the employee's resource: the custom resource color (soft
+ * tinted background) or null — the default accent tokens from CSS.
+ */
+function resourceBadgeStyle(res: DtoResourceResponse | null): Record<string, string> | null {
+  if (!res?.color) return null
+  return {
+    background: `color-mix(in srgb, ${res.color} 15%, transparent)`,
+    color: res.color,
+    borderColor: `color-mix(in srgb, ${res.color} 30%, transparent)`,
+  }
+}
+
 /** Date as DD.MM.YYYY or «—» */
 function fmtDate(iso?: string): string {
   if (!iso) return '—'
@@ -331,7 +344,12 @@ onMounted(async () => {
         >
           <div class="name-cell">
             <span class="name">{{ emp.name }}</span>
-            <span v-if="resourceOf(emp.id)" class="ep-badge" :title="resourceOf(emp.id)?.title">
+            <span
+              v-if="resourceOf(emp.id)"
+              class="ep-badge"
+              :style="resourceBadgeStyle(resourceOf(emp.id)) ?? undefined"
+              :title="resourceOf(emp.id)?.title"
+            >
               {{ resourceOf(emp.id)?.code }}
             </span>
           </div>

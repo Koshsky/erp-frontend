@@ -21,6 +21,7 @@ const groupItems = computed(() =>
   props.projects.map((p) => ({
     id: p.id,
     title: p.project_code || '',
+    color: p.color || '',
     start_date: p.start_date || '',
     end_date: p.end_date || '',
     priority: p.priority,
@@ -53,6 +54,7 @@ function onContextMenu(p: { clientX: number; clientY: number; id: number }) {
         :projectCode="item.title"
         :priority="item.priority"
         :ownerName="item.owner_name"
+        :color="item.color"
         :draggable="canManage(item.id)"
         :start-row-reorder="reorderable ? startReorder : null"
         @change="(d) => onBarChange(item.id, d)"

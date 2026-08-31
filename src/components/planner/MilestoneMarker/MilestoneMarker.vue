@@ -66,7 +66,7 @@ const pos = computed(() => {
 const markerStyle = computed<Record<string, string | number> | null>(() => {
   if (!pos.value) return null
   return {
-    background: props.color,
+    background: props.color || 'var(--ui-milestone)',
     height: Math.max(props.stripHeight - 4, 8) + 'px',
     ...(props.draggable ? { cursor: cursor.value ?? 'grab', touchAction: 'none' } : {}),
   }
@@ -74,7 +74,7 @@ const markerStyle = computed<Record<string, string | number> | null>(() => {
 
 const rayStyle = computed<Record<string, string | number> | null>(() => {
   if (!pos.value) return null
-  return { background: props.color, top: props.stripHeight + 'px' }
+  return { background: props.color || 'var(--ui-milestone)', top: props.stripHeight + 'px' }
 })
 
 function onContextMenu(e: MouseEvent) {
