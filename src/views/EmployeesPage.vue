@@ -20,8 +20,8 @@ const { users } = storeToRefs(app)
 const { resources, resourcesError } = storeToRefs(app)
 
 // Edit/delete: admin can edit anyone, others (vp) — only their subordinates.
-// Creating employees — admin only (worker.create; vp has no such permission).
-const { role, userId, canCreateEmployee, canEditEmployee } = useRoleAccess()
+// Creating employees is disabled (admin no longer creates from this page).
+const { role, userId, canEditEmployee } = useRoleAccess()
 const isAdmin = computed(() => role.value === 'admin')
 
 /**
@@ -44,6 +44,25 @@ const manageableResources = computed<DtoResourceResponse[]>(() =>
 
 /** All resources (for the filter select), sorted by code/title */
 const resourcesSorted = computed<DtoResourceResponse[]>(() => [...resources.value].sort(byResourceLabel))
+
+/**
+ * Snapshot of the full employee roster (admin), taken while no manager filter
+ * is active. DtoUserInfo (app.users) carries no manager_id, so "has
+ * subordinates" must be computed from the worker list.
+ */
+const managerPool = ref<DtoUserResponse[]>([])
+
+/** Non-worker users that have at least one direct subordinate in the roster */
+const managerFilterOptions = computed(() =>
+  users.value
+    .filter(
+      (u) =>
+        u.id != null &&
+        u.role !== 'worker' &&
+        managerPool.value.some((e) => e.manager_id === u.id),
+    )
+    .sort(compareByName),
+)
 
 /**
  * Badge style of the employee's resource: the custom resource color (soft
@@ -82,6 +101,25 @@ const managerFilter = ref<number | 'none' | ''>('')
 /** Filter by resource: '' — all, 'none' — no resource, number — a resource */
 const resourceFilter = ref<number | 'none' | ''>('')
 
+/**
+ * Resource filter options depend on the selected manager filter (admin):
+ * a manager → only the resources that contain at least one of his direct
+ * subordinates (employees is already server-filtered by that manager);
+ * 'none' → resources of employees without a manager; '' → all resources.
+ */
+const resourceFilterOptions = computed<DtoResourceResponse[]>(() => {
+  const m = managerFilter.value
+  if (m === '') return resourcesSorted.value
+  return resources.value
+    .filter((r) =>
+      employees.value.some((e) => {
+        if (e.id == null || app.resourceByUser[e.id]?.id !== r.id) return false
+        return m === 'none' ? e.manager_id == null : e.manager_id === m
+      }),
+    )
+    .sort(byResourceLabel)
+})
+
 const filteredEmployees = computed(() => {
   let list = employeesWithTitles.value
   const q = search.value.trim().toLowerCase()
@@ -101,8 +139,15 @@ const filteredEmployees = computed(() => {
 })
 
 // Changing the manager filter reloads the listing with manager_id (admin only)
+// and resets the resource filter, whose options depend on the selected manager.
 watch(managerFilter, (v) => {
   if (isAdmin.value) ts.fetchEmployees(typeof v === 'number' ? v : undefined)
+  resourceFilter.value = ''
+})
+
+// Keep the roster snapshot current while no manager filter is active
+watch(employees, (list) => {
+  if (managerFilter.value === '') managerPool.value = list
 })
 
 // Right-click on a row: edit/delete (own employees only / admin)
@@ -120,20 +165,18 @@ const menuItems = computed<ContextMenuItem[]>(() => [
 // Delete confirmation dialog
 const { confirm: confirmDialog, ask, proceed, cancel } = useConfirm()
 
-type ModalMode =
-  | { type: 'create' }
-  | {
-      type: 'edit'
-      id: number
-      lastName: string
-      firstName: string
-      middleName?: string
-      position?: string
-      managerId?: number | null
-      hireDate?: string
-      terminationDate?: string
-      resourceId?: number | null
-    }
+type ModalMode = {
+  type: 'edit'
+  id: number
+  lastName: string
+  firstName: string
+  middleName?: string
+  position?: string
+  managerId?: number | null
+  hireDate?: string
+  terminationDate?: string
+  resourceId?: number | null
+}
 
 /** Manager options (users, excluding workers) + the "No manager" option */
 const managerOptions = computed<ModalField['options']>(() => [
@@ -151,46 +194,46 @@ const { open: openModal, close: closeModal, submit: submitModal, bind: modalBind
         key: 'lastName',
         label: 'Фамилия',
         type: 'text',
-        value: state.type === 'edit' ? state.lastName : '',
+        value: state.lastName,
         required: true,
       },
       {
         key: 'firstName',
         label: 'Имя',
         type: 'text',
-        value: state.type === 'edit' ? state.firstName : '',
+        value: state.firstName,
         required: true,
       },
       {
         key: 'middleName',
         label: 'Отчество',
         type: 'text',
-        value: state.type === 'edit' ? (state.middleName ?? '') : '',
+        value: state.middleName ?? '',
       },
       {
         key: 'position',
         label: 'Должность',
         type: 'text',
-        value: state.type === 'edit' ? (state.position ?? '') : '',
+        value: state.position ?? '',
         placeholder: 'Свободный текст, например «Ведущий инженер»',
       },
     ]
     fields.push(
-      { key: 'hireDate', label: 'Дата приёма', type: 'date', value: state.type === 'edit' ? state.hireDate : '' },
-      { key: 'terminationDate', label: 'Дата увольнения', type: 'date', value: state.type === 'edit' ? state.terminationDate : '' },
+      { key: 'hireDate', label: 'Дата приёма', type: 'date', value: state.hireDate },
+      { key: 'terminationDate', label: 'Дата увольнения', type: 'date', value: state.terminationDate },
     )
-    // Manager is chosen by admin only (creating employees is admin-only)
+    // Manager is chosen by admin only
     if (isAdmin.value) {
       fields.push({
         key: 'managerId',
         label: 'Руководитель',
         type: 'select',
         options: managerOptions.value,
-        value: state.type === 'edit' ? (state.managerId ?? '') : '',
+        value: state.managerId ?? '',
       })
     }
     // Resource is changed only when editing and only by those who can manage it
-    if (state.type === 'edit' && manageableResources.value.length) {
+    if (manageableResources.value.length) {
       fields.push({
         key: 'resourceId',
         label: 'Ресурс',
@@ -202,7 +245,7 @@ const { open: openModal, close: closeModal, submit: submitModal, bind: modalBind
             label: `${r.code} — ${r.title}`,
           })),
         ],
-        value: state.type === 'edit' ? (state.resourceId != null ? state.resourceId : '') : '',
+        value: state.resourceId != null ? state.resourceId : '',
       })
     }
     return fields
@@ -222,11 +265,8 @@ const { open: openModal, close: closeModal, submit: submitModal, bind: modalBind
     if (isAdmin.value && values.managerId !== '' && values.managerId != null) {
       payload.manager_id = Number(values.managerId)
     }
-    const ok =
-      state.type === 'create'
-        ? await ts.createEmployee({ ...payload, role: 'worker' })
-        : await ts.updateEmployee(state.id, payload)
-    // Changing the employee's resource (only on edit and when it actually changed)
+    const ok = await ts.updateEmployee(state.id, payload)
+    // Changing the employee's resource (only when it actually changed)
     let resourceOk = true
     let resourceError: string | null = null
     if (state.type === 'edit' && ok) {
@@ -243,8 +283,8 @@ const { open: openModal, close: closeModal, submit: submitModal, bind: modalBind
     if (!resourceOk) return { ok: false, error: resourceError }
     return { ok: true, error: null }
   },
-  (state) => (state.type === 'create' ? 'Создать сотрудника' : 'Редактировать сотрудника'),
-  (state) => (state.type === 'create' ? 'Создать' : 'Сохранить'),
+  () => 'Редактировать сотрудника',
+  () => 'Сохранить',
 )
 
 function onRowContextMenu(e: MouseEvent, emp: DtoUserResponse) {
@@ -253,10 +293,6 @@ function onRowContextMenu(e: MouseEvent, emp: DtoUserResponse) {
 }
 
 const { open: openMenu, close: closeMenu, select, bind: menuBind } = useContextMenu(menu, menuItems, handleSelect)
-
-function openCreate() {
-  openModal({ type: 'create' })
-}
 
 function openEdit(id: number) {
   const emp = employees.value.find((e) => e.id === id)
@@ -290,6 +326,8 @@ function handleSelect(id: string) {
 
 onMounted(async () => {
   if (!employees.value.length) await ts.fetchEmployees()
+  // Roster snapshot for the manager filter (counts of direct subordinates)
+  managerPool.value = employees.value
   if (isAdmin.value && !users.value.length) await app.loadUsers()
   // Load resources and their members unconditionally: resources are often already in the store
   // (dashboard/planner load them earlier), but members — only here;
@@ -307,14 +345,13 @@ onMounted(async () => {
         <select v-if="isAdmin" v-model="managerFilter" class="ep-filter">
           <option value="">Все руководители</option>
           <option value="none">Без руководителя</option>
-          <option v-for="u in users.filter((u) => u.role !== 'worker').sort(compareByName)" :key="u.id" :value="u.id">{{ u.name ?? `#${u.id}` }}</option>
+          <option v-for="u in managerFilterOptions" :key="u.id" :value="u.id">{{ u.name ?? `#${u.id}` }}</option>
         </select>
         <select v-if="resources.length" v-model="resourceFilter" class="ep-filter" title="Фильтр по ресурсу">
           <option value="">Все ресурсы</option>
           <option value="none">Без ресурса</option>
-          <option v-for="r in resourcesSorted" :key="r.id" :value="r.id">{{ r.code }} — {{ r.title }}</option>
+          <option v-for="r in resourceFilterOptions" :key="r.id" :value="r.id">{{ r.code }} — {{ r.title }}</option>
         </select>
-        <button v-if="canCreateEmployee" type="button" class="ep-add" @click="openCreate">Создать сотрудника</button>
       </div>
     </div>
 
@@ -328,18 +365,19 @@ onMounted(async () => {
       instead of replacing it, so the header and filter controls remain usable.
     -->
     <div v-if="employees.length || (!loading && !error)" class="table">
-      <div class="tr th">
+      <div class="tr th" :class="{ 'tr--no-manager': !isAdmin }">
         <div>ФИО</div>
         <div>Должность</div>
         <div>Дата приёма</div>
         <div>Дата увольнения</div>
-        <div>Руководитель</div>
+        <div v-if="isAdmin">Руководитель</div>
       </div>
       <template v-if="filteredEmployees.length">
         <div
           v-for="emp in filteredEmployees"
           :key="emp.id"
           class="tr"
+          :class="{ 'tr--no-manager': !isAdmin }"
           @contextmenu.prevent.stop="onRowContextMenu($event, emp)"
         >
           <div class="name-cell">
@@ -356,7 +394,7 @@ onMounted(async () => {
           <div>{{ emp.position || '—' }}</div>
           <div>{{ fmtDate(emp.hire_date) }}</div>
           <div>{{ fmtDate(emp.termination_date) }}</div>
-          <div>{{ managerLabel(emp.manager_id) }}</div>
+          <div v-if="isAdmin">{{ managerLabel(emp.manager_id) }}</div>
         </div>
       </template>
       <p v-else class="ep-st">{{ employees.length ? 'Ничего не найдено' : 'Нет данных о сотрудниках' }}</p>
@@ -466,6 +504,10 @@ onMounted(async () => {
   font-size: 14px;
 }
 .tr:last-child { border-bottom: none; }
+/* Non-admin (sees only own employees): the "Руководитель" column is hidden */
+.tr--no-manager {
+  grid-template-columns: 1.4fr 1.3fr 110px 140px;
+}
 .tr:not(.th):hover {
   background: var(--ui-surface-3);
 }
