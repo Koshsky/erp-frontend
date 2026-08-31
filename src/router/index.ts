@@ -135,8 +135,15 @@ const router = createRouter({
  * cache) arrives would see an empty permission list and wrongly send the user
  * to the profile. If permissions could not be obtained at all (no network and
  * no cache) — fall back to the planner nav roles.
+ *
+ * The wait is bounded (PERMS_BOUND_MS): with a saved session but a
+ * stale/unreachable server, /permissions/me used to hold the FIRST navigation
+ * for the whole axios timeout (~10 s), keeping the boot splash up that long
+ * ("infinite loading"). If permissions do not arrive in time, navigation
+ * proceeds with the role fallback and the app re-checks them later.
  */
 const PLANNER_ROLES = ['admin', 'dp', 'rp', 'vp']
+const PERMS_BOUND_MS = 3000
 
 async function pageAccessible(
   rbac: ReturnType<typeof useRbacStore>,
@@ -145,11 +152,24 @@ async function pageAccessible(
   action: string,
 ): Promise<boolean> {
   if (!rbac.permsLoaded) {
-    const ok = await rbac.loadMyPermissions()
+    const ok = await Promise.race([
+      rbac.loadMyPermissions(),
+      new Promise<false>((resolve) => setTimeout(() => resolve(false), PERMS_BOUND_MS)),
+    ])
     if (!ok && !rbac.permsLoaded) return PLANNER_ROLES.includes(role ?? '')
   }
   return rbac.can(resource, action)
 }
+
+/**
+ * Desktop silent re-login must never block first paint: with a saved session
+ * and a stale/unreachable server address (an old profile can hold one), the
+ * login request used to keep the router guard waiting until axios timed out —
+ * the window stayed blank that whole time ("white screen"). The wait is now
+ * bounded; if the login did not finish in time, the app renders anyway and a
+ * late successful restore navigates in automatically (see main.ts watcher).
+ */
+const DESKTOP_AUTOSYNC_BOUND_MS = 2500
 
 // Global guard: unauthenticated users always go to /login.
 // If the access token is missing or expired but a refresh cookie exists — first silently
@@ -164,9 +184,25 @@ router.beforeEach(async (to) => {
     !isOffline.value
   ) {
     if (isElectron && shouldAutoSync() && !isLoggedOut()) {
-      await ensureDesktopAutoSyncSession()
+      await Promise.race([
+        ensureDesktopAutoSyncSession().catch(() => {}),
+        new Promise((resolve) => setTimeout(resolve, DESKTOP_AUTOSYNC_BOUND_MS)),
+      ])
     } else {
-      await auth.refreshSession()
+      // Desktop without autosync (disabled or after logout): the refresh
+      // request is bounded by the axios timeout, but a stale server must not
+      // hold first paint — cap the wait on desktop too. Web keeps the normal
+      // cookie refresh (fast and same-origin).
+      const refresh =
+        isElectron && !isOffline.value
+          ? Promise.race([
+              auth.refreshSession(),
+              new Promise<boolean>((resolve) =>
+                setTimeout(() => resolve(false), DESKTOP_AUTOSYNC_BOUND_MS),
+              ),
+            ])
+          : auth.refreshSession()
+      await refresh
     }
   }
 

@@ -20,7 +20,7 @@ import { isElectron } from './electron'
 const API_URL_KEY = 'mvs_erp_api_url'
 
 /** Constant suffix of the backend API endpoints. */
-const API_PREFIX = '/api/v1'
+export const API_PREFIX = '/api/v1'
 
 /** Current override (in memory) — to avoid reading localStorage on every request */
 let override: string | null = null
@@ -74,8 +74,11 @@ export function getApiUrl(): string | undefined {
 export function getServerBase(): string {
   const api = getApiUrl()
   if (!api) return ''
-  // If the saved value already contains /api/v1 — strip it to show the base.
-  return api.replace(API_PREFIX + '$', '').replace(/\/+$/, '')
+  // If the saved value already ends with /api/v1 — strip the suffix to show the
+  // bare server base (e.g. https://host). String.prototype.replace treats the
+  // pattern as a literal, so the regex anchor must be built explicitly.
+  const base = api.endsWith(API_PREFIX) ? api.slice(0, -API_PREFIX.length) : api
+  return base.replace(/\/+$/, '')
 }
 
 /**

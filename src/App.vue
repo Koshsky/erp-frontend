@@ -1,10 +1,33 @@
 <script setup lang="ts">
+import { ref } from 'vue'
+import { useRouter } from 'vue-router'
 import OfflineBanner from './offline/OfflineBanner.vue'
 import SyncToast from './offline/SyncToast.vue'
 import { isElectron } from './electron'
+
+const router = useRouter()
+
+// Boot splash (markup inherits the styles from index.html) stays visible until
+// the FIRST navigation resolves — the router guard can hold start-up briefly
+// while it restores a session. The wait is capped (SPLASH_BOUND_MS): with a
+// stale/unreachable saved server the navigation must not keep the splash up
+// forever ("infinite loading") — after the cap the app content shows as far as
+// it got (login page, offline view, …).
+const SPLASH_BOUND_MS = 6000
+const ready = ref(false)
+void Promise.race([
+  router.isReady().then(() => true),
+  new Promise((resolve) => setTimeout(resolve, SPLASH_BOUND_MS)),
+]).then(() => {
+  ready.value = true
+})
 </script>
 
 <template>
+  <div v-if="!ready" class="boot-splash">
+    <div class="boot-logo">MVS ERP</div>
+    <div class="boot-spinner" aria-hidden="true"></div>
+  </div>
   <OfflineBanner v-if="isElectron" />
   <SyncToast v-if="isElectron" />
   <RouterView />

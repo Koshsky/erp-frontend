@@ -546,11 +546,34 @@ const taskGroups = computed<PdfGanttGroup[]>(() =>
 @import '../styles/tokens.css';
 
 .pp {
-  --planner-max-height: calc(100vh - 112px);
+  /* The diagram fills the exact remaining viewport height (shell is vh-locked):
+     the page itself never scrolls — only the timeline does (rows — vertical,
+     calendar — horizontal). */
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  /* kept for nested previews (PdfExport / TaskComments) that still use the var */
+  --planner-max-height: calc(100dvh - 112px);
 }
 .pp-toolbar {
   display: flex;
   justify-content: flex-end;
   margin-bottom: 12px;
+  flex: none;
+}
+
+/* PlannerStates (.pg) and the timeline become a flex column: tg-scroll takes
+   exactly the remaining height, internal overflow instead of a page scroll. */
+.pp :deep(.pg) {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.pp :deep(.tg-scroll) {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
 }
 </style>

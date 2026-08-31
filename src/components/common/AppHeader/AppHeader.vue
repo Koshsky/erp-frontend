@@ -7,6 +7,7 @@ import type { NavCategory } from '../../../composables/useNavigation'
 import { isElectron } from '../../../electron'
 import { isOffline } from '../../../offline/state'
 import { pendingCount } from '../../../offline/outbox'
+import { lastPullAt } from '../../../offline/cycle'
 import { resolvedScheme, toggleScheme } from '../../../theme'
 
 const props = withDefaults(defineProps<{ brand?: string }>(), { brand: 'MVS ERP' })
@@ -21,6 +22,18 @@ const offline = computed(() => isOffline.value)
 
 // Pending changes awaiting sync (badge next to "Sync")
 const pending = computed(() => pendingCount.value)
+
+// Data freshness (desktop): how long ago the background PULL last updated the cache
+const lastPullLabel = computed(() => {
+  const ts = lastPullAt.value
+  if (ts == null) return '—'
+  const s = Math.max(0, Math.round((Date.now() - ts) / 1000))
+  if (s < 60) return `${s} с`
+  const m = Math.round(s / 60)
+  if (m < 60) return `${m} мин`
+  const h = Math.round(m / 60)
+  return `${h} ч`
+})
 
 // Header — list of categories; subcategories open in a dropdown menu.
 const { visibleCategories, activeCategory } = useNavigation()
@@ -116,6 +129,17 @@ onBeforeUnmount(() => {
           {{ pending }}
         </span>
       </RouterLink>
+      <!-- Data freshness (desktop offline-first UX) -->
+      <span
+        v-if="isElectron"
+        class="ah-sync-chip"
+        :class="{ 'ah-sync-chip--off': offline }"
+        :title="offline
+          ? 'Офлайн: показаны сохранённые данные (обновлены ' + lastPullLabel + ' назад). Изменения отправятся автоматически при появлении сети'
+          : 'Данные обновляются автоматически; последнее обновление: ' + lastPullLabel + ' назад'"
+      >
+        {{ offline ? `Офлайн · данные от ${lastPullLabel}` : `Онлайн · данные ${lastPullLabel}` }}
+      </span>
       <!-- Color scheme toggle -->
       <button type="button" class="ah-theme" :title="'Переключить тему (сейчас ' + themeLabel.toLowerCase() + ')'" @click="toggleScheme">
         {{ themeLabel }}
@@ -202,6 +226,23 @@ onBeforeUnmount(() => {
 .ah-caret {
   font-size: 10px;
   opacity: 0.75;
+}
+
+.ah-sync-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ui-success, #16a34a) 14%, transparent);
+  color: var(--ui-text-2);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.ah-sync-chip--off {
+  background: color-mix(in srgb, var(--ui-warning) 22%, transparent);
+  color: var(--ui-text);
 }
 
 .ah-sync-badge {

@@ -59,7 +59,9 @@ onBeforeUnmount(() => {
 @import '../styles/tokens.css';
 
 .ml {
-  min-height: 100vh;
+  height: 100vh;
+  height: 100dvh; /* exact device viewport; the page can never exceed it */
+  overflow: hidden; /* no page scroll / page scrollbar — content scrolls inside */
   display: flex;
   flex-direction: column;
   background: var(--ui-bg);
@@ -76,7 +78,8 @@ onBeforeUnmount(() => {
 }
 
 .ml-body {
-  flex: 1;
+  flex: 1 1 auto;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   margin: 0;
@@ -84,8 +87,9 @@ onBeforeUnmount(() => {
 
 .ml-main {
   flex: 1;
+  min-height: 0;
   padding: 24px;
-  overflow-x: auto;
+  overflow: auto; /* non-diagram pages scroll inside the frame, not the browser */
 }
 </style>
 

@@ -126,9 +126,12 @@ const filteredEmployees = computed(() => {
   if (q) {
     list = list.filter((e) => `${e.name ?? ''} ${e.position ?? ''}`.toLowerCase().includes(q))
   }
-  // 'none' (no manager) is filtered on the client; numeric manager_id is already filtered by the server
+  // Manager filter ('none' and numeric) is client-side: rendering always reads
+  // local data, so the numeric scope is applied here instead of the server.
   if (managerFilter.value === 'none') {
     list = list.filter((e) => e.manager_id == null)
+  } else if (typeof managerFilter.value === 'number') {
+    list = list.filter((e) => e.manager_id === managerFilter.value)
   }
   if (resourceFilter.value === 'none') {
     list = list.filter((e) => e.id != null && !app.resourceByUser[e.id])
@@ -138,10 +141,9 @@ const filteredEmployees = computed(() => {
   return list
 })
 
-// Changing the manager filter reloads the listing with manager_id (admin only)
-// and resets the resource filter, whose options depend on the selected manager.
-watch(managerFilter, (v) => {
-  if (isAdmin.value) ts.fetchEmployees(typeof v === 'number' ? v : undefined)
+// Changing the manager filter resets the resource filter, whose options depend
+// on the selected manager (no server reload — filtering is client-side now).
+watch(managerFilter, () => {
   resourceFilter.value = ''
 })
 
@@ -325,14 +327,15 @@ function handleSelect(id: string) {
 }
 
 onMounted(async () => {
-  if (!employees.value.length) await ts.fetchEmployees()
+  if (!employees.value.length) await ts.loadEmployees()
   // Roster snapshot for the manager filter (counts of direct subordinates)
   managerPool.value = employees.value
   if (isAdmin.value && !users.value.length) await app.loadUsers()
   // Load resources and their members unconditionally: resources are often already in the store
   // (dashboard/planner load them earlier), but members — only here;
   // a gate on resources.length would leave everyone "without a resource" without badges.
-  await app.ensureResourceMembers(true)
+  // Local-first: hydrate from the cache (no network from the render path).
+  await app.ensureResourceMembers(false)
 })
 </script>
 

@@ -16,6 +16,7 @@ import { tryAcquireRefreshLock, releaseRefreshLock, publishToken, subscribeToken
 import { isLoggedOut, clearLoggedOut, setLoggedOut } from '@/loggedOut'
 import { getSavedLogin } from '@/syncCredentials'
 import { shouldAutoSync } from '@/settings'
+import { hydrateFromCache, apiPath } from '@/offline/hydrate'
 
 const USER_KEY = 'mvs_erp_user'
 /** Cache of my RBAC permissions for offline mode. */
@@ -87,6 +88,10 @@ function apiConfig(): Configuration {
     basePath: getApiUrl(),
     baseOptions: {
       headers: { 'Content-Type': 'application/json' },
+      // Fail fast (10 s) on an unreachable backend: axios defaults to no timeout,
+      // and a hanging server used to freeze the UI indefinitely — most critically
+      // the silent auto re-login before first paint (see main.ts BOOT_BOUND_MS).
+      timeout: 10000,
       // Fail-fast when offline is known (the banner is up): the request does not go
       // to the network or wait for a timeout — mutations immediately land in the outbox
       // queue, GETs are served from cache. The adapter is only placed here (store clients)
@@ -384,7 +389,7 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   /** Fetches fresh user data by id via UsersApi.usersIdGet */
-  async function fetchProfile(userId: number) {
+  async function fetchProfile(userId: number): Promise<boolean> {
     if (isOffline.value && user.value) return true
     error.value = null
     try {
@@ -402,6 +407,26 @@ export const useAuthStore = defineStore('auth', () => {
       error.value = e.message || String(e)
       return false
     }
+  }
+
+  /** Local-first profile (desktop): hydrate from the cache; web fetches live */
+  async function loadProfile(userId: number): Promise<boolean> {
+    if (!isElectron) return fetchProfile(userId)
+    if (user.value) return true
+    await hydrateFromCache([
+      {
+        path: apiPath(`/user/${userId}`),
+        filled: () => user.value != null,
+        apply: (body) => {
+          const d = (body as { data?: DtoUserInfo } | undefined)?.data
+          if (d) {
+            user.value = d
+            localStorage.setItem(USER_KEY, JSON.stringify(d))
+          }
+        },
+      },
+    ])
+    return user.value != null
   }
 
   // After a page reload with saved tokens, continue proactive refresh
@@ -434,6 +459,7 @@ export const useAuthStore = defineStore('auth', () => {
     changePassword,
     refreshSession,
     fetchProfile,
+    loadProfile,
     logout,
   }
 })
@@ -444,7 +470,30 @@ export const useAppStore = defineStore('app', () => {
   const projectsLoading = ref(false)
   const projectsError = ref<string | null>(null)
 
-  async function loadProjects() {
+  /**
+   * Local-first (desktop only): fill the projects list from the cache if empty.
+   * The web build has no offline cache — it reads straight from the server
+   * (refreshProjects), as before the offline-first refactor.
+   */
+  async function loadProjects(): Promise<void> {
+    if (!isElectron) {
+      await refreshProjects()
+      return
+    }
+    if (projects.value.length) return
+    await hydrateFromCache([
+      {
+        path: apiPath('/projects'),
+        filled: () => projects.value.length > 0,
+        apply: (body) => {
+          const d = (body as { data?: { items?: DtoProject[] } } | undefined)?.data
+          projects.value = d?.items ?? []
+        },
+      },
+    ])
+  }
+
+  async function refreshProjects(): Promise<void> {
     // Only admin/dp/rp can see projects (per the RBAC matrix). For other roles the
     // listing is forbidden by the backend (403) — we do not send the request at all.
     const role = useAuthStore().user?.role
@@ -452,7 +501,6 @@ export const useAppStore = defineStore('app', () => {
       projects.value = []
       return
     }
-    if (isOffline.value && projects.value.length) return
     projectsLoading.value = true
     projectsError.value = null
     try {
@@ -471,13 +519,30 @@ export const useAppStore = defineStore('app', () => {
   const resourcesLoading = ref(false)
   const resourcesError = ref<string | null>(null)
 
-  async function loadResources(ownerId?: number) {
-    if (isOffline.value && resources.value.length) return
+  async function loadResources(): Promise<void> {
+    if (!isElectron) {
+      await refreshResources()
+      return
+    }
+    if (resources.value.length) return
+    await hydrateFromCache([
+      {
+        path: apiPath('/resources'),
+        filled: () => resources.value.length > 0,
+        apply: (body) => {
+          const d = (body as { data?: { items?: DtoResourceResponse[] } } | undefined)?.data
+          resources.value = d?.items ?? []
+        },
+      },
+    ])
+  }
+
+  async function refreshResources(): Promise<void> {
     resourcesLoading.value = true
     resourcesError.value = null
     try {
       const api = new TimesheetResourcesApi(apiConfig())
-      const resp = await api.resourcesGet(PAGE_SIZE, ownerId ?? undefined, 0)
+      const resp = await api.resourcesGet(PAGE_SIZE, undefined, 0)
       const data = resp.data?.data
       resources.value = data?.items ?? []
     } catch (e: any) {
@@ -556,9 +621,26 @@ export const useAppStore = defineStore('app', () => {
   // === Resource users (/resources/{id}/members) ===
   const resourceMembers = ref<Record<number, DtoResourceMemberResponse[]>>({})
 
-  /** Loads the member (user) list of a resource */
-  async function loadResourceMembers(resourceId: number) {
-    if (isOffline.value && resourceMembers.value[resourceId]?.length) return
+  /** Loads the member (user) list of a resource — local-first (cache) */
+  async function loadResourceMembers(resourceId: number): Promise<void> {
+    if (!isElectron) {
+      await refreshResourceMembers(resourceId)
+      return
+    }
+    if (resourceMembers.value[resourceId] != null) return
+    await hydrateFromCache([
+      {
+        path: apiPath(`/resources/${resourceId}/members`),
+        filled: () => resourceMembers.value[resourceId] != null,
+        apply: (body) => {
+          resourceMembers.value[resourceId] =
+            (body as { data?: DtoResourceMemberResponse[] } | undefined)?.data ?? []
+        },
+      },
+    ])
+  }
+
+  async function refreshResourceMembers(resourceId: number): Promise<void> {
     try {
       const api = new TimesheetResourcesApi(apiConfig())
       const resp = await api.resourcesIdMembersGet(resourceId)
@@ -579,8 +661,8 @@ export const useAppStore = defineStore('app', () => {
         user_id: userId,
       }),
       apply: async () => {
-        await loadResourceMembers(resourceId)
-        await loadResources()
+        await refreshResourceMembers(resourceId)
+        await refreshResources()
       },
       optimistic: () => {
         const list = resourceMembers.value[resourceId] ?? []
@@ -617,7 +699,7 @@ export const useAppStore = defineStore('app', () => {
       call: () => new TimesheetResourcesApi(apiConfig()).resourcesIdMembersUserIdDelete(resourceId, userId),
       apply: async () => {
         remove()
-        await loadResources()
+        await refreshResources()
       },
       optimistic: remove,
       onError: (m) => {
@@ -645,12 +727,12 @@ export const useAppStore = defineStore('app', () => {
    * page), otherwise only the missing ones are loaded.
    */
   async function ensureResourceMembers(force = false) {
-    if (isOffline.value && resources.value.length) return
     if (!resources.value.length) await loadResources()
     for (const res of resources.value) {
       if (res.id == null) continue
       if (force || resourceMembers.value[res.id] == null) {
-        await loadResourceMembers(res.id)
+        // force — explicit network refresh (badges after edits); otherwise local hydrate
+        await (force ? refreshResourceMembers(res.id) : loadResourceMembers(res.id))
       }
     }
   }
@@ -694,8 +776,25 @@ export const useAppStore = defineStore('app', () => {
   }
 
   /** Loads resource availability for the "180 days back / 360 days forward" window (within the backend limit) */
-  async function loadCalendar() {
-    if (isOffline.value && calendar.value.length) return
+  async function loadCalendar(): Promise<void> {
+    if (!isElectron) {
+      await refreshCalendar()
+      return
+    }
+    if (calendar.value.length) return
+    await hydrateFromCache([
+      {
+        path: apiPath('/timesheet/calendar'),
+        filled: () => calendar.value.length > 0,
+        apply: (body) => {
+          const d = (body as { data?: { resources?: DtoResourceCalendar[] } } | undefined)?.data
+          calendar.value = d?.resources ?? []
+        },
+      },
+    ])
+  }
+
+  async function refreshCalendar(): Promise<void> {
     calendarLoading.value = true
     calendarError.value = null
     try {
@@ -737,8 +836,25 @@ export const useAppStore = defineStore('app', () => {
   const myStaff = ref<DtoUserResponse[]>([])
   const myStaffLoading = ref(false)
 
-  async function loadUsers() {
-    if (isOffline.value && users.value.length) return
+  async function loadUsers(): Promise<void> {
+    if (!isElectron) {
+      await refreshUsers()
+      return
+    }
+    if (users.value.length) return
+    await hydrateFromCache([
+      {
+        path: apiPath('/user/all'),
+        filled: () => users.value.length > 0,
+        apply: (body) => {
+          const d = (body as { data?: DtoUserInfo[] } | undefined)?.data
+          users.value = d ?? []
+        },
+      },
+    ])
+  }
+
+  async function refreshUsers(): Promise<void> {
     usersLoading.value = true
     usersError.value = null
     try {
@@ -753,8 +869,26 @@ export const useAppStore = defineStore('app', () => {
   }
 
   /** Loads "own staff" (scoped /users without a role filter). */
-  async function loadMyStaff() {
-    if (isOffline.value && myStaff.value.length) return
+  async function loadMyStaff(): Promise<void> {
+    if (!isElectron) {
+      await refreshMyStaff()
+      return
+    }
+    if (myStaff.value.length) return
+    await hydrateFromCache([
+      {
+        path: apiPath('/user'),
+        filled: () => myStaff.value.length > 0,
+        keyPredicate: (key) => /\blimit=500\b/.test(key),
+        apply: (body) => {
+          const d = (body as { data?: { items?: DtoUserResponse[] } } | undefined)?.data
+          myStaff.value = d?.items ?? []
+        },
+      },
+    ])
+  }
+
+  async function refreshMyStaff(): Promise<void> {
     myStaffLoading.value = true
     try {
       const api = new UsersApi(apiConfig())
@@ -885,14 +1019,19 @@ export const useAppStore = defineStore('app', () => {
     calendarLoading,
     calendarError,
     loadProjects,
+    refreshProjects,
     loadResources,
+    refreshResources,
     loadCalendar,
+    refreshCalendar,
     absenceByResource,
     loadResourceAbsence,
     loadUsers,
+    refreshUsers,
     myStaff,
     myStaffLoading,
     loadMyStaff,
+    refreshMyStaff,
     adminUsers,
     adminUsersLoading,
     adminUsersError,
@@ -911,6 +1050,7 @@ export const useAppStore = defineStore('app', () => {
     deleteResource,
     resourceMembers,
     loadResourceMembers,
+    refreshResourceMembers,
     addResourceMember,
     removeResourceMember,
     resourceByUser,
@@ -974,8 +1114,23 @@ export const useTimesheetStore = defineStore('timesheet', () => {
     error.value = e?.message || String(e)
   }
 
-  /** Loads states (including the user's own) for [start, end] and merges them into the cache by id */
-  async function fetchPeriods(start: string, end: string) {
+  /** Local-first: hydrate each employee's states from the cache (freshest window) */
+  async function fetchPeriodsLocal(): Promise<void> {
+    const targets = timesheetRows.value.map((emp) => ({
+      path: apiPath(`/user/${emp.id ?? 0}/days`),
+      filled: () => periodsByEmployee.value[emp.id ?? 0] != null,
+      apply: (body: unknown) => {
+        const list = (body as { data?: DtoUserStateResponse[] } | undefined)?.data ?? []
+        periodsByEmployee.value[emp.id ?? 0] = [...list].sort((a, b) =>
+          (a.start_date ?? '').localeCompare(b.start_date ?? ''),
+        )
+      },
+    }))
+    await hydrateFromCache(targets)
+  }
+
+  /** Network refresh (PULL): loads states (including the user's own) for [start, end] and merges them into the cache by id */
+  async function refreshPeriods(start: string, end: string): Promise<void> {
     const api = new UsersApi(apiConfig())
     const results = await Promise.all(
       timesheetRows.value.map((emp) =>
@@ -1026,9 +1181,24 @@ export const useTimesheetStore = defineStore('timesheet', () => {
     return p && p.end_date != null && p.end_date >= iso ? p : undefined
   }
 
-  /** Loads the employee list (users with the worker role; vp sees subordinates, admin — all) */
-  async function fetchEmployees(managerId?: number) {
-    if (isOffline.value && employees.value.length) return
+  /** Local-first: hydrate the employee list (worker role) from the cache */
+  async function loadEmployeesList(): Promise<void> {
+    if (employees.value.length) return
+    await hydrateFromCache([
+      {
+        path: apiPath('/user'),
+        filled: () => employees.value.length > 0,
+        keyPredicate: (key) => /\brole=worker\b/.test(key),
+        apply: (body) => {
+          const d = (body as { data?: { items?: DtoUserResponse[]; total?: number } } | undefined)?.data
+          employees.value = d?.items ?? []
+          employeesTotal.value = d?.total ?? 0
+        },
+      },
+    ])
+  }
+
+  async function refreshEmployees(managerId?: number): Promise<void> {
     loading.value = true
     error.value = null
     try {
@@ -1045,11 +1215,15 @@ export const useTimesheetStore = defineStore('timesheet', () => {
     }
   }
 
-  /** Loads employees and initializes the states window (for the timesheet) */
-  async function loadEmployees() {
-    if (isOffline.value && employees.value.length) return
-    periodsByEmployee.value = {}
-    await fetchEmployees()
+  /** Loads employees and initializes the states window (for the timesheet).
+   *  Desktop — local-first; web reads from the server as before. */
+  async function loadEmployees(): Promise<void> {
+    if (!isElectron) {
+      await refreshEmployees()
+      await loadInitialWindow()
+      return
+    }
+    if (!employees.value.length) await loadEmployeesList()
     await loadInitialWindow()
   }
 
@@ -1079,7 +1253,7 @@ export const useTimesheetStore = defineStore('timesheet', () => {
           return new UsersApi(apiConfig()).userPost(req)
         },
         apply: async () => {
-          await fetchEmployees()
+          await refreshEmployees()
         },
         optimistic: () => {
           employees.value.push({
@@ -1107,7 +1281,7 @@ export const useTimesheetStore = defineStore('timesheet', () => {
         entity: 'user',
         call: () => new UsersApi(apiConfig()).userIdPut(id, payload as DtoUpdateUserRequest),
         apply: async () => {
-          await fetchEmployees()
+          await refreshEmployees()
         },
         optimistic: () => {
           const i = employees.value.findIndex((e) => e.id === id)
@@ -1136,7 +1310,7 @@ export const useTimesheetStore = defineStore('timesheet', () => {
         entity: 'user',
         call: () => new UsersApi(apiConfig()).userIdDelete(id),
         apply: async () => {
-          await fetchEmployees()
+          await refreshEmployees()
         },
         optimistic: remove,
         onError: (m) => {
@@ -1148,9 +1322,25 @@ export const useTimesheetStore = defineStore('timesheet', () => {
     }
   }
 
-  /** Loads the states reference */
-  async function loadStates() {
-    if (isOffline.value && states.value.length) return
+  /** Loads the states reference — desktop local-first, web reads from the server */
+  async function loadStates(): Promise<void> {
+    if (!isElectron) {
+      await refreshStates()
+      return
+    }
+    if (states.value.length) return
+    await hydrateFromCache([
+      {
+        path: apiPath('/timesheet/states'),
+        filled: () => states.value.length > 0,
+        apply: (body) => {
+          states.value = (body as { data?: DtoStateResponse[] } | undefined)?.data ?? []
+        },
+      },
+    ])
+  }
+
+  async function refreshStates(): Promise<void> {
     try {
       const api = new TimesheetStatesApi(apiConfig())
       const resp = await api.timesheetStatesGet()
@@ -1178,7 +1368,7 @@ export const useTimesheetStore = defineStore('timesheet', () => {
         tempId,
         call: () => new TimesheetStatesApi(apiConfig()).timesheetStatesPost(payload),
         apply: async () => {
-          await loadStates()
+          await refreshStates()
         },
         optimistic: () => {
           states.value.push({ id: tempId, ...payload } as unknown as DtoStateResponse)
@@ -1201,7 +1391,7 @@ export const useTimesheetStore = defineStore('timesheet', () => {
         entity: 'state',
         call: () => new TimesheetStatesApi(apiConfig()).timesheetStatesIdPut(id, payload),
         apply: async () => {
-          await loadStates()
+          await refreshStates()
         },
         optimistic: () => {
           const i = states.value.findIndex((s) => s.id === id)
@@ -1229,7 +1419,7 @@ export const useTimesheetStore = defineStore('timesheet', () => {
         entity: 'state',
         call: () => new TimesheetStatesApi(apiConfig()).timesheetStatesIdDelete(id),
         apply: async () => {
-          await loadStates()
+          await refreshStates()
         },
         optimistic: remove,
         onError: (m) => {
@@ -1241,26 +1431,31 @@ export const useTimesheetStore = defineStore('timesheet', () => {
     }
   }
 
-  /** Initializes the "180 back / 360 forward" window */
-  async function loadInitialWindow() {
+  /** Initializes the "180 back / 360 forward" window: desktop — local hydrate,
+   *  web — network period load (as before the offline-first refactor). */
+  async function loadInitialWindow(): Promise<void> {
     windowStart.value = shiftDate(todayISO(), -WINDOW_BACK_DAYS)
     windowEnd.value = shiftDate(todayISO(), WINDOW_FORWARD_DAYS)
-    await fetchPeriods(windowStart.value, windowEnd.value)
+    if (!isElectron) {
+      await refreshPeriods(windowStart.value, windowEnd.value)
+      return
+    }
+    await fetchPeriodsLocal()
   }
 
-  /** Extends the loaded window to cover [start, end] and loads only the new ranges */
+  /** Extends the loaded window to cover [start, end] and loads only the new ranges (user-initiated PULL) */
   async function ensureRange(startISO: string, endISO: string) {
     if (startISO < windowStart.value) {
       const from = startISO
       const to = shiftDate(windowStart.value, -1)
       windowStart.value = startISO
-      await fetchPeriods(from, to)
+      await refreshPeriods(from, to)
     }
     if (endISO > windowEnd.value) {
       const from = shiftDate(windowEnd.value, 1)
       const to = endISO
       windowEnd.value = endISO
-      await fetchPeriods(from, to)
+      await refreshPeriods(from, to)
     }
   }
 
@@ -1283,7 +1478,7 @@ export const useTimesheetStore = defineStore('timesheet', () => {
         entity: 'period',
         call: () => new UsersApi(apiConfig()).userIdDaysPut(employeeId, body),
         apply: async () => {
-          await fetchPeriods(windowStart.value, windowEnd.value)
+          await refreshPeriods(windowStart.value, windowEnd.value)
         },
         optimistic: () => {
           const existing = periodsByEmployee.value[employeeId] ?? []
@@ -1328,7 +1523,7 @@ export const useTimesheetStore = defineStore('timesheet', () => {
             stateId,
           ),
         apply: async () => {
-          await fetchPeriods(windowStart.value, windowEnd.value)
+          await refreshPeriods(windowStart.value, windowEnd.value)
         },
         optimistic: () => {
           const existing = periodsByEmployee.value[employeeId] ?? []
@@ -1364,11 +1559,13 @@ export const useTimesheetStore = defineStore('timesheet', () => {
     busy,
     error,
     loadEmployees,
-    fetchEmployees,
+    refreshEmployees,
+    loadStates,
+    refreshStates,
+    refreshPeriods,
     createEmployee,
     updateEmployee,
     deleteEmployee,
-    loadStates,
     createState,
     updateState,
     deleteState,
@@ -1409,24 +1606,80 @@ export const usePlanningStore = defineStore('planning', () => {
     }
   }
 
-  async function loadProjectPlanning(silent = false) {
-    if (isOffline.value && projectPlanning.value) return
+  /** Local-first: hydrate a planning payload from the cache */
+  function hydratePlanning(
+    get: () => unknown | null | undefined,
+    set: (v: unknown) => void,
+    path: string,
+  ): Promise<void> {
+    return hydrateFromCache([
+      {
+        path,
+        filled: () => get() != null,
+        apply: (body) => {
+          set((body as { data?: unknown } | undefined)?.data ?? null)
+        },
+      },
+    ])
+  }
+
+  async function loadProjectPlanning(): Promise<void> {
+    if (!isElectron) {
+      await refreshProjectPlanning()
+      return
+    }
+    await hydratePlanning(
+      () => projectPlanning.value,
+      (v) => {
+        projectPlanning.value = v
+      },
+      apiPath('/planning/projects'),
+    )
+  }
+
+  async function loadProcessPlanning(): Promise<void> {
+    if (!isElectron) {
+      await refreshProcessPlanning()
+      return
+    }
+    await hydratePlanning(
+      () => processPlanning.value,
+      (v) => {
+        processPlanning.value = v
+      },
+      apiPath('/planning/processes'),
+    )
+  }
+
+  async function loadTaskPlanning(): Promise<void> {
+    if (!isElectron) {
+      await refreshTaskPlanning()
+      return
+    }
+    await hydratePlanning(
+      () => taskPlanning.value,
+      (v) => {
+        taskPlanning.value = v
+      },
+      apiPath('/planning/tasks'),
+    )
+  }
+
+  async function refreshProjectPlanning(silent = false): Promise<void> {
     await runLoad(silent, async () => {
       const resp = await new PlanningApi(apiConfig()).planningProjectsGet()
       projectPlanning.value = resp.data?.data ?? null
     })
   }
 
-  async function loadProcessPlanning(silent = false) {
-    if (isOffline.value && processPlanning.value) return
+  async function refreshProcessPlanning(silent = false): Promise<void> {
     await runLoad(silent, async () => {
       const resp = await new PlanningApi(apiConfig()).planningProcessesGet()
       processPlanning.value = resp.data?.data ?? null
     })
   }
 
-  async function loadTaskPlanning(silent = false) {
-    if (isOffline.value && taskPlanning.value) return
+  async function refreshTaskPlanning(silent = false): Promise<void> {
     await runLoad(silent, async () => {
       const resp = await new PlanningApi(apiConfig()).planningTasksGet()
       taskPlanning.value = resp.data?.data ?? null
@@ -1469,7 +1722,7 @@ export const usePlanningStore = defineStore('planning', () => {
       entity: 'task',
       call: () => new TasksApi(apiConfig()).taskIdPut(id, { start_date, end_date }),
       apply: async () => {
-        await loadTaskPlanning(true)
+        await refreshTaskPlanning(true)
       },
       optimistic: () => {
         const t = findTaskRow(id)
@@ -1486,7 +1739,7 @@ export const usePlanningStore = defineStore('planning', () => {
       entity: 'process',
       call: () => new ProcessesApi(apiConfig()).processIdPut(id, { start_date, end_date }),
       apply: async () => {
-        await loadProcessPlanning(true)
+        await refreshProcessPlanning(true)
       },
       optimistic: () => {
         const pr = findProcessRow(id)
@@ -1503,7 +1756,7 @@ export const usePlanningStore = defineStore('planning', () => {
       entity: 'project',
       call: () => new ProjectsApi(apiConfig()).projectIdPut(id, { start_date, end_date }),
       apply: async () => {
-        await loadProjectPlanning(true)
+        await refreshProjectPlanning(true)
       },
       optimistic: () => {
         const p = findProjectRow(id)
@@ -1521,7 +1774,7 @@ export const usePlanningStore = defineStore('planning', () => {
       entity: 'milestone',
       call: () => new MilestonesApi(apiConfig()).milestoneIdPut(id, { date }),
       apply: async () => {
-        await loadTaskPlanning(true)
+        await refreshTaskPlanning(true)
       },
       optimistic: () => {
         const m = findMilestoneRow(id)
@@ -1541,7 +1794,7 @@ export const usePlanningStore = defineStore('planning', () => {
       entity: 'project',
       call: () => new ProjectsApi(apiConfig()).projectIdPut(id, patch),
       apply: async () => {
-        await loadProjectPlanning(true)
+        await refreshProjectPlanning(true)
       },
       optimistic: () => {
         const p = findProjectRow(id)
@@ -1563,7 +1816,7 @@ export const usePlanningStore = defineStore('planning', () => {
       entity: 'process',
       call: () => new ProcessesApi(apiConfig()).processIdPut(id, patch),
       apply: async () => {
-        await loadProcessPlanning(true)
+        await refreshProcessPlanning(true)
       },
       optimistic: () => {
         const pr = findProcessRow(id)
@@ -1580,7 +1833,7 @@ export const usePlanningStore = defineStore('planning', () => {
       entity: 'task',
       call: () => new TasksApi(apiConfig()).taskIdPut(id, patch),
       apply: async () => {
-        await loadTaskPlanning(true)
+        await refreshTaskPlanning(true)
       },
       optimistic: () => {
         const t = findTaskRow(id)
@@ -1600,7 +1853,7 @@ export const usePlanningStore = defineStore('planning', () => {
       entity: 'milestone',
       call: () => new MilestonesApi(apiConfig()).milestoneIdPut(id, patch),
       apply: async () => {
-        await loadTaskPlanning(true)
+        await refreshTaskPlanning(true)
       },
       optimistic: () => {
         const m = findMilestoneRow(id)
@@ -1964,7 +2217,7 @@ export const usePlanningStore = defineStore('planning', () => {
           quantity,
         }),
       apply: async () => {
-        await loadTaskPlanning(true)
+        await refreshTaskPlanning(true)
       },
       optimistic: () => {
         const t = findTaskRow(taskId)
@@ -2017,7 +2270,7 @@ export const usePlanningStore = defineStore('planning', () => {
       entity: 'assignment',
       call: () => new AssignmentsApi(apiConfig()).assignmentIdDelete(assignmentId!),
       apply: async () => {
-        await loadTaskPlanning(true)
+        await refreshTaskPlanning(true)
       },
       optimistic: () => {
         const t = findTaskRow(taskId)
@@ -2067,18 +2320,18 @@ export const usePlanningStore = defineStore('planning', () => {
           } catch {
             // queue unavailable — fall back to a regular error
             error.value = e?.message ?? String(e)
-            await loadProjectPlanning(true)
+            await refreshProjectPlanning(true)
             return false
           }
         }
         return true
       }
       error.value = e.message || String(e)
-      await loadProjectPlanning(true)
+      await refreshProjectPlanning(true)
       return false
     }
 
-    await loadProjectPlanning(true)
+    await refreshProjectPlanning(true)
     const appProjects = useAppStore().projects
     if (Array.isArray(appProjects)) {
       for (const p of appProjects) {
@@ -2119,13 +2372,13 @@ export const usePlanningStore = defineStore('planning', () => {
           })
         } catch {
           error.value = e?.message ?? String(e)
-          await loadProcessPlanning(true)
+          await refreshProcessPlanning(true)
           return false
         }
         return true
       }
       error.value = e.message || String(e)
-      await loadProcessPlanning(true)
+      await refreshProcessPlanning(true)
       return false
     }
     return true
@@ -2161,13 +2414,13 @@ export const usePlanningStore = defineStore('planning', () => {
           })
         } catch {
           error.value = e?.message ?? String(e)
-          await loadTaskPlanning(true)
+          await refreshTaskPlanning(true)
           return false
         }
         return true
       }
       error.value = e.message || String(e)
-      await loadTaskPlanning(true)
+      await refreshTaskPlanning(true)
       return false
     }
     return true
@@ -2252,6 +2505,9 @@ export const usePlanningStore = defineStore('planning', () => {
     loadProjectPlanning,
     loadProcessPlanning,
     loadTaskPlanning,
+    refreshProjectPlanning,
+    refreshProcessPlanning,
+    refreshTaskPlanning,
     updateTaskDates,
     updateProcessDates,
     updateProjectDates,
@@ -2397,18 +2653,27 @@ export const useRbacStore = defineStore('rbac', () => {
     return scopeSatisfied(scope, resource, auth.user?.id ?? 0, owners)
   }
 
-  /** Loads my permissions from the server; offline — from the localStorage cache. */
+  /**
+   * Loads my permissions — desktop LOCAL-FIRST (read the cached copy, never
+   * issue a GET from the render/guard path). The web build reads straight from
+   * the server (refreshPermissions) as before the offline-first refactor.
+   */
   async function loadMyPermissions(): Promise<boolean> {
-    if (isOffline.value) {
-      try {
-        const cached = localStorage.getItem(PERMS_KEY)
-        if (cached) myPermissions.value = JSON.parse(cached)
-      } catch {
-        /* cache unreadable — no permissions */
-      }
-      permsLoaded.value = true
-      return true
+    if (!isElectron) return refreshPermissions()
+    if (permsLoaded.value) return true
+    try {
+      const cached = localStorage.getItem(PERMS_KEY)
+      if (cached) myPermissions.value = JSON.parse(cached)
+    } catch {
+      /* cache unreadable — no permissions */
     }
+    permsLoaded.value = true
+    return true
+  }
+
+  /** Network refresh of my permissions (PULL). Falls back to cache when offline. */
+  async function refreshPermissions(): Promise<boolean> {
+    if (isOffline.value) return loadMyPermissions()
     try {
       const resp = await new PermissionsApi(apiConfig()).permissionsMeGet()
       myPermissions.value = resp.data?.data ?? []
@@ -2429,7 +2694,7 @@ export const useRbacStore = defineStore('rbac', () => {
     let timer: number | undefined
     let stopVisibility: (() => void) | undefined
     const tick = () => {
-      if (!document.hidden) void loadMyPermissions()
+      if (!document.hidden) void refreshPermissions()
     }
     const onVisibility = () => {
       if (document.hidden && timer != null) {
@@ -2563,6 +2828,7 @@ export const useRbacStore = defineStore('rbac', () => {
     perm,
     canOwn,
     loadMyPermissions,
+    refreshPermissions,
     startPermissionSync,
     reloadRules,
     upsertRule,

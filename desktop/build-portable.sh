@@ -11,14 +11,13 @@
 #       All artifacts of one release go into ONE directory named after the
 #       specific version: release/<version>/.
 #
-#  Release parts and flags (Linux is ON by default, Windows OFF; explicit
-#  flags add parts to the Linux default):
-#    --linux-portable   Linux portable folder linux-unpacked/          (default on)
-#    --linux-appimage   Linux single file *.AppImage                  (default on)
-#    --win-portable     Windows portable: win-unpacked/ + *.zip       (default off)
-#    --win-exe          Windows single self-contained *.exe           (default off)
-#    --win              shorthand for --win-portable --win-exe
-#    --linux            explicit enable of both Linux flags (no-op, already default)
+#  Release parts and flags — ALL parts are OFF by default; enable what you need:
+#    --linux            Linux: portable folder linux-unpacked/ + single *.AppImage
+#    --linux-portable   Linux portable folder linux-unpacked/ only
+#    --linux-appimage   Linux single file *.AppImage only
+#    --win              Windows: portable (win-unpacked/ + *.zip) + single *.exe
+#    --win-portable     Windows portable: win-unpacked/ + *.zip only
+#    --win-exe          Windows single self-contained *.exe only (best-effort)
 #
 #  Version:
 #    - source — desktop/package.json (semver); artifacts and UI get the same one
@@ -30,10 +29,11 @@
 #    (e.g. chore(desktop): release v1.0.1).
 #
 #  Usage:
-#    ./build-portable.sh                     # Linux (both parts); version = patch bump
-#    ./build-portable.sh --win-portable      # Linux + Windows portable (zip+folder)
-#    ./build-portable.sh --win-exe           # Linux + single Windows .exe (best-effort)
-#    ./build-portable.sh --win               # Linux + both Windows parts
+#    ./build-portable.sh --linux             # Linux (dir + AppImage); version = patch bump
+#    ./build-portable.sh --win-portable      # Windows portable (zip+folder)
+#    ./build-portable.sh --win-exe           # Windows single .exe (best-effort)
+#    ./build-portable.sh --win               # Windows portable + .exe
+#    ./build-portable.sh --linux --win       # Linux + Windows
 #    ./build-portable.sh --version 2.1.0     # build exactly 2.1.0
 #    ./build-portable.sh --no-bump           # current version as is
 #    ./build-portable.sh --bump minor        # increment minor
@@ -68,9 +68,9 @@ export electron_config_cache="$XDG_CACHE_HOME/electron"
 export ELECTRON_BUILDER_CACHE="$XDG_CACHE_HOME/electron-builder"
 mkdir -p "$XDG_CACHE_HOME" "$ELECTRON_BUILDER_CACHE"
 
-# Release parts: Linux on by default, Windows off
-LINUX_PORTABLE=1
-LINUX_APPIMAGE=1
+# Release parts: all OFF by default; enabled only by the flags above.
+LINUX_PORTABLE=0
+LINUX_APPIMAGE=0
 WIN_PORTABLE=0
 WIN_EXE=0
 
@@ -111,6 +111,13 @@ case "$BUMP_TYPE" in
   patch|minor|major) ;;
   *) echo "Некорректный --bump: $BUMP_TYPE (ожидается patch|minor|major)" >&2; exit 1 ;;
 esac
+
+# Nothing selected (all release parts off) — would silently build nothing.
+if [ "$LINUX_PORTABLE" -eq 0 ] && [ "$LINUX_APPIMAGE" -eq 0 ] && [ "$WIN_PORTABLE" -eq 0 ] && [ "$WIN_EXE" -eq 0 ]; then
+  echo "Не включена ни одна часть сборки." >&2
+  echo "Укажите --linux (Linux) и/или --win (Windows) или их части: --linux-portable --linux-appimage --win-portable --win-exe" >&2
+  exit 1
+fi
 
 # ---------- Version ----------
 # Source — desktop/package.json. Default bumps patch; --version disables the
@@ -170,27 +177,31 @@ fi
 rm -rf "$REL_DIR"
 mkdir -p "$REL_DIR"
 
-# Linux (on by default; flags --linux-portable/--linux-appimage)
+# Linux (enabled via --linux / --linux-portable / --linux-appimage)
+# extraMetadata.version pins the artifact names to $VERSION: the folder
+# release/<version>/ and the file names always carry the SAME version, even if
+# package.json drifted (this is what previously produced release/1.1.0/ with
+# 1.0.5 artifacts).
 if [ "$LINUX_PORTABLE" -eq 1 ] && [ "$LINUX_APPIMAGE" -eq 1 ]; then
   echo "== Linux: dir (portable-папка) + AppImage (единый файл) =="
-  (cd "$DESKTOP_DIR" && npx electron-builder --linux dir AppImage --x64 -c.directories.output="$REL_DIR")
+  (cd "$DESKTOP_DIR" && npx electron-builder --linux dir AppImage --x64 -c.directories.output="$REL_DIR" -c.extraMetadata.version="$VERSION")
 elif [ "$LINUX_PORTABLE" -eq 1 ]; then
   echo "== Linux: dir (portable-папка) =="
-  (cd "$DESKTOP_DIR" && npx electron-builder --linux dir --x64 -c.directories.output="$REL_DIR")
+  (cd "$DESKTOP_DIR" && npx electron-builder --linux dir --x64 -c.directories.output="$REL_DIR" -c.extraMetadata.version="$VERSION")
 else
   echo "== Linux: AppImage (единый файл) =="
-  (cd "$DESKTOP_DIR" && npx electron-builder --linux AppImage --x64 -c.directories.output="$REL_DIR")
+  (cd "$DESKTOP_DIR" && npx electron-builder --linux AppImage --x64 -c.directories.output="$REL_DIR" -c.extraMetadata.version="$VERSION")
 fi
 
 # Windows (off by default; enabled via --win-portable/--win-exe/--win)
 if [ "$WIN_PORTABLE" -eq 1 ]; then
   echo "== Windows: zip (portable-папка + архив) =="
-  (cd "$DESKTOP_DIR" && npx electron-builder --win zip --x64 -c.directories.output="$REL_DIR")
+  (cd "$DESKTOP_DIR" && npx electron-builder --win zip --x64 -c.directories.output="$REL_DIR" -c.extraMetadata.version="$VERSION")
 fi
 
 if [ "$WIN_EXE" -eq 1 ]; then
   echo "== Windows: единый self-contained .exe (portable, best-effort) =="
-  if (cd "$DESKTOP_DIR" && npx electron-builder --win portable --x64 -c.directories.output="$REL_DIR"); then
+  if (cd "$DESKTOP_DIR" && npx electron-builder --win portable --x64 -c.directories.output="$REL_DIR" -c.extraMetadata.version="$VERSION"); then
     echo "   portable-.exe собран"
   else
     echo "   [warning] portable-.exe не собран: на этом хосте нет нужных"
@@ -202,6 +213,27 @@ fi
 # Remove electron-builder service files from the release directory:
 # only distributable artifacts remain in release/<version>/.
 rm -rf "$REL_DIR/.icon-ico" "$REL_DIR/builder-debug.yml" "$REL_DIR/builder-effective-config.yaml"
+
+# Version-consistency check: every artifact file must carry the exact version
+# in its name (folder release/<version>/ == artifact names). Directories
+# (linux-unpacked/, win-unpacked/) are exempt — they are not version-named.
+MISMATCH=0
+for artifact in "$REL_DIR"/*; do
+  [ -e "$artifact" ] || continue
+  [ -d "$artifact" ] && continue
+  name="$(basename "$artifact")"
+  case "$name" in
+    *"-$VERSION-"*|*"-$VERSION."*) ;;
+    *)
+      echo "   [version mismatch] $name — ожидалась версия $VERSION" >&2
+      MISMATCH=1
+      ;;
+  esac
+done
+if [ "$MISMATCH" -eq 1 ]; then
+  echo "ОШИБКА: в $REL_DIR есть артефакты с другой версией (см. выше)." >&2
+  exit 1
+fi
 
 echo ""
 echo "== Готово. Релиз v$VERSION в: $REL_DIR =="

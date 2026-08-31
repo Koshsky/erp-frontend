@@ -58,13 +58,13 @@ const ownerOptions = computed<ModalField['options']>(() =>
     .map((u) => ({ value: u.id as number, label: u.name ?? `#${u.id}` })),
 )
 
-/** Filter by owner (owner_id): admin picks the owner, the backend filters by scope */
+/** Filter by owner (owner_id) — client-side: rendering always reads local data */
 const ownerFilter = ref<number | ''>('')
-const filteredResources = computed(() => resources.value)
-
-// Changing the owner filter reloads the listing with owner_id (admin only)
-watch(ownerFilter, (v) => {
-  if (isAdmin.value) store.loadResources(typeof v === 'number' ? v : undefined)
+const filteredResources = computed(() => {
+  const list = resources.value
+  return typeof ownerFilter.value === 'number'
+    ? list.filter((r) => (r as { owner_id?: number | null }).owner_id === ownerFilter.value)
+    : list
 })
 
 const { open: openModal, close: closeModal, submit: submitModal, bind: modalBind } = useEditModal<ModalMode>(
@@ -186,7 +186,7 @@ async function onRemoveMember(resourceId: number, userId: number) {
 onMounted(() => {
   if (!resources.value.length) store.loadResources()
   if (isAdmin.value && !users.value.length) store.loadUsers()
-  if (!employees.value.length) void ts.fetchEmployees()
+  if (!employees.value.length) void ts.loadEmployees()
 })
 </script>
 
