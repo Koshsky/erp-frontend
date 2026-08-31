@@ -25,3 +25,16 @@ export const COLOR_PALETTE: readonly (readonly string[])[] = [
 
 export const PALETTE_HUES = COLOR_PALETTE.length
 export const PALETTE_SHADES = COLOR_PALETTE[0]?.length ?? 0
+
+/**
+ * Picks a random vivid color from the palette — all hue families except the
+ * grey slate column (so a random milestone color never looks dull). Used when
+ * a milestone is created: it appears with a bright random color right away.
+ */
+export function randomPaletteColor(): string {
+  const vivid: string[] = []
+  for (let hue = 0; hue < PALETTE_HUES - 1; hue++) {
+    for (const c of COLOR_PALETTE[hue]) vivid.push(c)
+  }
+  return (vivid.length > 0 ? vivid[Math.floor(Math.random() * vivid.length)] : undefined) ?? '#3B82F6'
+}

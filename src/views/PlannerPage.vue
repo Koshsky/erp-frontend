@@ -22,6 +22,7 @@ import { usePlanningStore, useAppStore } from '../store'
 import { compareByName } from '../utils'
 import { addDaysISO, shiftSpanDates, clampDateToBounds } from '../components/planner/calendar'
 import { CELL_WIDTH } from '../components/planner/layout'
+import { randomPaletteColor } from '../components/common/ColorField/palette'
 import type { PdfGanttGroup } from '../components/planner/PdfExport/pdfRenderer'
 
 const planning = usePlanningStore()
@@ -255,6 +256,8 @@ async function handleSelect(id: string) {
       content: 'Новая веха',
       process_id: processId,
       date: clampDateToBounds(date, proc?.start_date, proc?.end_date),
+      // A new milestone appears with a vivid random color from the palette.
+      color: randomPaletteColor(),
     })
   } else if (id === 'edit-task' && taskId != null) {
     openTaskEdit(taskId)
