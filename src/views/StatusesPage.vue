@@ -14,8 +14,9 @@ import type { DtoStateResponse } from '@/api'
 const ts = useTimesheetStore()
 const { states, loading, error } = storeToRefs(ts)
 
-// The page is available to vp/admin only (route + guard); the buttons follow the same rule.
-const { canManageStates } = useRoleAccess()
+// The page is available to vp/admin only (route + guard); the buttons follow
+// the exact backend rights: create/update/delete are separate state.* rules.
+const { canCreateState, canManageState, canDeleteState } = useRoleAccess()
 
 // Right-click on a row: edit/delete
 interface MenuState {
@@ -24,10 +25,12 @@ interface MenuState {
   stateId: number
 }
 const menu = ref<MenuState | null>(null)
-const menuItems = computed<ContextMenuItem[]>(() => [
-  { id: 'edit-state', label: 'Редактировать' },
-  { id: 'delete-state', label: 'Удалить статус' },
-])
+const menuItems = computed<ContextMenuItem[]>(() => {
+  const items: ContextMenuItem[] = []
+  if (canManageState.value) items.push({ id: 'edit-state', label: 'Редактировать' })
+  if (canDeleteState.value) items.push({ id: 'delete-state', label: 'Удалить статус' })
+  return items
+})
 
 // Delete confirmation dialog
 const { confirm: confirmDialog, ask, proceed, cancel } = useConfirm()
@@ -71,7 +74,7 @@ const { open: openModal, close: closeModal, submit: submitModal, bind: modalBind
 )
 
 function onRowContextMenu(e: MouseEvent, st: DtoStateResponse) {
-  if (st.id == null || !canManageStates.value) return
+  if (st.id == null || (!canManageState.value && !canDeleteState.value)) return
   openMenu({ x: e.clientX, y: e.clientY, stateId: st.id })
 }
 
@@ -115,7 +118,7 @@ onMounted(() => {
   <section class="sp">
     <div class="sp-head">
       <h2 class="sp-title">Статусы</h2>
-      <button v-if="canManageStates" type="button" class="sp-add" @click="openCreate">Создать статус</button>
+      <button v-if="canCreateState" type="button" class="sp-add" @click="openCreate">Создать статус</button>
     </div>
 
     <p v-if="loading && !states.length" class="sp-st">Загрузка...</p>

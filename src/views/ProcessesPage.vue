@@ -63,7 +63,14 @@ const { open: openUnitMenu, close: closeUnitMenu, select: selectUnit, bind: unit
 
 // dp (project director) — read-only; rp manages the processes of their projects,
 // vp/worker — no rights (the process list for them is already filtered by the backend).
-const { canManageProcesses, role, userId } = useRoleAccess()
+const { canCreateProcess, canManageProcess, canDeleteProcess, role, userId } = useRoleAccess()
+
+/** Drag/resize/reorder are enabled when the user can manage at least one visible process */
+const anyManageableProcess = computed(() =>
+  (processPlanning.value?.projects ?? []).some((p: any) =>
+    (p.processes ?? []).some((pr: any) => canManageProcess(pr.id)),
+  ),
+)
 
 const { findProcess } = useFindPlanningItem()
 
@@ -103,13 +110,14 @@ const menu = ref<MenuState | null>(null)
 const { confirm: confirmDialog, ask, proceed, cancel } = useConfirm()
 
 const menuItems = computed<ContextMenuItem[]>(() => {
-  if (!canManageProcesses.value) return []
-  return menu.value?.processId != null
-    ? [
-        { id: 'edit-process', label: 'Редактировать' },
-        { id: 'delete-process', label: 'Удалить процесс' },
-      ]
-    : [{ id: 'create-process', label: 'Создать процесс' }]
+  if (menu.value?.processId == null) {
+    return canCreateProcess.value ? [{ id: 'create-process', label: 'Создать процесс' }] : []
+  }
+  const processId = menu.value.processId
+  const items: ContextMenuItem[] = []
+  if (canManageProcess(processId)) items.push({ id: 'edit-process', label: 'Редактировать' })
+  if (canDeleteProcess(processId)) items.push({ id: 'delete-process', label: 'Удалить процесс' })
+  return items
 })
 
 const ownerOptions = computed(() =>
@@ -145,9 +153,13 @@ const { open: openEdit, close: closeEdit, submit: submitEdit, bind: editBind } =
 )
 
 function onContextMenu(p: { clientX: number; clientY: number; date: string | null; rowIndex: number; projectId?: number; processId?: number }) {
-  if (!canManageProcesses.value) return
-  // Empty group area: creating a process requires a parent project and a known date
-  if (p.processId == null && (p.projectId == null || p.date == null)) return
+  // Empty group area: creating a process requires the create right, a parent project and a known date
+  if (p.processId == null) {
+    if (!canCreateProcess.value) return
+    if (p.projectId == null || p.date == null) return
+  } else if (!canManageProcess(p.processId) && !canDeleteProcess(p.processId)) {
+    return
+  }
   openMenu({ x: p.clientX, y: p.clientY, date: p.date, rowIndex: p.rowIndex, projectId: p.projectId, processId: p.processId })
 }
 
@@ -227,8 +239,8 @@ onMounted(() => {
       :users="app.users"
       :origin="origin"
       :unit="unit"
-      :can-manage="canManageProcesses"
-      :reorderable="canManageProcesses"
+      :can-manage="anyManageableProcess"
+      :reorderable="anyManageableProcess"
       :focus-date="focusDate"
       :focus-group-id="focusGroupId"
       @change="(p) => store.updateProcessDates(p.id, p.start_date, p.end_date)"

@@ -34,13 +34,23 @@ const router = createRouter({
       component: MainLayout,
       meta: { requiresAuth: true },
       children: [
-        // Main screen: the task planner if allowed by permissions
-        // (task.view), otherwise the profile. The guard decides after the
-        // redirect to /planner (see pageAccessible below).
+        // Main screen: the first tab the user may access by permissions.
+        // The guard below double-checks the landing page (pageAccessible),
+        // so a wrong pick (role fallback) is corrected there. Until the
+        // permissions arrive the role fallback chooses the tab.
         {
           path: '',
           name: 'home',
-          redirect: { name: 'planner' },
+          redirect: () => {
+            const rbac = useRbacStore()
+            const auth = useAuthStore()
+            const permsReady = rbac.permsLoaded || rbac.myPermissions.length > 0
+            const role = auth.user?.role ?? ''
+            const tab = FIRST_ACCESSIBLE_TABS.find(([, perm, roles]) =>
+              permsReady ? !perm || rbac.can(perm[0], perm[1]) : roles.includes(role),
+            )
+            return tab ? { name: tab[0] } : { name: 'profile' }
+          },
         },
         {
           path: 'planner',
@@ -144,6 +154,25 @@ const router = createRouter({
  */
 const PLANNER_ROLES = ['admin', 'dp', 'rp', 'vp']
 const PERMS_BOUND_MS = 3000
+
+/**
+ * Landing tab priority: name, the permission that unlocks it (null — always
+ * available), and the role fallback used until the permissions arrive.
+ * Mirrors the nav order in useNavigation.
+ */
+const FIRST_ACCESSIBLE_TABS: Array<[string, [string, string] | null, string[]]> = [
+  ['planner', ['task', 'view'], PLANNER_ROLES],
+  ['projects', ['project', 'view'], ['dp', 'rp', 'admin']],
+  ['processes', ['process', 'view'], ['dp', 'rp', 'admin']],
+  ['timesheet', ['worker', 'view'], ['vp', 'admin']],
+  ['employees', ['worker', 'view'], ['vp', 'admin']],
+  ['resources', ['resource', 'view'], ['vp', 'admin']],
+  ['users', ['user_admin', 'view'], ['admin']],
+  ['statuses', ['state_admin', 'view'], ['admin']],
+  ['structure', ['org_structure', 'view'], ['admin']],
+  ['auto-create', ['rbac_config', 'view'], ['admin']],
+  ['permissions', ['rbac_config', 'view'], ['admin']],
+]
 
 async function pageAccessible(
   rbac: ReturnType<typeof useRbacStore>,

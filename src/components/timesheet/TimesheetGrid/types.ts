@@ -27,4 +27,8 @@ export interface TimesheetGridProps {
   error?: string | null
   /** Saving in progress (blocks the assignment panel) */
   busy?: boolean
+  /** Whether the user may assign states to an employee's days (worker.update) */
+  canAssign?: (employeeId: number) => boolean
+  /** Whether the user may clear an employee's day ranges (worker.delete) */
+  canClear?: (employeeId: number) => boolean
 }

@@ -26,8 +26,13 @@ const seesAllEmployees = computed(() => rbac.perm('worker', 'view') === 'all')
 const app = useAppStore()
 const { users, resources } = storeToRefs(app)
 
-const { role } = useRoleAccess()
+const { role, canAssignEmployeeDays, canClearEmployeeDays } = useRoleAccess()
 const isAdmin = computed(() => role.value === 'admin')
+
+/** Resolve an employee row by id (for per-row permission predicates) */
+function employeeById(id: number) {
+  return visibleRows.value.find((e) => e.id === id)
+}
 
 /**
  * Shared employee filters (search / manager / resource) — synchronized with the
@@ -126,6 +131,8 @@ async function onClear(p: ClearPayload) {
             :states="states"
             :state-for-day="(id, iso) => ts.periodFor(id, iso)"
             :busy="busy"
+            :can-assign="(id) => canAssignEmployeeDays(employeeById(id)?.manager_id)"
+            :can-clear="(id) => canClearEmployeeDays(employeeById(id)?.manager_id)"
             @assign="onAssign"
             @clear="onClear"
             @range="onRange"

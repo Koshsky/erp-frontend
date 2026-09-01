@@ -10,6 +10,8 @@ import type { ClearPayload, TimesheetGridProps } from './types'
 const props = withDefaults(defineProps<TimesheetGridProps>(), {
   error: null,
   busy: false,
+  canAssign: () => () => true,
+  canClear: () => () => true,
 })
 
 const emit = defineEmits<{
@@ -190,6 +192,8 @@ function onPointerUp(e: PointerEvent) {
   // does not "stretch" text between clicks
   window.getSelection()?.removeAllRanges()
   if (!s || Number.isNaN(s.endIdx)) return
+  // Rows the current user cannot edit (worker.update) are not selectable
+  if (!props.canAssign(s.employeeId)) return
   const lo = Math.min(s.startIdx, s.endIdx)
   const hi = Math.max(s.startIdx, s.endIdx)
   const payload = {
@@ -383,7 +387,7 @@ const labelsH = computed(() => props.employees.length * ROW_H)
             </TooltipCell>
             <button type="button" class="ts-panel-close" aria-label="Закрыть" @click="closePanel">×</button>
           </div>
-          <div class="ts-panel-states">
+          <div v-if="props.canAssign(panel.employeeId)" class="ts-panel-states">
             <button
               v-for="st in states"
               :key="'ts' + st.id"
@@ -400,7 +404,15 @@ const labelsH = computed(() => props.employees.length * ROW_H)
             </button>
           </div>
           <div class="ts-panel-actions">
-            <button type="button" class="ts-btn-clear" :disabled="busy" @click="onClear">Сбросить</button>
+            <button
+              v-if="props.canClear(panel.employeeId)"
+              type="button"
+              class="ts-btn-clear"
+              :disabled="busy"
+              @click="onClear"
+            >
+              Сбросить
+            </button>
           </div>
         </div>
       </template>
