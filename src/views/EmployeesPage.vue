@@ -216,8 +216,8 @@ onMounted(async () => {
           :class="{ 'tr--no-manager': !isAdmin }"
           @contextmenu.prevent.stop="onRowContextMenu($event, emp)"
         >
-          <div class="name-cell">
-            <span class="name">{{ emp.name }}</span>
+          <div class="name">{{ emp.name }}</div>
+          <div class="pos-cell">
             <span
               v-if="resourceOf(emp.id)"
               class="ep-badge"
@@ -226,8 +226,8 @@ onMounted(async () => {
             >
               {{ resourceOf(emp.id)?.code }}
             </span>
+            <span class="pos-text">{{ emp.position || '—' }}</span>
           </div>
-          <div>{{ emp.position || '—' }}</div>
           <div>{{ fmtDate(emp.hire_date) }}</div>
           <div>{{ fmtDate(emp.termination_date) }}</div>
           <div v-if="isAdmin">{{ managerLabel(emp.manager_id) }}</div>
@@ -348,14 +348,23 @@ onMounted(async () => {
   font-weight: 700;
   color: var(--ui-text);
 }
-.name-cell {
+.pos-cell {
   display: flex;
   align-items: center;
   gap: 8px;
   min-width: 0;
 }
+.pos-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .ep-badge {
   flex: none;
+  /* A uniform badge width so the position text starts at the same x
+     in every row regardless of the code length */
+  min-width: 56px;
+  text-align: center;
   border-radius: 999px;
   padding: 2px 10px;
   font-size: 12px;
