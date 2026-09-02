@@ -119,6 +119,11 @@ const router = createRouter({
           component: () => import('../views/PermissionsPage.vue'),
         },
         {
+          path: 'audit',
+          name: 'audit',
+          component: () => import('../views/AuditLogPage.vue'),
+        },
+        {
           path: 'profile',
           name: 'profile',
           component: () => import('../views/ProfilePage.vue'),
@@ -267,6 +272,7 @@ router.beforeEach(async (to) => {
     structure: ['org_structure', 'view'],
     'auto-create': ['rbac_config', 'view'],
     permissions: ['rbac_config', 'view'],
+    audit: ['audit', 'view'],
   }
   const needed = pagePerm[to.name as string]
   if (needed && to.meta.requiresAuth) {

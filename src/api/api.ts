@@ -41,6 +41,16 @@ export interface AssignmentPost201Response {
     'data'?: DtoAssignmentResponse;
     'error'?: object;
 }
+export interface AuditEventsGet200Response {
+    'data'?: AuditEventsGet200ResponseAllOfData;
+    'error'?: object;
+}
+export interface AuditEventsGet200ResponseAllOfData {
+    'items'?: Array<DtoAuditEventView>;
+    'limit'?: number;
+    'offset'?: number;
+    'total'?: number;
+}
 export interface AuthLoginPost200Response {
     'data'?: DtoAuthResponse;
     'error'?: object;
@@ -84,6 +94,24 @@ export interface DtoAssignmentResponse {
     'quantity'?: number;
     'resource_id'?: number;
     'task_id'?: number;
+}
+export interface DtoAuditEventView {
+    'action'?: string;
+    'actor_email'?: string;
+    'actor_ip'?: string;
+    'actor_name'?: string;
+    'actor_role'?: string;
+    'actor_user_id'?: number;
+    'duration_ms'?: number;
+    'entity'?: string;
+    'entity_id'?: number;
+    'id'?: number;
+    'method'?: string;
+    'path'?: string;
+    'request_body'?: object;
+    'response_body'?: object;
+    'status'?: number;
+    'ts'?: string;
 }
 export interface DtoAuthResponse {
     'access_token'?: string;
@@ -1185,6 +1213,199 @@ export class AssignmentsApi extends BaseAPI {
      */
     public assignmentPost(request: DtoCreateAssignmentRequest, options?: RawAxiosRequestConfig) {
         return AssignmentsApiFp(this.configuration).assignmentPost(request, options).then((request) => request(this.axios, this.basePath));
+    }
+}
+
+
+
+/**
+ * AuditApi - axios parameter creator
+ */
+export const AuditApiAxiosParamCreator = function (configuration?: Configuration) {
+    return {
+        /**
+         * Returns a paged list of audit events (all CRUD mutations + auth events).
+         * @summary List audit events
+         * @param {number} [limit] Page size (default 50, max 500)
+         * @param {number} [offset] Page offset
+         * @param {number} [userId] Filter by actor user id
+         * @param {string} [user] Filter by actor login or full name (case-insensitive substring)
+         * @param {string} [entity] Filter by entity (project, user, auth, ...)
+         * @param {string} [action] Filter by action (create, update, delete, login, ...)
+         * @param {string} [status] Filter by HTTP status group (2xx/3xx/4xx/5xx) or exact code
+         * @param {string} [from] Lower bound (RFC3339, inclusive)
+         * @param {string} [to] Upper bound (RFC3339, inclusive)
+         * @param {string} [search] Substring search on path / actor email
+         * @param {string} [id] Filter by the ID shown in the ID column (entity_id or actor_user_id)
+         * @param {string} [ip] Filter by actor IP (case-insensitive substring)
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        auditEventsGet: async (limit?: number, offset?: number, userId?: number, user?: string, entity?: string, action?: string, status?: string, from?: string, to?: string, search?: string, id?: string, ip?: string, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            const localVarPath = `/audit/events`;
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'GET', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication ApiKeyAuth required
+            await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
+
+            if (limit !== undefined) {
+                localVarQueryParameter['limit'] = limit;
+            }
+
+            if (offset !== undefined) {
+                localVarQueryParameter['offset'] = offset;
+            }
+
+            if (userId !== undefined) {
+                localVarQueryParameter['user_id'] = userId;
+            }
+
+            if (user !== undefined) {
+                localVarQueryParameter['user'] = user;
+            }
+
+            if (entity !== undefined) {
+                localVarQueryParameter['entity'] = entity;
+            }
+
+            if (action !== undefined) {
+                localVarQueryParameter['action'] = action;
+            }
+
+            if (status !== undefined) {
+                localVarQueryParameter['status'] = status;
+            }
+
+            if (from !== undefined) {
+                localVarQueryParameter['from'] = from;
+            }
+
+            if (to !== undefined) {
+                localVarQueryParameter['to'] = to;
+            }
+
+            if (search !== undefined) {
+                localVarQueryParameter['search'] = search;
+            }
+
+            if (id !== undefined) {
+                localVarQueryParameter['id'] = id;
+            }
+
+            if (ip !== undefined) {
+                localVarQueryParameter['ip'] = ip;
+            }
+
+            localVarHeaderParameter['Accept'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+    }
+};
+
+/**
+ * AuditApi - functional programming interface
+ */
+export const AuditApiFp = function(configuration?: Configuration) {
+    const localVarAxiosParamCreator = AuditApiAxiosParamCreator(configuration)
+    return {
+        /**
+         * Returns a paged list of audit events (all CRUD mutations + auth events).
+         * @summary List audit events
+         * @param {number} [limit] Page size (default 50, max 500)
+         * @param {number} [offset] Page offset
+         * @param {number} [userId] Filter by actor user id
+         * @param {string} [user] Filter by actor login or full name (case-insensitive substring)
+         * @param {string} [entity] Filter by entity (project, user, auth, ...)
+         * @param {string} [action] Filter by action (create, update, delete, login, ...)
+         * @param {string} [status] Filter by HTTP status group (2xx/3xx/4xx/5xx) or exact code
+         * @param {string} [from] Lower bound (RFC3339, inclusive)
+         * @param {string} [to] Upper bound (RFC3339, inclusive)
+         * @param {string} [search] Substring search on path / actor email
+         * @param {string} [id] Filter by the ID shown in the ID column (entity_id or actor_user_id)
+         * @param {string} [ip] Filter by actor IP (case-insensitive substring)
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async auditEventsGet(limit?: number, offset?: number, userId?: number, user?: string, entity?: string, action?: string, status?: string, from?: string, to?: string, search?: string, id?: string, ip?: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<AuditEventsGet200Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.auditEventsGet(limit, offset, userId, user, entity, action, status, from, to, search, id, ip, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['AuditApi.auditEventsGet']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+    }
+};
+
+/**
+ * AuditApi - factory interface
+ */
+export const AuditApiFactory = function (configuration?: Configuration, basePath?: string, axios?: AxiosInstance) {
+    const localVarFp = AuditApiFp(configuration)
+    return {
+        /**
+         * Returns a paged list of audit events (all CRUD mutations + auth events).
+         * @summary List audit events
+         * @param {number} [limit] Page size (default 50, max 500)
+         * @param {number} [offset] Page offset
+         * @param {number} [userId] Filter by actor user id
+         * @param {string} [user] Filter by actor login or full name (case-insensitive substring)
+         * @param {string} [entity] Filter by entity (project, user, auth, ...)
+         * @param {string} [action] Filter by action (create, update, delete, login, ...)
+         * @param {string} [status] Filter by HTTP status group (2xx/3xx/4xx/5xx) or exact code
+         * @param {string} [from] Lower bound (RFC3339, inclusive)
+         * @param {string} [to] Upper bound (RFC3339, inclusive)
+         * @param {string} [search] Substring search on path / actor email
+         * @param {string} [id] Filter by the ID shown in the ID column (entity_id or actor_user_id)
+         * @param {string} [ip] Filter by actor IP (case-insensitive substring)
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        auditEventsGet(limit?: number, offset?: number, userId?: number, user?: string, entity?: string, action?: string, status?: string, from?: string, to?: string, search?: string, id?: string, ip?: string, options?: RawAxiosRequestConfig): AxiosPromise<AuditEventsGet200Response> {
+            return localVarFp.auditEventsGet(limit, offset, userId, user, entity, action, status, from, to, search, id, ip, options).then((request) => request(axios, basePath));
+        },
+    };
+};
+
+/**
+ * AuditApi - object-oriented interface
+ */
+export class AuditApi extends BaseAPI {
+    /**
+     * Returns a paged list of audit events (all CRUD mutations + auth events).
+     * @summary List audit events
+     * @param {number} [limit] Page size (default 50, max 500)
+     * @param {number} [offset] Page offset
+     * @param {number} [userId] Filter by actor user id
+     * @param {string} [user] Filter by actor login or full name (case-insensitive substring)
+     * @param {string} [entity] Filter by entity (project, user, auth, ...)
+     * @param {string} [action] Filter by action (create, update, delete, login, ...)
+     * @param {string} [status] Filter by HTTP status group (2xx/3xx/4xx/5xx) or exact code
+     * @param {string} [from] Lower bound (RFC3339, inclusive)
+     * @param {string} [to] Upper bound (RFC3339, inclusive)
+     * @param {string} [search] Substring search on path / actor email
+     * @param {string} [id] Filter by the ID shown in the ID column (entity_id or actor_user_id)
+     * @param {string} [ip] Filter by actor IP (case-insensitive substring)
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    public auditEventsGet(limit?: number, offset?: number, userId?: number, user?: string, entity?: string, action?: string, status?: string, from?: string, to?: string, search?: string, id?: string, ip?: string, options?: RawAxiosRequestConfig) {
+        return AuditApiFp(this.configuration).auditEventsGet(limit, offset, userId, user, entity, action, status, from, to, search, id, ip, options).then((request) => request(this.axios, this.basePath));
     }
 }
 

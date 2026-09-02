@@ -1,8 +1,8 @@
 import { defineStore } from 'pinia'
 import { ref, computed, onScopeDispose } from 'vue'
 import axios, { type AxiosError, type Method } from 'axios'
-import { AuthApi, ProjectsApi, ProcessesApi, TasksApi, TimesheetResourcesApi, TimesheetCalendarApi, TimesheetStatesApi, PlanningApi, MilestonesApi, UsersApi, AssignmentsApi, AutoCreateApi, RBACApi, PermissionsApi, Configuration } from '@/api'
-import type { DtoUserInfo, DtoProject, DtoResourceResponse, DtoResourceCalendar, DtoResourceMemberResponse, DtoResourceAbsenceResponse, DtoUserResponse, DtoUserStateResponse, DtoStateResponse, DtoCreateResourceRequest, DtoUpdateResourceRequest, DtoCreateUserRequest, DtoUpdateUserRequest, DtoSetDaysRequest, DtoAdminUserResponse, DtoCreateUserResult, DtoResetPasswordResponse, DtoAutoCreateConfig, DtoAutoCreatedCounts, DtoCommentResponse, DomainRole, DtoRuleInput, DtoRuleView, DtoMatrixCell, DtoRoutePolicyView, PoliciesKindInfo, DtoPermission } from '@/api'
+import { AuthApi, ProjectsApi, ProcessesApi, TasksApi, TimesheetResourcesApi, TimesheetCalendarApi, TimesheetStatesApi, PlanningApi, MilestonesApi, UsersApi, AssignmentsApi, AutoCreateApi, RBACApi, PermissionsApi, AuditApi, Configuration } from '@/api'
+import type { DtoUserInfo, DtoProject, DtoResourceResponse, DtoResourceCalendar, DtoResourceMemberResponse, DtoResourceAbsenceResponse, DtoUserResponse, DtoUserStateResponse, DtoStateResponse, DtoCreateResourceRequest, DtoUpdateResourceRequest, DtoCreateUserRequest, DtoUpdateUserRequest, DtoSetDaysRequest, DtoAdminUserResponse, DtoCreateUserResult, DtoResetPasswordResponse, DtoAutoCreateConfig, DtoAutoCreatedCounts, DtoCommentResponse, DomainRole, DtoRuleInput, DtoRuleView, DtoMatrixCell, DtoRoutePolicyView, PoliciesKindInfo, DtoPermission, DtoAuditEventView } from '@/api'
 import { apiErrorMessage } from '@/utils'
 import { getApiUrl } from '@/config'
 import { isOffline } from '@/offline/state'
@@ -2761,4 +2761,68 @@ export const useRbacStore = defineStore('rbac', () => {
     deleteRule,
     resetRbac,
   }
+})
+
+/** Filters accepted by the audit journal query. */
+export interface AuditQueryFilters {
+  limit?: number
+  offset?: number
+  userId?: number
+  /** Login or full name (case-insensitive substring), resolved server-side. */
+  user?: string
+  entity?: string
+  action?: string
+  /** HTTP status group ("2xx"/"3xx"/"4xx"/"5xx") or an exact code. */
+  status?: string
+  from?: string
+  to?: string
+  search?: string
+  /** Entity or actor id (matches the ID column: entity_id ?? actor_user_id). */
+  id?: string
+  /** Exact actor IP (e.g. 172.18.0.1). */
+  ip?: string
+}
+
+/**
+ * Audit journal store: reads the admin audit-log page (all CRUD mutations +
+ * auth events) through the ERP API, which relays queries to the dedicated
+ * auditlog service.
+ */
+export const useAuditStore = defineStore('audit', () => {
+  const items = ref<DtoAuditEventView[]>([])
+  const total = ref(0)
+  const loading = ref(false)
+  const error = ref<string | null>(null)
+
+  async function load(filters: AuditQueryFilters = {}): Promise<boolean> {
+    loading.value = true
+    error.value = null
+    try {
+      const resp = await new AuditApi(apiConfig()).auditEventsGet(
+        filters.limit,
+        filters.offset,
+        filters.userId,
+        filters.user,
+        filters.entity,
+        filters.action,
+        filters.status,
+        filters.from,
+        filters.to,
+        filters.search,
+        filters.id,
+        filters.ip,
+      )
+      const data = resp.data?.data
+      items.value = data?.items ?? []
+      total.value = data?.total ?? 0
+      return true
+    } catch (e: any) {
+      error.value = apiErrorMessage(e)
+      return false
+    } finally {
+      loading.value = false
+    }
+  }
+
+  return { items, total, loading, error, load }
 })

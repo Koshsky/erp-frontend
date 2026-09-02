@@ -6,6 +6,7 @@ src/api/git_push.sh
 src/api/docs/
 
 tmp/
+.dsh-project-memory
 
 node_modules/
 npm-debug.log*
