@@ -10,6 +10,8 @@ export interface NavItem {
   perm?: [string, string]
   /** Role fallback — used only while the permission list is not loaded yet */
   roles?: string[] | null
+  /** Compact badge shown on the right of the item ("new", a counter, etc.) */
+  badge?: string | number
 }
 
 export interface NavCategory {
@@ -70,6 +72,7 @@ export const NAV_CATEGORIES: NavCategory[] = [
       { label: 'Автосоздание проектов', to: '/auto-create', name: 'auto-create', perm: ['rbac_config', 'view'] },
       { label: 'Статусы', to: '/statuses', name: 'statuses', perm: ['state_admin', 'view'] },
       { label: 'Права', to: '/permissions', name: 'permissions', perm: ['rbac_config', 'view'] },
+      { label: 'Журнал действий', to: '/audit', name: 'audit', perm: ['audit', 'view'] },
     ],
   },
 ]

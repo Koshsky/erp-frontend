@@ -1,0 +1,538 @@
+<script setup lang="ts">
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { RouterLink } from 'vue-router'
+import type { NavCategory, NavItem } from '../../../composables/useNavigation'
+import { AppIcon, type AppIconName } from '../AppIcon'
+import type { AppNavDrawerEmits, AppNavDrawerProps } from './types'
+
+const props = withDefaults(defineProps<AppNavDrawerProps>(), { brand: 'MVS ERP' })
+const emit = defineEmits<AppNavDrawerEmits>()
+
+// ---------------------------------------------------------------------------
+// Collapsed groups — persisted per group label so the layout survives reloads.
+// Any group can be collapsed, including the one holding the active route.
+// When navigation moves into another group it is auto-expanded (the current
+// context should be visible), but a manually collapsed active group stays
+// collapsed until the user expands it or moves to another section.
+// ---------------------------------------------------------------------------
+const COLLAPSED_KEY = 'mvs_erp_nav_collapsed'
+
+function readCollapsed(): Set<string> {
+  try {
+    const raw = localStorage.getItem(COLLAPSED_KEY)
+    if (raw) return new Set(JSON.parse(raw) as string[])
+  } catch {
+    // storage unavailable or corrupted — start collapsed-free
+  }
+  return new Set()
+}
+
+const collapsed = ref<Set<string>>(readCollapsed())
+
+function persistCollapsed(): void {
+  try {
+    localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...collapsed.value]))
+  } catch {
+    // persistence is not critical
+  }
+}
+
+const activeCategory = computed<NavCategory | undefined>(() =>
+  props.categories.find((c) => c.items.some((i) => i.name === props.activeName)),
+)
+
+/** A group is open purely by the user's choice (persisted per label) */
+function isOpen(cat: NavCategory): boolean {
+  return !collapsed.value.has(cat.label)
+}
+
+function toggleGroup(cat: NavCategory): void {
+  if (collapsed.value.has(cat.label)) collapsed.value.delete(cat.label)
+  else collapsed.value.add(cat.label)
+  persistCollapsed()
+}
+
+// Auto-expand the group the user navigated into (route change), so the active
+// context is never hidden behind a collapsed header.
+watch(activeCategory, (cat) => {
+  if (cat && collapsed.value.has(cat.label)) {
+    collapsed.value.delete(cat.label)
+    persistCollapsed()
+  }
+})
+
+/* ---------------------------------------------------------------------------
+ * Group expand/collapse transitions.
+ * The visible height of the clip container animates between 0 and the real
+ * scrollHeight while the content fades. The clip has `overflow: hidden`, so
+ * the items themselves never move or squash — the block closes like a
+ * curtain and sibling section headers slide smoothly.
+ * ---------------------------------------------------------------------------
+ */
+function onBeforeEnter(el: Element): void {
+  const e = el as HTMLElement
+  e.style.height = '0px'
+  e.style.opacity = '0'
+}
+
+function onEnter(el: Element): void {
+  const e = el as HTMLElement
+  // Next frame: browser has painted the 0 state, now animate to full height
+  requestAnimationFrame(() => {
+    e.style.height = `${e.scrollHeight}px`
+    e.style.opacity = '1'
+  })
+}
+
+function onBeforeLeave(el: Element): void {
+  const e = el as HTMLElement
+  e.style.height = `${e.scrollHeight}px`
+}
+
+function onLeave(el: Element): void {
+  const e = el as HTMLElement
+  requestAnimationFrame(() => {
+    e.style.height = '0px'
+    e.style.opacity = '0'
+  })
+}
+
+/** Drop inline height/opacity once the transition finishes (back to auto) */
+function onAfterClear(el: Element): void {
+  const e = el as HTMLElement
+  e.style.height = ''
+  e.style.opacity = ''
+}
+
+// ---------------------------------------------------------------------------
+// Icons: route name -> icon (default: generic list icon for unknown items)
+// ---------------------------------------------------------------------------
+const ITEM_ICONS: Record<string, AppIconName> = {
+  projects: 'kanban',
+  processes: 'flow',
+  planner: 'checklist',
+  timesheet: 'calendar',
+  employees: 'users',
+  resources: 'cpu',
+  users: 'user-circle',
+  structure: 'org',
+  'auto-create': 'sparkles',
+  statuses: 'tag',
+  permissions: 'key',
+  audit: 'scroll',
+  sync: 'refresh',
+  profile: 'user',
+}
+
+function iconFor(item: NavItem): AppIconName {
+  return ITEM_ICONS[item.name] ?? 'list'
+}
+
+// ---------------------------------------------------------------------------
+// Focus management: focus the dialog on open, trap Tab inside, Esc closes.
+// On close the focus returns to the burger (handled by AppHeader).
+// ---------------------------------------------------------------------------
+const panelEl = ref<HTMLElement | null>(null)
+
+function onKeydown(e: KeyboardEvent): void {
+  if (e.key === 'Escape') {
+    e.stopPropagation()
+    emit('close')
+    return
+  }
+  if (e.key !== 'Tab' || !panelEl.value) return
+  const focusables = panelEl.value.querySelectorAll<HTMLElement>(
+    'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])',
+  )
+  if (focusables.length === 0) return
+  const first = focusables[0]
+  const last = focusables[focusables.length - 1]
+  if (e.shiftKey && document.activeElement === first) {
+    e.preventDefault()
+    last.focus()
+  } else if (!e.shiftKey && document.activeElement === last) {
+    e.preventDefault()
+    first.focus()
+  }
+}
+
+watch(
+  () => props.open,
+  (open) => {
+    if (open) {
+      panelEl.value?.addEventListener('keydown', onKeydown)
+      void nextTick(() => panelEl.value?.focus())
+    } else {
+      panelEl.value?.removeEventListener('keydown', onKeydown)
+    }
+  },
+)
+
+onBeforeUnmount(() => {
+  panelEl.value?.removeEventListener('keydown', onKeydown)
+})
+</script>
+
+<template>
+  <!-- Scrim behind the panel (fades in, closes on click) -->
+  <div
+    class="nd-overlay"
+    :class="{ 'nd-overlay--on': props.open }"
+    @click="emit('close')"
+  ></div>
+
+  <aside
+    ref="panelEl"
+    class="nd"
+    :class="{ 'nd--open': props.open }"
+    role="dialog"
+    aria-modal="true"
+    aria-label="Навигация"
+    tabindex="-1"
+  >
+    <!-- Drawer header: the only place the product brand lives -->
+    <div class="nd-top">
+      <div class="nd-brand">{{ props.brand }}</div>
+      <button
+        type="button"
+        class="nd-icon-btn"
+        aria-label="Закрыть меню"
+        title="Закрыть (Esc)"
+        @click="emit('close')"
+      >
+        <AppIcon name="close" :size="20" />
+      </button>
+    </div>
+
+    <nav class="nd-scroll">
+      <section
+        v-for="cat in props.categories"
+        :key="cat.label"
+        class="nd-group"
+        :class="{ 'nd-group--open': isOpen(cat) }"
+      >
+        <button
+          type="button"
+          class="nd-group-head"
+          :aria-expanded="isOpen(cat)"
+          @click="toggleGroup(cat)"
+        >
+          <span class="nd-group-title">{{ cat.label }}</span>
+          <AppIcon name="chevron-down" :size="16" class="nd-caret" />
+        </button>
+        <Transition
+          :duration="320"
+          @before-enter="onBeforeEnter"
+          @enter="onEnter"
+          @after-enter="onAfterClear"
+          @before-leave="onBeforeLeave"
+          @leave="onLeave"
+          @after-leave="onAfterClear"
+        >
+          <div v-show="isOpen(cat)" :key="cat.label" class="nd-items-clip">
+            <div class="nd-items">
+              <RouterLink
+                v-for="item in cat.items"
+                :key="item.to"
+                :to="item.to"
+                class="nd-item"
+                :class="{ active: item.name === props.activeName }"
+                @click="emit('close')"
+              >
+                <AppIcon :name="iconFor(item)" :size="22" />
+                <span class="nd-item-label">{{ item.label }}</span>
+                <span v-if="item.badge" class="nd-badge">{{ item.badge }}</span>
+              </RouterLink>
+            </div>
+          </div>
+        </Transition>
+      </section>
+    </nav>
+
+    <!-- System section (desktop/Electron): sync status + the sync page -->
+    <div v-if="props.sync?.enabled" class="nd-foot">
+      <div class="nd-status">
+        <span class="nd-dot" :class="{ 'nd-dot--off': props.sync.offline }"></span>
+        <span>
+          {{
+            props.sync.offline && props.sync.lastPullLabel
+              ? `Офлайн · данные от ${props.sync.lastPullLabel}`
+              : `Онлайн · данные ${props.sync.lastPullLabel ?? '—'}`
+          }}
+        </span>
+      </div>
+      <RouterLink
+        to="/sync"
+        class="nd-item"
+        :class="{ active: props.activeName === 'sync' }"
+        @click="emit('close')"
+      >
+        <AppIcon name="refresh" :size="22" />
+        <span class="nd-item-label">Синхронизация</span>
+        <span v-if="props.sync.pending > 0" class="nd-badge nd-badge--num">
+          {{ props.sync.pending }}
+        </span>
+      </RouterLink>
+    </div>
+  </aside>
+</template>
+
+<style scoped>
+@import '../../../styles/tokens.css';
+
+/* Scrim: covers the whole viewport, sits between content and the panel */
+.nd-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 34990;
+  background: rgba(15, 23, 42, 0.45);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--ui-duration) ease;
+}
+
+.nd-overlay--on {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Panel: fixed left drawer, above the header, below modals (z-40000) */
+.nd {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  z-index: 35000;
+  width: min(280px, 92vw);
+  display: flex;
+  flex-direction: column;
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  border-right: 1px solid var(--ui-border);
+  box-shadow: var(--ui-shadow-lg);
+  transform: translateX(-104%);
+  transition: transform 0.26s cubic-bezier(0.16, 1, 0.3, 1);
+  outline: none;
+}
+
+/* Custom dark-mode scrim (the base rule targets the light rgba) */
+:root[data-scheme='dark'] .nd-overlay {
+  background: rgba(0, 0, 0, 0.55);
+}
+/* OS-dark fallback, skipped when an explicit light scheme is set */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-scheme='light']) .nd-overlay {
+    background: rgba(0, 0, 0, 0.55);
+  }
+}
+
+.nd--open {
+  transform: translateX(0);
+}
+
+.nd-top {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 64px;
+  padding: 0 16px 0 20px;
+  border-bottom: 1px solid var(--ui-surface-3);
+}
+
+.nd-brand {
+  font-size: 20px;
+  font-weight: 750;
+  letter-spacing: 0.2px;
+  color: var(--ui-text);
+  white-space: nowrap;
+}
+
+.nd-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: var(--ui-radius-sm);
+  background: transparent;
+  color: var(--ui-text-2);
+  cursor: pointer;
+  transition: background var(--ui-duration), color var(--ui-duration);
+}
+
+.nd-icon-btn:hover {
+  background: var(--ui-surface-3);
+  color: var(--ui-text);
+}
+
+.nd-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 18px 10px 22px;
+}
+
+.nd-group {
+  margin-bottom: 4px;
+}
+
+.nd-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 12px 10px 9px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background var(--ui-duration);
+}
+
+.nd-group-head:hover {
+  background: var(--ui-surface-2);
+}
+
+.nd-group-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--ui-text-faint);
+}
+
+.nd-caret {
+  color: var(--ui-text-faint);
+  transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.nd-group--open .nd-caret {
+  transform: rotate(180deg);
+}
+
+/* Expand/collapse clip: the CONTAINER height animates (0 <-> full height),
+   content only fades; overflow hidden guarantees items never move/squash */
+.nd-items-clip {
+  overflow: hidden;
+  transition:
+    height 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.22s ease;
+  will-change: height;
+}
+
+.nd-items {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 2px 0 8px;
+}
+
+.nd-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 42px;
+  padding: 0 12px 0 16px;
+  border-radius: 8px;
+  color: var(--ui-text-2);
+  text-decoration: none;
+  font-size: 15px;
+  font-family: inherit;
+  transition: background var(--ui-duration), color var(--ui-duration);
+}
+
+.nd-item :deep(svg) {
+  color: var(--ui-text-faint);
+  transition: color var(--ui-duration);
+}
+
+.nd-item:hover {
+  background: var(--ui-surface-3);
+  color: var(--ui-text);
+}
+
+.nd-item:hover :deep(svg) {
+  color: var(--ui-text-2);
+}
+
+.nd-item.active {
+  background: var(--ui-accent-soft);
+  color: var(--ui-text);
+  font-weight: 600;
+}
+
+.nd-item.active :deep(svg) {
+  color: var(--ui-accent);
+}
+
+/* Thin accent bar on the left of the active item — quiet, not loud */
+.nd-item.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 9px;
+  bottom: 9px;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--ui-accent);
+}
+
+.nd-item-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nd-badge {
+  flex: none;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 7px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  background: var(--ui-accent-soft);
+  color: var(--ui-accent);
+}
+
+.nd-badge--num {
+  background: var(--ui-warning-soft);
+  color: var(--ui-warning);
+}
+
+.nd-foot {
+  flex: none;
+  border-top: 1px solid var(--ui-border);
+  padding: 10px 10px 14px;
+}
+
+.nd-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px 9px;
+  font-size: 13px;
+  color: var(--ui-text-muted);
+}
+
+.nd-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--ui-success);
+}
+
+.nd-dot--off {
+  background: var(--ui-warning);
+}
+</style>

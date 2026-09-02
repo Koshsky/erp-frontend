@@ -1,16 +1,16 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../../../store'
 import { useNavigation } from '../../../composables/useNavigation'
-import type { NavCategory } from '../../../composables/useNavigation'
 import { isElectron } from '../../../electron'
 import { isOffline } from '../../../offline/state'
 import { pendingCount } from '../../../offline/outbox'
 import { lastPullAt } from '../../../offline/cycle'
 import { resolvedScheme, toggleScheme } from '../../../theme'
-
-const props = withDefaults(defineProps<{ brand?: string }>(), { brand: 'MVS ERP' })
+import { AppIcon } from '../AppIcon'
+import { AppNavDrawer } from '../AppNavDrawer'
+import type { DrawerSyncStats } from '../AppNavDrawer/types'
 
 const router = useRouter()
 const route = useRoute()
@@ -20,7 +20,7 @@ const authStore = useAuthStore()
 // in the template (imported refs are bound without auto-unwrapping).
 const offline = computed(() => isOffline.value)
 
-// Pending changes awaiting sync (badge next to "Sync")
+// Pending changes awaiting sync (badge next to «Синхронизация» in the drawer)
 const pending = computed(() => pendingCount.value)
 
 // Reactive clock so the freshness label keeps advancing while mounted
@@ -28,16 +28,11 @@ const pending = computed(() => pendingCount.value)
 const CLOCK_TICK_MS = 30_000
 const now = ref(Date.now())
 let clockTimer: number | undefined
-onMounted(() => {
-  clockTimer = window.setInterval(() => {
-    now.value = Date.now()
-  }, CLOCK_TICK_MS)
-})
 
 // Data freshness (desktop): how long ago the background PULL last updated the cache
 const lastPullLabel = computed(() => {
   const ts = lastPullAt.value
-  if (ts == null) return '—'
+  if (ts == null) return null
   const s = Math.max(0, Math.round((now.value - ts) / 1000))
   if (s < 60) return `${s} с`
   const m = Math.round(s / 60)
@@ -46,26 +41,110 @@ const lastPullLabel = computed(() => {
   return `${h} ч`
 })
 
-// Header — list of categories; subcategories open in a dropdown menu.
-const { visibleCategories, activeCategory } = useNavigation()
+// Route name as a plain string (route.name can also be a symbol in edge cases)
+const routeName = computed(() => (typeof route.name === 'string' ? route.name : undefined))
 
-// shallowRef: keeps the category object as-is (no deep-reactive wrapper)
-// so identity comparison openCategory === cat works.
-const openCategory = shallowRef<NavCategory | null>(null)
-const navEl = ref<HTMLElement | null>(null)
+// Permission-filtered categories; the drawer is the only place they render now
+const { visibleCategories } = useNavigation()
 
 // Theme toggle label (Russian UI copy)
 const themeLabel = computed(() => (resolvedScheme.value === 'dark' ? 'Светлая' : 'Тёмная'))
 
-function toggleCategory(cat: NavCategory) {
-  openCategory.value = openCategory.value === cat ? null : cat
+// ---------------------------------------------------------------------------
+// Left drawer state:
+//   'closed' — hidden,
+//   'pinned' — opened by the burger / Ctrl+B, stays open,
+//   'peek'   — edge-opened by holding the pointer at the left screen edge;
+//              slides back when the pointer leaves the panel.
+// ---------------------------------------------------------------------------
+const navState = ref<'closed' | 'peek' | 'pinned'>('closed')
+const burgerRef = ref<HTMLElement | null>(null)
+
+/** Drawer is visible in every state except 'closed' */
+const navOpen = computed(() => navState.value !== 'closed')
+
+function toggleNav(): void {
+  // Burger / Ctrl+B: toggle pinned <-> closed; a peeked drawer becomes pinned.
+  navState.value = navState.value === 'pinned' ? 'closed' : 'pinned'
 }
 
-function closeCategory() {
-  openCategory.value = null
+function onCloseNav(): void {
+  navState.value = 'closed'
+  // Return focus to the burger that opened the drawer
+  void nextTick(() => burgerRef.value?.focus())
 }
 
-function onLogout() {
+// ---------------------------------------------------------------------------
+// Edge-open behaviour:
+//  - closing the mouse against the left screen edge (x <= EDGE_X) peeks the
+//    drawer after a short hold (avoids accidental opens when moving across
+//    the edge);
+//  - a peeked drawer closes again once the pointer leaves the panel area
+//    (with a short grace period so it does not slam shut on tiny movements);
+//  - a pinned drawer is unaffected by pointer position.
+// ---------------------------------------------------------------------------
+const EDGE_X = 12
+const EDGE_HOLD_MS = 120
+const EDGE_CLOSE_MS = 220
+const PANEL_WIDTH = 280
+
+let edgeHoverTimer: number | undefined
+let edgeLeaveTimer: number | undefined
+
+function clearEdgeTimers(): void {
+  if (edgeHoverTimer != null) {
+    window.clearTimeout(edgeHoverTimer)
+    edgeHoverTimer = undefined
+  }
+  if (edgeLeaveTimer != null) {
+    window.clearTimeout(edgeLeaveTimer)
+    edgeLeaveTimer = undefined
+  }
+}
+
+function onGlobalMouseMove(e: MouseEvent): void {
+  const x = e.clientX
+
+  if (navState.value === 'closed') {
+    if (x <= EDGE_X && edgeHoverTimer == null) {
+      edgeHoverTimer = window.setTimeout(() => {
+        edgeHoverTimer = undefined
+        if (navState.value === 'closed') navState.value = 'peek'
+      }, EDGE_HOLD_MS)
+    } else if (x > EDGE_X && edgeHoverTimer != null) {
+      window.clearTimeout(edgeHoverTimer)
+      edgeHoverTimer = undefined
+    }
+  } else if (navState.value === 'peek') {
+    if (x > PANEL_WIDTH + EDGE_X && edgeLeaveTimer == null) {
+      edgeLeaveTimer = window.setTimeout(() => {
+        edgeLeaveTimer = undefined
+        if (navState.value === 'peek') navState.value = 'closed'
+      }, EDGE_CLOSE_MS)
+    } else if (x <= PANEL_WIDTH + EDGE_X && edgeLeaveTimer != null) {
+      window.clearTimeout(edgeLeaveTimer)
+      edgeLeaveTimer = undefined
+    }
+  }
+}
+
+// Ctrl/Cmd+B toggles the drawer (common desktop shortcut)
+function onGlobalKeydown(e: KeyboardEvent): void {
+  if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.code === 'KeyB') {
+    e.preventDefault()
+    toggleNav()
+  }
+}
+
+// Close the drawer on any programmatic navigation (router guards, redirects)
+watch(
+  () => route.name,
+  () => {
+    if (navState.value !== 'closed') navState.value = 'closed'
+  },
+)
+
+function onLogout(): void {
   // Handler-level safeguard: offline logout is not performed (logout
   // clears the outbox), even if the disabled attribute did not fire.
   if (offline.value) return
@@ -73,102 +152,92 @@ function onLogout() {
   router.push('/login')
 }
 
-// Click outside the menu or Escape — close
-function onDocClick(e: MouseEvent) {
-  if (navEl.value && !navEl.value.contains(e.target as Node)) closeCategory()
-}
+const burgerTitle = computed(() =>
+  isElectron
+    ? `Меню · ${offline.value ? 'офлайн: данные из кэша' : 'онлайн'} (Ctrl+B)`
+    : 'Меню (Ctrl+B)',
+)
 
-function onKeydown(e: KeyboardEvent) {
-  if (e.key === 'Escape') closeCategory()
-}
+// Sync stats block for the drawer footer (can be passed live)
+const syncStats = computed<DrawerSyncStats>(() => ({
+  enabled: isElectron,
+  offline: offline.value,
+  pending: pending.value,
+  lastPullLabel: lastPullLabel.value,
+}))
 
-watch(openCategory, (oc) => {
-  if (oc) {
-    window.addEventListener('click', onDocClick)
-    window.addEventListener('keydown', onKeydown)
-  } else {
-    window.removeEventListener('click', onDocClick)
-    window.removeEventListener('keydown', onKeydown)
-  }
+onMounted(() => {
+  window.addEventListener('keydown', onGlobalKeydown)
+  window.addEventListener('mousemove', onGlobalMouseMove, { passive: true })
+  clockTimer = window.setInterval(() => {
+    now.value = Date.now()
+  }, CLOCK_TICK_MS)
 })
 
 onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onGlobalKeydown)
+  window.removeEventListener('mousemove', onGlobalMouseMove)
+  clearEdgeTimers()
   if (clockTimer != null) window.clearInterval(clockTimer)
-  window.removeEventListener('click', onDocClick)
-  window.removeEventListener('keydown', onKeydown)
 })
 </script>
 
 <template>
   <header class="ah">
-    <div class="ah-brand">{{ props.brand }}</div>
-    <nav ref="navEl" class="ah-nav">
-      <div
-        v-for="cat in visibleCategories"
-        :key="cat.label"
-        class="ah-cat-wrap"
-      >
-        <button
-          type="button"
-          class="ah-cat"
-          :class="{ active: activeCategory === cat || openCategory === cat }"
-          @click="toggleCategory(cat)"
-        >
-          {{ cat.label }}
-          <span class="ah-caret">▾</span>
-        </button>
-        <div v-if="openCategory === cat" class="ah-menu" role="menu">
-          <RouterLink
-            v-for="item in cat.items"
-            :key="item.to"
-            :to="item.to"
-            class="ah-menu-item"
-            :class="{ active: item.name === route.name }"
-            role="menuitem"
-            @click="closeCategory"
-          >
-            {{ item.label }}
-          </RouterLink>
-        </div>
-      </div>
-    </nav>
+    <!-- Burger: the only entry point to the left drawer; a status dot on top
+         (desktop) shows the sync state without cluttering the topbar -->
+    <button
+      ref="burgerRef"
+      type="button"
+      class="ah-burger"
+      :aria-label="'Открыть меню'"
+      :aria-expanded="navOpen"
+      :title="burgerTitle"
+      @click="toggleNav"
+    >
+      <AppIcon name="menu" :size="22" />
+      <span v-if="isElectron" class="ah-burger-dot" :class="{ on: !offline }"></span>
+    </button>
+
     <div class="ah-spacer"></div>
+
     <div class="ah-actions">
-      <RouterLink to="/profile" class="ah-link" :class="{ active: route.name === 'profile' }">Профиль</RouterLink>
-      <RouterLink v-if="isElectron" to="/sync" class="ah-link" :class="{ active: route.name === 'sync' }">
-        Синхронизация
-        <span v-if="pending > 0" class="ah-sync-badge" :title="`Ожидают отправки: ${pending}`">
-          {{ pending }}
-        </span>
+      <RouterLink to="/profile" class="ah-act" :class="{ active: route.name === 'profile' }">
+        <AppIcon name="user" :size="18" />
+        <span>Профиль</span>
       </RouterLink>
-      <!-- Data freshness (desktop offline-first UX) -->
-      <span
-        v-if="isElectron"
-        class="ah-sync-chip"
-        :class="{ 'ah-sync-chip--off': offline }"
-        :title="offline
-          ? 'Офлайн: показаны сохранённые данные (обновлены ' + lastPullLabel + ' назад). Изменения отправятся автоматически при появлении сети'
-          : 'Данные обновляются автоматически; последнее обновление: ' + lastPullLabel + ' назад'"
+      <button
+        type="button"
+        class="ah-act ah-act--icon"
+        :title="'Переключить тему (сейчас ' + themeLabel.toLowerCase() + ')'"
+        :aria-label="'Переключить тему'"
+        @click="toggleScheme"
       >
-        {{ offline ? `Офлайн · данные от ${lastPullLabel}` : `Онлайн · данные ${lastPullLabel}` }}
-      </span>
-      <!-- Color scheme toggle -->
-      <button type="button" class="ah-theme" :title="'Переключить тему (сейчас ' + themeLabel.toLowerCase() + ')'" @click="toggleScheme">
-        {{ themeLabel }}
+        <AppIcon :name="resolvedScheme === 'dark' ? 'sun' : 'moon'" :size="18" />
       </button>
       <!-- Logout is unavailable offline: logout clears the outbox, which must be kept until the network is back -->
       <button
         type="button"
-        class="ah-logout"
-        :class="{ 'ah-logout--off': offline }"
+        class="ah-act ah-act--icon ah-act--logout"
+        :class="{ 'ah-act--off': offline }"
         :disabled="offline"
-        :title="offline ? 'Выход недоступен офлайн: очередь изменений сохранится до возврата сети' : undefined"
+        :title="offline ? 'Выход недоступен офлайн: очередь изменений сохранится до возврата сети' : 'Выйти из системы'"
+        :aria-label="'Выйти из системы'"
         @click="onLogout"
       >
-        Выйти
+        <AppIcon name="logout" :size="18" />
       </button>
     </div>
   </header>
+
+  <!-- Navigation drawer: the only place modules live now -->
+  <AppNavDrawer
+    :open="navOpen"
+    :categories="visibleCategories"
+    :active-name="routeName"
+    :sync="syncStats"
+    @close="onCloseNav"
+  />
 </template>
 
 <style scoped>
@@ -183,140 +252,59 @@ onBeforeUnmount(() => {
   flex: none;
   background: var(--ui-surface);
   color: var(--ui-text);
-  padding: 0 24px;
+  padding: 0 16px 0 8px;
   height: 60px;
   display: flex;
   align-items: center;
-  gap: 32px;
+  gap: 12px;
   box-shadow: var(--ui-shadow-sm);
   border-bottom: 1px solid var(--ui-border);
   position: sticky;
   top: 0;
-  /* Header and its dropdown menus sit above page content; modal dialogs
-     (z-40000) render above the header and dim it */
+  /* Header and the drawer sit above page content; modal dialogs
+     (z-40000) render above them and dim everything */
   z-index: 30000;
 }
 
-.ah-brand {
-  font-size: 20px;
-  font-weight: 750;
-  letter-spacing: 0.2px;
-  color: var(--ui-text);
-  white-space: nowrap;
-}
-
-.ah-nav {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.ah-link,
-.ah-cat {
-  color: var(--ui-text-2);
-  text-decoration: none;
-  font-size: 14px;
-  padding: 8px 12px;
-  border-radius: var(--ui-radius-sm);
-  border: none;
-  background: transparent;
-  font-family: inherit;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  transition: background var(--ui-duration), color var(--ui-duration);
-}
-
-.ah-link:hover,
-.ah-cat:hover {
-  background: var(--ui-surface-3);
-  color: var(--ui-text);
-}
-
-.ah-cat.active,
-.ah-link.active {
-  background: var(--ui-accent-soft);
-  color: var(--ui-accent);
-  font-weight: 600;
-}
-
-.ah-caret {
-  font-size: 10px;
-  opacity: 0.75;
-}
-
-.ah-sync-chip {
-  display: inline-flex;
-  align-items: center;
-  padding: 3px 10px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--ui-success, #16a34a) 14%, transparent);
-  color: var(--ui-text-2);
-  font-size: 12px;
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-.ah-sync-chip--off {
-  background: color-mix(in srgb, var(--ui-warning) 22%, transparent);
-  color: var(--ui-text);
-}
-
-.ah-sync-badge {
+.ah-burger {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 6px;
-  border-radius: 999px;
-  background: var(--ui-milestone);
-  color: #4a3d14;
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 1;
-}
-
-.ah-cat-wrap {
-  position: relative;
-}
-
-.ah-menu {
-  position: absolute;
-  top: calc(100% + 8px);
-  left: 0;
-  min-width: 200px;
-  background: var(--ui-surface);
-  border-radius: var(--ui-radius-md);
-  box-shadow: var(--ui-shadow-lg);
-  border: 1px solid var(--ui-border);
-  padding: 6px;
-  display: flex;
-  flex-direction: column;
-  /* Within the header's stacking context (z-30000) — above the rest of the header content */
-  z-index: 100;
-}
-
-.ah-menu-item {
-  display: block;
-  padding: 9px 12px;
-  border-radius: 7px;
-  color: var(--ui-text);
-  text-decoration: none;
-  font-size: 14px;
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: var(--ui-radius-sm);
+  background: transparent;
+  color: var(--ui-text-2);
+  cursor: pointer;
   transition: background var(--ui-duration), color var(--ui-duration);
 }
 
-.ah-menu-item:hover {
+.ah-burger:hover {
   background: var(--ui-surface-3);
-  color: var(--ui-accent);
+  color: var(--ui-text);
 }
 
-.ah-menu-item.active {
-  background: var(--ui-accent-soft);
-  color: var(--ui-accent);
-  font-weight: 600;
+.ah-burger:focus-visible {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: 2px;
+}
+
+/* Sync state dot on the burger (desktop): green = online, amber = offline */
+.ah-burger-dot {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 2px solid var(--ui-surface);
+  background: var(--ui-warning);
+}
+
+.ah-burger-dot.on {
+  background: var(--ui-success);
 }
 
 .ah-spacer {
@@ -326,51 +314,76 @@ onBeforeUnmount(() => {
 .ah-actions {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
-.ah-theme {
+.ah-act {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 42px;
+  padding: 0 14px;
+  border: none;
+  border-radius: var(--ui-radius-sm);
   background: transparent;
   color: var(--ui-text-2);
-  border: 1px solid var(--ui-border-strong);
-  border-radius: var(--ui-radius-sm);
-  padding: 6px 12px;
-  font-size: 12.5px;
+  text-decoration: none;
+  font-size: 14px;
+  font-family: inherit;
   cursor: pointer;
-  transition: background var(--ui-duration), color var(--ui-duration), border-color var(--ui-duration);
+  transition: background var(--ui-duration), color var(--ui-duration);
 }
 
-.ah-theme:hover {
+.ah-act:hover:not(:disabled) {
   background: var(--ui-surface-3);
   color: var(--ui-text);
 }
 
-.ah-logout {
-  background: transparent;
-  color: var(--ui-text-2);
-  border: 1px solid var(--ui-border-strong);
-  border-radius: var(--ui-radius-sm);
-  padding: 6px 14px;
-  font-size: 13px;
-  cursor: pointer;
-  transition: background var(--ui-duration), color var(--ui-duration), border-color var(--ui-duration);
+.ah-act.active {
+  background: var(--ui-accent-soft);
+  color: var(--ui-accent);
+  font-weight: 600;
 }
 
-.ah-logout:hover:not(:disabled) {
+/* Icon-only actions (theme toggle, logout): square, no label */
+.ah-act--icon {
+  width: 42px;
+  padding: 0;
+  justify-content: center;
+}
+
+.ah-act--logout:hover:not(:disabled) {
   background: var(--ui-danger-soft);
   border-color: var(--ui-danger);
   color: var(--ui-danger);
 }
 
-.ah-logout:disabled,
-.ah-logout--off {
+.ah-act:disabled,
+.ah-act--off {
   opacity: 0.45;
   cursor: not-allowed;
   pointer-events: none;
 }
 
+/* Narrow screens: one row, icons only (touch targets stay >= 44px) */
 @media (max-width: 720px) {
-  .ah { flex-direction: column; height: auto; padding: 12px; gap: 12px; }
-  .ah-spacer { display: none; }
+  .ah {
+    padding: 0 8px;
+    gap: 4px;
+  }
+
+  .ah-act {
+    width: 48px;
+    padding: 0;
+    justify-content: center;
+  }
+
+  .ah-act span {
+    display: none;
+  }
+
+  .ah-actions {
+    gap: 2px;
+  }
 }
 </style>

@@ -1,4 +1,6 @@
 export { default as AppHeader } from './AppHeader/AppHeader.vue'
+export { default as AppIcon } from './AppIcon/AppIcon.vue'
+export { default as AppNavDrawer } from './AppNavDrawer/AppNavDrawer.vue'
 export { default as TooltipCell } from './TooltipCell/TooltipCell.vue'
 export { default as ContextMenu } from './ContextMenu/ContextMenu.vue'
 export { default as ModalForm } from './ModalForm/ModalForm.vue'
