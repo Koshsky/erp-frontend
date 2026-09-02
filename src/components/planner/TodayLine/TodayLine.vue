@@ -57,11 +57,13 @@ const lineStyle = computed<Record<string, string> | null>(() =>
   position: absolute;
   top: 0;
   bottom: 0;
-  /* Its own level: above the content (bars 2, milestones 3) and resource cells (20),
-     but below the calendar header (30) and the side panel (65+): the header, resource
-     codes, merged/row labels, the milestone strip and the corner stay on top of
-     the today line */
-  z-index: 25;
+  /* Its own level: above the content (bars 2, milestones 3), the resource
+     cells (20) and the calendar date header (30) — the line crosses the
+     header on top. Still below the scale badge (50) and the side-panel
+     label layers (65/70/80/90: merged/row labels, resource codes, corner),
+     and below popups (30000+). The label layers never overlap the line in X
+     (it starts after LABEL_WIDTH), but keep the ordering strict anyway. */
+  z-index: 35;
   pointer-events: none;
 }
 </style>
