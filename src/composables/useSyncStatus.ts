@@ -1,4 +1,4 @@
-import { computed, onBeforeUnmount, ref } from 'vue'
+import { computed, ref } from 'vue'
 import { isElectron } from '../electron'
 import { isOffline } from '../offline/state'
 import { pendingCount } from '../offline/outbox'
@@ -9,22 +9,27 @@ import type { DrawerSyncStats } from '../components/common/AppNavDrawer/types'
  * Shared sync/freshness status (desktop offline-first UX): how long ago the
  * background PULL last updated the cache, pending queue size and offline
  * flag, plus the desktop-only sync footer block for the nav drawer.
- * A lightweight clock advances the freshness label while mounted.
+ *
+ * A single module-level clock (started by the first consumer, app-lifetime)
+ * advances `now`, so the relative freshness label keeps ticking even when
+ * `lastPullAt` changes rarely (all domains within their TTL). No per-consumer
+ * intervals — MainLayout and AppHeader share one timer.
  */
 
 const CLOCK_TICK_MS = 30_000
 
-export function useSyncStatus() {
-  const now = ref(Date.now())
-
-  let clockTimer: number | undefined
-  clockTimer = window.setInterval(() => {
+const now = ref(Date.now())
+let clockStarted = false
+function ensureClock(): void {
+  if (clockStarted || typeof window === 'undefined') return
+  clockStarted = true
+  window.setInterval(() => {
     now.value = Date.now()
   }, CLOCK_TICK_MS)
+}
 
-  onBeforeUnmount(() => {
-    if (clockTimer != null) window.clearInterval(clockTimer)
-  })
+export function useSyncStatus() {
+  ensureClock()
 
   const offline = computed(() => isOffline.value)
   const pending = computed(() => pendingCount.value)
