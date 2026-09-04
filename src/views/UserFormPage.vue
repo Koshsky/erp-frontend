@@ -62,6 +62,8 @@ const loadingEdit = ref(isEdit.value && adminUsers.value.length === 0)
 const missing = ref(false)
 /** manager_id пользователя при загрузке — для определения изменения при сохранении */
 const savedManagerId = ref<number | null>(null)
+/** Username of the edited user at load (null in create mode). */
+const savedLogin = ref<string | null>(null)
 /** true после первой попытки отправки — включает сообщение валидации */
 const submitAttempted = ref(false)
 
@@ -114,6 +116,10 @@ function fillForm(u: DtoAdminUserResponse) {
   form.hireDate = u.hire_date ?? ''
   form.terminationDate = u.termination_date ?? ''
   savedManagerId.value = u.manager_id ?? null
+  // Current login at load — the reserved-name exception: an unchanged reserved
+  // login (e.g. the seeded "admin") stays editable; assigning/renaming to a
+  // reserved word is still blocked (mirrors the backend).
+  savedLogin.value = u.username ? u.username.toLowerCase() : null
   // В редактировании логин вводится вручную — без автозаполнения
   loginTouched.value = true
 }
@@ -163,7 +169,11 @@ const RESERVED_LOGINS = new Set(['admin', 'support', 'root', 'system', 'help'])
 function loginError(login: string, required: boolean): string | null {
   const v = login.trim().toLowerCase()
   if (v === '') return required ? 'Заполните логин' : null
-  if (RESERVED_LOGINS.has(v)) return `Логин «${v}» зарезервирован системой`
+  // Reserved words may not be assigned or renamed to; an unchanged reserved
+  // login of the edited user (e.g. the seeded "admin") keeps working.
+  if (RESERVED_LOGINS.has(v) && v !== savedLogin.value) {
+    return `Логин «${v}» зарезервирован системой`
+  }
   if (!LOGIN_PATTERN.test(v)) {
     return 'Только латиница, цифры, точка и подчёркивание. Длина от 3 до 20 символов'
   }
