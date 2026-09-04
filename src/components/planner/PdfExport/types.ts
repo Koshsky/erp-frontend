@@ -22,27 +22,27 @@ export interface PdfExportMilestone {
   date?: string
 }
 
-/** Ресурс для блока занятости (DTO /resources) — без импорта @/api */
+/** Resource for the occupancy block (DTO /resources) — without @/api import */
 export interface PdfExportResource {
   id?: number
   code?: string
   title?: string
 }
 
-/** Период доступности (DTO /timesheet/calendar) */
+/** Availability period (DTO /timesheet/calendar) */
 export interface PdfExportResourcePeriod {
   start_date?: string
   end_date?: string
   available?: number
 }
 
-/** Запись календаря доступности ресурса (DTO /timesheet/calendar) */
+/** Resource availability calendar record (DTO /timesheet/calendar) */
 export interface PdfExportResourceCalendar {
   resource_id?: number
   periods?: PdfExportResourcePeriod[]
 }
 
-/** Структурный тип процесса (DTO /planning/tasks) — без импорта @/api */
+/** Structural process type (DTO /planning/tasks) — without @/api import */
 export interface PdfExportProcess {
   id?: number
   title?: string
@@ -56,30 +56,30 @@ export interface PdfExportProcess {
 }
 
 export interface PdfExportProps {
-  /** Готовая модель печати: группы → строки (строится страницей-планировщиком) */
+  /** Ready print model: groups → rows (built by the planner page) */
   groups?: PdfGanttGroup[] | null
-  /** Якорь шкалы: ячейка с индексом 0 (начальная позиция) */
+  /** Timeline anchor: cell with index 0 (starting position) */
   origin?: Date | string
-  /** Единица ячейки: день или декада */
+  /** Cell unit: day or decade */
   unit?: PlanningUnit
-  /** Заголовок в колонтитуле PDF */
+  /** Title in the PDF footer/header */
   pageTitle?: string
-  /** Id текущего пользователя — для фильтра «Только мои процессы» */
+  /** Current user id — for the "Only my processes" filter */
   ownerId?: number | null
-  /** Роль текущего пользователя — определяет видимость фильтров (vp видит «Только мои») */
+  /** Current user role — determines filter visibility (vp sees "Only mine") */
   role?: string | null
-  /** Скоуп диаграммы: определяет набор опций и фильтров модалки печати */
+  /** Diagram scope: determines the print dialog's option and filter set */
   scope?: 'tasks' | 'processes' | 'projects'
-  /** Толщина строки в экранных px (default 26; бар = строка − 2px) */
+  /** Row thickness in screen px (default 26; bar = row − 2px) */
   rowHeight?: number | null
-  /** Начало печатного периода — видимое окно шкалы со страницы (ISO YYYY-MM-DD) */
+  /** Print period start — the visible timeline window from the page (ISO YYYY-MM-DD) */
   periodFrom?: string | null
-  /** Конец печатного периода — видимое окно шкалы со страницы (ISO YYYY-MM-DD) */
+  /** Print period end — the visible timeline window from the page (ISO YYYY-MM-DD) */
   periodTo?: string | null
-  /** Масштаб печати: зум страницы (Ctrl+wheel) — множитель плотности контента */
+  /** Print scale: page zoom (Ctrl+wheel) — content-density multiplier */
   scale?: number | null
-  /** Ресурсы для блока занятости (ResourceHeader) в печати */
+  /** Resources for the occupancy block (ResourceHeader) in print */
   resources?: PdfExportResource[] | null
-  /** Календарь доступности ресурсов (/timesheet/calendar) — для ResourceHeader */
+  /** Resource availability calendar (/timesheet/calendar) — for ResourceHeader */
   calendar?: PdfExportResourceCalendar[] | null
 }

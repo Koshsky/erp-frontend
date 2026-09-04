@@ -8,10 +8,10 @@ export interface EditModalResult {
 }
 
 /**
- * Модалка редактирования/создания: состояние edit/saving/error + готовые пропсы
- * для <ModalForm>. buildFields(state) строит поля, onSave(state, values) сохраняет
- * и возвращает { ok, error } (error — текст, показывается внутри модалки).
- * getTitle/submitLabel дают заголовок и текст кнопки по состоянию.
+ * Edit/create modal: edit/saving/error state + ready-made props
+ * for <ModalForm>. buildFields(state) builds fields, onSave(state, values) saves
+ * and returns { ok, error } (error — text shown inside the modal).
+ * getTitle/submitLabel provide the title and the button text for the state.
  */
 export function useEditModal<T>(
   buildFields: (state: T) => ModalField[],

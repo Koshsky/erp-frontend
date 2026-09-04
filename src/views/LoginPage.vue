@@ -12,31 +12,25 @@ const router = useRouter()
 const route = useRoute()
 const auth = useAuthStore()
 
-// Поля для входа
+// Login fields
 const username = ref('')
 const password = ref('')
 
 const localError = ref<string | null>(null)
 
-const features = [
-  { icon: '📈', label: 'Диаграммы Гантта', desc: 'Наглядное планирование проектов' },
-  { icon: '👥', label: 'Ресурсы', desc: 'Управление загрузкой команд' },
-  { icon: '🎯', label: 'Задачи', desc: 'Контроль сроков и статусов' },
-]
-
 const offline = computed(() => isElectron && isOffline.value)
-/** Адрес сервера для показа на странице входа (если задан) */
+/** Server address to show on the login page (if set) */
 const serverBase = computed(() => getServerBase())
-/** Одна кнопка входа: лейбл меняется по сети, поведение — в onSubmit */
+/** Single login button: the label depends on the network state, the behavior is in onSubmit */
 const submitLabel = computed(() =>
   auth.loading ? 'Подождите…' : offline.value ? 'Войти офлайн' : 'Войти →',
 )
 
-// === Пинг сервера: символ-кнопка + сигнализатор соединения ===
+// === Server ping: symbol button + connection indicator ===
 const pinging = ref(false)
-/** Результат пинга: null — ещё не было, true — доступен, false — недоступен */
+/** Ping result: null — not attempted yet, true — reachable, false — unreachable */
 const pingOk = ref<boolean | null>(null)
-// Если сервер уже известен как недоступный (офлайн) — индикатор сразу красный
+// If the server is already known to be unreachable (offline) — the indicator is red right away
 if (isElectron && isOffline.value) pingOk.value = false
 
 const pingSymbol = computed(() => (pinging.value ? '⏳' : '⇄'))
@@ -55,7 +49,7 @@ const pingTitle = computed(() => {
   return 'Проверить соединение с сервером'
 })
 
-/** Пинг бэкенда (GET /health, публичный): любой статус <500 = жив */
+/** Ping the backend (GET /health, public): any status < 500 means alive */
 async function onPing() {
   if (pinging.value) return
   pinging.value = true
@@ -74,9 +68,9 @@ function getError(): string | null {
 }
 
 /**
- * Офлайн-вход: локальная сессия без токена (данные из кэша, мутации в
- * очередь), пароль не проверяется и не сохраняется. Идентичность: введённый
- * логин → сохранённый профиль → логин автосинка (см. префилл ниже).
+ * Offline login: a local session without a token (data from the cache, mutations
+ * go to a queue), the password is neither checked nor saved. Identity: typed
+ * login → saved profile → autosync login (see the prefilled value below).
  */
 function enterOffline() {
   const typed = username.value.trim()
@@ -102,13 +96,13 @@ async function onSubmit() {
   }
   const ok = await auth.login(username.value, password.value)
   if (ok) {
-    // Desktop: креды успешного входа — safeguard-креды автосинка (пароль в
-    // safeStorage). Сохраняем только верифицированный пароль.
+    // Desktop: credentials of a successful login — the autosync safeguard credentials (password in
+    // safeStorage). Only the verified password is saved.
     if (isElectron) {
       try {
         await saveSyncCredentials(username.value, password.value)
       } catch {
-        // автосинк просто останется без пароля — не критично
+        // autosync will simply remain without a password — not critical
       }
     }
     goToRedirect()
@@ -120,8 +114,8 @@ function goToRedirect() {
   router.push(redirect)
 }
 
-// В офлайне подставляем сохранённый логин автосинка — пользователю остаётся
-// только нажать одну кнопку.
+// Offline: prefill the saved autosync login — the user only needs
+// to press one button.
 if (isElectron && isOffline.value && !username.value) {
   username.value = getSavedLogin() ?? ''
 }
@@ -129,30 +123,16 @@ if (isElectron && isOffline.value && !username.value) {
 
 <template>
   <div class="lp">
-    <div class="lp-brand">
-      <div class="lp-logo">MVS</div>
-      <h1 class="lp-btitle">MVS ERP</h1>
-      <p class="lp-bsub">Система планирования проектов</p>
-
-      <ul class="lp-features">
-        <li v-for="f in features" :key="f.label" class="feature">
-          <span class="feature-icon">{{ f.icon }}</span>
-          <span class="feature-body">
-            <strong>{{ f.label }}</strong>
-            <em>{{ f.desc }}</em>
-          </span>
-        </li>
-      </ul>
-    </div>
-
     <div class="lp-form-side">
-      <h2 class="lp-title">Вход в систему</h2>
-      <p class="lp-subtitle">Введите учётные данные для продолжения</p>
+      <div class="lp-brand-head">
+        <h1 class="lp-btitle">MVS ERP</h1>
+        <p class="lp-bsub">Система планирования проектов</p>
+      </div>
 
       <form class="lp-form" @submit.prevent="onSubmit">
         <label class="lp-field">
           <span>Логин</span>
-          <input v-model="username" type="text" autocomplete="username" placeholder="например, ivanov" />
+          <input v-model="username" type="text" autocomplete="username" placeholder="ivanov" />
         </label>
 
         <PasswordField v-model="password" label="Пароль" autocomplete="current-password" placeholder="••••••••" />
@@ -165,7 +145,10 @@ if (isElectron && isOffline.value && !username.value) {
         </button>
       </form>
 
-      <div v-if="serverBase" class="lp-server-row">
+      <!-- The "Server: …" row + ping and server settings — desktop (Electron)
+           build only. In the online (web) version the address is set by the
+           deployment and cannot be changed — the block is not shown at all. -->
+      <div v-if="isElectron && serverBase" class="lp-server-row">
         <span class="lp-server">Сервер: {{ serverBase }}</span>
         <button
           type="button"
@@ -180,9 +163,26 @@ if (isElectron && isOffline.value && !username.value) {
         </button>
       </div>
 
-      <RouterLink to="/login/settings" class="lp-settings-link">⚙ Настройки сервера</RouterLink>
+      <RouterLink v-if="isElectron" to="/login/settings" class="lp-settings-link">⚙ Настройки сервера</RouterLink>
     </div>
   </div>
 </template>
 
+<style scoped>
+@import '../styles/tokens.css';
+</style>
+
 <style src="./LoginPage.css" scoped></style>
+
+<style scoped>
+/* Login-only overrides: single-column centered card.
+   LoginPage.css stays untouched — it is shared with the server settings page. */
+.lp {
+  grid-template-columns: 1fr;
+  max-width: 420px;
+}
+
+.lp-brand-head .lp-bsub {
+  margin-bottom: 24px; /* tighten the gap before the form heading */
+}
+</style>

@@ -7,10 +7,10 @@ export interface WindowPointerTrackOptions {
 }
 
 /**
- * Отслеживание указателя на window во время драга: подписки pointermove/pointerup/
- * pointercancel и блокировка выделения (userSelect). start() включает, stop() — гасит.
- * При размонтировании посреди драга слушатели снимаются автоматически (без этого
- * они и userSelect=«none» оставались навсегда).
+ * Tracks the pointer on window during a drag: pointermove/pointerup/
+ * pointercancel subscriptions and selection blocking (userSelect). start()
+ * enables it, stop() disables it. On unmount mid-drag the listeners are
+ * removed automatically (otherwise they and userSelect="none" were left forever).
  */
 export function useWindowPointerTrack(opts: WindowPointerTrackOptions) {
   function onMove(e: PointerEvent) {

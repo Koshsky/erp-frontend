@@ -1,11 +1,11 @@
-/** Единица ячейки шкалы: день или декада (10 дней) */
+/** Timeline cell unit: day or decade (10 days) */
 export type PlanningUnit = 'day' | 'decade'
 
 import { LABEL_WIDTH } from './layout'
 import { DAY_MS, clamp } from '../../utils'
 
-/** Дата в локальной временной зоне. Строки «YYYY-MM-DD» парсятся как локальная полночь,
- * а не UTC (иначе getTime() не совпадёт с локальной полночью ячеек). */
+/** Date in the local timezone. "YYYY-MM-DD" strings are parsed as local midnight,
+ * not UTC (otherwise getTime() would not match the cells' local midnight). */
 export function toDate(v: Date | string | number): Date {
   if (v instanceof Date) return v
   if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)) {
@@ -15,37 +15,37 @@ export function toDate(v: Date | string | number): Date {
   return new Date(v)
 }
 
-/** Дата, приведённая к началу суток в локальной зоне */
+/** Date normalized to the start of the day in the local timezone */
 function toDayStart(v: Date | string | number): Date {
   const d = toDate(v)
   return new Date(d.getFullYear(), d.getMonth(), d.getDate())
 }
 
-/** Дата в формате YYYY-MM-DD (локальная зона) */
+/** Date in YYYY-MM-DD format (local timezone) */
 export function fmtDate(d: Date): string {
   const m = String(d.getMonth() + 1).padStart(2, '0')
   const day = String(d.getDate()).padStart(2, '0')
   return `${d.getFullYear()}-${m}-${day}`
 }
 
-/** Дата через n дней (YYYY-MM-DD, локальная зона) */
+/** Date n days later (YYYY-MM-DD, local timezone) */
 export function addDaysISO(date: Date | string | number, days: number): string {
   const d = toDayStart(date)
   return fmtDate(new Date(d.getFullYear(), d.getMonth(), d.getDate() + days))
 }
 
-/** Дата через n календарных месяцев (YYYY-MM-DD, локальная зона) */
+/** Date n calendar months later (YYYY-MM-DD, local timezone) */
 export function addMonthsISO(date: Date | string | number, months: number): string {
   const d = toDayStart(date)
   return fmtDate(new Date(d.getFullYear(), d.getMonth() + months, d.getDate()))
 }
 
-/** Диапазон дат «дд.мм.гггг — дд.мм.гггг» (локальная зона) для тултипов баров */
+/** Date range "dd.mm.yyyy — dd.mm.yyyy" (local timezone) for bar tooltips */
 export function formatDateRange(start: Date | string | number, end: Date | string | number): string {
   return `${toDate(start).toLocaleDateString('ru')} — ${toDate(end).toLocaleDateString('ru')}`
 }
 
-/** Последний день месяца даты d (новый Date, чтобы не мутировать исходный) */
+/** Last day of the month of date d (a new Date, so the original is not mutated) */
 function lastDayOfMonth(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth() + 1, 0)
 }
@@ -62,25 +62,25 @@ export interface CalendarCell {
 }
 
 // ============================================================================
-// Бесконечная шкала в абсолютных индексах ячеек.
-// origin — дата-якорь; ячейка i — абсолютный индекс (может быть отрицательным).
-// День:  i  = origin + i дней.  Декада: строго по календарю (1-10/11-20/21-конец),
-// ячейка 0 — декада, содержащая origin; месяц = месяц(origin) + floor(i/3).
+// Infinite timeline in absolute cell indices.
+// origin — the anchor date; cell i — the absolute index (may be negative).
+// Day:   i  = origin + i days.  Decade: strictly by the calendar (1-10/11-20/21-end),
+// cell 0 — the decade containing origin; month = month(origin) + floor(i/3).
 // ============================================================================
 
-/** Месяц в абсолютном счёте: год*12 + месяц (для разницы месяцев). */
+/** Month in absolute count: year*12 + month (for month differences). */
 function monthNumber(d: Date): number {
   return d.getFullYear() * 12 + d.getMonth()
 }
 
-/** Номер декады внутри месяца по дате: 0 ([1..10]), 1 ([11..20]), 2 ([21..конец]). */
+/** Decade number within the month by date: 0 ([1..10]), 1 ([11..20]), 2 ([21..end]). */
 function decadeIndexOfDay(d: Date): number {
   if (d.getDate() <= 10) return 0
   if (d.getDate() <= 20) return 1
   return 2
 }
 
-/** Первое число месяца и номер декады для ячейки i (корректно для отрицательных i). */
+/** First day of the month and decade number for cell i (correct for negative i). */
 function cellMonthDec(origin: Date, i: number): { first: Date; dec: number } {
   const first = new Date(origin.getFullYear(), origin.getMonth() + Math.floor(i / 3), 1)
   const dec = ((i % 3) + 3) % 3
@@ -88,8 +88,8 @@ function cellMonthDec(origin: Date, i: number): { first: Date; dec: number } {
 }
 
 /**
- * Абсолютный индекс ячейки, содержащей дату. Всегда существует (может быть
- * отрицательным). Для дней — разница дат от origin; для декад — календарная привязка.
+ * Absolute index of the cell containing the date. Always exists (may be
+ * negative). For days — the day difference from origin; for decades — calendar anchoring.
  */
 export function cellIndexForDate(
   origin: Date | string | number,
@@ -102,7 +102,7 @@ export function cellIndexForDate(
   return (monthNumber(d) - monthNumber(o)) * 3 + decadeIndexOfDay(d)
 }
 
-/** Дата начала ячейки i (локальная полночь). */
+/** Start date of cell i (local midnight). */
 export function cellStartDate(origin: Date | string | number, unit: PlanningUnit, i: number): Date {
   const o = toDayStart(origin)
   if (unit === 'day') return new Date(o.getFullYear(), o.getMonth(), o.getDate() + i)
@@ -110,7 +110,7 @@ export function cellStartDate(origin: Date | string | number, unit: PlanningUnit
   return new Date(first.getFullYear(), first.getMonth(), 1 + dec * 10)
 }
 
-/** Дата конца ячейки i (включительно, локальная полночь). */
+/** End date of cell i (inclusive, local midnight). */
 export function cellEndDate(origin: Date | string | number, unit: PlanningUnit, i: number): Date {
   if (unit === 'day') return cellStartDate(origin, unit, i)
   const { first, dec } = cellMonthDec(toDayStart(origin), i)
@@ -118,7 +118,7 @@ export function cellEndDate(origin: Date | string | number, unit: PlanningUnit, 
   return lastDayOfMonth(first)
 }
 
-/** count подряд идущих ячеек, начиная с fromCell (абсолютные индексы). */
+/** count consecutive cells starting from fromCell (absolute indices). */
 export function windowCells(
   origin: Date | string | number,
   unit: PlanningUnit,
@@ -134,9 +134,9 @@ export function windowCells(
 }
 
 /**
- * Спан интервала [start, end] (обе границы включительно) в абсолютных ячейках.
- * endCell — эксклюзивная граница (индекс ячейки, следующей за последней занятой).
- * Возвращает null, если интервал некорректен (end < start).
+ * Span of the interval [start, end] (both bounds inclusive) in absolute cells.
+ * endCell — the exclusive bound (index of the cell after the last occupied one).
+ * Returns null if the interval is invalid (end < start).
  */
 export function cellRangeForSpan(
   origin: Date | string | number,
@@ -153,7 +153,7 @@ export function cellRangeForSpan(
   return { startCell, endCell }
 }
 
-/** Преобразование спана ячеек [startCell, endCell) в даты [start, end] (обе включительно). */
+/** Converts a cell span [startCell, endCell) to dates [start, end] (both inclusive). */
 export function spanToDates(
   origin: Date | string | number,
   unit: PlanningUnit,
@@ -166,7 +166,7 @@ export function spanToDates(
   return { start_date: fmtDate(cellStartDate(origin, unit, s)), end_date: fmtDate(last) }
 }
 
-/** Границы родителя в абсолютных ячейках (для зажима драга). null, если не заданы/некорректны. */
+/** Parent bounds in absolute cells (for drag clamping). null if not set/invalid. */
 export function boundsForSpan(
   origin: Date | string | number,
   unit: PlanningUnit,
@@ -178,9 +178,9 @@ export function boundsForSpan(
 }
 
 /**
- * Зажим интервала дат [start, end] (обе границы включительно) в фактические
- * границы родителя [bStart, bEnd]. Результат всегда с end >= start (минимум 1 день).
- * Если границы не заданы — интервал как есть.
+ * Clamps the date interval [start, end] (both bounds inclusive) into the actual
+ * parent bounds [bStart, bEnd]. Result always has end >= start (minimum 1 day).
+ * If the bounds are not set — the interval is unchanged.
  */
 export function clampSpanDates(
   start: Date | string | number,
@@ -201,8 +201,8 @@ export function clampSpanDates(
 }
 
 /**
- * Зажим одиночной даты в фактические границы родителя [bStart, bEnd]
- * (обе границы включительно). Если границы не заданы — дата как есть.
+ * Clamps a single date into the actual parent bounds [bStart, bEnd]
+ * (both bounds inclusive). If the bounds are not set — the date is unchanged.
  */
 export function clampDateToBounds(
   date: Date | string | number,
@@ -219,12 +219,12 @@ export function clampDateToBounds(
 }
 
 /**
- * Вписывает интервал [start, end] в границы родителя [bStart, bEnd], сохраняя
- * длительность (в отличие от clampSpanDates, который обрезает): если интервал
- * целиком (или выступает) левее начала родителя — прижимается к началу и растёт
- * вправо на свою длину; правее конца — прижимается к концу и растёт влево;
- * если длительность больше родителя — занимает родителя целиком.
- * Если границы не заданы — интервал как есть.
+ * Fits the interval [start, end] into the parent bounds [bStart, bEnd], preserving
+ * duration (unlike clampSpanDates, which truncates): if the interval lies entirely
+ * (or sticks out) left of the parent start — it is pushed to the start and grows
+ * right by its own length; right of the end — pushed to the end and grows left;
+ * if the duration exceeds the parent — it occupies the parent entirely.
+ * If the bounds are not set — the interval is unchanged.
  */
 export function shiftSpanDates(
   start: Date | string | number,
@@ -259,11 +259,11 @@ export function shiftSpanDates(
 }
 
 /**
- * Дата под указателем мыши в бесконечной шкале.
- * windowStartCell — абсолютный индекс ячейки у левого края шкалы (видимое окно),
- * cellPx — ширина ячейки в px, rect — контейнер (включая колонку названий LABEL_WIDTH),
- * scale — CSS-зум контейнера (viewport-координаты делятся на масштаб).
- * Возвращает YYYY-MM-DD (локальная зона) либо null, если клик левее шкалы.
+ * Date under the mouse pointer on the infinite timeline.
+ * windowStartCell — absolute cell index at the left edge of the timeline (visible window),
+ * cellPx — cell width in px, rect — the container (including the LABEL_WIDTH label column),
+ * scale — CSS zoom of the container (viewport coordinates are divided by the scale).
+ * Returns YYYY-MM-DD (local timezone) or null if the click is left of the timeline.
  */
 export function dateForPointer(
   origin: Date | string | number,

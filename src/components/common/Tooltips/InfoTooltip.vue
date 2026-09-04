@@ -27,6 +27,8 @@ withDefaults(defineProps<InfoTooltipProps>(), {
 </template>
 
 <style scoped>
+@import "../../../styles/tokens.css";
+
 .it {
   font-size: 12px;
   line-height: 1.5;
@@ -49,7 +51,7 @@ withDefaults(defineProps<InfoTooltipProps>(), {
   display: flex;
   align-items: center;
   gap: 7px;
-  color: #666;
+  color: var(--ui-text-2);
   white-space: nowrap;
 }
 .it-marker {

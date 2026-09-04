@@ -1,15 +1,15 @@
 /**
- * Векторный рендерер диаграммы Ганта в PDF (печать на принтере).
+ * Vector renderer of the Gantt diagram to PDF (printer output).
  *
- * Чистая функция без зависимостей от Vue/DOM/сторов: на вход — модель групп
- * (процессы → задачи/вехи) и настройки печати, на выход — байты PDF.
- * Даты и ячейки считаются через calendar.ts, константы раскладки — из layout.ts,
- * чтобы печать совпадала с экранной диаграммой.
+ * A pure function with no dependencies on Vue/DOM/stores: input — the group model
+ * (processes → tasks/milestones) and print settings, output — PDF bytes.
+ * Dates and cells are computed via calendar.ts, layout constants from layout.ts,
+ * so print matches the on-screen diagram.
  *
- * Пагинация: A4 landscape, шкала режется по колонкам (каждая страница — свой
- * срез дат), строки — по страницам по вертикали; колонка названий и календарный
- * заголовок повторяются на каждой странице. Ширина ячейки задаётся в px экрана
- * (умножается на 0.75 → pt).
+ * Pagination: A4 landscape, the timeline is cut by columns (each page — its own
+ * date slice), rows — across pages vertically; the label column and the calendar
+ * header repeat on every page. Cell width is given in screen px
+ * (multiplied by 0.75 → pt).
  */
 import fontkit from '@pdf-lib/fontkit'
 import { PDFDocument, rgb, type PDFFont, type PDFPage } from 'pdf-lib'
@@ -25,33 +25,33 @@ import {
 import robotoBoldUrl from '@/assets/fonts/Roboto-Bold.ttf?url'
 import robotoRegularUrl from '@/assets/fonts/Roboto-Regular.ttf?url'
 
-/** Экранный px → pt (печать в масштабе 1:1 с экранной раскладкой) */
+/** Screen px → pt (print at 1:1 scale with the screen layout) */
 const PT = 0.75
 
 /** A4 landscape (pt) */
 const PAGE_W = 841.89
 const PAGE_H = 595.28
 
-/** Равный отступ со всех сторон листа (pt) */
+/** Equal margin on all sides of the page (pt) */
 const MARGIN = 16
 const FOOTER_H = 18
 
-/** Ширина колонки названий в pt (180px экрана) */
+/** Label column width in pt (180px screen) */
 const labelW = LABEL_WIDTH * PT
-/** Полоса вех в группе в pt (20px) */
+/** Milestone strip in a group in pt (20px) */
 const msStripH = 20 * PT
-/** Мин. высота объединённого лейбла группы в pt (64px, как на экране) */
+/** Min height of the group merged label in pt (64px, as on screen) */
 const minGroupH = 64 * PT
-/** Высоты строк шапки (px на экране 18, верхний отступ 2) */
+/** Header row heights (18px on screen, top offset 2) */
 const monthRowH = 20 * PT
 const numRowH = 18 * PT
 const wdRowH = 18 * PT
-/** Высота строки ресурса в блоке занятости в pt (18px) */
+/** Resource row height in the usage block in pt (18px) */
 const rsRowH = 18 * PT
 
 type Color = ReturnType<typeof rgb>
 
-/** Палитра отрисовки: цветной (как на экране) или чёрно-белый контурный */
+/** Drawing palette: color (as on screen) or black-and-white outline */
 interface Palette {
   headerBg: Color
   headerLine: Color
@@ -63,13 +63,13 @@ interface Palette {
   textMid: Color
   textDim: Color
   textFaint: Color
-  /** Название месяца в шапке (#444) */
+  /** Month name in the header (#444) */
   textHeader: Color
-  /** Числа в шапке (#666) */
+  /** Numbers in the header (#666) */
   textHeaderNum: Color
-  /** Заголовок группы в merged-лейбле (#555) */
+  /** Group title in the merged label (#555) */
   groupTitle: Color
-  /** Код процесса в объединённом лейбле группы */
+  /** Process code in the group merged label */
   codeText: Color
   bar: Color
   barOpacity: number
@@ -84,7 +84,7 @@ interface Palette {
   resBadgeBg: Color
   resBadgeOpacity: number
   ms: Color
-  /** Цвет луча вехи (в ч/б — чёрный, чтобы луч был виден над барами) */
+  /** Milestone ray color (black in mono so the ray is visible over the bars) */
   msRay: Color
   msOpacity: number
   msBorder?: Color
@@ -98,14 +98,14 @@ interface Palette {
   usageCritical: Color
   usageWeekend: Color
   usageUnknown: Color
-  /** Текст внутри цветных ячеек занятости */
+  /** Text inside colored usage cells */
   usageText: Color
 }
 
 const BLACK = rgb(0, 0, 0)
 const WHITE = rgb(1, 1, 1)
 
-/** Цветной стиль — текущая раскраска планировщика */
+/** Color style — the planner's current coloring */
 const COLOR_PALETTE: Palette = {
   headerBg: rgb(248 / 255, 249 / 255, 250 / 255), // #f8f9fa
   headerLine: rgb(230 / 255, 230 / 255, 230 / 255), // #e6e6e6
@@ -150,7 +150,7 @@ const COLOR_PALETTE: Palette = {
   usageText: rgb(0.2, 0.2, 0.2), // #333
 }
 
-/** Чёрно-белый контурный стиль: все тексты чёрные, блоки — светло-серые с контуром */
+/** Black-and-white outline style: all text black, blocks light gray with outlines */
 const MONO_PALETTE: Palette = {
   headerBg: WHITE,
   headerLine: rgb(200 / 255, 200 / 255, 200 / 255), // #c8c8c8
@@ -200,7 +200,7 @@ function buildPalette(style?: 'color' | 'mono'): Palette {
 }
 
 export interface PdfGanttResource {
-  /** id ресурса (resource_id из DTO) — для сопоставления в блоке занятости */
+  /** Resource id (resource_id from the DTO) — for matching in the usage block */
   id?: number
   code?: string
   title?: string
@@ -212,9 +212,9 @@ export interface PdfGanttRow {
   title: string
   start_date: string
   end_date: string
-  /** Проект строки (для фильтра «Скрыть проекты» на уровне строк) */
+  /** Row's project (for the "Hide projects" filter at the row level) */
   project_id?: number
-  /** Владелец строки (для фильтра «Только мои» на уровне строк) */
+  /** Row's owner (for the "Only mine" filter at the row level) */
   owner_id?: number
   resources?: PdfGanttResource[]
 }
@@ -231,59 +231,59 @@ export interface PdfGanttGroup {
   title: string
   start_date?: string
   end_date?: string
-  /** Проект группы (для фильтра «Скрыть проекты» на уровне групп) */
+  /** Group's project (for the "Hide projects" filter at the group level) */
   project_id?: number
-  /** Владелец группы (для фильтра «Только мои» на уровне групп) */
+  /** Group's owner (for the "Only mine" filter at the group level) */
   owner_id?: number
   rows: PdfGanttRow[]
   milestones?: PdfGanttMilestone[]
 }
 
-/** Период доступности ресурса (как в /timesheet/calendar) */
+/** Resource availability period (as in /timesheet/calendar) */
 export interface PdfGanttAvailabilityPeriod {
   start_date: string
   end_date: string
-  /** Максимальное количество ресурса на этом периоде (активные − отсутствующие) */
+  /** Maximum resource quantity for this period (active − absent) */
   available: number
 }
 
-/** Ресурс для блока занятости (как ResourceHeader на экране) */
+/** Resource for the usage block (like ResourceHeader on screen) */
 export interface PdfGanttResourceInfo {
   id: number
   code: string
   title?: string
-  /** Периоды доступности из /timesheet/calendar — учитывают табель и даты нанят/уволен */
+  /** Availability periods from /timesheet/calendar — account for the timesheet and hire/fire dates */
   periods?: PdfGanttAvailabilityPeriod[]
 }
 
 export interface PdfGanttOptions {
-  /** Начало печатного диапазона YYYY-MM-DD (включительно) */
+  /** Start of the print range YYYY-MM-DD (inclusive) */
   from: string
-  /** Конец печатного диапазона YYYY-MM-DD (включительно) */
+  /** End of the print range YYYY-MM-DD (inclusive) */
   to: string
-  /** Якорь шкалы: ячейка с индексом 0 */
+  /** Timeline anchor: the cell with index 0 */
   origin: Date | string
-  /** Единица ячейки: день или декада */
+  /** Cell unit: day or decade */
   unit: PlanningUnit
-  /** Заголовок в колонтитуле */
+  /** Title in the footer */
   pageTitle?: string
-  /** Масштаб печати (зум страницы Ctrl+wheel): множитель плотности контента */
+  /** Print scale (page zoom Ctrl+wheel): content density multiplier */
   scale?: number
-  /** Толщина строки в экранных px (default 26); бар = строка − 2px */
+  /** Row thickness in screen px (default 26); bar = row − 2px */
   rowHeight?: number
-  /** Рисовать ли полосу вех и флажки (по умолчанию true) */
+  /** Whether to draw the milestone strip and flags (default true) */
   showMilestones?: boolean
-  /** Рисовать ли линию «сегодня» (по умолчанию true) */
+  /** Whether to draw the "today" line (default true) */
   showTodayLine?: boolean
-  /** Стиль отрисовки: цветной (как на экране) или чёрно-белый контурный */
+  /** Drawing style: color (as on screen) or black-and-white outline */
   style?: 'color' | 'mono'
-  /** Ресурсы для блока занятости под календарным заголовком */
+  /** Resources for the usage block under the calendar header */
   resources?: PdfGanttResourceInfo[]
 }
 
 const dowMap = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб']
 
-/** База данных шрифтов на уровне модуля: загружаем один раз, внедряем в каждый документ */
+/** Module-level font cache: loaded once, embedded into each document */
 let fontBytesCache: { regular: Uint8Array; bold: Uint8Array } | null = null
 
 async function loadFontBytes(): Promise<{ regular: Uint8Array; bold: Uint8Array }> {
@@ -305,21 +305,21 @@ interface DrawCtx {
   cellW: number
   headerH: number
   contentW: number
-  /** Высота полосы вех в группе (0, если вехи скрыты) */
+  /** Milestone strip height in a group (0 if milestones are hidden) */
   stripH: number
-  /** Группы для расчёта занятости ресурсов */
+  /** Groups for computing resource usage */
   groups: PdfGanttGroup[]
-  /** Верх контента на странице: шапка календаря + блок ресурсов (pt) */
+  /** Content top on the page: calendar header + resource block (pt) */
   groupsStart: number
-  /** Масштаб печати (зум страницы): множитель размеров контента */
+  /** Print scale (page zoom): multiplier of content sizes */
   z: number
-  /** Размеры контента, масштабированные на z */
+  /** Content sizes, scaled by z */
   layout: PdfLayout
-  /** Палитра текущего стиля (цветной / чёрно-белый) */
+  /** Palette of the current style (color / mono) */
   palette: Palette
 }
 
-/** Размеры контента диаграммы (pt), уже умноженные на масштаб z */
+/** Diagram content sizes (pt), already multiplied by scale z */
 interface PdfLayout {
   rowH: number
   barH: number
@@ -331,10 +331,10 @@ interface PdfLayout {
   rsRowH: number
 }
 
-/** pdf-y для top-y (координаты от верхнего края страницы с учётом поля) */
+/** pdf y for a top-y (coordinates from the page top, accounting for the margin) */
 const pdfY = (top: number): number => PAGE_H - MARGIN - top
 
-/** Путь скруглённого прямоугольника в SVG-координатах (y вниз; r — радиусы углов) */
+/** Rounded rectangle path in SVG coordinates (y down; r — corner radii) */
 function roundedRectPath(
   w: number,
   h: number,
@@ -353,7 +353,7 @@ function roundedRectPath(
   )
 }
 
-/** Скруглённый прямоугольник: top — координата от верха страницы (как drawRectangle) */
+/** Rounded rectangle: top — coordinate from the page top (like drawRectangle) */
 function drawRoundedRect(
   page: PDFPage,
   opts: {
@@ -379,14 +379,14 @@ function drawRoundedRect(
   })
 }
 
-/** pdf-y базовой линии текста, центрированного в полосе [bandTop, bandTop+bandH] */
+/** pdf y of the baseline of text centered in the band [bandTop, bandTop+bandH] */
 const textY = (bandTop: number, bandH: number, size: number): number =>
   pdfY(bandTop + (bandH - size) / 2 + size * 0.8)
 
-/** pdf-y базовой линии текста, центрированного по вертикальной оси center */
+/** pdf y of the baseline of text centered on the vertical axis center */
 const centerTextY = (center: number, size: number): number => pdfY(center + size * 0.8 - size / 2)
 
-/** Обрезает текст многоточием до maxWidth */
+/** Truncates text with an ellipsis to maxWidth */
 function truncate(font: PDFFont, text: string, size: number, maxWidth: number): string {
   if (font.widthOfTextAtSize(text, size) <= maxWidth) return text
   let out = text
@@ -396,7 +396,7 @@ function truncate(font: PDFFont, text: string, size: number, maxWidth: number): 
   return out + '…'
 }
 
-/** Подпись числа ячейки: для дня — число; для декады — диапазон дней (1-10, 11-20, 21-конец) */
+/** Cell number label: for a day — the number; for a decade — the day range (1-10, 11-20, 21-end) */
 function numLabel(origin: Date | string, unit: PlanningUnit, i: number): string {
   const s = cellStartDate(origin, unit, i)
   const e = cellEndDate(origin, unit, i)
@@ -408,7 +408,7 @@ function monthLabel(d: Date): string {
   return m.charAt(0).toUpperCase() + m.slice(1) + ' ' + d.getFullYear()
 }
 
-/** Месяц ячейки в абсолютном счёте (для объединения полос) */
+/** Cell's month in absolute count (for merging month bands) */
 function monthKey(origin: Date | string, unit: PlanningUnit, i: number): number {
   const d = cellStartDate(origin, unit, i)
   return d.getFullYear() * 12 + d.getMonth()
@@ -418,11 +418,11 @@ interface GroupLayout {
   group: PdfGanttGroup
   top: number
   height: number
-  /** Высота полосы вех внутри этой группы (0 — вехи скрыты) */
+  /** Milestone strip height inside this group (0 — milestones hidden) */
   stripH: number
 }
 
-/** Занятость ресурса в день: сумма quantity по задачам, покрывающим день */
+/** Resource usage per day: sum of quantity over the tasks covering the day */
 function usageForDay(groups: PdfGanttGroup[], resourceId: number, day: Date): number {
   const t = day.getTime()
   let used = 0
@@ -438,7 +438,7 @@ function usageForDay(groups: PdfGanttGroup[], resourceId: number, day: Date): nu
   return used
 }
 
-/** Доступность ресурса на день из периодов /timesheet/calendar (null — нет покрытия) */
+/** Resource availability for the day from /timesheet/calendar periods (null — no coverage) */
 function availableForDay(r: PdfGanttResourceInfo, day: Date): number | null {
   const periods = r.periods
   if (!periods || !periods.length) return null
@@ -452,9 +452,9 @@ function availableForDay(r: PdfGanttResourceInfo, day: Date): number | null {
 }
 
 /**
- * Блок занятости ресурсов (как ResourceHeader): строка на ресурс под календарным
- * заголовком, в колонке названий — код, по ячейкам — пик загрузки за дни ячейки
- * с цветом по состоянию (норма/перегруз/критично/выходной/нет данных).
+ * Resource usage block (like ResourceHeader): one row per resource below the calendar
+ * header, the code in the label column, per cell — the peak load over the cell's days
+ * colored by state (normal/overload/critical/weekend/no data).
  */
 function drawResourceHeader(
   ctx: DrawCtx,
@@ -466,7 +466,7 @@ function drawResourceHeader(
   const yTop = headerH
   const height = resources.length * layout.rsRowH
 
-  // Колонка названий: белая подложка + коды ресурсов
+  // Label column: white backdrop + resource codes
   page.drawRectangle({ x: MARGIN, y: pdfY(yTop + height), width: labelW, height, color: palette.labelBg })
   for (let ri = 0; ri < resources.length; ri++) {
     const r = resources[ri]
@@ -486,7 +486,7 @@ function drawResourceHeader(
     color: palette.labelLine,
   })
 
-  // Ячейки загрузки по видимым индексам
+  // Usage cells across the visible indices
   for (let ri = 0; ri < resources.length; ri++) {
     const r = resources[ri]
     const top = yTop + ri * layout.rsRowH
@@ -508,11 +508,11 @@ function drawResourceHeader(
         else minAvail = minAvail == null ? availDay : Math.min(minAvail, availDay)
         cur.setDate(cur.getDate() + 1)
       }
-      // Доступность ячейки как в планировщике: минимум по дням; если хоть один
-      // день без периода — состояние «нет данных»
+      // Cell availability as in the planner: minimum over days; if any day has
+      // no period — the state is "no data"
       const avail = hasUnknown ? null : minAvail
-      // Состояние по проценту загрузки, как в UsageCell: ≤100% норма, до 160%
-      // перегруз, >160% критично (0 доступных с занятостью — критично)
+      // State by load percentage, as in UsageCell: ≤100% normal, up to 160%
+      // overload, >160% critical (0 available with load — critical)
       let state: 'normal' | 'warn' | 'critical' | 'weekend' | 'unknown'
       if (weekend) state = 'weekend'
       else if (avail == null) state = 'unknown'
@@ -532,9 +532,9 @@ function drawResourceHeader(
                 ? palette.usageCritical
                 : palette.usageNormal
       page.drawRectangle({ x, y: pdfY(top + layout.rsRowH), width: cellW, height: layout.rsRowH, color: bg })
-      // Числа занятости: шрифт адаптивный — стартует от масштаба (6.75×z) и ширины
-      // ячейки, при нехватке места уменьшается, чтобы «used/cap» помещалось
-      // (при низком зуме шрифт мельче — числа видны даже в узких ячейках).
+      // Usage numbers: adaptive font — starts from the scale (6.75×z) and the cell
+      // width, shrinks when space is tight so that "used/cap" fits
+      // (at low zoom the font is smaller — numbers stay visible even in narrow cells).
       const label = avail == null ? `${peak}` : `${peak}/${avail}`
       let size = Math.min(6.75 * z, cellW * 0.6)
       while (size >= 1.5 && font.widthOfTextAtSize(label, size) > cellW - 1) size -= 0.25
@@ -551,7 +551,7 @@ function drawResourceHeader(
         })
       }
     }
-    // Разделитель строки ресурса
+    // Resource row divider
     page.drawLine({
       start: { x: MARGIN + labelW, y: pdfY(top + layout.rsRowH) },
       end: { x: MARGIN + labelW + (colTo - colFrom + 1) * cellW, y: pdfY(top + layout.rsRowH) },
@@ -561,7 +561,7 @@ function drawResourceHeader(
   }
 }
 
-/** Рисует календарную шапку: месяц/числа/дни недели + границы ячеек */
+/** Draws the calendar header: month/numbers/weekdays + cell borders */
 function drawHeader(ctx: DrawCtx, colFrom: number, colTo: number, cellWidthPx: number) {
   const { page, font, bold, unit, cellW, headerH, contentW, layout, z, palette } = ctx
   const bands: { top: number; h: number }[] = [{ top: 0, h: layout.monthRowH }]
@@ -572,14 +572,14 @@ function drawHeader(ctx: DrawCtx, colFrom: number, colTo: number, cellWidthPx: n
 
   page.drawRectangle({ x: MARGIN, y: pdfY(headerH), width: contentW, height: headerH, color: palette.headerBg })
 
-  // Вертикальные границы ячеек в шапке
+  // Vertical cell borders in the header
   for (let k = colFrom; k <= colTo + 1; k++) {
     const x = MARGIN + labelW + (k - colFrom) * cellW
     page.drawLine({ start: { x, y: pdfY(0) }, end: { x, y: pdfY(headerH) }, thickness: 0.5, color: palette.headerLine })
   }
 
-  // Полосы месяцев: метка центрируется по видимой части месяца; при узких ячейках
-  // размер шрифта уменьшается, чтобы название месяца осталось читаемым
+  // Month bands: the label is centered over the visible part of the month; with narrow
+  // cells the font size shrinks so the month name stays readable
   let i = colFrom
   while (i <= colTo) {
     const key = monthKey(ctx.origin, unit, i)
@@ -603,7 +603,7 @@ function drawHeader(ctx: DrawCtx, colFrom: number, colTo: number, cellWidthPx: n
     i = j
   }
 
-  // Числа и дни недели по ячейкам
+  // Numbers and weekdays per cell
   if (showNumRow) {
     for (let k = colFrom; k <= colTo; k++) {
       const x = MARGIN + labelW + (k - colFrom) * cellW
@@ -633,11 +633,11 @@ function drawHeader(ctx: DrawCtx, colFrom: number, colTo: number, cellWidthPx: n
     }
   }
 
-  // Нижняя граница шапки
+  // Header bottom border
   page.drawLine({ start: { x: MARGIN, y: pdfY(headerH) }, end: { x: MARGIN + contentW, y: pdfY(headerH) }, thickness: 0.75, color: palette.groupLine })
 }
 
-/** Вертикальные линии сетки для видимого окна (от шапки до низа таблицы) */
+/** Vertical grid lines for the visible window (from the header to the table bottom) */
 function drawGrid(ctx: DrawCtx, colFrom: number, colTo: number, winTop: number, winBottom: number) {
   const { page, cellW, headerH, palette } = ctx
   for (let k = colFrom; k <= colTo + 1; k++) {
@@ -651,14 +651,14 @@ function drawGrid(ctx: DrawCtx, colFrom: number, colTo: number, winTop: number, 
   }
 }
 
-/** Рисует группу (полоса вех, объединённый лейбл, бары задач), обрезая по видимому окну */
+/** Draws a group (milestone strip, merged label, task bars), clipped to the visible window */
 function drawGroup(ctx: DrawCtx, gl: GroupLayout, colFrom: number, colTo: number, winTop: number, winBottom: number) {
   const { page, font, bold, unit, cellW, stripH, groupsStart, layout, z, palette } = ctx
   const g = gl.group
   const strip = gl.stripH
   const top = gl.top
   const bottom = top + gl.height
-  // Верх видимого среза: контент ниже шапки и блока ресурсов (page-local = y - winTop)
+  // Top of the visible slice: content below the header and the resource block (page-local = y - winTop)
   const clipTop = winTop + groupsStart
   const visibleTop = Math.max(top, clipTop)
   const visibleBottom = Math.min(bottom, winBottom)
@@ -667,7 +667,7 @@ function drawGroup(ctx: DrawCtx, gl: GroupLayout, colFrom: number, colTo: number
   const x0 = MARGIN + labelW
   const x1 = MARGIN + labelW + (colTo - colFrom + 1) * cellW
 
-  // Подложка границ группы (как .gg-overlay) по фактическому спару дат
+  // Group bounds backdrop (like .gg-overlay) across the actual date span
   const s = cellRangeForSpanSafe(ctx.origin, unit, g.start_date, g.end_date)
   if (s) {
     const ox = Math.max(x0, MARGIN + labelW + (Math.max(s.startCell, colFrom) - colFrom) * cellW)
@@ -684,9 +684,9 @@ function drawGroup(ctx: DrawCtx, gl: GroupLayout, colFrom: number, colTo: number
     }
   }
 
-  // Объединённый лейбл группы (код + имя + даты). Текст рисуем только на первой
-  // странице группы (labelTop виден в срезе): на продолжениях — белая подложка
-  // и граница, чтобы не дублировалась «ячейка» описания процесса.
+  // Group merged label (code + name + dates). Text is drawn only on the first
+  // page of the group (labelTop visible in the slice): on continuations — a white
+  // backdrop and border, so the process description "cell" is not duplicated.
   const labelTop = top + strip
   const labelBottom = bottom
   const lvTop = Math.max(labelTop, clipTop)
@@ -712,11 +712,11 @@ function drawGroup(ctx: DrawCtx, gl: GroupLayout, colFrom: number, colTo: number
         page.drawText(truncate(font, range, dSize, maxW), { x: MARGIN + padX, y: pdfY(cursor + dSize * 0.8), size: dSize, font, color: palette.textDim })
       }
     }
-    // Границы лейбла
+    // Label borders
     page.drawLine({ start: { x: MARGIN + labelW, y: pdfY(lvBottom - winTop) }, end: { x: MARGIN + labelW, y: pdfY(lvTop - winTop) }, thickness: 0.75, color: palette.labelLine })
   }
 
-  // Бары задач
+  // Task bars
   const rows = g.rows ?? []
   for (let i = 0; i < rows.length; i++) {
     const bandTop = top + strip + i * layout.rowH
@@ -729,16 +729,16 @@ function drawGroup(ctx: DrawCtx, gl: GroupLayout, colFrom: number, colTo: number
     const bx = Math.max(barX, x0)
     const bx1 = Math.min(barX1, x1)
     if (bx1 - bx <= 0) continue
-    // Вертикальная обрезка бара по видимому срезу (граничная группа на стыке страниц):
-    // clipTop — в page-local координатах (groupsStart), низ — winBottom - winTop
+    // Vertical clip of the bar to the visible slice (boundary group at a page seam):
+    // clipTop — in page-local coordinates (groupsStart), the bottom — winBottom - winTop
     const barTopLocal = bandTop - winTop + (layout.rowH - layout.barH) / 2
     const barBottomLocal = barTopLocal + layout.barH
     const barTopClip = Math.max(barTopLocal, groupsStart)
     const barBottomClip = Math.min(barBottomLocal, winBottom - winTop)
     if (barBottomClip - barTopClip <= 0) continue
     const barFull = barTopClip === barTopLocal && barBottomClip === barBottomLocal
-    // Скругление как на экране (5px), но без радиуса с обрезанной стороны
-    // на стыке страниц (иначе угол «выпирает» за край).
+    // Rounding as on screen (5px), but without a radius on the clipped side
+    // at page seams (otherwise the corner "bulges" past the edge).
     const topClipped = barTopClip > barTopLocal
     const bottomClipped = barBottomClip < barBottomLocal
     const barRad = Math.min(5 * PT * z, (bx1 - bx) / 2, (barBottomClip - barTopClip) / 2)
@@ -759,7 +759,7 @@ function drawGroup(ctx: DrawCtx, gl: GroupLayout, colFrom: number, colTo: number
       borderWidth: palette.barBorderWidth,
     })
 
-    // Текст на баре: название + бейдж кода + бейджи ресурсов (только если бар не обрезан)
+    // Bar text: title + code badge + resource badges (only when the bar is not clipped)
     const pad = 6
     const barCenter = (barTopClip + barBottomClip) / 2
     if (barFull && bx1 - bx >= pad * 2 + 10) {
@@ -772,7 +772,7 @@ function drawGroup(ctx: DrawCtx, gl: GroupLayout, colFrom: number, colTo: number
       cx += tw + 4.5
 
       const bh = 12 * z
-      // Пилюля, как на экране (radius 10px), ограниченная высотой
+      // Pill as on screen (radius 10px), limited by the height
       const badgeRad = Math.min(10 * PT * z, bh / 2)
       const drawBadge = (text: string, cs: number, bg: Color, opacity: number, border?: Color, borderWidth = 0) => {
         const w = bold.widthOfTextAtSize(text, cs) + 8
@@ -782,7 +782,7 @@ function drawGroup(ctx: DrawCtx, gl: GroupLayout, colFrom: number, colTo: number
         cx += w + 4.5
       }
 
-      // Бейдж кода проекта, если есть место
+      // Project code badge, if there is room
       if (g.code && cx + 12 < bx1 - pad) {
         const cs = 7.5 * z
         const codeText = truncate(bold, g.code, cs, bx1 - pad - cx - 8)
@@ -790,7 +790,7 @@ function drawGroup(ctx: DrawCtx, gl: GroupLayout, colFrom: number, colTo: number
           drawBadge(codeText, cs, palette.codeBadgeBg, palette.codeBadgeOpacity, palette.badgeBorder, palette.badgeBorderWidth)
         }
       }
-      // Бейджи ресурсов, пока есть место
+      // Resource badges while there is room
       for (const r of row.resources ?? []) {
         if (cx + 14 >= bx1 - pad) break
         const cs = 7.5 * z
@@ -802,9 +802,9 @@ function drawGroup(ctx: DrawCtx, gl: GroupLayout, colFrom: number, colTo: number
     }
   }
 
-  // Вехи: флажок в полосе + луч вниз по группе. Рисуем ПОСЛЕ баров, чтобы луч был
-  // поверх них. Полоса должна целиком влезать в видимый срез (иначе флажок
-  // попадает под шапку/в поле страницы).
+  // Milestones: a flag in the strip + a ray down the group. Drawn AFTER the bars so the ray
+  // is on top of them. The strip must fit entirely in the visible slice (otherwise the flag
+  // ends up under the header/in the page margin).
   if (strip > 0 && top >= clipTop && top + strip <= winBottom) {
     const rayStart = (top - winTop) + strip
     const rayEnd = Math.min(bottom - winTop, winBottom - winTop)
@@ -817,10 +817,10 @@ function drawGroup(ctx: DrawCtx, gl: GroupLayout, colFrom: number, colTo: number
       const flagH = 12 * z
       const fx = cx - flagW / 2
       const flagTop = top - winTop + 1.5 * z
-      // Скругление 4px, как у .ms-marker на экране (ограничено размером флажка)
+      // 4px rounding, like .ms-marker on screen (limited by the flag size)
       const flagRad = Math.min(4 * PT * z, flagW / 2, flagH / 2)
       drawRoundedRect(page, { x: fx, top: flagTop, w: flagW, h: flagH, r: flagRad, color: palette.ms, opacity: 1, borderColor: palette.msBorder, borderWidth: palette.msBorderWidth })
-      // Луч от полосы вех до низа группы (обрезается по низу среза)
+      // Ray from the milestone strip to the group bottom (clipped by the slice bottom)
       page.drawLine({
         start: { x: cx, y: pdfY(rayStart) },
         end: { x: cx, y: pdfY(rayEnd) },
@@ -832,7 +832,7 @@ function drawGroup(ctx: DrawCtx, gl: GroupLayout, colFrom: number, colTo: number
   }
 }
 
-/** Спан интервала дат в ячейках; null, если даты некорректны */
+/** Span of a date interval in cells; null if the dates are invalid */
 function cellRangeForSpanSafe(
   origin: Date | string,
   unit: PlanningUnit,
@@ -849,14 +849,14 @@ function cellRangeForSpanSafe(
   }
 }
 
-/** Красная линия «сегодня» в видимом окне — на границе «вчера/сегодня», как в планировщике */
+/** Red "today" line in the visible window — at the "yesterday/today" boundary, as in the planner */
 function drawToday(ctx: DrawCtx, colFrom: number, colTo: number, winTop: number, winBottom: number) {
   const idx = cellIndexForDate(ctx.origin, ctx.unit, new Date())
   if (idx < colFrom || idx > colTo) return
   const now = new Date()
   const s = cellStartDate(ctx.origin, ctx.unit, idx).getTime()
   const e = cellEndDate(ctx.origin, ctx.unit, idx).getTime()
-  // день — левый край ячейки «сегодня»; декада — дробная позиция текущего дня
+  // day — the left edge of the "today" cell; decade — the fractional position of the current day
   const frac = ctx.unit === 'decade' ? (now.getTime() - s) / (e - s + DAY_MS) : 0
   const x = MARGIN + labelW + (idx - colFrom) * ctx.cellW + frac * ctx.cellW
   ctx.page.drawLine({
@@ -882,24 +882,24 @@ function drawFooter(page: PDFPage, font: PDFFont, bold: PDFFont, pageNo: number,
 }
 
 /**
- * Рендерит диаграмму Ганта в PDF.
- * Возвращает байты PDF-файла (Uint8Array), готовые для скачивания.
+ * Renders the Gantt diagram to PDF.
+ * Returns the PDF file bytes (Uint8Array), ready for download.
  */
 export async function renderGanttPdf(groups: PdfGanttGroup[], opts: PdfGanttOptions): Promise<Uint8Array> {
   const doc = await PDFDocument.create()
   doc.registerFontkit(fontkit)
   const bytes = await loadFontBytes()
-  // subset:false — сабсеттинг pdf-lib 1.17.1 плодит битый отдельный сабсет на каждый
-  // drawText (текст пропадает в рендере). Полный шрифт внедряется корректно.
+  // subset:false — pdf-lib 1.17.1 subsetting produces a broken separate subset per
+  // drawText (text disappears in the render). The full font embeds correctly.
   const font = await doc.embedFont(bytes.regular, { subset: false })
   const bold = await doc.embedFont(bytes.bold, { subset: false })
 
   const unit = opts.unit
-  /** Масштаб печати: зум страницы (Ctrl+wheel) — множитель плотности контента */
+  /** Print scale: page zoom (Ctrl+wheel) — content density multiplier */
   const z = Math.max(0.25, Math.min(4, opts.scale ?? 1))
-  /** Палитра стиля: цветной (по умолчанию) или чёрно-белый контурный */
+  /** Style palette: color (default) or black-and-white outline */
   const palette = buildPalette(opts.style)
-  /** Толщина строки (экранные px); бар на 2px тоньше строки */
+  /** Row thickness (screen px); the bar is 2px thinner than the row */
   const rowHeightPx = opts.rowHeight ?? 26
   const layout: PdfLayout = {
     rowH: rowHeightPx * PT * z,
@@ -915,9 +915,9 @@ export async function renderGanttPdf(groups: PdfGanttGroup[], opts: PdfGanttOpti
   const toCell = Math.max(fromCell, cellIndexForDate(opts.origin, unit, opts.to))
   const totalCells = toCell - fromCell + 1
 
-  // Процессы, целиком лежащие вне печатного диапазона, исключаем из рендеринга
-  // совсем: start_date >= правой границы или end_date <= левой границы.
-  // Без дат (или с кривыми) процесс остаётся — рендер опирается на задачи.
+  // Processes lying entirely outside the print range are excluded from rendering
+  // altogether: start_date >= right boundary or end_date <= left boundary.
+  // Without dates (or with broken ones) the process stays — rendering relies on tasks.
   const fromTime = toDate(opts.from).getTime()
   const toTime = toDate(opts.to).getTime()
   const groupsInRange = groups.filter((g) => {
@@ -928,21 +928,21 @@ export async function renderGanttPdf(groups: PdfGanttGroup[], opts: PdfGanttOpti
     return s < toTime && e > fromTime
   })
 
-  /** Полоса вех: 0, если вехи скрыты опцией печати */
+  /** Milestone strip: 0 if milestones are hidden by the print option */
   const stripH = opts.showMilestones === false ? 0 : layout.msStripH
-  /** Ресурсы для блока занятости (пусто — блок не рисуется) */
+  /** Resources for the usage block (empty — the block is not drawn) */
   const resources = opts.resources ?? []
 
   const contentW = PAGE_W - 2 * MARGIN
-  /** Ширина ячейки под вписывание ВСЕГО диапазона дат на одну страницу */
+  /** Cell width to fit the ENTIRE date range on one page */
   const cellW = Math.max((contentW - labelW) / totalCells, 0.5)
-  /** Эффективная «экранная» ширина ячейки для порогов шапки */
+  /** Effective "screen" cell width for header thresholds */
   const cellWidthPx = cellW / PT
   const headerH = headerHeight(unit, cellWidthPx) * PT * z
-  /** Весь диапазон — на одной странице по ширине (без горизонтальной пагинации) */
+  /** The whole range on one page across the width (no horizontal pagination) */
   const pagesAcross = 1
 
-  // Группы в «своих» координатах (0 = сразу под шапкой/ресурсами)
+  // Groups in "own" coordinates (0 = right below the header/resources)
   const layouts: GroupLayout[] = []
   let top = 0
   for (const g of groupsInRange) {
@@ -954,13 +954,13 @@ export async function renderGanttPdf(groups: PdfGanttGroup[], opts: PdfGanttOpti
   const tableBottom = PAGE_H - MARGIN - FOOTER_H
   const availH = tableBottom - MARGIN
   const resourcesH = resources.length * layout.rsRowH
-  /** Верх контента на странице: шапка календаря + блок ресурсов */
+  /** Content top on the page: calendar header + resource block */
   const groupsStart = headerH + resourcesH
-  /** Высота страницы под группы (после шапки и ресурсов) */
+  /** Page height available for groups (after the header and resources) */
   const groupsAvail = Math.max(availH - groupsStart, 50)
 
-  // Разбивка страниц ТОЛЬКО по границам строк: страница вмещает целые строки,
-  // иначе последняя строка (и её бар) целиком переносится на следующую страницу.
+  // Page breaks ONLY at row boundaries: a page fits whole rows,
+  // otherwise the last row (and its bar) would move entirely to the next page.
   const rowTops: number[] = []
   for (const gl of layouts) {
     const rowsCount = (gl.group.rows ?? []).length
@@ -978,14 +978,14 @@ export async function renderGanttPdf(groups: PdfGanttGroup[], opts: PdfGanttOpti
           end = t + layout.rowH
         }
       }
-      // Страховка: ни одна строка не «влезла» — режем по пиксельной высоте
+      // Safety net: no row "fit" — cut by pixel height
       if (end <= start) end = Math.min(start + groupsAvail, tableH)
       start = end
     }
   }
-  // Хвостовая пустая страница: если после последней строки осталась только
-  // высота мин-группы (последняя группа короче своих строк), строки кончаются
-  // раньше tableH — лишние разрывы страниц убираем.
+  // Trailing empty page: if after the last row only the min-group height is left
+  // (the last group is shorter than its rows), the rows end before tableH —
+  // we remove the extra page breaks.
   if (rowTops.length > 0) {
     const rowsEnd = Math.max(...rowTops) + layout.rowH
     while (pageBreaks.length > 1 && pageBreaks[pageBreaks.length - 1] >= rowsEnd) pageBreaks.pop()
@@ -1011,12 +1011,12 @@ export async function renderGanttPdf(groups: PdfGanttGroup[], opts: PdfGanttOpti
         layout,
         palette,
       }
-      // Абсолютные индексы ячеек: весь диапазон — на одной странице по ширине.
+      // Absolute cell indices: the whole range on one page across the width.
       const colFrom = fromCell
       const colTo = toCell
-      // Вертикальная пагинация по границам строк: winTop сдвинут на groupsStart,
-      // чтобы первый видимый слой групп начинался ПОД шапкой и блоком ресурсов;
-      // winBottom — граница среза (конец последней полной строки).
+      // Vertical pagination at row boundaries: winTop is shifted by groupsStart
+      // so the first visible group slice starts BELOW the header and the resource block;
+      // winBottom — the slice boundary (end of the last full row).
       const start = pageBreaks[r]
       const end = r + 1 < pagesDown ? pageBreaks[r + 1] : tableH
       const winTop = start - groupsStart
@@ -1027,7 +1027,7 @@ export async function renderGanttPdf(groups: PdfGanttGroup[], opts: PdfGanttOpti
       if (resources.length) drawResourceHeader(ctx, resources, colFrom, colTo)
       for (const gl of layouts) drawGroup(ctx, gl, colFrom, colTo, winTop, winBottom)
 
-      // Разделители групп на всю ширину таблицы (только в видимом срезе ниже шапки)
+      // Group dividers across the full table width (only in the visible slice below the header)
       for (const gl of layouts) {
         const y = gl.top + gl.height
         if (y <= winTop + groupsStart || y >= winBottom) continue
@@ -1039,8 +1039,8 @@ export async function renderGanttPdf(groups: PdfGanttGroup[], opts: PdfGanttOpti
         })
       }
 
-      // Линия «сегодня» рисуется последней — поверх баров и лучей вех (как на экране);
-      // колонку названий она не пересекает (стартует от x >= labelW)
+      // The "today" line is drawn last — over the bars and milestone rays (as on screen);
+      // it does not cross the label column (starts at x >= labelW)
       if (opts.showTodayLine !== false) drawToday(ctx, colFrom, colTo, winTop, winBottom)
 
       drawFooter(page, font, bold, r * pagesAcross + c + 1, pagesDown * pagesAcross, opts, palette)

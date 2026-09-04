@@ -11,9 +11,9 @@ const props = withDefaults(
     used: number
     available: number | null
     isWeekend: boolean
-    /** Показывать ли подпись used/available (прячется в узких ячейках) */
+    /** Whether to show the used/available caption (hidden in narrow cells) */
     showText?: boolean
-    /** Отсутствующие сотрудники ресурса на днях ячейки (для тултипа) */
+    /** Resource employees absent on the cell's days (for the tooltip) */
     absentees?: DtoResourceAbsenceResponse[]
   }>(),
   {
@@ -23,10 +23,10 @@ const props = withDefaults(
   },
 )
 
-/** Процент загрузки: ≤100% зелёный, 100–160% жёлтый, >160% красный */
+/** Load percentage: ≤100% green, 100–160% yellow, >160% red */
 const state = computed<UsageState>(() => usageState({ used: props.used, available: props.available, isWeekend: props.isWeekend }))
 
-/** Полный формат в ячейке; для крайних случаев (переполнение) — дублируется в тултипе */
+/** Full format in the cell; for edge cases (overflow) it is duplicated in the tooltip */
 const displayText = computed(() =>
   props.available == null ? `${props.used}` : `${props.used}/${props.available}`,
 )
@@ -42,7 +42,9 @@ const displayText = computed(() =>
 </template>
 
 <style scoped>
-/* Триггер тултипа заполняет ячейку (класс переносится на корень TooltipCell) */
+@import "../../../styles/tokens.css";
+
+/* Tooltip trigger fills the cell (the class is forwarded to the TooltipCell root) */
 .uc {
   display: flex;
   width: 100%;
@@ -65,41 +67,41 @@ const displayText = computed(() =>
   padding: 0 1px;
   overflow: hidden;
   white-space: nowrap;
-  transition: background 0.15s, color 0.15s;
+  transition: background var(--ui-duration), color var(--ui-duration);
 }
 
-/* Узкие ячейки: текст скрыт, ячейка вдвое тоньше */
+/* Narrow cells: text hidden, cell twice as thin */
 .uc--compact {
   min-height: 9px;
 }
 
-/* 1. Норма — загрузка ≤ 100% (база: исходный зелёный #aacfcf) */
+/* 1. Normal — load ≤ 100% (base: original green) */
 .normal {
-  background: #aacfcf;
-  color: #333;
+  background: var(--ui-usage-ok);
+  color: var(--ui-usage-ok-text);
 }
 
-/* 2. Перегруз — 100–160% (жёлтый, мутирован от зелёного в ту же тональность) */
+/* 2. Overload — 100–160% (yellow, mutated from green into the same tone) */
 .warn {
-  background: #e6d488;
-  color: #333;
+  background: var(--ui-usage-warn);
+  color: var(--ui-usage-warn-text);
 }
 
-/* 3. Критическая перегруз — >160% (красный, мутирован от зелёного в ту же тональность) */
+/* 3. Critical overload — >160% (red, mutated from green into the same tone) */
 .critical {
-  background: #e09a9a;
-  color: #333;
+  background: var(--ui-usage-crit);
+  color: var(--ui-usage-crit-text);
 }
 
-/* 4. Выходной день — как обычная ячейка таблицы (не выделять) */
+/* 4. Weekend — like a regular table cell (do not highlight) */
 .weekend {
-  background: #f0f0f0;
-  color: #999;
+  background: var(--ui-usage-weekend);
+  color: var(--ui-usage-weekend-text);
 }
 
-/* 5. Нет данных о доступности (вне окна загрузки ±год) — нейтральная ячейка */
+/* 5. No availability data (outside the ±1-year load window) — neutral cell */
 .unknown {
-  background: #fff;
-  color: #b0b0b0;
+  background: var(--ui-usage-unknown);
+  color: var(--ui-usage-unknown-text);
 }
 </style>

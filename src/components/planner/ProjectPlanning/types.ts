@@ -10,9 +10,9 @@ export interface ProjectItem {
 
 export interface ProjectPlanningProps {
   projects?: DtoProject[] | null
-  /** Якорь шкалы: ячейка с индексом 0 (начальная позиция) */
+  /** Timeline anchor: cell with index 0 (starting position) */
   origin?: string | Date
-  /** Единица ячейки: день или декада */
+  /** Cell unit: day or decade */
   unit?: PlanningUnit
 }
 

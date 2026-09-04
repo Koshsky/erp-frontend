@@ -10,12 +10,14 @@ const props = withDefaults(defineProps<TimesheetCellProps>(), {
   isWeekend: false,
   selected: false,
   showText: false,
+  selectionRange: null,
+  tooltipDisabled: false,
 })
 
 const bg = computed<string>(() => {
   const s = props.state
   if (!s) {
-    return props.isWeekend ? '#f0f0f0' : 'transparent'
+    return props.isWeekend ? 'var(--ui-usage-weekend)' : 'transparent'
   }
   return stateBackground(s.state_code, s.is_available, s.state_id)
 })
@@ -26,7 +28,12 @@ function fmtDM(iso?: string): string {
   return `${d}.${m}`
 }
 
-/** Цветной маркер состояния (для пустого дня — нет маркера) */
+function fmtFull(iso: string): string {
+  const [y, m, d] = iso.split('-')
+  return `${d}.${m}.${y}`
+}
+
+/** Colored state marker (no marker for an empty day) */
 const marker = computed<string | null>(() => {
   const s = props.state
   if (!s) return null
@@ -43,7 +50,7 @@ const emptyLabel = computed(() => (props.isWeekend ? 'Выходной' : 'Ра�
 </script>
 
 <template>
-  <TooltipCell class="tsc" :multiline="true">
+  <TooltipCell class="tsc" :multiline="true" :disabled="tooltipDisabled">
     <div
       class="tsc-inner"
       :class="{ 'tsc--selected': selected, 'tsc--show-text': showText }"
@@ -52,12 +59,26 @@ const emptyLabel = computed(() => (props.isWeekend ? 'Выходной' : 'Ра�
       <span v-if="showText && state" class="tsc-code">{{ state.state_code }}</span>
     </div>
     <template #popup>
-      <InfoTooltip :title="state ? state.state_name : emptyLabel" :lines="state ? [period] : []" :marker="marker" />
+      <!-- While the cell is part of an active selection, show the fragment date
+           range instead of the per-day info (assignment feedback) -->
+      <InfoTooltip
+        v-if="selectionRange"
+        title="Выделенный фрагмент"
+        :lines="[`${fmtFull(selectionRange.start)} — ${fmtFull(selectionRange.end)}`]"
+      />
+      <InfoTooltip
+        v-else
+        :title="state ? state.state_name : emptyLabel"
+        :lines="state ? [period] : []"
+        :marker="marker"
+      />
     </template>
   </TooltipCell>
 </template>
 
 <style scoped>
+@import '../../../styles/tokens.css';
+
 .tsc {
   display: flex;
   width: 100%;
@@ -73,7 +94,7 @@ const emptyLabel = computed(() => (props.isWeekend ? 'Выходной' : 'Ра�
   box-sizing: border-box;
 }
 .tsc--selected {
-  outline: 2px solid #1a73e8;
+  outline: 2px solid var(--ui-accent);
   outline-offset: -2px;
   z-index: 2;
 }

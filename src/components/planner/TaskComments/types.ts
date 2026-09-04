@@ -1,11 +1,11 @@
 import type { DtoCommentResponse, DtoUserInfo } from '@/api'
 
-/** Плоский элемент дерева обсуждения (pre-order) для рендера с отступами */
+/** Flat discussion-tree node (pre-order) for indented rendering */
 export interface CommentFlatNode {
   comment: DtoCommentResponse
-  /** Глубина вложенности (0 — корневой/осиротевший) */
+  /** Nesting depth (0 — root/orphaned) */
   depth: number
-  /** Родитель удалён — ответ отображается на верхнем уровне с пометкой */
+  /** Parent deleted — the reply is shown at the top level with a marker */
   orphan: boolean
 }
 
@@ -13,17 +13,17 @@ export interface TaskCommentsProps {
   open: boolean
   taskId: number
   taskTitle?: string
-  /** Плоский список комментариев задачи (GET /task/{id}/comments) */
+  /** Flat list of the task's comments (GET /task/{id}/comments) */
   comments?: DtoCommentResponse[]
-  /** Справочник пользователей для имён авторов (author_id → name) */
+  /** User directory for author names (author_id → name) */
   users?: DtoUserInfo[]
   busy?: boolean
   error?: string | null
-  /** Причина блокировки отправки (например, офлайн); null — отправка доступна */
+  /** Reason for blocking sending (e.g. offline); null — sending available */
   disabledReason?: string | null
-  /** Право удалять чужие комментарии (admin/vp); автор удаляет своё всегда */
+  /** Permission to delete others' comments (admin/vp); authors always delete their own */
   canManage?: boolean
-  /** Текущий пользователь — для кнопки «Удалить» у своих комментариев */
+  /** Current user — for the "Delete" button on own comments */
   userId?: number | null
 }
 
@@ -36,9 +36,9 @@ export interface DeleteCommentPayload {
   comment_id: number
 }
 
-/** Строит пре-ордер плоский список: ответы идут сразу после родителя с отступом.
- *  Если parent_id ссылается на отсутствующий комментарий (удалён) — узел
- *  поднимается на верхний уровень с пометкой orphan. */
+/** Builds a pre-order flat list: replies follow their parent indented.
+ *  If parent_id references a missing (deleted) comment — the node
+ *  is lifted to the top level with the orphan marker. */
 export function flattenComments(list: DtoCommentResponse[]): CommentFlatNode[] {
   const byId = new Map<number, DtoCommentResponse>()
   for (const c of list) if (c.id != null) byId.set(c.id, c)
@@ -61,7 +61,7 @@ export function flattenComments(list: DtoCommentResponse[]): CommentFlatNode[] {
   }
 
   for (const c of list) {
-    // Корни: без parent_id или с parent_id, которого нет в списке (удалён).
+    // Roots: no parent_id or a parent_id absent from the list (deleted).
     if (c.parent_id != null && byId.has(c.parent_id)) continue
     walk(c, 0, c.parent_id != null && !byId.has(c.parent_id))
   }

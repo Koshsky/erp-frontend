@@ -58,4 +58,13 @@ export const WithDecades: Story = {
   },
 }
 
+/** Empty DB: a centered «Новый проект» action (the page creates with today's date) */
+export const Empty: Story = {
+  args: {
+    projects: [],
+    origin: '2026-07-01',
+    canCreate: true,
+  },
+}
+
 

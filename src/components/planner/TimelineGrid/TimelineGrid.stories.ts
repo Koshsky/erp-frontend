@@ -106,8 +106,8 @@ export const Decades: Story = {
   }),
 }
 
-/** Драг + автопрокрутка: реальные Bar внутри TimelineGrid.
- *  Перетащи бар к краю — шкала автоматически прокрутится (диапазон расширится). */
+/** Drag + autoscroll: real Bars inside TimelineGrid.
+ *  Drag a bar toward the edge — the timeline scrolls automatically (the range expands). */
 export const DragAutoscroll: Story = {
   render: () => ({
     components: { TimelineGrid, Bar },

@@ -1,37 +1,37 @@
-/** Одна запись лога комментариев в тултипе задачи */
+/** A single comment log entry in a task tooltip */
 export interface BarTooltipComment {
-  /** Имя автора (резолвится на фронте из author_id) */
+  /** Author name (resolved on the frontend from author_id) */
   author?: string
-  /** Короткая дата-время */
+  /** Short date-time */
   date?: string
   text: string
 }
 
-/** Общий тултип объекта диаграммы: заголовок + строки + ресурсы (задача/проект/процесс/веха) */
+/** Generic diagram entity tooltip: title + rows + resources (task/project/process/milestone) */
 export interface BarTooltipProps {
   title: string
-  /** Дополнительные строки (даты, владелец, приоритет, содержимое и т.п.) */
+  /** Additional rows (dates, owner, priority, content, etc.) */
   rows?: string[]
-  /** Список ресурсов с количеством — отдельным блоком с разделителем */
-  resources?: { label: string; quantity?: number }[]
-  /** Лог комментариев задачи (показывается до 4 записей + «…и ещё N») */
+  /** Resource list with quantities — as a separate block with a divider */
+  resources?: { label: string; quantity?: number; color?: string }[]
+  /** Task comment log (shows up to 4 entries + "…and N more") */
   comments?: BarTooltipComment[]
-  /** Акцентный цвет заголовка (задача=зелёный, проект/процесс=синий, веха=янтарный) */
+  /** Accent color of the header (task=green, project/process=blue, milestone=amber) */
   accent?: string
 }
 
-/** Тултип загрузки ресурса: дробь, процент и состояние с цветом */
+/** Resource usage tooltip: fraction, percent and colored state */
 export interface UsageTooltipProps {
   used: number
   available: number | null
-  /** Отсутствующие сотрудники ресурса (для секции «Отсутствуют:») */
+  /** Absent resource members (for the "Absent:" section) */
   absentees?: { user_name?: string; state_name?: string; start_date?: string; end_date?: string }[]
 }
 
-/** Простая подсказка/состояние: заголовок + строки + опциональный цветной маркер */
+/** Simple hint/state: title + rows + optional colored marker */
 export interface InfoTooltipProps {
   title?: string
   lines?: string[]
-  /** Цветной маркер слева (например цвет состояния табеля); null/'' — без маркера */
+  /** Colored marker on the left (e.g. timesheet state color); null/'' — no marker */
   marker?: string | null
 }

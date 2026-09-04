@@ -1,38 +1,38 @@
 /**
- * Runtime-конфигурация приложения.
+ * Runtime configuration of the app.
  *
- * Полный URL API складывается из «базового адреса сервера» (куда пользователь
- * обращается, например https://localhost или https://erp.example.ru) и
- * суффикса /api/v1. По умолчанию берётся из VITE_API_URL (build), но может
- * быть переопределён в рантайме (экран настроек до входа / экран
- * синхронизации). Override хранится в localStorage (mvs_erp_api_url) и
- * переживает перезагрузки.
+ * The full API URL is composed of the "server base address" (where the user
+ * connects, e.g. https://localhost or https://erp.example.ru) plus the
+ * /api/v1 suffix. By default it comes from VITE_API_URL (build), but can
+ * be overridden at runtime (the pre-login settings screen / the sync
+ * screen). The override is stored in localStorage (mvs_erp_api_url) and
+ * survives reloads.
  *
- * Смена адреса — только для настольной (Electron) сборки. В браузерной версии
- * SPA и API живут на одном origin (nginx-прокси /api/v1), CSP
- * «connect-src 'self'» блокирует кросс-ориджин, а refresh-кука (HttpOnly,
- * SameSite=Strict) не переживает смену origin, поэтому override в вебе
- * игнорируется и не сохраняется (см. также ServerSettingsPage/SyncPage).
+ * Changing the address is only for the desktop (Electron) build. In the browser
+ * version the SPA and the API live on the same origin (nginx proxy /api/v1),
+ * the CSP «connect-src 'self'» blocks cross-origin, and the refresh cookie
+ * (HttpOnly, SameSite=Strict) does not survive an origin change, so the web
+ * override is ignored and not persisted (see also ServerSettingsPage/SyncPage).
  */
 
 import { isElectron } from './electron'
 
 const API_URL_KEY = 'mvs_erp_api_url'
 
-/** Постоянный суффикс API-эндпоинтов бэкенда. */
-const API_PREFIX = '/api/v1'
+/** Constant suffix of the backend API endpoints. */
+export const API_PREFIX = '/api/v1'
 
-/** Текущий override (в памяти) — чтобы не читать localStorage на каждый запрос */
+/** Current override (in memory) — to avoid reading localStorage on every request */
 let override: string | null = null
 
-// В вебе устаревший override (например, остался от десктоп-сессии в том же
-// браузерном профиле) не должен влиять на приложение — сразу чистим.
+// In the web build a stale override (e.g. left over from a desktop session in
+// the same browser profile) must not affect the app — clear it right away.
 if (!isElectron) {
   override = null
   try {
     localStorage.removeItem(API_URL_KEY)
   } catch {
-    // ключа нет — ок
+    // no key — that's fine
   }
 }
 
@@ -55,12 +55,12 @@ function readStored(): string | null {
 }
 
 /**
- * Базовый URL API для API-клиентов: runtime-переопределение, либо env.
- * undefined — клиенты сами откатятся на встроенный default (как было).
+ * Base API URL for API clients: runtime override, or env.
+ * undefined — clients fall back to the built-in default themselves (as before).
  */
 export function getApiUrl(): string | undefined {
-  // Override (смена сервера) — только в настольной сборке; в вебе адрес
-  // всегда берётся из env (same-origin nginx-прокси).
+  // Override (server change) — only in the desktop build; in the web the address
+  // always comes from env (same-origin nginx proxy).
   const stored = isElectron ? (override ?? readStored()) : null
   if (stored) return stored.replace(/\/+$/, '')
   const env = import.meta.env.VITE_API_URL
@@ -68,21 +68,24 @@ export function getApiUrl(): string | undefined {
 }
 
 /**
- * Базовый адрес сервера (без суффикса /api/v1) для показа в поле настроек.
- * Например: https://localhost / https://erp.example.ru.
+ * Base server address (without the /api/v1 suffix) to show in the settings field.
+ * E.g. https://localhost / https://erp.example.ru.
  */
 export function getServerBase(): string {
   const api = getApiUrl()
   if (!api) return ''
-  // Если в сохранённом уже есть /api/v1 — убираем его для показа базы.
-  return api.replace(API_PREFIX + '$', '').replace(/\/+$/, '')
+  // If the saved value already ends with /api/v1 — strip the suffix to show the
+  // bare server base (e.g. https://host). String.prototype.replace treats the
+  // pattern as a literal, so the regex anchor must be built explicitly.
+  const base = api.endsWith(API_PREFIX) ? api.slice(0, -API_PREFIX.length) : api
+  return base.replace(/\/+$/, '')
 }
 
 /**
- * Нормализует введённый пользователем адрес сервера в полный URL API:
- *  - убирает хвостовые слэши и пробелы;
- *  - добавляет /api/v1, если его ещё нет (чтобы не зависеть от ввода).
- * Возвращает null, если адрес не является http(s)://host.
+ * Normalizes a user-entered server address into the full API URL:
+ *  - strips trailing slashes and spaces;
+ *  - appends /api/v1 if it is not there yet (so it does not depend on input).
+ * Returns null if the address is not http(s)://host.
  */
 export function normalizeServerToApiUrl(input: string): string | null {
   const trimmed = input.trim().replace(/\/+$/, '')
@@ -92,8 +95,8 @@ export function normalizeServerToApiUrl(input: string): string | null {
 }
 
 /**
- * Устанавливает адрес сервера из базового ввода (автодобавляет /api/v1).
- * persist=true сохраняет в localStorage. Возвращает false при невалидном URL.
+ * Sets the server address from a base input (auto-appends /api/v1).
+ * persist=true saves to localStorage. Returns false for an invalid URL.
  */
 export function setServerBase(input: string, persist: boolean): boolean {
   if (!isElectron) return false
@@ -103,9 +106,9 @@ export function setServerBase(input: string, persist: boolean): boolean {
 }
 
 /**
- * Устанавливает runtime URL API (полный, уже с /api/v1 при необходимости).
- * persist=true сохраняет в localStorage; иначе живёт только в памяти сессии.
- * Возвращает false, если URL некорректен (не http(s)).
+ * Sets the runtime API URL (full, already with /api/v1 when needed).
+ * persist=true saves to localStorage; otherwise it lives only in session memory.
+ * Returns false if the URL is invalid (not http(s)).
  */
 export function setApiUrl(url: string, persist: boolean): boolean {
   if (!isElectron) return false
@@ -116,12 +119,12 @@ export function setApiUrl(url: string, persist: boolean): boolean {
     if (persist) localStorage.setItem(API_URL_KEY, full)
     else localStorage.removeItem(API_URL_KEY)
   } catch {
-    // настройки не критичны — остаётся override в памяти
+    // settings are not critical — the in-memory override remains
   }
   return true
 }
 
-/** Сбрасывает override — приложение возвращается к VITE_API_URL */
+/** Resets the override — the app returns to VITE_API_URL */
 export function resetApiUrl(): void {
   override = null
   try {
@@ -131,14 +134,14 @@ export function resetApiUrl(): void {
   }
 }
 
-/** Есть ли сохранённый runtime-URL (для показа «используется override») */
+/** Whether a saved runtime URL exists (to show "override in use") */
 export function hasApiUrlOverride(): boolean {
   return isElectron && Boolean(override ?? readStored())
 }
 
-/** Предупреждение при http-схеме для не-loopback-хоста: Secure-кука refresh
- *  не сохраняется/не уходит, вход и автосинк могут не работать. Для
- *  localhost/127.0.0.1 — null (локальная разработка). */
+/** Warning for an http scheme on a non-loopback host: the Secure refresh
+ *  cookie is not stored/sent, so login and auto-sync may not work. For
+ *  localhost/127.0.0.1 — null (local development). */
 export function httpSchemeWarning(url: string): string | null {
   try {
     const u = new URL(url)

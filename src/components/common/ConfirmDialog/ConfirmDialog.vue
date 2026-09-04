@@ -47,10 +47,12 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
 </template>
 
 <style scoped>
+@import "../../../styles/tokens.css";
+
 .cd-overlay {
   position: fixed;
   inset: 0;
-  /* Подтверждение — поверх всех оверлеев страницы (модалки, меню) */
+  /* Confirmation dialog renders above all page overlays (modals, menus) */
   z-index: 50000;
   display: flex;
   align-items: center;
@@ -61,9 +63,9 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
 .cd {
   width: 100%;
   max-width: 400px;
-  background: #fff;
+  background: var(--ui-surface);
   border-radius: 10px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--ui-shadow-md);
   overflow: hidden;
 }
 .cd-head {
@@ -71,12 +73,12 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
   align-items: center;
   justify-content: space-between;
   padding: 14px 16px;
-  border-bottom: 1px solid #e8e8e8;
+  border-bottom: 1px solid var(--ui-border);
 }
 .cd-title {
   font-size: 16px;
   font-weight: 700;
-  color: #2c3e50;
+  color: var(--ui-text);
   margin: 0;
 }
 .cd-close {
@@ -84,21 +86,21 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
   background: transparent;
   font-size: 22px;
   line-height: 1;
-  color: #999;
+  color: var(--ui-text-muted);
   cursor: pointer;
   padding: 2px 6px;
   border-radius: 6px;
 }
 .cd-close:hover {
-  background: #f2f2f2;
-  color: #333;
+  background: var(--ui-surface-2);
+  color: var(--ui-text);
 }
 .cd-message {
   margin: 0;
   padding: 18px 16px;
   font-size: 14px;
   line-height: 1.5;
-  color: #444;
+  color: var(--ui-text-2);
 }
 .cd-actions {
   display: flex;
@@ -108,32 +110,32 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
 }
 .cd-btn {
   border: none;
-  border-radius: 8px;
+  border-radius: var(--ui-radius-sm);
   padding: 9px 18px;
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.15s, opacity 0.15s;
+  transition: background var(--ui-duration), opacity var(--ui-duration);
 }
 .cd-cancel {
-  background: #f2f2f2;
-  color: #444;
+  background: var(--ui-surface-2);
+  color: var(--ui-text-2);
 }
 .cd-cancel:hover {
-  background: #e6e6e6;
+  background: var(--ui-border);
 }
 .cd-primary {
-  background: #1a73e8;
-  color: #fff;
+  background: var(--ui-accent);
+  color: var(--ui-accent-on);
 }
 .cd-primary:hover {
-  background: #1765cc;
+  background: color-mix(in srgb, var(--ui-accent) 88%, black);
 }
 .cd-danger {
-  background: #d93025;
-  color: #fff;
+  background: var(--ui-danger);
+  color: var(--ui-accent-on);
 }
 .cd-danger:hover {
-  background: #c5221f;
+  background: color-mix(in srgb, var(--ui-danger) 88%, black);
 }
 </style>

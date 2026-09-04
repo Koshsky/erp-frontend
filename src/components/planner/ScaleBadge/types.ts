@@ -1,6 +1,6 @@
 export interface ScaleBadgeProps {
-  /** Текущий масштаб таблицы (zoom на .tg-content, 0.5–2) */
+  /** Current table scale (zoom on .tg-content, 0.5–2) */
   scale: number
-  /** Счётчик изменений масштаба: каждый инкремент показывает бейдж на время */
+  /** Scale-change counter: each increment shows the badge for a while */
   bump: number
 }

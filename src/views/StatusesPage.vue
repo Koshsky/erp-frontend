@@ -14,29 +14,32 @@ import type { DtoStateResponse } from '@/api'
 const ts = useTimesheetStore()
 const { states, loading, error } = storeToRefs(ts)
 
-// Страница доступна только vp/admin (роут + guard); кнопки — тем же правилом.
-const { canManageStates } = useRoleAccess()
+// The page is available to vp/admin only (route + guard); the buttons follow
+// the exact backend rights: create/update/delete are separate state.* rules.
+const { canCreateState, canManageState, canDeleteState } = useRoleAccess()
 
-// ПКМ по строке: редактирование/удаление
+// Right-click on a row: edit/delete
 interface MenuState {
   x: number
   y: number
   stateId: number
 }
 const menu = ref<MenuState | null>(null)
-const menuItems = computed<ContextMenuItem[]>(() => [
-  { id: 'edit-state', label: 'Редактировать' },
-  { id: 'delete-state', label: 'Удалить статус' },
-])
+const menuItems = computed<ContextMenuItem[]>(() => {
+  const items: ContextMenuItem[] = []
+  if (canManageState.value) items.push({ id: 'edit-state', label: 'Редактировать' })
+  if (canDeleteState.value) items.push({ id: 'delete-state', label: 'Удалить статус' })
+  return items
+})
 
-// Диалог подтверждения удаления
+// Delete confirmation dialog
 const { confirm: confirmDialog, ask, proceed, cancel } = useConfirm()
 
 type ModalMode =
   | { type: 'create' }
   | { type: 'edit'; id: number; code: string; name: string; isAvailable: boolean }
 
-/** Доступность статуса (ModalField не поддерживает boolean — используем '1'/'0') */
+/** Status availability (ModalField does not support boolean — we use '1'/'0') */
 const availabilityOptions: ModalField['options'] = [
   { value: '1', label: 'Доступен' },
   { value: '0', label: 'Недоступен' },
@@ -71,7 +74,7 @@ const { open: openModal, close: closeModal, submit: submitModal, bind: modalBind
 )
 
 function onRowContextMenu(e: MouseEvent, st: DtoStateResponse) {
-  if (st.id == null || !canManageStates.value) return
+  if (st.id == null || (!canManageState.value && !canDeleteState.value)) return
   openMenu({ x: e.clientX, y: e.clientY, stateId: st.id })
 }
 
@@ -115,34 +118,41 @@ onMounted(() => {
   <section class="sp">
     <div class="sp-head">
       <h2 class="sp-title">Статусы</h2>
-      <button v-if="canManageStates" type="button" class="sp-add" @click="openCreate">Создать статус</button>
+      <button v-if="canCreateState" type="button" class="sp-add" @click="openCreate">Создать статус</button>
     </div>
 
     <p v-if="loading && !states.length" class="sp-st">Загрузка...</p>
     <p v-if="error && !states.length" class="sp-st er">{{ error }}</p>
 
-    <div v-if="states.length" class="table">
+    <!--
+      The table frame (header included) stays visible even when there is no
+      data: the empty-state message is rendered inside the table instead of
+      replacing it.
+    -->
+    <div v-if="states.length || (!loading && !error)" class="table">
       <div class="tr th">
         <div>Код</div>
         <div>Название</div>
         <div>Доступность</div>
       </div>
-      <div
-        v-for="st in states"
-        :key="st.id"
-        class="tr"
-        @contextmenu.prevent.stop="onRowContextMenu($event, st)"
-      >
-        <div class="code">{{ st.code }}</div>
-        <div>{{ st.name }}</div>
-        <div>
-          <span class="avail" :class="{ off: !st.is_available }">
-            {{ st.is_available ? 'Доступен' : 'Недоступен' }}
-          </span>
+      <template v-if="states.length">
+        <div
+          v-for="st in states"
+          :key="st.id"
+          class="tr"
+          @contextmenu.prevent.stop="onRowContextMenu($event, st)"
+        >
+          <div class="code">{{ st.code }}</div>
+          <div>{{ st.name }}</div>
+          <div>
+            <span class="avail" :class="{ off: !st.is_available }">
+              {{ st.is_available ? 'Доступен' : 'Недоступен' }}
+            </span>
+          </div>
         </div>
-      </div>
+      </template>
+      <p v-else class="sp-st">Нет данных о статусах</p>
     </div>
-    <p v-else-if="!loading && !error" class="sp-st">Нет данных о статусах</p>
 
     <ContextMenu v-bind="menuBind" @select="select" @close="closeMenu" />
 
@@ -159,6 +169,8 @@ onMounted(() => {
 </template>
 
 <style scoped>
+@import '../styles/tokens.css';
+
 .sp-head {
   display: flex;
   align-items: center;
@@ -169,34 +181,34 @@ onMounted(() => {
 .sp-title {
   font-size: 24px;
   font-weight: 700;
-  color: #2c3e50;
+  color: var(--ui-text);
 }
 .sp-add {
   border: none;
-  border-radius: 8px;
+  border-radius: var(--ui-radius-sm);
   padding: 9px 18px;
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
-  background: #1a73e8;
-  color: #fff;
-  transition: background 0.15s;
+  background: var(--ui-accent);
+  color: var(--ui-accent-on);
+  transition: background var(--ui-duration);
 }
 .sp-add:hover {
-  background: #1765cc;
+  background: color-mix(in srgb, var(--ui-accent) 88%, black);
 }
 .sp-st {
-  color: #666;
+  color: var(--ui-text-muted);
   font-size: 14px;
   padding: 30px;
   text-align: center;
 }
-.er { color: #d93025; }
+.er { color: var(--ui-danger); }
 
 .table {
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.08);
+  background: var(--ui-surface);
+  border-radius: var(--ui-radius-md);
+  box-shadow: var(--ui-shadow-sm);
   overflow: hidden;
 }
 .tr {
@@ -204,33 +216,33 @@ onMounted(() => {
   grid-template-columns: 140px 1fr 160px;
   gap: 8px;
   padding: 12px 20px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--ui-border);
   font-size: 14px;
 }
 .tr:last-child { border-bottom: none; }
 .tr:not(.th):hover {
-  background: #f6f8fa;
+  background: var(--ui-surface-2);
 }
 .th {
-  background: #f8f9fa;
+  background: var(--ui-surface-2);
   font-weight: 600;
-  color: #555;
+  color: var(--ui-text-muted);
 }
 .code {
   font-weight: 700;
-  color: #1a73e8;
+  color: var(--ui-accent);
 }
 .avail {
   display: inline-block;
   padding: 2px 10px;
   border-radius: 10px;
-  background: #e6f4ea;
-  color: #137333;
+  background: var(--ui-success-soft);
+  color: var(--ui-success);
   font-size: 13px;
   font-weight: 600;
 }
 .avail.off {
-  background: #fce8e6;
-  color: #c5221f;
+  background: var(--ui-danger-soft);
+  color: var(--ui-danger);
 }
 </style>

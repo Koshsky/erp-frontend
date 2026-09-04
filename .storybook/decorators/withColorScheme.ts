@@ -8,13 +8,13 @@ export const withColorScheme: Decorator = (story, context) => {
   return {
     components: { story },
     setup() {
-      const isDark = scheme === 'dark'
-      const bg = isDark ? '#1a1a2e' : '#f4f6f9'
-      const color = isDark ? '#e0e0e0' : '#2c3e50'
-      return { bg, color, isDark }
+      // Tokens (tokens.css) drive all colors: applying the scheme to <html>
+      // via data-scheme is enough for light/dark pairs.
+      document.documentElement.dataset.scheme = scheme
+      return {}
     },
     template: `
-      <div :style="{ background: bg, color: color, padding: '16px', minHeight: '100vh' }">
+      <div :style="{ padding: '16px', minHeight: '100vh' }">
         <story />
       </div>
     `,

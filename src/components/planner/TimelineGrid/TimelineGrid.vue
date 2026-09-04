@@ -14,20 +14,20 @@ import TodayLine from '../TodayLine/TodayLine.vue'
 import ScaleBadge from '../ScaleBadge/ScaleBadge.vue'
 
 const props = defineProps<{
-  /** Дата-якорь: ячейка с индексом 0 (начальная позиция шкалы) */
+  /** Anchor date: cell with index 0 (initial timeline position) */
   origin: Date | string
-  /** Единица ячейки: день или декада */
+  /** Cell unit: day or decade */
   unit: PlanningUnit
-  /** Стабильный id таблицы: масштаб и прокрутка сохраняются между переключениями вкладок */
+  /** Stable table id: scale and scroll persist across tab switches */
   id?: string
-  /** При открытии/изменении прокрутить шкалу так, чтобы эта дата была у левого края */
+  /** On open/change, scroll the timeline so this date is at the left edge */
   focusDate?: string | null
-  /** При открытии/изменении прокрутить контейнер по вертикали к группе с этим id */
+  /** On open/change, scroll the container vertically to the group with this id */
   focusGroupId?: string | number | null
 }>()
 
 const emit = defineEmits<{
-  /** ПКМ по пустому месту шкалы (не по барам/лейблам): дата, строка и группа под курсором */
+  /** Right-click on empty timeline space (not bars/labels): date, row and group under the cursor */
   ctxmenu: [payload: {
     clientX: number
     clientY: number
@@ -35,12 +35,12 @@ const emit = defineEmits<{
     rowIndex?: number
     groupId?: string
   }]
-  /** ПКМ по шапке таблицы (календарный заголовок / корнер): переключение масштаба */
+  /** Right-click on the table header (calendar header / corner): scale switching */
   'header-ctxmenu': [payload: { clientX: number; clientY: number }]
   /**
-   * Текущее видимое окно шкалы (период «как на экране») + эффективная ширина
-   * ячейки с учётом зума + масштаб зума (Ctrl+wheel). Дебаунс ~150 мс; испускается
-   * при прокрутке/зуме/смене масштаба и после монтирования. Потребитель — печать в PDF.
+   * Current visible timeline window (the "as on screen" period) + the effective
+   * cell width accounting for zoom + the zoom scale (Ctrl+wheel). Debounced ~150 ms; emitted
+   * on scroll/zoom/scale change and after mounting. Consumer — PDF export.
    */
   'visible-range': [payload: { from: string; to: string; cellWidthPx: number; scale: number }]
 }>()
@@ -49,7 +49,7 @@ const scrollEl = ref<HTMLElement | null>(null)
 const contentEl = ref<HTMLElement | null>(null)
 const unit = computed(() => props.unit)
 
-/** Дата-якорь; при пустом origin — сегодня */
+/** Anchor date; today when origin is empty */
 const originDate = props.origin ? toDate(props.origin) : new Date()
 
 const tl = useInfiniteTimeline(originDate, unit, scrollEl, contentEl, props.id)
@@ -60,8 +60,8 @@ provide(TimelineSyncKey, tl.sync)
 onMounted(async () => {
   tl.mount()
   pan.enable()
-  // Якорь (навигация с другой вкладки): прокручиваем после того, как mount
-  // восстановил сохранённую позицию, чтобы якорь её перекрыл.
+  // Anchor (navigation from another tab): scroll after mount has
+  // restored the saved position, so the anchor overrides it.
   if (props.focusDate || props.focusGroupId != null) {
     await nextTick()
     applyFocus()
@@ -69,7 +69,7 @@ onMounted(async () => {
   emitVisibleRange()
 })
 
-/** Видимое окно шкалы для потребителей (печать): первая/последняя видимая дата + ширина ячейки */
+/** Visible timeline window for consumers (print): first/last visible date + cell width */
 function emitVisibleRange() {
   const start = tl.windowStart.value
   const count = tl.viewportCells.value
@@ -100,7 +100,7 @@ watch(
   scheduleVisibleRange,
 )
 
-/** Изменение якоря без перемонтирования (смена query на той же странице) */
+/** Anchor change without remounting (query change on the same page) */
 watch(
   () => [props.focusDate, props.focusGroupId] as const,
   () => {
@@ -111,9 +111,9 @@ watch(
 )
 
 /**
- * Смена масштаба «День»/«Декада»: центром сжатия/растяжения остаётся центр таблицы,
- * а не левый край. Ловим точную дату в центре окна по старому масштабу (layout от
- * unit не зависит), затем прокручиваем так, чтобы эта дата снова оказалась в центре.
+ * "Day"/"Decade" scale change: the center of the table stays the zoom anchor,
+ * not the left edge. We capture the exact date at the window center using the old
+ * scale (layout does not depend on unit), then scroll so that date is centered again.
  */
 watch(
   () => props.unit,
@@ -127,8 +127,8 @@ watch(
 )
 
 /**
- * Прокрутка к якорю: по дате — целевая ячейка у левого края; по группе —
- * строка .gg-group с этим id становится сразу под липкими шапками.
+ * Scroll to the anchor: by date — the target cell at the left edge; by group —
+ * the .gg-group with this id lands right below the sticky headers.
  */
 function applyFocus() {
   if (props.focusDate) tl.scrollToDate(props.focusDate)
@@ -136,9 +136,9 @@ function applyFocus() {
 }
 
 /**
- * Вертикальная прокрутка к группе: группы рендерятся слотом после монтирования,
- * а их позиция может меняться (дозагрузка данных/ресурсной ленты). Ретраим по
- * кадрам, пока цель не встанет под липкие шапки и не «успокоится» на пару кадров.
+ * Vertical scroll to a group: groups render via the slot after mounting, and their
+ * position may change (lazy data/resource-row loading). Retry per frame until the
+ * target lands under the sticky headers and "settles" for a couple of frames.
  */
 function focusGroup(groupId: string | number, attempt: number, settled: number) {
   const sc = scrollEl.value
@@ -154,7 +154,7 @@ function focusGroup(groupId: string | number, attempt: number, settled: number) 
   requestAnimationFrame(() => focusGroup(groupId, attempt + 1, nextSettled))
 }
 
-/** Вертикальная прокрутка: верх группы — под липкими шапками; возвращает смещение */
+/** Vertical scroll: group top — under the sticky headers; returns the offset */
 function scrollGroupToTop(target: HTMLElement): number {
   const sc = scrollEl.value
   if (!sc) return 0
@@ -174,15 +174,15 @@ onBeforeUnmount(() => {
 })
 
 /**
- * Элементы, с которых нельзя начать панорамирование: на них висит свой интерактив
- * (бары, вехи, реордер строк, липкие колонки, ресурсная лента). Шапку .tg-head
- * тянуть можно — это «пустое место» шкалы. Полоса вех .tg-ms-label тоже не тянется.
+ * Elements from which panning must not start: they have their own interaction
+ * (bars, milestones, row reorder, sticky columns, resource row). The .tg-head header
+ * can be dragged — it is the timeline's "empty space"; the .tg-ms-label strip is not.
  */
 const PAN_IGNORE = INTERACTIVE_SELECTOR + ', .tg-ms-label'
 
 const pan = useTimelinePan(scrollEl, PAN_IGNORE)
 
-/** Контекст таймлайна для слотов: ref-ы развёрнуты; Date не кладём (Proxy ломается) */
+/** Timeline context for slots: refs unwrapped; no Date (Proxy breaks) */
 const ctx: TimelineCtx = reactive({
   origin: fmtDate(originDate),
   unit,
@@ -201,8 +201,8 @@ const ctx: TimelineCtx = reactive({
   dateAtPointer: tl.dateAtPointer,
 })
 
-/** ПКМ по пустому месту шкалы (бары/лейблы/вехи перехватывают сами через .stop).
- *  ПКМ по шапке таблицы — меню переключения масштаба (день/декада). */
+/** Right-click on empty timeline space (bars/labels/milestones intercept it themselves via .stop).
+ *  Right-click on the table header — the scale switching menu (day/decade). */
 function onContextMenu(e: MouseEvent) {
   const target = e.target as HTMLElement
   if (target.closest('.tg-head, .th-corner')) {
@@ -215,8 +215,8 @@ function onContextMenu(e: MouseEvent) {
   const date = tl.dateAtPointer(scrollEl.value?.getBoundingClientRect() ?? null, e.clientX)
   const rowEl = target.closest<HTMLElement>('.gg-row')
   const groupEl = target.closest<HTMLElement>('.gg-group')
-  // Полоса вех (.tg-task-group) лежит рядом с .gg-group, а не внутри неё, но это та же
-  // группа процесса — резолвим её через вложенный .gg-group (вставка в конец, как у пустого места).
+  // The milestone strip (.tg-task-group) sits next to .gg-group, not inside it, but it is the same
+  // process group — resolve it through the nested .gg-group (append at the end, like empty space).
   const tgGroupEl = target.closest<HTMLElement>('.tg-task-group')
   const msGroupEl = !rowEl && !groupEl && tgGroupEl
     ? tgGroupEl.querySelector<HTMLElement>('.gg-group')
@@ -236,7 +236,7 @@ function onContextMenu(e: MouseEvent) {
 <template>
   <div ref="scrollEl" class="tg-scroll" @contextmenu.prevent="onContextMenu">
     <div ref="contentEl" class="tg-content" :style="{ width: ctx.contentWidth + 'px' }">
-      <!-- Сеточные линии только для видимого окна (под контентом) -->
+      <!-- Grid lines for the visible window only (under the content) -->
       <div
         class="tg-gridlines"
         :style="{ left: ctx.gridLeft + 'px', width: (ctx.viewportCells + 1) * ctx.cellPx + 'px' }"
@@ -249,18 +249,19 @@ function onContextMenu(e: MouseEvent) {
         />
       </div>
 
-      <!-- Красный луч текущей даты: граница между «вчера» и «сегодня» -->
+      <!-- Red ray of the current date: the boundary between "yesterday" and "today" -->
       <TodayLine :timeline="ctx" />
 
       <slot :t="ctx" />
     </div>
 
-    <!-- Бейдж масштаба: всплывает при зумме Ctrl+колесо -->
+    <!-- Scale badge: pops up on Ctrl+wheel zoom -->
     <ScaleBadge :scale="ctx.scale" :bump="ctx.scaleBump" />
   </div>
 </template>
 
 <style scoped>
+@import "../../../styles/tokens.css";
 .tg-scroll {
   overflow: auto;
   max-height: var(--planner-max-height, calc(100vh - 160px));
@@ -292,6 +293,6 @@ function onContextMenu(e: MouseEvent) {
   top: 0;
   bottom: 0;
   width: 1px;
-  background: #e4e6e8;
+  background: var(--ui-border);
 }
 </style>

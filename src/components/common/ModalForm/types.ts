@@ -4,29 +4,29 @@ export interface ModalFieldOption {
 }
 
 export interface ModalField {
-  /** Ключ поля — имя в payload при сохранении (save(values)) */
+  /** Field key — name in the payload when saving (save(values)) */
   key: string
   label: string
-  type: 'text' | 'textarea' | 'select' | 'number' | 'date'
-  /** Начальное значение (подставляется при открытии) */
+  type: 'text' | 'textarea' | 'select' | 'number' | 'date' | 'color'
+  /** Initial value (applied when opened) */
   value?: number | string
-  /** Варианты для type: 'select' */
+  /** Options for type: 'select' */
   options?: ModalFieldOption[]
   required?: boolean
   placeholder?: string
 }
 
 export interface ModalFormProps {
-  /** Видимость модалки */
+  /** Modal visibility */
   open: boolean
-  /** Заголовок окна */
+  /** Dialog title */
   title: string
-  /** Описание полей формы; не нужно, если используется default-слот */
+  /** Description of form fields; not needed if the default slot is used */
   fields?: ModalField[]
-  /** Текст кнопки подтверждения; по умолчанию «Сохранить» */
+  /** Confirmation button text; defaults to "Save" */
   submitLabel?: string
-  /** Идёт сохранение: кнопка заблокирована, показывается спиннер */
+  /** Saving in progress: the button is disabled and a spinner is shown */
   busy?: boolean
-  /** Текст ошибки внутри модалки */
+  /** Error text inside the modal */
   error?: string | null
 }

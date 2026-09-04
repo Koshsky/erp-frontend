@@ -16,66 +16,66 @@ import { useTableState } from './useTableState'
 import { useTimelineZoom } from './useTimelineZoom'
 
 export interface InfiniteTimeline {
-  /** Ширина ячейки в px (из CSS-переменной --cell-width, адаптивная) */
+  /** Cell width in px (from the --cell-width CSS variable, responsive) */
   cellPx: Ref<number>
-  /** Масштаб таблицы (zoom на .tg-content): ячейки, строки, шрифты */
+  /** Table scale (zoom on .tg-content): cells, rows, fonts */
   tableScale: Ref<number>
-  /** Счётчик изменений масштаба: инкрементируется на каждом зуме — сигнал для бейджа масштаба */
+  /** Scale-change counter: incremented on every zoom — signal for the scale badge */
   scaleBump: Ref<number>
-  /** Абсолютный индекс ячейки у левого края видимой шкалы (floor) */
+  /** Absolute cell index at the left edge of the visible timeline (floor) */
   windowStart: Ref<number>
-  /** Сколько ячеек помещается в видимую область шкалы */
+  /** How many cells fit in the visible timeline area */
   viewportCells: ComputedRef<number>
-  /** Ячеек, «материализованных» слева от origin (origin — индекс 0) */
+  /** Cells "materialized" to the left of the origin (origin is index 0) */
   leftPad: Ref<number>
-  /** Общая ширина контента в px: LABEL_WIDTH + (leftPad+rightCells)*cellPx */
+  /** Total content width in px: LABEL_WIDTH + (leftPad+rightCells)*cellPx */
   contentWidth: ComputedRef<number>
-  /** Видимые ячейки (виртуализация): windowStart … windowStart+viewportCells+2 */
+  /** Visible cells (virtualization): windowStart … windowStart+viewportCells+2 */
   visibleCells: ComputedRef<CalendarCell[]>
-  /** content-координата левого края сетки для видимого окна */
+  /** content-coordinate of the grid's left edge for the visible window */
   gridLeft: ComputedRef<number>
-  /** Индексы видимых ячеек (виртуализированный рендер) */
+  /** Indices of visible cells (virtualized rendering) */
   visibleIndices: ComputedRef<number[]>
-  /** content-координата левого края ячейки i (абсолютный индекс) */
+  /** content-coordinate of the left edge of cell i (absolute index) */
   cellLeft: (i: number) => number
-  /** Дата начала ячейки i */
+  /** Start date of cell i */
   cellStart: (i: number) => Date
-  /** Дата конца ячейки i (включительно) */
+  /** End date of cell i (inclusive) */
   cellEnd: (i: number) => Date
-  /** Дата под указателем (для контекст-меню) */
+  /** Date under the pointer (for context menu) */
   dateAtPointer: (rect: DOMRect | null, clientX: number) => string | null
-  /** Точная дата в локальной координате контейнера (для центрирования при смене масштаба) */
+  /** Exact date at a local container coordinate (for centering when the scale changes) */
   dateAtLocalX: (localX: number, unit?: PlanningUnit) => Date | null
-  /** Программная прокрутка к дате (ячейка с датой — у левого края окна) */
+  /** Programmatic scroll to a date (the cell with the date lands at the window's left edge) */
   scrollToDate: (date: Date | string | number) => void
-  /** Программная прокрутка: дата становится центром окна (смена масштаба день/декада) */
+  /** Programmatic scroll: the date becomes the window center (day/decade scale change) */
   scrollToCenterDate: (date: Date | string | number) => void
-  /** Инициализация: стартовая позиция = origin у левого края шкалы */
+  /** Initialization: starting position = origin at the left edge of the timeline */
   initialize: () => void
-  /** Пересчёт окна и расширение диапазона (вызывается на scroll/resize) */
+  /** Recompute the window and extend the range (called on scroll/resize) */
   sync: () => void
-  /** Подписка на scroll + ResizeObserver */
+  /** Subscribe to scroll + ResizeObserver */
   mount: () => void
-  /** Отписка */
+  /** Unsubscribe */
   unmount: () => void
 }
 
 /**
- * Бесконечная горизонтальная шкала с динамическим расширением.
- * origin — дата-якорь (индекс ячейки 0). Слева/справа «материализуется» ровно
- * столько ячеек, сколько нужно для текущего положения; при приближении к краю
- * диапазон расширяется (справа — просто рост ширины, слева — компенсация scrollLeft,
- * поэтому картинка не сдвигается). Рендер ячеек виртуализирован (видимое окно).
+ * Infinite horizontal timeline with dynamic expansion.
+ * origin is the date anchor (cell index 0). Exactly as many cells as needed for
+ * the current position are "materialized" to the left/right; when approaching an
+ * edge the range expands (to the right — just width growth, to the left — with
+ * scrollLeft compensation, so the picture does not shift). Cell rendering is virtualized (visible window).
  *
- * Масштабирование (zoomTo/applyTableScale/resetAll) и персист состояния вынесены
- * в useTimelineZoom и useTableState.
+ * Scaling (zoomTo/applyTableScale/resetAll) and state persistence are factored
+ * out into useTimelineZoom and useTableState.
  */
 export function useInfiniteTimeline(
   origin: Date | string,
   unit: Ref<PlanningUnit>,
   container: Ref<HTMLElement | null>,
   contentEl: Ref<HTMLElement | null>,
-  /** Стабильный id таблицы: состояние (масштаб + прокрутка) сохраняется между монтированиями */
+  /** Stable table id: state (scale + scroll) is preserved between mounts */
   id?: string,
 ): InfiniteTimeline {
   const cellPx = ref(CELL_WIDTH)
@@ -84,7 +84,7 @@ export function useInfiniteTimeline(
   const windowStart = ref(0)
   const viewportWidth = ref(0)
   const tableScale = ref(1)
-  /** Инкрементируется при каждом реальном изменении масштаба (зум/сброс) */
+  /** Incremented on every actual scale change (zoom/reset) */
   const scaleBump = ref(0)
 
   const viewportCells = computed(() =>
@@ -101,7 +101,7 @@ export function useInfiniteTimeline(
     const count = viewportCells.value + 2
     return windowCells(toDate(origin), unit.value, from, count)
   })
-  /** Индексы видимых ячеек (для виртуализированного рендера) */
+  /** Indices of visible cells (for virtualized rendering) */
   const visibleIndices = computed(() => {
     const from = windowStart.value
     const count = viewportCells.value + 2
@@ -119,12 +119,12 @@ export function useInfiniteTimeline(
     return LABEL_WIDTH + (i + leftPad.value) * cellPx.value
   }
 
-  /** Дата начала ячейки i (свежий Date — безопасен для вызова методов) */
+  /** Start date of cell i (fresh Date — safe for method calls) */
   function cellStart(i: number): Date {
     return cellStartDate(toDate(origin), unit.value, i)
   }
 
-  /** Дата конца ячейки i (включительно) */
+  /** End date of cell i (inclusive) */
   function cellEnd(i: number): Date {
     return cellEndDate(toDate(origin), unit.value, i)
   }
@@ -142,10 +142,10 @@ export function useInfiniteTimeline(
   }
 
   /**
-   * Точная дата в локальной координате x контейнера (px, без масштаба), согласованная
-   * с отрисованными ячейками: учитывает фактические scrollLeft/leftPad/cellPx.
-   * В отличие от dateAtPointer, дробная позиция внутри ячейки считается верно —
-   * это важно для центрирования при смене масштаба день/декада.
+   * Exact date at a local x-coordinate of the container (px, unscaled), consistent
+   * with the rendered cells: accounts for the actual scrollLeft/leftPad/cellPx.
+   * Unlike dateAtPointer, the fractional position inside a cell is computed
+   * correctly — important for centering on day/decade scale changes.
    */
   function dateAtLocalX(localX: number, u: PlanningUnit = unit.value): Date | null {
     const el = container.value
@@ -174,7 +174,7 @@ export function useInfiniteTimeline(
     sync,
   })
 
-  /** Обновляет ширину контейнера и cellPx из CSS-переменной */
+  /** Update container width and cellPx from the CSS variable */
   function measure() {
     const el = container.value
     if (!el) return
@@ -188,12 +188,12 @@ export function useInfiniteTimeline(
     const el = container.value
     if (!el) return
     const scale = tableScale.value
-    // scrollLeft — в масштабированных px: локальные = визуальные / scale
+    // scrollLeft is in scaled px: local = visual / scale
     const scrollLeft = el.scrollLeft / scale
     const vs = windowStartFor(scrollLeft, cellPx.value, leftPad.value)
     windowStart.value = vs
-    // Вправо: расширяем диапазон (ширина растёт, скроллбар утончается);
-    // влево: расширяем + компенсируем scrollLeft, чтобы картинка не сдвинулась.
+    // To the right: extend the range (width grows, scrollbar thins);
+    // to the left: extend + compensate scrollLeft so the picture does not shift.
     ensureRange(vs, range, (step) => {
       el.scrollLeft += step * cellPx.value * scale
     })
@@ -201,9 +201,9 @@ export function useInfiniteTimeline(
   }
 
   /**
-   * Программная прокрутка к ячейке i: ячейка становится левым краем видимого окна.
-   * Диапазон расширяется под целевую позицию (в т.ч. в далёкое прошлое — leftPad
-   * растёт до step − i); применяется после flush DOM.
+   * Programmatic scroll to cell i: the cell becomes the left edge of the visible window.
+   * The range is extended to cover the target position (including far past — leftPad
+   * grows to step − i); applied after the DOM flush.
    */
   function scrollToCell(i: number) {
     const el = container.value
@@ -220,30 +220,30 @@ export function useInfiniteTimeline(
     })
   }
 
-  /** Программная прокрутка к дате: ячейка с этой датой — у левого края окна */
+  /** Programmatic scroll to a date: the cell with that date lands at the window's left edge */
   function scrollToDate(date: Date | string | number) {
     scrollToCell(cellIndexForDate(toDate(origin), unit.value, date))
   }
 
   /**
-   * Программная прокрутка: дата становится центром видимого окна.
-   * Используется при смене масштаба день/декада — центром сжатия/растяжения
-   * шкалы остаётся центр таблицы, а не левый край.
+   * Programmatic scroll: the date becomes the center of the visible window.
+   * Used on day/decade scale changes — the timeline shrinks/stretches around
+   * the table center, not the left edge.
    */
   /**
-   * Программная прокрутка: дата становится центром видимого окна.
-   * Используется при смене масштаба день/декада — центром сжатия/растяжения
-   * шкалы остаётся центр таблицы, а не левый край. Тот же паттерн, что в
-   * zoomTo: диапазон расширяется до применения scrollLeft (колбэк мутирует
-   * nsl), поэтому sync() после установки ничего не сдвигает.
+   * Programmatic scroll: the date becomes the center of the visible window.
+   * Used on day/decade scale changes — the timeline shrinks/stretches around
+   * the table center, not the left edge. Same pattern as in zoomTo: the range
+   * is extended before scrollLeft is applied (the callback mutates nsl), so
+   * the sync() after assignment does not shift anything.
    */
   function scrollToCenterDate(date: Date | string | number) {
     const el = container.value
     if (!el) return
     const scale = tableScale.value
     const targetCell = cellIndexForDate(toDate(origin), unit.value, date)
-    // Дробная позиция даты внутри её ячейки в новом масштабе (0..1): для дня — 0
-    // (дата = начало ячейки), для декады — положение дня внутри декады.
+    // Fractional position of the date inside its cell at the new scale (0..1): for a day — 0
+    // (date = cell start), for a decade — the day's position inside the decade.
     const s = cellStartDate(toDate(origin), unit.value, targetCell).getTime()
     const e = cellEndDate(toDate(origin), unit.value, targetCell).getTime()
     const frac = e > s ? (toDate(date).getTime() - s) / (e - s) : 0
@@ -262,14 +262,14 @@ export function useInfiniteTimeline(
   }
 
   function initialize() {
-    // Восстановление сохранённого состояния (масштаб) до measure(),
-    // чтобы measure() подхватил сохранённый --cell-width из computed style.
+    // Restore the saved state (scale) before measure(),
+    // so measure() picks up the saved --cell-width from the computed style.
     const stored = tableState.get(id)
     const el0 = container.value
     if (stored && el0) {
       cellPx.value = stored.cellPx
-      // Инлайн --cell-width ставим только при отличии от адаптивного дефолта из
-      // :root — иначе «сброшенный» масштаб заморозится и перестанет реагировать на resize.
+      // Set the inline --cell-width only when it differs from the responsive :root
+      // default — otherwise a "reset" scale would freeze and stop reacting to resize.
       if (Math.abs(stored.cellPx - readRootCellWidth()) > 0.5) {
         el0.style.setProperty('--cell-width', stored.cellPx + 'px')
       }
@@ -280,8 +280,8 @@ export function useInfiniteTimeline(
     const step = growStep(viewportCells.value)
     leftPad.value = step
     rightCells.value = viewportCells.value + step * 2
-    // Расширяем диапазон под сохранённый scrollLeft сразу (до flush), иначе
-    // браузер зажмёт scrollLeft в меньшую ширину контента и позиция потеряется.
+    // Extend the range for the saved scrollLeft up front (before flush), otherwise
+    // the browser clamps scrollLeft to the smaller content width and the position is lost.
     if (stored) {
       const local = stored.scrollLeft / tableScale.value
       const vs = windowStartFor(local, cellPx.value, leftPad.value)
@@ -294,7 +294,7 @@ export function useInfiniteTimeline(
 
   let observer: ResizeObserver | null = null
 
-  /** Рестор scrollLeft/scrollTop применён (иначе unmount перезапишет хранилище дефолтом) */
+  /** scrollLeft/scrollTop restore has been applied (otherwise unmount overwrites the store with defaults) */
   let stateReady = false
 
   function onScroll() {
@@ -306,12 +306,17 @@ export function useInfiniteTimeline(
     if (!el) return
     initialize()
     const stored = tableState.get(id)
-    // Ширина контента обновляется реактивно (leftPad/rightCells) — ждём применения
-    // DOM, иначе scrollLeft зажимается в старую (нулевую) ширину и origin не встаёт у левого края.
+    // Content width updates reactively (leftPad/rightCells) — wait for the DOM
+    // to apply, otherwise scrollLeft clamps to the old (zero) width and origin does not reach the left edge.
     void nextTick().then(() => {
       if (stored) {
         el.scrollLeft = stored.scrollLeft
-        el.scrollTop = stored.scrollTop
+        // The table may have changed size since the state was saved: a vertical
+        // position beyond the current scrollable range would be silently clamped
+        // by the browser to the bottom, pinning the last rows into view with no
+        // user scroll. A stale position is meaningless — open at the top.
+        const maxScroll = el.scrollHeight - el.clientHeight
+        el.scrollTop = stored.scrollTop <= maxScroll ? stored.scrollTop : 0
         sync()
       } else {
         el.scrollLeft = leftPad.value * cellPx.value
@@ -333,8 +338,8 @@ export function useInfiniteTimeline(
     observer?.disconnect()
     observer = null
     const el = container.value
-    // Если рестор не успел примениться (быстрое перемонтирование из-за
-    // loading-флипа), состояние в хранилище ещё валидно — не затираем его.
+    // If the restore has not applied yet (fast remount due to a loading flip),
+    // the store state is still valid — do not overwrite it.
     if (id && el && stateReady) {
       tableState.save(id, {
         cellPx: cellPx.value,

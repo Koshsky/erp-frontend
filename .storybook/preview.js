@@ -1,5 +1,25 @@
+import '../src/styles/tokens.css'
+import { setup } from '@storybook/vue3'
+import { createRouter, createMemoryHistory } from 'vue-router'
+import { createPinia } from 'pinia'
 import { withCustomTheme } from './decorators/withCustomTheme'
 import { withColorScheme } from './decorators/withColorScheme'
+
+/**
+ * Real app-level setup for every story: a memory router (so RouterLink /
+ * useRoute / useRouter and navigation links render) plus Pinia (stores).
+ * The same instance is shared by all stories; the catch-all route keeps any
+ * RouterLink `to` valid.
+ */
+const storyRouter = createRouter({
+  history: createMemoryHistory(),
+  routes: [{ path: '/:pathMatch(.*)*', component: { template: '<div />' } }],
+})
+
+setup((app) => {
+  app.use(storyRouter)
+  app.use(createPinia())
+})
 
 /** @type { import('@storybook/vue3-vite').Preview } */
 const preview = {

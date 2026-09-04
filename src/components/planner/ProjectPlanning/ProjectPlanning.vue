@@ -11,19 +11,21 @@ const props = withDefaults(defineProps<{
   projects?: DtoProject[] | null
   loading?: boolean
   error?: string | null
-  /** Якорь шкалы: ячейка с индексом 0 (начальная позиция) */
+  /** Timeline anchor: cell with index 0 (starting position) */
   origin?: Date | string
-  /** Единица ячейки: день или декада */
+  /** Cell unit: day or decade */
   unit?: PlanningUnit
-  /** Пользователи для отображения владельца (owner_id → name) в тултипах */
+  /** Users to display the owner (owner_id → name) in tooltips */
   users?: DtoUserInfo[] | null
-  /** Разрешает переупорядочивание строк (смену приоритетов) */
+  /** Allows reordering rows (changing priorities) */
   reorderable?: boolean
-  /** Проверка прав на управление проектом */
+  /** Check manage rights for a project */
   canManage?: (projectId: number) => boolean
-  /** При открытии прокрутить шкалу к этой дате (навигация с другой вкладки) */
+  /** Whether the current user may create projects (affects the empty-state hint) */
+  canCreate?: boolean
+  /** On open, scroll the timeline to this date (navigation from another tab) */
   focusDate?: string | null
-  /** При открытии прокрутить по вертикали к группе (строке) проекта */
+  /** On open, scroll vertically to the group (project row) */
   focusGroupId?: string | number | null
 }>(), {
   projects: null,
@@ -34,6 +36,7 @@ const props = withDefaults(defineProps<{
   users: null,
   reorderable: true,
   canManage: () => true,
+  canCreate: true,
   focusDate: null,
   focusGroupId: null,
 })
@@ -44,7 +47,9 @@ const emit = defineEmits<{
   'header-ctxmenu': [payload: { clientX: number; clientY: number }]
   reorder: [payload: { from: number; to: number }]
   navigate: [payload: number]
-  /** Видимое окно шкалы (период «как на экране») — проброс из TimelineGrid */
+  /** Empty state: create a new project (the page decides the dates) */
+  create: []
+  /** Visible timeline window (the "as on screen" period) — forwarded from TimelineGrid */
   'visible-range': [payload: { from: string; to: string; cellWidthPx: number; scale: number }]
 }>()
 
@@ -54,6 +59,7 @@ const displayProjects = computed(() =>
   (props.projects || []).map((dto) => ({
     id: dto.id ?? 0,
     project_code: dto.project_code ?? '',
+    color: dto.color ?? '',
     start_date: dto.start_date ?? '',
     end_date: dto.end_date ?? '',
     priority: dto.priority,
@@ -61,7 +67,7 @@ const displayProjects = computed(() =>
   })),
 )
 
-/** ПКМ по пустому месту шкалы — создание проекта в позиции строки под курсором */
+/** Right-click on empty timeline space — create a project at the row position under the cursor */
 function onGridCtx(p: { clientX: number; clientY: number; date: string | null; rowIndex?: number }) {
   emit('contextmenu', {
     clientX: p.clientX,
@@ -74,6 +80,10 @@ function onGridCtx(p: { clientX: number; clientY: number; date: string | null; r
 
 <template>
   <PlannerStates :loading="loading" :error="error" :has-data="displayProjects.length > 0">
+    <!-- Empty DB: just a centered create-project action -->
+    <template v-if="canCreate" #empty>
+      <button type="button" class="pp-big" @click="emit('create')">Новый проект</button>
+    </template>
     <TimelineGrid v-if="displayProjects.length" id="project" :origin="origin" :unit="unit" :focus-date="focusDate" :focus-group-id="focusGroupId" @ctxmenu="onGridCtx" @header-ctxmenu="(p) => emit('header-ctxmenu', p)" @visible-range="(p) => emit('visible-range', p)">
       <template #default="{ t }">
         <CalendarHeader :t="t" />
@@ -91,4 +101,22 @@ function onGridCtx(p: { clientX: number; clientY: number; date: string | null; r
     </TimelineGrid>
   </PlannerStates>
 </template>
+
+<style scoped>
+@import '../../../styles/tokens.css';
+.pp-big {
+  display: block;
+  margin: 24px auto;
+  padding: 16px 36px;
+  background: var(--ui-accent);
+  color: var(--ui-accent-on);
+  border: none;
+  border-radius: 10px;
+  font-size: 16px;
+  cursor: pointer;
+}
+.pp-big:hover {
+  background: color-mix(in srgb, var(--ui-accent) 88%, black);
+}
+</style>
 

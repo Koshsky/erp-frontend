@@ -6,7 +6,7 @@ import { syncNow } from './sync'
 
 const busy = ref(false)
 
-/** Кнопка в баннере: если сеть вернулась — очередь уйдёт, если нет — flush тихо ничего не сделает. */
+/** Banner button: if the network is back the queue flushes, otherwise the flush quietly does nothing. */
 async function onPush() {
   if (busy.value) return
   busy.value = true
@@ -21,7 +21,7 @@ async function onPush() {
 <template>
   <transition name="offline-fade">
     <div v-if="isOffline" class="offline-banner" role="status">
-      <span>Бэкенд недоступен: показаны сохранённые данные, изменения копятся в очереди</span>
+      <span>Сервер недоступен — показаны сохранённые данные. Изменения отправятся автоматически при появлении сети.</span>
       <button
         v-if="pendingCount > 0"
         type="button"
@@ -39,6 +39,8 @@ async function onPush() {
 </template>
 
 <style scoped>
+@import '../styles/tokens.css';
+
 .offline-banner {
   position: fixed;
   top: 0;
@@ -46,11 +48,11 @@ async function onPush() {
   right: 0;
   z-index: 1000;
   padding: 8px 16px;
-  background: #f39c12;
-  color: #fff;
+  background: var(--ui-warning-soft);
+  color: var(--ui-text-2);
   font-size: 14px;
   text-align: center;
-  box-shadow: 0 2px 6px rgb(0 0 0 / 0.2);
+  box-shadow: var(--ui-shadow-md);
   display: flex;
   gap: 12px;
   align-items: center;
@@ -59,7 +61,8 @@ async function onPush() {
 }
 
 .offline-banner__count {
-  background: rgb(0 0 0 / 0.25);
+  background: color-mix(in srgb, var(--ui-warning) 20%, transparent);
+  color: var(--ui-text);
   padding: 2px 10px;
   border-radius: 999px;
   font-weight: 600;
@@ -67,8 +70,8 @@ async function onPush() {
 }
 
 .offline-banner__push {
-  background: #fff;
-  color: #b26a00;
+  background: var(--ui-warning);
+  color: var(--ui-accent-on);
   border: none;
   border-radius: 999px;
   padding: 3px 14px;
@@ -79,7 +82,7 @@ async function onPush() {
 }
 
 .offline-banner__push:hover:not(:disabled) {
-  background: #fdf3e3;
+  background: color-mix(in srgb, var(--ui-warning) 88%, black);
 }
 
 .offline-banner__push:disabled {

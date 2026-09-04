@@ -1,13 +1,13 @@
 'use strict'
 
 /**
- * Preload: мост между renderer и main через contextBridge.
- * Renderer получает минимальный, строго типизированный API:
+ * Preload: bridge between the renderer and main via contextBridge.
+ * The renderer receives a minimal, strictly typed API:
  *   window.erpDesktop.isElectron  → true
  *   window.erpDesktop.appVersion  → { version, electron }
- *   window.erpDesktop.password.*  → get/set/clear (safeStorage в main)
+ *   window.erpDesktop.password.*  → get/set/clear (safeStorage in main)
  *
- * Никакого доступа к Node/filesystem у renderer нет (nodeIntegration off,
+ * The renderer has no access to Node/filesystem (nodeIntegration off,
  * contextIsolation on, sandbox on).
  */
 

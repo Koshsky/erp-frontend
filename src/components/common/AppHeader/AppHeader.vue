@@ -1,254 +1,199 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { computed } from 'vue'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../../../store'
-import { useNavigation } from '../../../composables/useNavigation'
-import type { NavCategory } from '../../../composables/useNavigation'
 import { isElectron } from '../../../electron'
-import { isOffline } from '../../../offline/state'
-import { pendingCount } from '../../../offline/outbox'
-
-const props = withDefaults(defineProps<{ brand?: string }>(), { brand: 'MVS ERP' })
+import { resolvedScheme, toggleScheme } from '../../../theme'
+import { isNavOpen, toggleNav } from '../../../composables/useNavDrawer'
+import { useSyncStatus } from '../../../composables/useSyncStatus'
+import { AppIcon } from '../AppIcon'
 
 const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
+const { offline } = useSyncStatus()
 
-// Локальный computed поверх импортированного ref — гарантированная реактивность
-// в шаблоне (импортированные ref привязываются без автораспаковки).
-const offline = computed(() => isOffline.value)
+// Theme toggle label (Russian UI copy)
+const themeLabel = computed(() => (resolvedScheme.value === 'dark' ? 'Светлая' : 'Тёмная'))
 
-// Ожидающие отправки изменения (бейдж у «Синхронизация»)
-const pending = computed(() => pendingCount.value)
-
-// Шапка — список категорий; подкатегории открываются выпадающим меню.
-const { visibleCategories, activeCategory, standalone } = useNavigation()
-
-// shallowRef: хранит объект категории как есть (без deep-reactive обёртки),
-// чтобы работало сравнение по идентичности openCategory === cat.
-const openCategory = shallowRef<NavCategory | null>(null)
-const navEl = ref<HTMLElement | null>(null)
-
-function toggleCategory(cat: NavCategory) {
-  openCategory.value = openCategory.value === cat ? null : cat
-}
-
-function closeCategory() {
-  openCategory.value = null
-}
-
-function onLogout() {
-  // Страховка на уровне обработчика: офлайн выход не выполняется (logout
-  // чистит очередь изменений), даже если атрибут disabled не сработал.
+function onLogout(): void {
+  // Handler-level safeguard: offline logout is not performed (logout
+  // clears the outbox), even if the disabled attribute did not fire.
   if (offline.value) return
   authStore.logout()
   router.push('/login')
 }
 
-// Клик вне меню или Escape — закрыть
-function onDocClick(e: MouseEvent) {
-  if (navEl.value && !navEl.value.contains(e.target as Node)) closeCategory()
-}
+const burgerTitle = computed(() =>
+  isElectron
+    ? `Меню · ${offline.value ? 'офлайн: данные из кэша' : 'онлайн'} (Ctrl+B)`
+    : 'Меню (Ctrl+B)',
+)
 
-function onKeydown(e: KeyboardEvent) {
-  if (e.key === 'Escape') closeCategory()
-}
-
-watch(openCategory, (oc) => {
-  if (oc) {
-    window.addEventListener('click', onDocClick)
-    window.addEventListener('keydown', onKeydown)
-  } else {
-    window.removeEventListener('click', onDocClick)
-    window.removeEventListener('keydown', onKeydown)
-  }
-})
-
-onBeforeUnmount(() => {
-  window.removeEventListener('click', onDocClick)
-  window.removeEventListener('keydown', onKeydown)
-})
+const burgerLabel = computed(() => (isNavOpen.value ? 'Закрыть меню' : 'Открыть меню'))
 </script>
 
 <template>
   <header class="ah">
-    <div class="ah-brand">{{ props.brand }}</div>
-    <nav ref="navEl" class="ah-nav">
-      <RouterLink v-for="item in standalone" :key="item.to" :to="item.to" class="ah-link">
-        {{ item.label }}
-      </RouterLink>
-      <div
-        v-for="cat in visibleCategories"
-        :key="cat.label"
-        class="ah-cat-wrap"
-      >
-        <button
-          type="button"
-          class="ah-cat"
-          :class="{ active: activeCategory === cat || openCategory === cat }"
-          @click="toggleCategory(cat)"
+    <!-- Burger: a single glyph that morphs between the hamburger (drawer
+         closed) and an × (drawer visible) — the three bars rotate into the
+         cross with a smooth transition -->
+    <button
+      type="button"
+      class="ah-burger"
+      :aria-label="burgerLabel"
+      :aria-expanded="isNavOpen"
+      :title="burgerTitle"
+      @click="toggleNav"
+    >
+      <span class="ah-burger-glyph" :class="{ open: isNavOpen }" aria-hidden="true">
+        <svg
+          viewBox="0 0 24 24"
+          width="22"
+          height="22"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.8"
+          stroke-linecap="round"
+          stroke-linejoin="round"
         >
-          {{ cat.label }}
-          <span class="ah-caret">▾</span>
-        </button>
-        <div v-if="openCategory === cat" class="ah-menu" role="menu">
-          <RouterLink
-            v-for="item in cat.items"
-            :key="item.to"
-            :to="item.to"
-            class="ah-menu-item"
-            :class="{ active: item.name === route.name }"
-            role="menuitem"
-            @click="closeCategory"
-          >
-            {{ item.label }}
-          </RouterLink>
-        </div>
-      </div>
-    </nav>
+          <line class="ah-line ah-line--top" x1="4" y1="6" x2="20" y2="6" />
+          <line class="ah-line ah-line--mid" x1="4" y1="12" x2="20" y2="12" />
+          <line class="ah-line ah-line--bot" x1="4" y1="18" x2="20" y2="18" />
+        </svg>
+      </span>
+      <span v-if="isElectron" class="ah-burger-dot" :class="{ on: !offline }"></span>
+    </button>
+
     <div class="ah-spacer"></div>
+
     <div class="ah-actions">
-      <RouterLink to="/profile" class="ah-link" :class="{ active: route.name === 'profile' }">Профиль</RouterLink>
-      <RouterLink v-if="isElectron" to="/sync" class="ah-link" :class="{ active: route.name === 'sync' }">
-        Синхронизация
-        <span v-if="pending > 0" class="ah-sync-badge" :title="`Ожидают отправки: ${pending}`">
-          {{ pending }}
-        </span>
+      <RouterLink to="/profile" class="ah-act" :class="{ active: route.name === 'profile' }">
+        <AppIcon name="user" :size="18" />
+        <span>Профиль</span>
       </RouterLink>
-      <!-- Выход офлайн недоступен: logout чистит очередь изменений, а её нужно сохранить до возврата сети -->
       <button
         type="button"
-        class="ah-logout"
-        :class="{ 'ah-logout--off': offline }"
+        class="ah-act ah-act--icon"
+        :title="'Переключить тему (сейчас ' + themeLabel.toLowerCase() + ')'"
+        :aria-label="'Переключить тему'"
+        @click="toggleScheme"
+      >
+        <AppIcon :name="resolvedScheme === 'dark' ? 'sun' : 'moon'" :size="18" />
+      </button>
+      <!-- Logout is unavailable offline: logout clears the outbox, which must be kept until the network is back -->
+      <button
+        type="button"
+        class="ah-act ah-act--icon ah-act--logout"
+        :class="{ 'ah-act--off': offline }"
         :disabled="offline"
-        :title="offline ? 'Выход недоступен офлайн: очередь изменений сохранится до возврата сети' : undefined"
+        :title="offline ? 'Выход недоступен офлайн: очередь изменений сохранится до возврата сети' : 'Выйти из системы'"
+        :aria-label="'Выйти из системы'"
         @click="onLogout"
       >
-        Выйти
+        <AppIcon name="logout" :size="18" />
       </button>
     </div>
   </header>
 </template>
 
 <style scoped>
+@import '../../../styles/tokens.css';
+
 .ah {
-  background: #1a73e8;
-  color: #fff;
-  padding: 0 24px;
-  height: 56px;
+  width: 100%; /* the header width never depends on the page or scrollbars */
+  /* The header is a flex item of .ml-col (column flex): without this the flex
+     shrink distribution on viewport-filling diagram pages squeezes the header
+     height below 60px (the timeline is taller than the container). flex: none
+     keeps the header size dependent only on the screen, never on page content. */
+  flex: none;
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  padding: 0 16px 0 8px;
+  height: 60px;
   display: flex;
   align-items: center;
-  gap: 32px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  gap: 12px;
+  box-shadow: var(--ui-shadow-sm);
+  border-bottom: 1px solid var(--ui-border);
   position: sticky;
   top: 0;
-  /* Шапка и её выпадающие меню — поверх контента страницы; модальные окна
-     (z-40000) рисуются поверх шапки и затемняют её */
-  z-index: 30000;
+  z-index: 100; /* above page content inside the column */
 }
 
-.ah-brand {
-  font-size: 20px;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-  white-space: nowrap;
-}
-
-.ah-nav {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.ah-link,
-.ah-cat {
-  color: rgba(255, 255, 255, 0.85);
-  text-decoration: none;
-  font-size: 14px;
-  padding: 6px 12px;
-  border-radius: 6px;
-  border: none;
-  background: transparent;
-  font-family: inherit;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  transition: background 0.15s, color 0.15s;
-}
-
-.ah-link:hover,
-.ah-cat:hover {
-  background: rgba(255, 255, 255, 0.15);
-  color: #fff;
-}
-
-.ah-cat.active,
-.ah-link.active {
-  background: rgba(255, 255, 255, 0.22);
-  color: #fff;
-  font-weight: 600;
-}
-
-.ah-caret {
-  font-size: 10px;
-  opacity: 0.8;
-}
-
-.ah-sync-badge {
+.ah-burger {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 6px;
-  border-radius: 999px;
-  background: #f39c12;
-  color: #fff;
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 1;
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: var(--ui-radius-sm);
+  background: transparent;
+  color: var(--ui-text-2);
+  cursor: pointer;
+  transition: background var(--ui-duration), color var(--ui-duration);
 }
 
-.ah-cat-wrap {
-  position: relative;
+.ah-burger:hover {
+  background: var(--ui-surface-3);
+  color: var(--ui-text);
 }
 
-.ah-menu {
-  position: absolute;
-  top: calc(100% + 8px);
-  left: 0;
-  min-width: 200px;
-  background: #fff;
-  border-radius: 10px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
-  border: 1px solid #e8e8e8;
-  padding: 6px;
-  display: flex;
-  flex-direction: column;
-  /* Внутри контекста шапки (z-30000) — поверх остального контента шапки */
-  z-index: 100;
+.ah-burger:focus-visible {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: 2px;
 }
 
-.ah-menu-item {
+/* Morphing burger glyph — universal (works in Chromium, Firefox, Safari).
+   One SVG whose three bars transform into a full centred ×:
+   - top/bottom bars slide to the middle line (translateY) and tilt ±45°
+     around the canvas centre (transform-box: view-box → origin 12,12);
+   - the middle bar fades out.
+   Function order matters: `rotate(45deg) translateY(6px)` applies the
+   translate FIRST (bar reaches the centre line) and the rotate LAST,
+   yielding a proper centred diagonal. */
+.ah-burger-glyph {
   display: block;
-  padding: 9px 12px;
-  border-radius: 7px;
-  color: #333;
-  text-decoration: none;
-  font-size: 14px;
-  transition: background 0.15s, color 0.15s;
+  width: 22px;
+  height: 22px;
 }
 
-.ah-menu-item:hover {
-  background: #f2f6fc;
-  color: #1a73e8;
+.ah-line {
+  transform-box: view-box;
+  transform-origin: center;
+  transition:
+    transform 0.34s cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 0.22s ease;
 }
 
-.ah-menu-item.active {
-  background: #e8f0fe;
-  color: #1a73e8;
-  font-weight: 600;
+.ah-burger-glyph.open .ah-line--top {
+  transform: rotate(45deg) translateY(6px);
+}
+
+.ah-burger-glyph.open .ah-line--mid {
+  opacity: 0;
+}
+
+.ah-burger-glyph.open .ah-line--bot {
+  transform: rotate(-45deg) translateY(-6px);
+}
+
+/* Sync state dot on the burger (desktop): green = online, amber = offline */
+.ah-burger-dot {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 2px solid var(--ui-surface);
+  background: var(--ui-warning);
+}
+
+.ah-burger-dot.on {
+  background: var(--ui-success);
 }
 
 .ah-spacer {
@@ -258,34 +203,76 @@ onBeforeUnmount(() => {
 .ah-actions {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
 }
 
-.ah-logout {
-  background: rgba(255, 255, 255, 0.15);
-  color: #fff;
-  border: 1px solid rgba(255, 255, 255, 0.35);
-  border-radius: 6px;
-  padding: 6px 14px;
-  font-size: 13px;
+.ah-act {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 42px;
+  padding: 0 14px;
+  border: none;
+  border-radius: var(--ui-radius-sm);
+  background: transparent;
+  color: var(--ui-text-2);
+  text-decoration: none;
+  font-size: 14px;
+  font-family: inherit;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+  transition: background var(--ui-duration), color var(--ui-duration);
 }
 
-.ah-logout:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.28);
-  color: #fff;
+.ah-act:hover:not(:disabled) {
+  background: var(--ui-surface-3);
+  color: var(--ui-text);
 }
 
-.ah-logout:disabled,
-.ah-logout--off {
+.ah-act.active {
+  background: var(--ui-accent-soft);
+  color: var(--ui-accent);
+  font-weight: 600;
+}
+
+/* Icon-only actions (theme toggle, logout): square, no label */
+.ah-act--icon {
+  width: 42px;
+  padding: 0;
+  justify-content: center;
+}
+
+.ah-act--logout:hover:not(:disabled) {
+  background: var(--ui-danger-soft);
+  border-color: var(--ui-danger);
+  color: var(--ui-danger);
+}
+
+.ah-act:disabled,
+.ah-act--off {
   opacity: 0.45;
   cursor: not-allowed;
   pointer-events: none;
 }
 
+/* Narrow screens: one row, icons only (touch targets stay >= 44px) */
 @media (max-width: 720px) {
-  .ah { flex-direction: column; height: auto; padding: 12px; gap: 12px; }
-  .ah-spacer { display: none; }
+  .ah {
+    padding: 0 8px;
+    gap: 4px;
+  }
+
+  .ah-act {
+    width: 48px;
+    padding: 0;
+    justify-content: center;
+  }
+
+  .ah-act span {
+    display: none;
+  }
+
+  .ah-actions {
+    gap: 2px;
+  }
 }
 </style>

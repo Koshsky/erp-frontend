@@ -1,7 +1,7 @@
 import type { TimelineCtx } from '@/composables/timeline-context'
 import type { DtoUserResponse, DtoUserStateResponse, DtoStateResponse } from '@/api'
 
-/** Сотрудник табеля — пользователь с ролью worker */
+/** Timesheet employee — a user with the worker role */
 export type EmployeeWithTitle = DtoUserResponse
 
 export interface AssignPayload {
@@ -21,10 +21,14 @@ export interface TimesheetGridProps {
   t: TimelineCtx
   employees: EmployeeWithTitle[]
   states: DtoStateResponse[]
-  /** Состояние, покрывающее день сотрудника (undefined — рабочий день) */
+  /** State covering an employee's day (undefined — a workday) */
   stateForDay: (employeeId: number, iso: string) => DtoUserStateResponse | undefined
-  /** Ошибка загрузки/сохранения */
+  /** Load/save error */
   error?: string | null
-  /** Идёт сохранение (блокирует панель назначения) */
+  /** Saving in progress (blocks the assignment panel) */
   busy?: boolean
+  /** Whether the user may assign states to an employee's days (worker.update) */
+  canAssign?: (employeeId: number) => boolean
+  /** Whether the user may clear an employee's day ranges (worker.delete) */
+  canClear?: (employeeId: number) => boolean
 }

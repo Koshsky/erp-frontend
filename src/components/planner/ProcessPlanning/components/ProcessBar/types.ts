@@ -1,7 +1,7 @@
 import type { TimelineCtx } from '@/composables/timeline-context'
 
 export interface ProcessBarProps {
-  /** Контекст бесконечной шкалы */
+  /** Infinite timeline context */
   timeline: TimelineCtx
   startDate: string | Date | number
   endDate: string | Date | number
@@ -10,13 +10,16 @@ export interface ProcessBarProps {
   ownerName?: string
   color?: string
   opacity?: number
-  /** Включает перетаскивание и ручки изменения длительности */
+  /** Enables dragging and duration-resize handles */
   draggable?: boolean
-  /** Границы проекта — ограничивают перетаскивание процесса */
+  /** Vertical row reorder: pressing the bar body and dragging vertically calls
+   *  this with the pointerdown event (horizontal drags keep changing dates). */
+  startRowReorder?: ((e: PointerEvent) => void) | null
+  /** Project bounds — restrict dragging of the process */
   groupStartDate?: string | Date | number | null
   groupEndDate?: string | Date | number | null
-  /** Высота бара в px (default 24) */
+  /** Bar height in px (default 24) */
   height?: number
-  /** Смещение бара от верха строки в px (default 1) */
+  /** Bar offset from the top of the row in px (default 1) */
   top?: number
 }

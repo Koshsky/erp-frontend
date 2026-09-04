@@ -3,16 +3,16 @@ import type { OutboxEntry } from './outbox'
 import { applyRangeSplit } from './periodSplit'
 
 /**
- * Write-through офлайн-дельт в «нагретые» данные (кэш GET-ответов в IndexedDB).
+ * Write-through of offline deltas into "warmed" data (cache of GET responses in IndexedDB).
  *
- * Когда мутация уходит в очередь (outbox), мы сразу же применяем её к сохранённым
- * ответам API — чтобы после перезагрузки страницы в офлайне стора читала уже
- * актуальный кэш (серверный снимок + все офлайн-изменения), а не устаревший.
+ * When a mutation goes to the queue (outbox), we immediately apply it to the saved
+ * API responses — so after a page reload while offline the store reads the
+ * up-to-date cache (server snapshot + all offline changes) instead of stale data.
  *
- * Покрывает все сущности: списки (проекты/процессы/задачи/вехи/назначения/
- * ресурсы/пользователи), участников ресурсов, массивы (статусы, периоды
- * табеля) и агрегаты планировщика (/planning/projects|processes|tasks).
- * Записи, которых нет в кэше, не создаём — no-op (нечего обновлять).
+ * Covers all entities: lists (projects/processes/tasks/milestones/assignments/
+ * resources/users), resource members, arrays (statuses, timesheet
+ * periods) and planner aggregates (/planning/projects|processes|tasks).
+ * Entries missing from the cache are not created — no-op (nothing to update).
  */
 
 const CACHE_STORE = 'cache'
@@ -35,7 +35,7 @@ function pathnameOf(url: string): string {
   }
 }
 
-/** id из последнего сегмента пути (PUT/DELETE /entity/{id}) */
+/** id from the last path segment (PUT/DELETE /entity/{id}) */
 function entryId(entry: OutboxEntry): number | undefined {
   const p = pathnameOf(entry.url).replace(/\/+$/, '')
   const seg = p.split('/').pop() ?? ''
@@ -43,7 +43,7 @@ function entryId(entry: OutboxEntry): number | undefined {
   return Number.isFinite(n) ? n : undefined
 }
 
-/** Пройти по записям кэша, применить мутацию к data, записать при изменении */
+/** Walk the cache entries, apply the mutation to data, write when changed */
 async function forEachCacheKey(
   match: (path: string) => boolean,
   mutate: (body: CachedBody) => void,
@@ -61,7 +61,7 @@ async function forEachCacheKey(
   }
 }
 
-/** Мутация для листинга { items, total } */
+/** Mutation for a listing { items, total } */
 function applyListMutation(
   payload: { items: any[]; total?: number },
   entry: OutboxEntry,
@@ -108,7 +108,7 @@ function listApplier(path: string, make: (b: any, tempId?: number) => any) {
     })
 }
 
-// Синтез создаваемых объектов из тела запроса (с временным id)
+// Synthesize created objects from the request body (with a temporary id)
 const makeResource = (b: any, tempId?: number) => ({
   id: tempId ?? -1,
   code: b?.code,
@@ -119,7 +119,7 @@ const makeResource = (b: any, tempId?: number) => ({
 const makeEmployee = (b: any, tempId?: number) => ({
   id: tempId ?? -1,
   name: b?.name,
-  role: b?.role ?? 'worker',
+  preset: b?.preset ?? 'worker',
   position: b?.position,
   manager_id: b?.manager_id,
   hire_date: b?.hire_date,
@@ -164,7 +164,7 @@ const makeAssignment = (b: any, tempId?: number) => ({
   quantity: b?.quantity,
 })
 
-/** Агрегат /planning/projects: проекты с приоритетом */
+/** Aggregate /planning/projects: projects with priority */
 async function applyPlanningProjects(entry: OutboxEntry): Promise<void> {
   const body = entry.body as Record<string, any> | undefined
   const method = (entry.method || '').toUpperCase()
@@ -195,7 +195,7 @@ async function applyPlanningProjects(entry: OutboxEntry): Promise<void> {
   })
 }
 
-/** Агрегат /planning/processes: процессы внутри проектов */
+/** Aggregate /planning/processes: processes inside projects */
 async function applyPlanningProcesses(entry: OutboxEntry): Promise<void> {
   const body = entry.body as Record<string, any> | undefined
   const method = (entry.method || '').toUpperCase()
@@ -240,14 +240,14 @@ async function applyPlanningProcesses(entry: OutboxEntry): Promise<void> {
   })
 }
 
-/** Агрегат /planning/tasks: задачи/вехи/назначения внутри процессов */
+/** Aggregate /planning/tasks: tasks/milestones/assignments inside processes */
 async function applyPlanningTasks(
   entry: OutboxEntry,
   kind: 'task' | 'milestone' | 'assignment',
 ): Promise<void> {
   const body = entry.body as Record<string, any> | undefined
   const method = (entry.method || '').toUpperCase()
-  // Код/название ресурса для бейджа задачи при офлайн-назначении (из кэша справочника)
+  // Resource code/name for the task badge on offline assignment (from the reference cache)
   const resourceFields =
     kind === 'assignment' && method === 'POST'
       ? await getResourceFields(body?.resource_id as number | undefined)
@@ -357,7 +357,7 @@ async function applyPlanningTasks(
   })
 }
 
-/** Массив /timesheet/states */
+/** Array /timesheet/states */
 async function applyState(entry: OutboxEntry): Promise<void> {
   const body = entry.body as Record<string, any> | undefined
   const method = (entry.method || '').toUpperCase()
@@ -387,8 +387,8 @@ function parseEmployeeDays(entry: OutboxEntry): {
   stateId?: number
 } {
   try {
-    // В проде URL запроса относительный (basePath /api/v1) — без base
-    // new URL() бросает, и дельты табеля молча не применялись.
+    // In production the request URL is relative (basePath /api/v1) — without a base
+    // new URL() throws, and timesheet deltas were silently not applied.
     const u = new URL(entry.url, 'https://mvs.local')
     const m = u.pathname.match(/\/user\/(\d+)\/days/)
     const stateRaw = u.searchParams.get('state_id')
@@ -404,7 +404,7 @@ function parseEmployeeDays(entry: OutboxEntry): {
   }
 }
 
-/** Полная информация статуса из кэша состояний (для аббревиатуры/цвета ячейки) */
+/** Full status info from the states cache (for cell abbreviation/color) */
 async function getStateFields(stateId: number | undefined): Promise<Record<string, unknown>> {
   if (stateId == null) return {}
   const keys = await idbKeys(CACHE_STORE)
@@ -423,7 +423,7 @@ async function getStateFields(stateId: number | undefined): Promise<Record<strin
   return {}
 }
 
-/** Код/название ресурса из кэша справочника /api/v1/resources (для бейджа задачи) */
+/** Resource code/name from the /api/v1/resources reference cache (for the task badge) */
 async function getResourceFields(resourceId: number | undefined): Promise<Record<string, unknown>> {
   if (resourceId == null) return {}
   const keys = await idbKeys(CACHE_STORE)
@@ -442,7 +442,7 @@ async function getResourceFields(resourceId: number | undefined): Promise<Record
   return {}
 }
 
-/** Периоды табеля /user/{id}/days (окна кэшируются по диапазонам) */
+/** Timesheet periods /user/{id}/days (windows are cached by ranges) */
 async function applyPeriod(entry: OutboxEntry): Promise<void> {
   const { employeeId, start, end, stateId } = parseEmployeeDays(entry)
   if (employeeId == null) return
@@ -458,7 +458,7 @@ async function applyPeriod(entry: OutboxEntry): Promise<void> {
       const s = body?.start_date as string | undefined
       const e = body?.end_date as string | undefined
       if (!s || !e) return
-      // Разбиение как на бэкенде: вычитаем [s,e], хвосты сохраняем.
+      // Splitting as on the backend: subtract [s,e], keep the tails.
       cachedBody.data = applyRangeSplit(data, 'put', s, e, undefined, {
         id: -entry.ts,
         state_id: body?.state_id,
@@ -473,7 +473,7 @@ async function applyPeriod(entry: OutboxEntry): Promise<void> {
   })
 }
 
-/** Поля пользователя из кэша справочника /api/v1/users (для офлайн-добавления в ресурс) */
+/** User fields from the /api/v1/users reference cache (offline member addition) */
 async function getUserFields(userId: number | undefined): Promise<Record<string, unknown>> {
   if (userId == null) return {}
   const keys = await idbKeys(CACHE_STORE)
@@ -484,7 +484,7 @@ async function getUserFields(userId: number | undefined): Promise<Record<string,
     if (u) {
       return {
         name: u.name,
-        role: u.role,
+        preset: u.preset,
         position: u.position,
         manager_id: u.manager_id,
         hire_date: u.hire_date,
@@ -496,7 +496,7 @@ async function getUserFields(userId: number | undefined): Promise<Record<string,
   return {}
 }
 
-/** Массив участников ресурса /api/v1/resources/{id}/members */
+/** Resource members array /api/v1/resources/{id}/members */
 async function applyMembers(entry: OutboxEntry): Promise<void> {
   const body = entry.body as Record<string, any> | undefined
   const method = (entry.method || '').toUpperCase()
@@ -517,7 +517,7 @@ async function applyMembers(entry: OutboxEntry): Promise<void> {
       if (i >= 0) data.splice(i, 1)
     }
   })
-  // Счётчик участников в справочнике ресурсов
+  // Member counter in the resources reference
   if (method === 'POST' || method === 'DELETE') {
     await forEachCacheKey((p) => p === '/api/v1/resources', (cachedBody) => {
       const data = cachedBody.data as { items?: any[] } | undefined
@@ -530,8 +530,8 @@ async function applyMembers(entry: OutboxEntry): Promise<void> {
 }
 
 /**
- * Применяет офлайн-дельту к сохранённым GET-ответам. Вызывается при каждой
- * записи в очередь. Ошибки не критичны — кэш просто не обновится.
+ * Applies an offline delta to saved GET responses. Called on every
+ * queue write. Errors are not critical — the cache simply won't update.
  */
 export async function applyToCache(entry: OutboxEntry): Promise<void> {
   try {
@@ -576,6 +576,6 @@ export async function applyToCache(entry: OutboxEntry): Promise<void> {
         break
     }
   } catch {
-    // правка кэша не критична — при сбое не обновится
+    // cache edit is not critical — on failure it just won't update
   }
 }

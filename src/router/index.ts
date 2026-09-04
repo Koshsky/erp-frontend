@@ -21,8 +21,8 @@ const router = createRouter({
           component: () => import('../views/LoginPage.vue'),
         },
         {
-          // Настройка адреса сервера — доступна до входа (нужно для exe:
-          // на другом компьютере бэкенд может быть не на localhost).
+          // Server address settings — available before login (needed for the exe:
+          // on another machine the backend may not be on localhost).
           path: 'settings',
           name: 'server-settings',
           component: () => import('../views/ServerSettingsPage.vue'),
@@ -34,10 +34,23 @@ const router = createRouter({
       component: MainLayout,
       meta: { requiresAuth: true },
       children: [
+        // Main screen: the first tab the user may access by permissions.
+        // The guard below double-checks the landing page (pageAccessible),
+        // so a wrong pick (role fallback) is corrected there. Until the
+        // permissions arrive the role fallback chooses the tab.
         {
           path: '',
-          name: 'dashboard',
-          component: () => import('../views/DashboardPage.vue'),
+          name: 'home',
+          redirect: () => {
+            const rbac = useRbacStore()
+            const auth = useAuthStore()
+            const permsReady = rbac.permsLoaded || rbac.myPermissions.length > 0
+            const role = auth.user?.preset ?? ''
+            const tab = FIRST_ACCESSIBLE_TABS.find(([, perm, roles]) =>
+              permsReady ? !perm || rbac.can(perm[0], perm[1]) : roles.includes(role),
+            )
+            return tab ? { name: tab[0] } : { name: 'profile' }
+          },
         },
         {
           path: 'planner',
@@ -80,6 +93,17 @@ const router = createRouter({
           component: () => import('../views/UsersPage.vue'),
         },
         {
+          // Create / edit user — a dedicated page instead of a modal
+          path: 'users/new',
+          name: 'user-new',
+          component: () => import('../views/UserFormPage.vue'),
+        },
+        {
+          path: 'users/:id/edit',
+          name: 'user-edit',
+          component: () => import('../views/UserFormPage.vue'),
+        },
+        {
           path: 'structure',
           name: 'structure',
           component: () => import('../views/CompanyStructure.vue'),
@@ -95,9 +119,19 @@ const router = createRouter({
           component: () => import('../views/PermissionsPage.vue'),
         },
         {
+          path: 'audit',
+          name: 'audit',
+          component: () => import('../views/AuditLogPage.vue'),
+        },
+        {
           path: 'profile',
           name: 'profile',
           component: () => import('../views/ProfilePage.vue'),
+        },
+        {
+          path: 'profile/edit',
+          name: 'profile-edit',
+          component: () => import('../views/ProfileEditPage.vue'),
         },
         {
           path: 'sync',
@@ -109,10 +143,72 @@ const router = createRouter({
   ],
 })
 
-// Глобальный guard: неавторизованных пользователей всегда отправляем на /login.
-// Если access-токен отсутствует или протух, но есть refresh — сначала тихо
-// обновляем сессию: web — refresh по куке, desktop — тихий re-login по кредам
-// автосинка (refresh-кука не работает кросс-сайт). Офлайн — без попыток сети.
+/**
+ * Page access by matrix permission (a resource/action pair from `pagePerm`),
+ * WAITING for the permissions to load first. On a cold start (page reload)
+ * the store is fresh: deciding access before /permissions/me (or the offline
+ * cache) arrives would see an empty permission list and wrongly send the user
+ * to the profile. If permissions could not be obtained at all (no network and
+ * no cache) — fall back to the planner nav roles.
+ *
+ * The wait is bounded (PERMS_BOUND_MS): with a saved session but a
+ * stale/unreachable server, /permissions/me used to hold the FIRST navigation
+ * for the whole axios timeout (~10 s), keeping the boot splash up that long
+ * ("infinite loading"). If permissions do not arrive in time, navigation
+ * proceeds with the role fallback and the app re-checks them later.
+ */
+const PLANNER_ROLES = ['admin', 'dp', 'rp', 'vp']
+const PERMS_BOUND_MS = 3000
+
+/**
+ * Landing tab priority: name, the permission that unlocks it (null — always
+ * available), and the role fallback used until the permissions arrive.
+ * Mirrors the nav order in useNavigation.
+ */
+const FIRST_ACCESSIBLE_TABS: Array<[string, [string, string] | null, string[]]> = [
+  ['planner', ['task', 'view'], PLANNER_ROLES],
+  ['projects', ['project', 'view'], ['dp', 'rp', 'admin']],
+  ['processes', ['process', 'view'], ['dp', 'rp', 'admin']],
+  ['timesheet', ['worker', 'view'], ['vp', 'admin']],
+  ['employees', ['worker', 'view'], ['vp', 'admin']],
+  ['resources', ['resource', 'view'], ['vp', 'admin']],
+  ['users', ['user_admin', 'view'], ['admin']],
+  ['statuses', ['state_admin', 'view'], ['admin']],
+  ['structure', ['org_structure', 'view'], ['admin']],
+  ['auto-create', ['rbac_config', 'view'], ['admin']],
+  ['permissions', ['rbac_config', 'view'], ['admin']],
+]
+
+async function pageAccessible(
+  rbac: ReturnType<typeof useRbacStore>,
+  role: string | undefined,
+  resource: string,
+  action: string,
+): Promise<boolean> {
+  if (!rbac.permsLoaded) {
+    const ok = await Promise.race([
+      rbac.loadMyPermissions(),
+      new Promise<false>((resolve) => setTimeout(() => resolve(false), PERMS_BOUND_MS)),
+    ])
+    if (!ok && !rbac.permsLoaded) return PLANNER_ROLES.includes(role ?? '')
+  }
+  return rbac.can(resource, action)
+}
+
+/**
+ * Desktop silent re-login must never block first paint: with a saved session
+ * and a stale/unreachable server address (an old profile can hold one), the
+ * login request used to keep the router guard waiting until axios timed out —
+ * the window stayed blank that whole time ("white screen"). The wait is now
+ * bounded; if the login did not finish in time, the app renders anyway and a
+ * late successful restore navigates in automatically (see main.ts watcher).
+ */
+const DESKTOP_AUTOSYNC_BOUND_MS = 2500
+
+// Global guard: unauthenticated users always go to /login.
+// If the access token is missing or expired but a refresh cookie exists — first silently
+// refresh the session: web — refresh via the cookie, desktop — silent re-login with auto-sync
+// credentials (the refresh cookie does not work cross-site). Offline — no network attempts.
 router.beforeEach(async (to) => {
   const auth = useAuthStore()
 
@@ -122,33 +218,46 @@ router.beforeEach(async (to) => {
     !isOffline.value
   ) {
     if (isElectron && shouldAutoSync() && !isLoggedOut()) {
-      await ensureDesktopAutoSyncSession()
+      await Promise.race([
+        ensureDesktopAutoSyncSession().catch(() => {}),
+        new Promise((resolve) => setTimeout(resolve, DESKTOP_AUTOSYNC_BOUND_MS)),
+      ])
     } else {
-      await auth.refreshSession()
+      // Desktop without autosync (disabled or after logout): the refresh
+      // request is bounded by the axios timeout, but a stale server must not
+      // hold first paint — cap the wait on desktop too. Web keeps the normal
+      // cookie refresh (fast and same-origin).
+      const refresh =
+        isElectron && !isOffline.value
+          ? Promise.race([
+              auth.refreshSession(),
+              new Promise<boolean>((resolve) =>
+                setTimeout(() => resolve(false), DESKTOP_AUTOSYNC_BOUND_MS),
+              ),
+            ])
+          : auth.refreshSession()
+      await refresh
     }
   }
 
-  // Страницы под главным layout требуют авторизации
+  // Pages under the main layout require authentication
   if (to.meta.requiresAuth && !auth.isAuthenticated) {
     return { name: 'login', query: { redirect: to.fullPath } }
   }
 
-  // Уже авторизованных не пускаем на страницу входа
+  // Already-authenticated users are not allowed on the login page
   if (to.name === 'login' && auth.isAuthenticated) {
-    return { name: auth.user?.role === 'worker' ? 'profile' : 'dashboard' }
+    return { name: 'home' }
   }
 
-  // Права для навигации: загружаем один раз на сессию (кроме офлайна — кеш).
+  // The permission gate below (pageAccessible) waits for the permissions on
+  // every guarded page — no fire-and-forget load here, otherwise it would race
+  // the awaited load with a duplicate /permissions/me request.
   const rbac = useRbacStore()
-  if (auth.isAuthenticated && !rbac.permsLoaded && !isOffline.value) {
-    // Не блокируем навигацию сетью: права подгружаются асинхронно
-    // (кнопки появятся по мере загрузки; поллинг обновляет дальше).
-    void rbac.loadMyPermissions()
-  }
 
-  // Действия/страницы показываем по правам из матрицы, а не по ролям.
-  // Бизнес-страницы — по праву view; админ-разделы — временный fallback
-  // на роль (TODO: виртуальные ресурсы-разделы).
+  // Show actions/pages by matrix permissions, not by roles.
+  // Business pages — by the view permission; admin sections — a temporary fallback
+  // to the role (TODO: virtual resource sections).
   const pagePerm: Record<string, [string, string]> = {
     timesheet: ['worker', 'view'],
     employees: ['worker', 'view'],
@@ -158,21 +267,30 @@ router.beforeEach(async (to) => {
     resources: ['resource', 'view'],
     statuses: ['state_admin', 'view'],
     users: ['user_admin', 'view'],
+    'user-new': ['user_admin', 'view'],
+    'user-edit': ['user_admin', 'view'],
     structure: ['org_structure', 'view'],
     'auto-create': ['rbac_config', 'view'],
     permissions: ['rbac_config', 'view'],
+    audit: ['audit', 'view'],
   }
   const needed = pagePerm[to.name as string]
-  if (needed && to.meta.requiresAuth && !rbac.can(needed[0], needed[1])) {
-    return { name: 'dashboard' }
+  if (needed && to.meta.requiresAuth) {
+    // Decide access by matrix permissions after WAITING for them: on a cold
+    // start (F5 / Ctrl+Shift+R) rbac.can() evaluated before the permissions
+    // arrive sees an empty list and wrongly redirects the page to the profile.
+    const allowed = await pageAccessible(rbac, auth.user?.preset, needed[0], needed[1])
+    if (!allowed) {
+      return { name: 'profile' }
+    }
   }
 
-  // Пользователь без прав ни на одну бизнес-страницу — только профиль
-  // (сотрудник без назначенных прав; админ и роли с правами ходят дальше).
+  // User with permission to no business page — profile only
+  // (an employee without assigned permissions; admin and roles with permissions continue further).
   if (
     to.meta.requiresAuth &&
     to.name !== 'profile' &&
-    to.name !== 'dashboard' &&
+    to.name !== 'profile-edit' &&
     to.name !== 'sync' &&
     !pagePerm[to.name as string] &&
     !rbac.can('project', 'view') &&
@@ -180,15 +298,22 @@ router.beforeEach(async (to) => {
     !rbac.can('task', 'view') &&
     !rbac.can('resource', 'view') &&
     !rbac.can('worker', 'view') &&
-    auth.user?.role !== 'admin'
+    auth.user?.preset !== 'admin'
   ) {
     return { name: 'profile' }
   }
 
-  // Синхронизация (офлайн-настройки) — доступна только в настольной (Electron)
-  // сборке. В веб-версии офлайна нет, страница недоступна.
+  // Sync (offline settings) — available only in the desktop (Electron)
+  // build. The web version has no offline, so the page is unavailable.
   if (to.name === 'sync' && !isElectron) {
-    return { name: 'dashboard' }
+    return { name: 'home' }
+  }
+
+  // Server address settings — desktop (Electron) build only. In the online
+  // (web) version the address is set at deployment (same-origin nginx proxy),
+  // the screen is unavailable.
+  if (to.name === 'server-settings' && !isElectron) {
+    return { name: 'login' }
   }
 
   return true

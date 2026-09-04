@@ -23,7 +23,7 @@ const emit = defineEmits<{
 const selectedResourceId = ref<number | ''>('')
 const quantity = ref(1)
 
-/** Ресурсы, ещё не назначенные задаче — доступны для добавления */
+/** Resources not yet assigned to the task — available for adding */
 const available = computed<ResourceOption[]>(() =>
   props.resources.filter(
     (r) => !props.assigned.some((a) => a.resource_id === r.id),
@@ -39,7 +39,7 @@ function resetForm() {
   quantity.value = 1
 }
 
-/** Сброс формы при открытии и после изменения набора назначенных (успешный add/remove) */
+/** Form reset on open and after the assigned set changes (successful add/remove) */
 watch(
   () => props.open,
   (open) => {
@@ -123,6 +123,7 @@ function resourceTitle(r: AssignedResource): string {
 </template>
 
 <style scoped>
+@import '../../../styles/tokens.css';
 .rm-body {
   padding: 16px;
   display: flex;
@@ -132,7 +133,7 @@ function resourceTitle(r: AssignedResource): string {
 .rm-error {
   margin: 0;
   font-size: 13px;
-  color: #d93025;
+  color: var(--ui-danger);
 }
 .rm-list {
   display: flex;
@@ -144,11 +145,11 @@ function resourceTitle(r: AssignedResource): string {
   align-items: center;
   gap: 10px;
   padding: 8px 10px;
-  background: #f6f6f6;
-  border: 1px solid #ececec;
-  border-radius: 8px;
+  background: var(--ui-surface-2);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
   font-size: 14px;
-  color: #333;
+  color: var(--ui-text);
 }
 .rm-item-name {
   flex: 1;
@@ -158,7 +159,7 @@ function resourceTitle(r: AssignedResource): string {
   white-space: nowrap;
 }
 .rm-item-qty {
-  color: #666;
+  color: var(--ui-text-2);
   white-space: nowrap;
 }
 .rm-remove {
@@ -166,14 +167,14 @@ function resourceTitle(r: AssignedResource): string {
   background: transparent;
   font-size: 14px;
   line-height: 1;
-  color: #999;
+  color: var(--ui-text-muted);
   cursor: pointer;
   padding: 2px 6px;
   border-radius: 6px;
 }
 .rm-remove:hover:not(:disabled) {
-  background: #ffe5e5;
-  color: #d93025;
+  background: var(--ui-danger-soft);
+  color: var(--ui-danger);
 }
 .rm-remove:disabled {
   cursor: not-allowed;
@@ -183,9 +184,9 @@ function resourceTitle(r: AssignedResource): string {
   padding: 18px 0;
   text-align: center;
   font-size: 14px;
-  color: #999;
-  border: 1px dashed #ddd;
-  border-radius: 8px;
+  color: var(--ui-text-muted);
+  border: 1px dashed var(--ui-border-strong);
+  border-radius: var(--ui-radius-sm);
 }
 .rm-add {
   display: flex;
@@ -198,18 +199,18 @@ function resourceTitle(r: AssignedResource): string {
 }
 .rm-input {
   box-sizing: border-box;
-  border: 1px solid #ddd;
-  border-radius: 8px;
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius-sm);
   padding: 9px 12px;
   font-size: 14px;
   font-family: inherit;
-  color: #333;
-  background: #fff;
+  color: var(--ui-text);
+  background: var(--ui-surface);
   outline: none;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition: border-color var(--ui-duration), box-shadow var(--ui-duration);
 }
 .rm-input:focus {
-  border-color: #1a73e8;
+  border-color: var(--ui-accent);
   box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.12);
 }
 .rm-select {
@@ -221,20 +222,20 @@ function resourceTitle(r: AssignedResource): string {
 }
 .rm-btn {
   border: none;
-  border-radius: 8px;
+  border-radius: var(--ui-radius-sm);
   padding: 9px 18px;
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
-  background: #1a73e8;
-  color: #fff;
+  background: var(--ui-accent);
+  color: var(--ui-accent-on);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
 }
 .rm-btn:hover:not(:disabled) {
-  background: #1765cc;
+  background: color-mix(in srgb, var(--ui-accent) 88%, black);
 }
 .rm-btn:disabled {
   opacity: 0.55;
@@ -244,7 +245,7 @@ function resourceTitle(r: AssignedResource): string {
   width: 14px;
   height: 14px;
   border: 2px solid rgba(255, 255, 255, 0.4);
-  border-top-color: #fff;
+  border-top-color: var(--ui-accent-on);
   border-radius: 50%;
   animation: rm-spin 0.7s linear infinite;
 }

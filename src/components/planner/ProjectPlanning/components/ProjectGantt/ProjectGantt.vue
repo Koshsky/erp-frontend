@@ -13,7 +13,7 @@ const emit = defineEmits<{
   change: [payload: { id: number; start_date: string; end_date: string }]
   contextmenu: [payload: { clientX: number; clientY: number; date: string; rowIndex: number; projectId?: number }]
   reorder: [payload: { from: number; to: number }]
-  /** Одиночный клик по бару проекта — переход на вкладку процессов этого проекта */
+  /** Single click on a project bar — switch to that project's processes tab */
   navigate: [payload: number]
 }>()
 
@@ -21,6 +21,7 @@ const groupItems = computed(() =>
   props.projects.map((p) => ({
     id: p.id,
     title: p.project_code || '',
+    color: p.color || '',
     start_date: p.start_date || '',
     end_date: p.end_date || '',
     priority: p.priority,
@@ -45,7 +46,7 @@ function onContextMenu(p: { clientX: number; clientY: number; id: number }) {
     :rowHeight="52"
     @reorder="(p) => emit('reorder', p)"
   >
-    <template #bar="{ item }">
+    <template #bar="{ item, startReorder }">
       <ProjectBar
         :timeline="timeline"
         :startDate="item.start_date"
@@ -53,7 +54,9 @@ function onContextMenu(p: { clientX: number; clientY: number; id: number }) {
         :projectCode="item.title"
         :priority="item.priority"
         :ownerName="item.owner_name"
+        :color="item.color"
         :draggable="canManage(item.id)"
+        :start-row-reorder="reorderable ? startReorder : null"
         @change="(d) => onBarChange(item.id, d)"
         @contextmenu="(p) => onContextMenu({ ...p, id: item.id })"
         @click="() => emit('navigate', item.id)"

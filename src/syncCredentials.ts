@@ -1,21 +1,21 @@
 /**
- * Хранение данных для автосинхронизации (логин + пароль).
+ * Storage of auto-sync data (login + password).
  *
- *  - Логин (username) не секретен — хранится в localStorage.
- *  - Пароль секретен — в Electron хранится только в safeStorage
- *    (шифрование на уровне ОС, доступ через main-процесс: файл в userData);
- *    в обычном браузере пароль не хранится вовсе.
+ *  - Login (username) is not secret — stored in localStorage.
+ *  - Password is secret — in Electron it is stored only in safeStorage
+ *    (OS-level encryption, accessed via the main process: a file in userData);
+ *    in a regular browser the password is not stored at all.
  *
- * Схема пары: `{ login, password }`, где password === null означает «пароль
- * не сохранён» (например, в браузере). Авторелогin возможен только когда
- * есть и логин, и пароль.
+ * Pair schema: `{ login, password }`, where password === null means "password
+ * not saved" (e.g. in the browser). Auto re-login is possible only when
+ * both login and password are present.
  */
 
 import { getDesktopPassword, setDesktopPassword, clearDesktopPassword, isElectron } from './electron'
 
 const LOGIN_KEY = 'mvs_erp_sync_login'
 
-/** Сохранённый логин (localStorage), либо null */
+/** Saved login (localStorage), or null */
 export function getSavedLogin(): string | null {
   try {
     return localStorage.getItem(LOGIN_KEY)
@@ -29,11 +29,11 @@ function setSavedLogin(login: string | null): void {
     if (login) localStorage.setItem(LOGIN_KEY, login)
     else localStorage.removeItem(LOGIN_KEY)
   } catch {
-    // настройки не критичны
+    // settings are not critical
   }
 }
 
-/** Пароль из safeStorage (Electron) или null (браузер / не сохранён) */
+/** Password from safeStorage (Electron) or null (browser / not saved) */
 export async function getSavedPassword(): Promise<string | null> {
   if (!isElectron) return null
   return getDesktopPassword()
@@ -44,7 +44,7 @@ export interface SyncCredentials {
   password: string | null
 }
 
-/** Полные сохранённые креды для авторелогina ({ password: null } — нельзя автовойти) */
+/** Full saved credentials for auto re-login ({ password: null } — cannot auto-login) */
 export async function getSyncCredentials(): Promise<SyncCredentials | null> {
   const login = getSavedLogin()
   if (!login) return null
@@ -53,9 +53,9 @@ export async function getSyncCredentials(): Promise<SyncCredentials | null> {
 }
 
 /**
- * Сохранить логин и пароль.
- * Логин — всегда; пароль — только в Electron (safeStorage). Возвращает true,
- * если пара полна (можно авторелогin).
+ * Save login and password.
+ * Login — always; password — only in Electron (safeStorage). Returns true
+ * if the pair is complete (auto re-login is possible).
  */
 export async function saveSyncCredentials(login: string, password: string): Promise<boolean> {
   setSavedLogin(login.trim() || null)
@@ -64,18 +64,18 @@ export async function saveSyncCredentials(login: string, password: string): Prom
   return Boolean(login.trim() && password)
 }
 
-/** Очистить сохранённые логин и пароль */
+/** Clear the saved login and password */
 export async function clearSyncCredentials(): Promise<void> {
   setSavedLogin(null)
   if (isElectron) await clearDesktopPassword()
 }
 
-/** Есть ли сохранённый логин (показываем подсказку на экране) */
+/** Whether a saved login exists (to show the hint on screen) */
 export function hasSavedLogin(): boolean {
   return getSavedLogin() != null
 }
 
-/** Пароль хранится безопасно (Electron) или не хранится вовсе (браузер) */
+/** Password is stored securely (Electron) or not stored at all (browser) */
 export function passwordStorageLabel(): string {
   return isElectron ? 'Хранится в защищённом хранилище ОС (safeStorage)' : 'Не хранится в браузере'
 }

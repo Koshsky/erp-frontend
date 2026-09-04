@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, ref, useSlots, watch } from 'vue'
 import { cellRangeForSpan, clampSpanDates, spanToDates, formatDateRange } from '../calendar'
 import { useTimelineItem } from '../../../composables/useTimelineItem'
+import { useWindowPointerTrack } from '../../../utils'
 import { TooltipCell } from '../../common'
 import type { BarProps } from './types'
 
@@ -10,7 +11,7 @@ const slots = useSlots()
 const props = withDefaults(defineProps<BarProps>(), {
   title: '',
   projectCode: '',
-  color: '#34a853',
+  color: 'var(--ui-gantt-task)',
   opacity: 0.75,
   tooltip: '',
   height: 24,
@@ -26,29 +27,71 @@ const props = withDefaults(defineProps<BarProps>(), {
 const emit = defineEmits<{
   change: [payload: { start_date: string; end_date: string }]
   contextmenu: [payload: { clientX: number; clientY: number }]
-  /** Одиночный клик (без перетаскивания) — навигация между вкладками */
+  /** Single click (without dragging) — navigation between tabs */
   click: []
-  /** Старт драга/ресайза: предложенные новые даты (live-предпросмотр загрузки) */
+  /** Drag/resize start: proposed new dates (live loading preview) */
   dragstart: [payload: { start_date: string; end_date: string }]
-  /** Драг продолжается — новые даты обновились */
+  /** Drag continues — new dates updated */
   dragmove: [payload: { start_date: string; end_date: string }]
-  /** Драг закончен (любым образом) — превью сбросить */
+  /** Drag finished (any way) — reset the preview */
   dragend: []
-  /** Тултип бара стал видимым — для ленивой подгрузки связанных данных */
+  /** Bar tooltip became visible — for lazy loading of related data */
   'tooltip-open': []
 }>()
 
-// === Разграничение одиночного клика и даблклика ===
-// Одиночный клик запускает короткий таймер (120мс); если пришёл второй клик (dblclick) —
-// таймер гасится и даблклик не делает ничего. Это позволяет клику по бару
-// навигировать между вкладками быстро, не срабатывая на двойном клике.
+// === Distinguishing a single click from a double click ===
+// A single click starts a short timer (120ms); if a second click arrives (dblclick) —
+// the timer is cancelled and the double click does nothing. This lets a click on a bar
+// navigate between tabs quickly without firing on a double click.
 const CLICK_DELAY_MS = 120
 const CLICK_MOVE_PX = 4
 let clickTimer: ReturnType<typeof setTimeout> | null = null
 const downPos = ref<{ x: number; y: number } | null>(null)
 
+// === Body press: vertical reorder vs horizontal date drag ===
+// With a reorderable row (startRowReorder is provided) the press on the bar body
+// is not committed to the date drag immediately: the dominant movement axis
+// decides — vertical → row reorder, horizontal → date drag as before.
+const REORDER_AXIS_PX = 8
+let pressStart: { x: number; y: number; e: PointerEvent } | null = null
+
+const pressTrack = useWindowPointerTrack({
+  onMove: (e) => {
+    if (!pressStart) return
+    const dx = e.clientX - pressStart.x
+    const dy = e.clientY - pressStart.y
+    if (Math.abs(dx) < REORDER_AXIS_PX && Math.abs(dy) < REORDER_AXIS_PX) return
+    const start = pressStart
+    pressStart = null
+    pressTrack.stop()
+    if (Math.abs(dy) > Math.abs(dx)) {
+      // Vertical — row reorder (with the bar's own pointerdown event)
+      start.e.preventDefault()
+      start.e.stopPropagation()
+      props.startRowReorder?.(start.e)
+    } else if (props.draggable) {
+      // Horizontal — regular date drag
+      startDrag(start.e, 'move')
+    }
+  },
+  onUp: () => {
+    pressStart = null
+    pressTrack.stop()
+  },
+  onCancel: () => {
+    pressStart = null
+    pressTrack.stop()
+  },
+})
+
 function onBodyPointerDown(e: PointerEvent) {
   if (e.button === 0) downPos.value = { x: e.clientX, y: e.clientY }
+  if (props.startRowReorder) {
+    // Axis disambiguation pending — the drag starts once the move direction is clear
+    pressStart = { x: e.clientX, y: e.clientY, e }
+    pressTrack.start()
+    return
+  }
   if (props.draggable) startDrag(e, 'move')
 }
 
@@ -56,9 +99,9 @@ function onPointerUp(e: PointerEvent) {
   const p = downPos.value
   downPos.value = null
   if (!p || e.button !== 0) return
-  // Было движение (драг/ресиз) — это не клик.
+  // There was movement (drag/resize) — this is not a click.
   if (Math.abs(e.clientX - p.x) + Math.abs(e.clientY - p.y) >= CLICK_MOVE_PX) return
-  // Уже есть таймер — это второй клик из даблклика: гасим навигацию, ждём dblclick.
+  // A timer already exists — this is the second click of a double click: suppress navigation, wait for dblclick.
   if (clickTimer) {
     clearTimeout(clickTimer)
     clickTimer = null
@@ -74,7 +117,7 @@ onBeforeUnmount(() => {
   if (clickTimer) clearTimeout(clickTimer)
 })
 
-/** Есть ли кастомный тултип: через проп `tooltip` или слот `#tooltip` */
+/** Whether there is a custom tooltip: via the `tooltip` prop or the `#tooltip` slot */
 const hasTooltip = computed(() => Boolean(props.tooltip) || Boolean(slots.tooltip))
 
 const span = computed(() =>
@@ -92,8 +135,8 @@ const { bounds, visible, isDragging, cursor, previewStyle, dragSpan, startDrag }
   },
 })
 
-/** Live-предпросмотр: публикуем предложенные даты бара, пока идёт драг/ресайз.
- *  flush:'sync' — цвет ячеек пересчитывается сразу на каждый move. */
+/** Live preview: publish the bar's proposed dates while dragging/resizing.
+ *  flush:'sync' — cell colors are recalculated immediately on each move. */
 watch(
   dragSpan,
   (sp) => {
@@ -131,14 +174,14 @@ const cursorStyle = computed<Record<string, string>>(() => {
   return { cursor: 'default' }
 })
 
-/** Диапазон дат бара «дд.мм.гггг — дд.мм.гггг» (для тултипа и слотов) */
+/** Bar date range "dd.mm.yyyy — dd.mm.yyyy" (for tooltip and slots) */
 const dateRange = computed(() => formatDateRange(props.startDate, props.endDate))
 
 function onHandlePointerDown(e: PointerEvent, mode: 'resizeStart' | 'resizeEnd') {
   if (props.draggable) startDrag(e, mode)
 }
 
-/** Даблклик по бару не делает ничего; гасим отложенный одиночный клик (навигацию) */
+/** Double click on the bar does nothing; cancel the deferred single click (navigation) */
 function onDblClick() {
   if (clickTimer) {
     clearTimeout(clickTimer)
@@ -197,6 +240,7 @@ function onContextMenu(e: MouseEvent) {
 </template>
 
 <style scoped>
+@import "../../../styles/tokens.css";
 .gantt-bar {
   position: absolute;
   border-radius: 5px;
@@ -204,7 +248,7 @@ function onContextMenu(e: MouseEvent) {
   align-items: center;
   overflow: hidden;
   box-sizing: border-box;
-  transition: opacity 0.15s;
+  transition: opacity var(--ui-duration);
 }
 .gantt-bar :deep(.tt-trigger) {
   display: flex;
@@ -225,7 +269,7 @@ function onContextMenu(e: MouseEvent) {
   opacity: 0.95 !important;
 }
 .gb-shadow {
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--ui-shadow-sm);
 }
 .gb-handle {
   position: absolute;
@@ -249,7 +293,7 @@ function onContextMenu(e: MouseEvent) {
 .lb-title {
   font-size: 12px;
   font-weight: 700;
-  color: #fff;
+  color: var(--ui-accent-on);
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
   white-space: nowrap;
   pointer-events: none;
@@ -275,7 +319,7 @@ function onContextMenu(e: MouseEvent) {
   margin-bottom: 2px;
 }
 .lb-tt-row {
-  color: #666;
+  color: var(--ui-text-2);
   white-space: nowrap;
 }
 </style>

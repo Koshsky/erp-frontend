@@ -1,4 +1,4 @@
-/** Цвет заливки ячейки/свача по состоянию (код + флаг доступности). */
+/** Cell/swatch fill color by state (code + availability flag). */
 
 const CODE_COLORS: Record<string, string> = {
   ОТП: '#ffd6a5',

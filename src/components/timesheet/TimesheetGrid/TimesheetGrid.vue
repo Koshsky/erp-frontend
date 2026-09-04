@@ -10,30 +10,38 @@ import type { ClearPayload, TimesheetGridProps } from './types'
 const props = withDefaults(defineProps<TimesheetGridProps>(), {
   error: null,
   busy: false,
+  canAssign: () => () => true,
+  canClear: () => () => true,
 })
 
 const emit = defineEmits<{
   assign: [payload: { employeeId: number; stateId: number; startDate: string; endDate: string }]
   clear: [payload: ClearPayload]
-  /** Видимый диапазон дат изменился (для дозагрузки окна состояний) */
+  /** The visible date range changed (to load more of the states window) */
   range: [payload: { startDate: string; endDate: string }]
 }>()
 
-/** Высота строки сотрудника и слоя имён (px): две строки — ФИО + должность */
+/** Employee row and name-layer height (px): two lines — full name + position */
 const ROW_H = 32
 
 /**
- * Задержка открытия панели назначения после отпускания мыши: различает одиночный
- * клик (открыть меню) и даблклик (сброс зума). Если в этот интервал приходит
- * второй клик — панель не открываем, сброс отработает по событию dblclick.
+ * Delay before opening the assignment panel after mouse release: distinguishes a single
+ * click (open the menu) from a double-click (zoom reset). If a second click arrives within
+ * this interval, the panel is not opened; the reset is handled by the dblclick event.
  */
 const OPEN_DELAY_MS = 200
 let openTimer: ReturnType<typeof setTimeout> | null = null
 
-/** Активное выделение диапазона (drag) */
+/** Active range selection (drag) */
 const selection = ref<{ employeeId: number; startIdx: number; endIdx: number } | null>(null)
 
-/** Плавающая панель назначения состояния */
+/** Live tooltip position — follows the cursor while selecting (assignment feedback) */
+const dragTip = ref<{ x: number; y: number } | null>(null)
+
+/** Whether a range drag is in progress (left mouse button held) */
+const dragging = ref(false)
+
+/** Floating panel for assigning a state */
 const panel = ref<{
   x: number
   y: number
@@ -42,15 +50,15 @@ const panel = ref<{
   endDate: string
 } | null>(null)
 
-/** Ссылка на панель для измерения её фактического размера */
+/** Reference to the panel for measuring its actual size */
 const panelEl = ref<HTMLElement | null>(null)
 
-/** Отступ панели от краёв окна (px) */
+/** Panel offset from window edges (px) */
 const PANEL_MARGIN = 8
 
 /**
- * Проверяет, помещается ли панель в окно браузера; если нет —
- * сдвигает её так, чтобы она целиком осталась в видимой области.
+ * Checks whether the panel fits in the browser window; if not,
+ * shifts it so that it stays entirely within the visible area.
  */
 function clampPanel() {
   const el = panelEl.value
@@ -67,7 +75,7 @@ function clampPanel() {
   if (x !== p.x || y !== p.y) panel.value = { ...p, x, y }
 }
 
-/** После открытия панели измеряем её и корректируем позицию под размер окна */
+/** After the panel opens, measure it and adjust its position to fit the window size */
 watch(panel, (p) => {
   if (p) {
     nextTick(clampPanel)
@@ -101,12 +109,44 @@ function fmtFull(iso: string): string {
   return `${d}.${m}.${y}`
 }
 
+/** Full date range of the active selection (for the live tooltip) */
+const rangeLabel = computed(() => {
+  const s = selection.value
+  if (!s || Number.isNaN(s.endIdx)) return ''
+  const lo = Math.min(s.startIdx, s.endIdx)
+  const hi = Math.max(s.startIdx, s.endIdx)
+  return `${fmtFull(fmtDate(props.t.cellStart(lo)))} — ${fmtFull(fmtDate(props.t.cellEnd(hi)))}`
+})
+
+/** Date range of the active selection a cell belongs to, for its hover tooltip */
+function selectionRangeFor(employeeId: number, idx: number): { start: string; end: string } | null {
+  const s = selection.value
+  if (!s || s.employeeId !== employeeId) return null
+  const lo = Math.min(s.startIdx, s.endIdx)
+  const hi = Math.max(s.startIdx, s.endIdx)
+  if (idx < lo || idx > hi) return null
+  return {
+    start: fmtDate(props.t.cellStart(lo)),
+    end: fmtDate(props.t.cellEnd(hi)),
+  }
+}
+
 function isSelected(employeeId: number, idx: number): boolean {
   const s = selection.value
   if (!s || s.employeeId !== employeeId) return false
   const lo = Math.min(s.startIdx, s.endIdx)
   const hi = Math.max(s.startIdx, s.endIdx)
   return idx >= lo && idx <= hi
+}
+
+/** Clamp the live tooltip position (cursor + offset) to the window boundaries */
+function dragTipStyle(): Record<string, string> {
+  const p = dragTip.value
+  if (!p) return {}
+  return {
+    left: Math.max(0, Math.min(p.x + 10, window.innerWidth - 200)) + 'px',
+    top: Math.max(0, Math.min(p.y + 10, window.innerHeight - 40)) + 'px',
+  }
 }
 
 function onPointerDown(e: PointerEvent) {
@@ -118,6 +158,8 @@ function onPointerDown(e: PointerEvent) {
   if (empId == null || Number.isNaN(idx)) return
   e.preventDefault()
   selection.value = { employeeId: empId, startIdx: idx, endIdx: idx }
+  dragTip.value = { x: e.clientX, y: e.clientY }
+  dragging.value = true
   document.body.style.userSelect = 'none'
   window.addEventListener('pointermove', onPointerMove)
   window.addEventListener('pointerup', onPointerUp)
@@ -129,22 +171,29 @@ function onPointerMove(e: PointerEvent) {
   const cell = el?.closest<HTMLElement>('.ts-cell')
   if (!cell) return
   const empId = Number(cell.dataset.employeeId)
-  // Выделение остаётся в строке начального сотрудника
+  // Keep the selection within the starting employee's row
   if (empId !== selection.value.employeeId) return
   const idx = Number(cell.dataset.cellIndex)
-  if (!Number.isNaN(idx)) selection.value.endIdx = idx
+  if (!Number.isNaN(idx)) {
+    selection.value.endIdx = idx
+    dragTip.value = { x: e.clientX, y: e.clientY }
+  }
 }
 
 function onPointerUp(e: PointerEvent) {
   const s = selection.value
   selection.value = null
+  dragging.value = false
+  dragTip.value = null
   document.body.style.userSelect = ''
   window.removeEventListener('pointermove', onPointerMove)
   window.removeEventListener('pointerup', onPointerUp)
-  // Драг мог оставить якорь браузерного выделения — снимаем, чтобы клик вне панели
-  // не «растянул» текст между кликами
+  // The drag may have left a browser selection anchor — clear it so a click outside the panel
+  // does not "stretch" text between clicks
   window.getSelection()?.removeAllRanges()
   if (!s || Number.isNaN(s.endIdx)) return
+  // Rows the current user cannot edit (worker.update) are not selectable
+  if (!props.canAssign(s.employeeId)) return
   const lo = Math.min(s.startIdx, s.endIdx)
   const hi = Math.max(s.startIdx, s.endIdx)
   const payload = {
@@ -154,13 +203,13 @@ function onPointerUp(e: PointerEvent) {
     startDate: fmtDate(props.t.cellStart(lo)),
     endDate: fmtDate(props.t.cellEnd(hi)),
   }
-  // Второй клик из даблклика — панель не открываем: сброс зума отработает по dblclick
+  // Second click of a double-click — do not open the panel: the zoom reset is handled by dblclick
   if (openTimer) {
     clearTimeout(openTimer)
     openTimer = null
     return
   }
-  // Выделение показываем сразу, панель — после задержки (для различения даблклика)
+  // Show the selection immediately, the panel after a delay (to distinguish a double-click)
   selection.value = { employeeId: s.employeeId, startIdx: lo, endIdx: hi }
   openTimer = setTimeout(() => {
     openTimer = null
@@ -196,20 +245,22 @@ function closePanel() {
   }
   panel.value = null
   selection.value = null
-  // Убираем браузерное выделение, оставшееся после драга/клика вне панели
+  dragTip.value = null
+  dragging.value = false
+  // Remove the browser selection left after a drag/click outside the panel
   window.getSelection()?.removeAllRanges()
 }
 
-/** Клик вне панели (оверлей): закрываем и запрещаем создание/расширение выделения текста */
+/** Click outside the panel (overlay): close it and prevent creating/extending a text selection */
 function onOverlayPointerDown(e: PointerEvent) {
   e.preventDefault()
   closePanel()
 }
 
 /**
- * Даблклик по табелю — сброс масштаба к исходному (обрабатывает бесконечная
- * шкала). Здесь гасим отложенное открытие панели и снимаем выделение, чтобы
- * одиночный клик (открытие меню) не сработал на двойном.
+ * Double-click on the timesheet resets the zoom to the default (handled by the infinite
+ * scale). Here we cancel the delayed panel opening and clear the selection so that
+ * a single click (opening the menu) does not fire on a double one.
  */
 function onDblClick() {
   if (openTimer) {
@@ -218,6 +269,8 @@ function onDblClick() {
   }
   panel.value = null
   selection.value = null
+  dragTip.value = null
+  dragging.value = false
 }
 
 function onKeydown(e: KeyboardEvent) {
@@ -233,9 +286,11 @@ onBeforeUnmount(() => {
   window.removeEventListener('pointerup', onPointerUp)
   window.removeEventListener('resize', clampPanel)
   document.body.style.userSelect = ''
+  dragTip.value = null
+  dragging.value = false
 })
 
-/** Видимый диапазон дат — сигнал для дозагрузки состояний (при прокрутке/зуме) */
+/** The visible date range — signal to load more states (on scroll/zoom) */
 watch(
   () => [props.t.windowStart, props.t.viewportCells, props.t.cellPx] as const,
   () => {
@@ -254,7 +309,7 @@ const labelsH = computed(() => props.employees.length * ROW_H)
 
 <template>
   <div class="ts" @pointerdown="onPointerDown" @dblclick="onDblClick">
-    <!-- Слой имён сотрудников: строки липнут слева, вертикально едут с рядами -->
+    <!-- Employee names layer: rows stick to the left and scroll vertically with the rows -->
     <div
       class="ts-labels"
       :style="{ width: LABEL_WIDTH + 'px', marginBottom: '-' + labelsH + 'px' }"
@@ -277,7 +332,7 @@ const labelsH = computed(() => props.employees.length * ROW_H)
       </TooltipCell>
     </div>
 
-    <!-- Сетка ячеек: ряд на сотрудника, ячейки по видимым дням -->
+    <!-- Cell grid: one row per employee, cells by visible days -->
     <div class="ts-rows">
       <div
         v-for="emp in employees"
@@ -297,6 +352,8 @@ const labelsH = computed(() => props.employees.length * ROW_H)
             :state="stateForDay(emp.id ?? 0, isoFor(i)) ?? null"
             :is-weekend="isWeekend(i)"
             :selected="isSelected(emp.id ?? 0, i)"
+            :selection-range="selectionRangeFor(emp.id ?? 0, i)"
+            :tooltip-disabled="dragging"
             :show-text="t.cellPx >= 40"
           />
         </div>
@@ -305,7 +362,17 @@ const labelsH = computed(() => props.employees.length * ROW_H)
 
     <p v-if="error" class="ts-error">{{ error }}</p>
 
-    <!-- Плавающая панель назначения состояния выделенному диапазону -->
+    <!-- Live tooltip: date range of the fragment being selected (follows the cursor) -->
+    <div
+      v-if="dragTip && selection && !panel"
+      class="ts-range-tip"
+      :style="dragTipStyle()"
+      aria-hidden="true"
+    >
+      {{ rangeLabel }}
+    </div>
+
+    <!-- Floating panel for assigning a state to the selected range -->
     <Teleport to="body">
       <template v-if="panel">
         <div class="ts-overlay" @pointerdown="onOverlayPointerDown" />
@@ -320,7 +387,7 @@ const labelsH = computed(() => props.employees.length * ROW_H)
             </TooltipCell>
             <button type="button" class="ts-panel-close" aria-label="Закрыть" @click="closePanel">×</button>
           </div>
-          <div class="ts-panel-states">
+          <div v-if="props.canAssign(panel.employeeId)" class="ts-panel-states">
             <button
               v-for="st in states"
               :key="'ts' + st.id"
@@ -337,7 +404,15 @@ const labelsH = computed(() => props.employees.length * ROW_H)
             </button>
           </div>
           <div class="ts-panel-actions">
-            <button type="button" class="ts-btn-clear" :disabled="busy" @click="onClear">Сбросить</button>
+            <button
+              v-if="props.canClear(panel.employeeId)"
+              type="button"
+              class="ts-btn-clear"
+              :disabled="busy"
+              @click="onClear"
+            >
+              Сбросить
+            </button>
           </div>
         </div>
       </template>
@@ -346,17 +421,19 @@ const labelsH = computed(() => props.employees.length * ROW_H)
 </template>
 
 <style scoped>
+@import '../../../styles/tokens.css';
+
 .ts {
   position: relative;
 }
-/* Боковая панель имён: липнет слева, поверх контента (ячеек/линий), шапки календаря
-   (30) и линии текущей даты (25), но под корнером (90). Ширина колонки 180px, поэтому
-   с шапкой не пересекается (у шапки слева — корнер), а линия «сегодня» идёт от x>=180. */
+/* Side names panel: sticks to the left, above the content (cells/lines), the calendar header
+   (30) and the current-date line (25), but below the corner (90). The column is 180px wide, so
+   it does not overlap the header (the header has a corner on its left), and the "today" line runs from x>=180. */
 .ts-labels {
   position: sticky;
   left: 0;
   z-index: 80;
-  background: #fff;
+  background: var(--ui-surface);
   box-sizing: border-box;
   user-select: none;
   -webkit-user-select: none;
@@ -368,13 +445,13 @@ const labelsH = computed(() => props.employees.length * ROW_H)
   gap: 2px;
   padding: 0 8px;
   box-sizing: border-box;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--ui-border);
   overflow: hidden;
   cursor: default;
 }
 .ts-label-name {
   font-weight: 700;
-  color: #333;
+  color: var(--ui-text);
   font-size: 12px;
   line-height: 1.2;
   overflow: hidden;
@@ -383,7 +460,7 @@ const labelsH = computed(() => props.employees.length * ROW_H)
 }
 .ts-label-pos {
   font-size: 11px;
-  color: #667;
+  color: var(--ui-text-2);
   line-height: 1.2;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -395,7 +472,7 @@ const labelsH = computed(() => props.employees.length * ROW_H)
 .ts-row {
   position: relative;
   box-sizing: border-box;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--ui-border);
 }
 .ts-cell {
   position: absolute;
@@ -408,7 +485,23 @@ const labelsH = computed(() => props.employees.length * ROW_H)
 .ts-error {
   margin: 10px 0 0;
   font-size: 13px;
-  color: #d93025;
+  color: var(--ui-danger);
+}
+
+/* Live selection tooltip: same look as the regular popovers, but fixed at the cursor */
+.ts-range-tip {
+  position: fixed;
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  font-size: 12px;
+  line-height: 1.45;
+  padding: 6px 10px;
+  border-radius: var(--ui-radius-sm);
+  border: 1px solid var(--ui-border);
+  box-shadow: var(--ui-shadow-md);
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 900;
 }
 
 .ts-overlay {
@@ -423,10 +516,10 @@ const labelsH = computed(() => props.employees.length * ROW_H)
   position: fixed;
   z-index: 1001;
   width: 200px;
-  background: #fff;
-  border-radius: 10px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
-  border: 1px solid #e0e0e0;
+  background: var(--ui-surface);
+  border-radius: var(--ui-radius-md);
+  box-shadow: var(--ui-shadow-lg);
+  border: 1px solid var(--ui-border);
   overflow: hidden;
 }
 .ts-panel-head {
@@ -434,19 +527,19 @@ const labelsH = computed(() => props.employees.length * ROW_H)
   align-items: center;
   gap: 6px;
   padding: 10px 12px;
-  background: #f8f9fa;
-  border-bottom: 1px solid #eee;
+  background: var(--ui-surface-2);
+  border-bottom: 1px solid var(--ui-border);
   font-size: 12px;
 }
 .ts-panel-title {
   font-weight: 700;
-  color: #1a3a6b;
+  color: var(--ui-accent);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .ts-panel-range {
-  color: #777;
+  color: var(--ui-text-2);
   flex: 1;
   text-align: right;
 }
@@ -455,12 +548,12 @@ const labelsH = computed(() => props.employees.length * ROW_H)
   background: transparent;
   font-size: 16px;
   line-height: 1;
-  color: #999;
+  color: var(--ui-text-muted);
   cursor: pointer;
   padding: 0 2px;
 }
 .ts-panel-close:hover {
-  color: #333;
+  color: var(--ui-text);
 }
 .ts-panel-states {
   display: flex;
@@ -475,16 +568,16 @@ const labelsH = computed(() => props.employees.length * ROW_H)
   align-items: center;
   gap: 8px;
   border: none;
-  background: #f7f8fa;
-  border-radius: 8px;
+  background: var(--ui-surface-2);
+  border-radius: var(--ui-radius-sm);
   padding: 8px 10px;
   font-size: 13px;
   text-align: left;
   cursor: pointer;
-  transition: background 0.15s;
+  transition: background var(--ui-duration);
 }
 .ts-state:hover:not(:disabled) {
-  background: #eef2f8;
+  background: var(--ui-surface-3);
 }
 .ts-state:disabled {
   opacity: 0.5;
@@ -494,7 +587,7 @@ const labelsH = computed(() => props.employees.length * ROW_H)
   width: 14px;
   height: 14px;
   border-radius: 4px;
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--ui-border-strong);
   flex-shrink: 0;
 }
 .ts-panel-actions {
@@ -502,16 +595,16 @@ const labelsH = computed(() => props.employees.length * ROW_H)
 }
 .ts-btn-clear {
   width: 100%;
-  border: 1px solid #e0e0e0;
-  background: #fff;
-  border-radius: 8px;
+  border: 1px solid var(--ui-border);
+  background: var(--ui-surface);
+  border-radius: var(--ui-radius-sm);
   padding: 8px;
   font-size: 13px;
-  color: #b3261e;
+  color: var(--ui-danger);
   cursor: pointer;
 }
 .ts-btn-clear:hover:not(:disabled) {
-  background: #fef2f1;
+  background: var(--ui-danger-soft);
 }
 .ts-btn-clear:disabled {
   opacity: 0.5;

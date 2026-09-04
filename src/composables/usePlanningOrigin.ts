@@ -6,11 +6,11 @@ export const UNIT_OPTIONS: { value: PlanningUnit; label: string }[] = [
   { value: 'decade', label: 'Декада' },
 ]
 
-/** Масштаб шкалы и якорь для диаграмм планирования (единые для трёх страниц) */
+/** Timeline scale and anchor for planning diagrams (shared across three pages) */
 export function usePlanningOrigin() {
   const unit = ref<PlanningUnit>('day')
 
-  /** Якорь шкалы: позавчера от сегодня — при открытии первые столбцы = позавчера, вчера */
+  /** Timeline anchor: two days before today — so on open the first columns are the day before yesterday, yesterday */
   const origin = computed(() => {
     const now = new Date()
     return new Date(now.getFullYear(), now.getMonth(), now.getDate() - 2)

@@ -8,17 +8,17 @@ import { clamp, useWindowPointerTrack } from '../utils'
 export type BarDragMode = 'move' | 'resizeStart' | 'resizeEnd'
 
 export interface UseBarDragOptions {
-  /** Текущий контекст бесконечной шкалы (reactive, читается на каждом move) */
+  /** Current infinite-timeline context (reactive, read on every move) */
   timeline: () => TimelineCtx
-  /** Скролл-контейнер шкалы (для rect → ячейка и автопрокрутки) */
+  /** Timeline scroll container (for rect → cell mapping and autoscroll) */
   scrollEl: () => HTMLElement | null
-  /** Пересчёт окна + расширение диапазона после программной прокрутки */
+  /** Recompute the window + extend the range after programmatic scroll */
   sync: () => void
-  /** Текущий диапазон ячеек бара (абсолютные индексы) */
+  /** Current bar cell span (absolute indices) */
   getSpan: () => CellSpan | null
-  /** Допустимый диапазон ячеек — границы родителя (абсолютные). null = без границ */
+  /** Allowed cell span — parent bounds (absolute). null = unbounded */
   getBounds?: () => CellSpan | null
-  /** Вызывается на отпускание, если диапазон изменился */
+  /** Called on release if the span changed */
   onCommit: (span: CellSpan) => void
 }
 
@@ -26,7 +26,7 @@ export interface BarDrag {
   isDragging: Ref<boolean>
   cursor: Ref<'grabbing' | 'ew-resize' | null>
   previewStyle: Ref<Record<string, string | number> | null>
-  /** Текущий диапазон ячеек во время драга (null — нет драга). Публикуется для live-предпросмотра загрузки */
+  /** Current cell span while dragging (null — not dragging). Published for live load preview */
   dragSpan: Ref<CellSpan | null>
   startDrag: (e: PointerEvent, mode: BarDragMode) => void
 }
@@ -35,10 +35,10 @@ const EDGE_MARGIN = 48
 const SCROLL_SPEED = 28
 
 /**
- * Драг бара в бесконечной шкале: движение переводится в абсолютные ячейки через
- * ячейку под курсором (учитывает автопрокрутку), диапазон зажимается в границы
- * родителя. У края контейнера включается автопрокрутка (rAF-цикл), которая
- * двигает скролл и расширяет диапазон шкалы.
+ * Bar drag in the infinite timeline: pointer movement is translated to absolute
+ * cells through the cell under the cursor (accounts for autoscroll), and the span
+ * is clamped to the parent bounds. Near the container edge autoscroll kicks in
+ * (rAF loop), which moves the scroll and extends the timeline range.
  */
 export function useBarDrag(options: UseBarDragOptions): BarDrag {
   const isDragging = ref(false)
@@ -77,10 +77,10 @@ export function useBarDrag(options: UseBarDragOptions): BarDrag {
     let s = startSpan.startCell
     let end = startSpan.endCell
     if (mode === 'move') {
-      // Оба края ведёт дельта мыши; границы зажимает общий клэмп ниже.
-      // У родительской границы передний край «замирает», а противоположная
-      // сторона ужимается (бар как будто уходит за границу, но не уходит);
-      // при обратном движении длина наращивается до исходной.
+      // Both edges follow the mouse delta; bounds are clamped by the shared clamp below.
+      // At the parent boundary the leading edge "freezes" while the opposite side
+      // shrinks (the bar looks like it goes past the boundary but does not);
+      // on reverse movement the length grows back to its original value.
       s = Math.round(startSpan.startCell + delta)
       end = Math.round(startSpan.endCell + delta)
     } else if (mode === 'resizeStart') {
@@ -173,8 +173,8 @@ export function useBarDrag(options: UseBarDragOptions): BarDrag {
     track.start()
   }
 
-  // Компонент мог размонтироваться посреди драга (смена данных/страницы):
-  // без этого слушатели и userSelect=«none» остаются навсегда.
+  // The component may unmount mid-drag (data/page change): without this,
+  // listeners and userSelect="none" would remain forever.
   onBeforeUnmount(endDrag)
 
   return { isDragging, cursor, previewStyle, dragSpan, startDrag }

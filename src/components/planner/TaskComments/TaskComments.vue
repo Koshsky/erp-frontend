@@ -26,14 +26,14 @@ const emit = defineEmits<{
   delete: [payload: DeleteCommentPayload]
 }>()
 
-/** Черновик корневого комментария и ответа (один активный ответ одновременно) */
+/** Drafts of the root comment and a reply (only one active reply at a time) */
 const rootDraft = ref('')
 const replyTo = ref<number | null>(null)
 const replyDraft = ref('')
 
 const composerDisabled = computed(() => props.busy || props.disabledReason != null)
 
-/** Плоский пре-ордер список для рендера с отступами */
+/** Flat pre-order list for indented rendering */
 const flat = computed(() => flattenComments(props.comments))
 
 const userById = computed(() => new Map((props.users || []).map((u) => [u.id ?? 0, u])))
@@ -71,7 +71,7 @@ function authorName(c: DtoCommentResponse): string {
   return userById.value.get(c.author_id)?.name ?? `Пользователь #${c.author_id}`
 }
 
-/** Удаление: автор — всегда, чужие — только при canManage (admin/vp) */
+/** Deletion: own always, others only with canManage (admin/vp) */
 function canDelete(c: DtoCommentResponse): boolean {
   return c.author_id != null && (c.author_id === props.userId || props.canManage)
 }
@@ -205,6 +205,7 @@ function sendReply(commentId: number) {
 </template>
 
 <style scoped>
+@import '../../../styles/tokens.css';
 .tc {
   display: flex;
   flex-direction: column;
@@ -214,12 +215,12 @@ function sendReply(commentId: number) {
 .tc-error {
   margin: 0;
   font-size: 13px;
-  color: #d93025;
+  color: var(--ui-danger);
 }
 .tc-offline {
   margin: 0;
   font-size: 13px;
-  color: #b06000;
+  color: var(--ui-warning);
 }
 .tc-list {
   display: flex;
@@ -233,15 +234,15 @@ function sendReply(commentId: number) {
   padding: 18px 0;
   text-align: center;
   font-size: 14px;
-  color: #999;
-  border: 1px dashed #ddd;
-  border-radius: 8px;
+  color: var(--ui-text-muted);
+  border: 1px dashed var(--ui-border-strong);
+  border-radius: var(--ui-radius-sm);
 }
 .tc-item {
   padding: 8px 10px;
-  background: #f6f6f6;
-  border: 1px solid #ececec;
-  border-radius: 8px;
+  background: var(--ui-surface-2);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
 }
 .tc-head {
   display: flex;
@@ -252,24 +253,24 @@ function sendReply(commentId: number) {
 .tc-author {
   font-size: 13px;
   font-weight: 700;
-  color: #174ea6;
+  color: var(--ui-accent);
 }
 .tc-orphan {
   font-size: 11px;
-  color: #999;
+  color: var(--ui-text-muted);
   font-style: italic;
 }
 .tc-date {
   margin-left: auto;
   font-size: 11px;
-  color: #777;
+  color: var(--ui-text-2);
   white-space: nowrap;
 }
 .tc-text {
   margin-top: 4px;
   font-size: 14px;
   line-height: 1.45;
-  color: #333;
+  color: var(--ui-text);
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -292,7 +293,7 @@ function sendReply(commentId: number) {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  border-top: 1px solid #eee;
+  border-top: 1px solid var(--ui-border);
   padding-top: 12px;
 }
 .tc-composer-row {
@@ -303,40 +304,40 @@ function sendReply(commentId: number) {
 }
 .tc-hint {
   font-size: 12px;
-  color: #b06000;
+  color: var(--ui-warning);
 }
 .tc-input {
   box-sizing: border-box;
   width: 100%;
   resize: vertical;
-  border: 1px solid #ddd;
-  border-radius: 8px;
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius-sm);
   padding: 9px 12px;
   font-size: 14px;
   font-family: inherit;
-  color: #333;
-  background: #fff;
+  color: var(--ui-text);
+  background: var(--ui-surface);
   outline: none;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition: border-color var(--ui-duration), box-shadow var(--ui-duration);
 }
 .tc-input:focus {
-  border-color: #1a73e8;
+  border-color: var(--ui-accent);
   box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.12);
 }
 .tc-input:disabled {
-  background: #f3f3f3;
-  color: #888;
+  background: var(--ui-surface-2);
+  color: var(--ui-text-muted);
   cursor: not-allowed;
 }
 .tc-btn {
   border: none;
-  border-radius: 8px;
+  border-radius: var(--ui-radius-sm);
   padding: 6px 14px;
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
   background: transparent;
-  color: #1a73e8;
+  color: var(--ui-accent);
 }
 .tc-btn:hover:not(:disabled) {
   background: rgba(26, 115, 232, 0.08);
@@ -345,7 +346,7 @@ function sendReply(commentId: number) {
   opacity: 0.55;
   cursor: not-allowed;
 }
-/* Квадратная кнопка-иконка (удаление комментария) */
+/* Square icon button (comment deletion) */
 .tc-icon {
   display: inline-flex;
   align-items: center;
@@ -363,16 +364,16 @@ function sendReply(commentId: number) {
   cursor: not-allowed;
 }
 .tc-del {
-  color: #d93025;
+  color: var(--ui-danger);
 }
 .tc-del:hover:not(:disabled) {
-  background: #ffe5e5;
+  background: var(--ui-danger-soft);
 }
 .tc-send {
-  background: #1a73e8;
-  color: #fff;
+  background: var(--ui-accent);
+  color: var(--ui-accent-on);
 }
 .tc-send:hover:not(:disabled) {
-  background: #1765cc;
+  background: color-mix(in srgb, var(--ui-accent) 88%, black);
 }
 </style>

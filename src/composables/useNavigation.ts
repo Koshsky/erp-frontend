@@ -1,84 +1,112 @@
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { useAuthStore } from '../store'
+import { useAuthStore, useRbacStore } from '../store'
 
 export interface NavItem {
   label: string
   to: string
   name: string
-  /** Роли, которым виден пункт; null — всем авторизованным */
+  /** The (resource, action) permission from the backend that unlocks this tab */
+  perm?: [string, string]
+  /** Role fallback — used only while the permission list is not loaded yet */
   roles?: string[] | null
+  /** Compact badge shown on the right of the item ("new", a counter, etc.) */
+  badge?: string | number
 }
 
 export interface NavCategory {
   label: string
-  /** Роли, которым видна категория целиком; null — всем авторизованным */
+  /** Role fallback while permissions are not loaded; null — all authenticated users */
   roles: string[] | null
   items: NavItem[]
 }
 
-/** Категории бокового меню: подкатегории открываются во всплывающем оверлее */
+/**
+ * Sidebar menu categories; subcategories open in a popup overlay.
+ * Item visibility is driven by the RBAC permissions from /permissions/me
+ * (same pairs as the router pagePerm), not by hardcoded roles.
+ */
 export const NAV_CATEGORIES: NavCategory[] = [
   {
     label: 'Планировщик',
     roles: null,
     items: [
-      { label: 'Проекты', to: '/projects', name: 'projects', roles: ['dp', 'rp', 'admin'] },
-      { label: 'Процессы', to: '/processes', name: 'processes', roles: ['dp', 'rp', 'admin'] },
-      { label: 'Задачи', to: '/planner', name: 'planner', roles: ['dp', 'rp', 'admin', 'vp'] },
+      {
+        label: 'Проекты',
+        to: '/projects',
+        name: 'projects',
+        perm: ['project', 'view'],
+        roles: ['dp', 'rp', 'admin'],
+      },
+      {
+        label: 'Процессы',
+        to: '/processes',
+        name: 'processes',
+        perm: ['process', 'view'],
+        roles: ['dp', 'rp', 'admin'],
+      },
+      {
+        label: 'Задачи',
+        to: '/planner',
+        name: 'planner',
+        perm: ['task', 'view'],
+        roles: ['dp', 'rp', 'admin', 'vp'],
+      },
     ],
   },
   {
     label: 'Табель',
     roles: ['vp', 'admin'],
     items: [
-      { label: 'Табель', to: '/timesheet', name: 'timesheet' },
-      { label: 'Сотрудники', to: '/employees', name: 'employees' },
-      { label: 'Ресурсы', to: '/resources', name: 'resources' },
+      { label: 'Табель', to: '/timesheet', name: 'timesheet', perm: ['worker', 'view'] },
+      { label: 'Сотрудники', to: '/employees', name: 'employees', perm: ['worker', 'view'] },
+      { label: 'Ресурсы', to: '/resources', name: 'resources', perm: ['resource', 'view'] },
     ],
   },
   {
     label: 'Админ',
     roles: ['admin'],
     items: [
-      { label: 'Пользователи', to: '/users', name: 'users' },
-      { label: 'Структура компании', to: '/structure', name: 'structure' },
-      { label: 'Автосоздание проектов', to: '/auto-create', name: 'auto-create' },
-      { label: 'Статусы', to: '/statuses', name: 'statuses' },
-      { label: 'Права', to: '/permissions', name: 'permissions' },
+      { label: 'Пользователи', to: '/users', name: 'users', perm: ['user_admin', 'view'] },
+      { label: 'Структура компании', to: '/structure', name: 'structure', perm: ['org_structure', 'view'] },
+      { label: 'Автосоздание проектов', to: '/auto-create', name: 'auto-create', perm: ['rbac_config', 'view'] },
+      { label: 'Статусы', to: '/statuses', name: 'statuses', perm: ['state_admin', 'view'] },
+      { label: 'Права', to: '/permissions', name: 'permissions', perm: ['rbac_config', 'view'] },
+      { label: 'Журнал действий', to: '/audit', name: 'audit', perm: ['audit', 'view'] },
     ],
   },
 ]
 
-/** Прямые ссылки в шапке (вне категорий) */
-export const STANDALONE_NAV: NavItem[] = [
-  { label: 'Дашборд', to: '/', name: 'dashboard', roles: ['admin', 'dp', 'rp', 'vp'] },
-]
-
-/** Навигация с учётом роли текущего пользователя */
+/** Navigation aware of the current user's RBAC permissions (role — only as a cold-start fallback) */
 export function useNavigation() {
   const auth = useAuthStore()
+  const rbac = useRbacStore()
   const route = useRoute()
 
-  /** Категории с учётом роли: скрываются и закрытые для роли пункты, и опустевшие категории */
+  const role = computed(() => auth.user?.preset ?? '')
+
+  /** Permissions arrived (or were cached) — the permission filter is authoritative */
+  const permsReady = computed(() => rbac.permsLoaded || rbac.myPermissions.length > 0)
+
+  /** Permission-filtered categories: items hidden without the right, emptied categories dropped */
   const visibleCategories = computed(() =>
-    NAV_CATEGORIES.filter((c) => !c.roles || c.roles.includes(auth.user?.role ?? ''))
+    NAV_CATEGORIES.filter((c) => !c.roles || permsReady.value || c.roles.includes(role.value))
       .map((c) => ({
         ...c,
-        items: c.items.filter((i) => !i.roles || i.roles.includes(auth.user?.role ?? '')),
+        items: c.items.filter((i) => {
+          if (permsReady.value) {
+            return i.perm ? rbac.can(i.perm[0], i.perm[1]) : true
+          }
+          return !i.roles || i.roles.includes(role.value)
+        }),
       }))
       .filter((c) => c.items.length > 0),
   )
 
-  /** Категория, которой принадлежит текущий маршрут (для подсветки) */
+  /** Category that owns the current route (for highlighting) */
   const activeCategory = computed(() =>
     visibleCategories.value.find((c) => c.items.some((i) => i.name === route.name)),
   )
 
-  /** Прямые ссылки с учётом роли (например, дашборд скрыт от worker) */
-  const standalone = computed(() =>
-    STANDALONE_NAV.filter((i) => !i.roles || i.roles.includes(auth.user?.role ?? '')),
-  )
-
-  return { visibleCategories, activeCategory, standalone }
+  return { visibleCategories, activeCategory }
 }

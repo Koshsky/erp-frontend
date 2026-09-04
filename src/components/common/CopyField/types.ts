@@ -1,10 +1,10 @@
 export interface CopyFieldProps {
-  /** Значение для отображения и копирования */
+  /** Value to display and copy */
   value: string
-  /** Подпись над полем */
+  /** Label above the field */
   label?: string
-  /** Моноширинный шрифт (для паролей/логинов) */
+  /** Monospace font (for passwords/logins) */
   monospace?: boolean
-  /** Подпись/aria кнопки копирования */
+  /** Copy button label/aria */
   copyLabel?: string
 }

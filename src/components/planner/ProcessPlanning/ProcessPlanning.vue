@@ -11,17 +11,19 @@ const props = withDefaults(defineProps<{
   projects?: DtoDetailedProject[] | null
   loading?: boolean
   error?: string | null
-  /** Якорь шкалы: ячейка с индексом 0 (начальная позиция) */
+  /** Timeline anchor: cell with index 0 (starting position) */
   origin?: Date | string
-  /** Единица ячейки: день или декада */
+  /** Cell unit: day or decade */
   unit?: PlanningUnit
-  /** Пользователи для отображения владельца (owner_id → name) в тултипах */
+  /** Users to display the owner (owner_id → name) in tooltips */
   users?: DtoUserInfo[] | null
-  /** Разрешает изменение процессов: перенос дат, редактирование, удаление */
+  /** Allows modifying processes: moving dates, editing, deleting */
   canManage?: boolean
-  /** При открытии прокрутить шкалу к этой дате (навигация с другой вкладки) */
+  /** Enables vertical row drag to reorder processes within each project */
+  reorderable?: boolean
+  /** On open, scroll the timeline to this date (navigation from another tab) */
   focusDate?: string | null
-  /** При открытии прокрутить по вертикали к группе (строке) проекта */
+  /** On open, scroll vertically to the group (project row) */
   focusGroupId?: string | number | null
 }>(), {
   projects: null,
@@ -31,6 +33,7 @@ const props = withDefaults(defineProps<{
   unit: 'day',
   users: null,
   canManage: true,
+  reorderable: false,
   focusDate: null,
   focusGroupId: null,
 })
@@ -39,14 +42,17 @@ const emit = defineEmits<{
   change: [payload: { id: number; start_date: string; end_date: string }]
   contextmenu: [payload: { clientX: number; clientY: number; date: string | null; rowIndex: number; projectId?: number; processId?: number }]
   'header-ctxmenu': [payload: { clientX: number; clientY: number }]
+  /** Vertical row drag: a process moved within its project group */
+  reorder: [payload: { projectId: number; from: number; to: number }]
   navigate: [payload: number]
-  /** Видимое окно шкалы (период «как на экране») — проброс из TimelineGrid */
+  /** Visible timeline window (the "as on screen" period) — forwarded from TimelineGrid */
   'visible-range': [payload: { from: string; to: string; cellWidthPx: number; scale: number }]
 }>()
 
 const userNames = computed(() => new Map((props.users || []).map((u) => [u.id, u.name])))
 
-/** Маппим DTO (из /planning/processes) во внутренний тип. Процессы сортируем по алфавиту. */
+/** Map the DTO (from /planning/processes) into the internal type. Processes are
+ *  sorted by their per-project order (fallback: id). */
 const displayProjects = computed(() =>
   (props.projects || []).map((dto) => ({
     id: dto.id ?? 0,
@@ -55,20 +61,22 @@ const displayProjects = computed(() =>
     end_date: dto.end_date ?? '',
     priority: dto.priority,
     processes: [...(dto.processes || [])]
-      .sort((a, b) => (a.title || '').localeCompare(b.title || '', 'ru'))
+      .sort((a, b) => (a.order ?? a.id ?? 0) - (b.order ?? b.id ?? 0))
       .map((p) => ({
         id: p.id ?? 0,
         title: p.title ?? '',
+        color: p.color ?? '',
         start_date: p.start_date ?? '',
         end_date: p.end_date ?? '',
         owner_id: p.owner_id,
         owner_name: p.owner_id != null ? userNames.value.get(p.owner_id) : undefined,
         project_id: p.project_id,
+        order: p.order,
       })),
   })),
 )
 
-/** ПКМ по пустому месту внутри группы проекта — создание процесса в этом проекте */
+/** Right-click on empty space inside a project group — create a process in that project */
 function onGridCtx(p: { clientX: number; clientY: number; date: string | null; rowIndex?: number; groupId?: string }) {
   const projectId = p.groupId ? Number(p.groupId) : undefined
   emit('contextmenu', {
@@ -96,8 +104,10 @@ function onGridCtx(p: { clientX: number; clientY: number; date: string | null; r
           :groupStartDate="project.start_date"
           :groupEndDate="project.end_date"
           :can-manage="canManage"
+          :reorderable="reorderable"
           @change="(p) => emit('change', p)"
           @contextmenu="(p) => emit('contextmenu', p)"
+          @reorder="(p) => emit('reorder', { projectId: project.id, ...p })"
           @navigate="(id) => emit('navigate', id)"
         />
       </template>

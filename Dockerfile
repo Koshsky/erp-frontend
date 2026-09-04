@@ -2,7 +2,7 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
 
-# Базовый URL API, подставляется при сборке (vite встраивает VITE_* на этапе build)
+# API base URL, substituted at build time (vite inlines VITE_* at build stage)
 ARG VITE_API_BASE=/api/v1
 ENV VITE_API_BASE=$VITE_API_BASE
 ARG VITE_API_URL=/api/v1

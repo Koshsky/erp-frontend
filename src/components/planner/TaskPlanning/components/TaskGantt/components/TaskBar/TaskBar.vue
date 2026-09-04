@@ -12,17 +12,23 @@ const props = withDefaults(
     timeline: TimelineCtx
     task: Task
     projectCode?: string
+    /** Custom task color (#RRGGBB); empty — the standard token */
+    color?: string
     draggable?: boolean
-    /** Границы процесса — ограничивают перетаскивание задачи */
+    /** Vertical row reorder: pressing the bar body and dragging vertically calls
+     *  this with the pointerdown event (horizontal drags keep changing dates). */
+    startRowReorder?: ((e: PointerEvent) => void) | null
+    /** Process bounds — limit task dragging */
     groupStartDate?: string | Date | number | null
     groupEndDate?: string | Date | number | null
-    /** Справочник пользователей — имена авторов комментариев в тултипе */
+    /** User directory — author names for comments in the tooltip */
     users?: DtoUserInfo[] | null
-    /** Кэш комментариев по задаче (для лога в тултипе) */
+    /** Per-task comments cache (for the log in the tooltip) */
     commentsByTask?: Record<number, DtoCommentResponse[]> | null
   }>(),
   {
     projectCode: '',
+    color: '',
     draggable: true,
     groupStartDate: null,
     groupEndDate: null,
@@ -34,13 +40,15 @@ const props = withDefaults(
 const emit = defineEmits<{
   change: [payload: { start_date: string; end_date: string }]
   contextmenu: [payload: { clientX: number; clientY: number }]
-  /** Одиночный клик по бару (без перетаскивания) — открыть комментарии задачи */
-  'open-comments': [payload: number]
-  /** Тултип открылся у задачи с комментариями — лениво подгрузить их (кэш) */
+  /** Single click on the bar (without dragging) — open the task editor */
+  'edit': [payload: number]
+  /** Tooltip opened on a task with comments — lazy-load them (cache) */
   'request-comments': [payload: number]
+  /** Click on the comments badge (bubble + counter) - open the comments panel */
+  'open-comments': [payload: number]
 }>()
 
-/** Строки тултипа: ответственный (если назначен) + диапазон дат */
+/** Tooltip rows: owner (if assigned) + date range */
 const tooltipRows = (dateRange: string): string[] =>
   [taskOwnerLabel.value, dateRange].filter(Boolean)
 
@@ -48,7 +56,7 @@ const taskOwnerLabel = computed<string>(() =>
   props.task.owner_name ? `Ответственный: ${props.task.owner_name}` : '',
 )
 
-/** У задачи есть комментарии — показываем бейдж и лог в тултипе */
+/** The task has comments — show a badge and the log in the tooltip */
 const hasComments = computed(() => (props.task.comments_count ?? 0) > 0)
 
 const userById = computed(() => new Map((props.users || []).map((u) => [u.id ?? 0, u])))
@@ -67,7 +75,7 @@ function fmtShortDate(iso?: string): string {
   return Number.isNaN(d.getTime()) ? '' : fmtDT.format(d)
 }
 
-/** Лог комментариев для тултипа: имя автора (из users), короткая дата, текст */
+/** Comment log for the tooltip: author name (from users), short date, text */
 const tooltipComments = computed(() =>
   (props.commentsByTask?.[props.task.id] ?? []).map((c) => ({
     author:
@@ -79,13 +87,13 @@ const tooltipComments = computed(() =>
   })),
 )
 
-/** Тултип открылся: если у задачи есть комментарии — лениво подгружаем их (кэш) */
+/** Tooltip opened: if the task has comments — lazy-load them (cache) */
 function onTooltipOpen() {
   if (!hasComments.value) return
   emit('request-comments', props.task.id)
 }
 
-/** Live-предпросмотр загрузки: публикуем перетаскиваемую задачу и её новые даты */
+/** Live loading preview: publish the dragged task and its new dates */
 const dragPreview = useDragPreview()
 
 function setDragPreview(d: { start_date: string; end_date: string } | null) {
@@ -103,15 +111,15 @@ function setDragPreview(d: { start_date: string; end_date: string } | null) {
   }
 }
 
-/** Название ресурса для бейджа: код, при его отсутствии — полное название */
+/** Resource badge label: the code, or the full name if absent */
 function badgeLabel(r: { code?: string; title?: string }): string {
   return r.code || r.title || '?'
 }
 
-// === Бейджи: код проекта, ответственный + стопка бейджей ресурсов ===
-// Бейдж кода проекта идёт сразу после названия; за ним — бейдж ответственного
-// («Фамилия И.О.»). Если тот или другой не умещается рядом с названием — скрываются.
-// Ресурсные бейджи при нехватке места складываются стопкой.
+// === Badges: project code, owner + a stack of resource badges ===
+// The project code badge goes right after the title; after it — the owner badge
+// ("Last Name I.O."). If either does not fit next to the title — it is hidden.
+// Resource badges stack up when space is tight.
 const contentRef = ref<HTMLElement | null>(null)
 const titleRef = ref<HTMLElement | null>(null)
 const projRef = ref<HTMLElement | null>(null)
@@ -130,7 +138,7 @@ function updateStacked() {
   const title = titleRef.value
   const badges = badgesRef.value
   if (!content || !title || !badges) return
-  // Кэш ширины бейджей обновляем только пока они видимы (при display:none scrollWidth = 0)
+  // Refresh the badge width cache only while they are visible (with display:none scrollWidth = 0)
   const proj = projRef.value
   if (proj && showProj.value) projWidth.value = proj.scrollWidth
   const owner = ownerRef.value
@@ -140,7 +148,7 @@ function updateStacked() {
   showProj.value = pw > 0 && available >= pw
   const ow = props.task.owner_short ? ownerWidth.value : 0
   showOwner.value = ow > 0 && available - (showProj.value ? pw : 0) >= ow
-  // Бейдж комментариев резервирует место (как код проекта/ответственный)
+  // The comments badge reserves space (like the project code/owner)
   const cw = hasComments.value ? 22 : 0
   const availForRes = available - (showProj.value ? pw : 0) - (showOwner.value ? ow : 0) - cw
   stacked.value = badges.scrollWidth > availForRes
@@ -156,7 +164,7 @@ onBeforeUnmount(() => {
   resizeObserver?.disconnect()
 })
 
-// После обновления набора ресурсов или кода проекта пересчитываем укладку
+// After the resource set or the project code changes, recompute the layout
 watch(
   () => props.task.resources,
   () => requestAnimationFrame(updateStacked),
@@ -179,13 +187,15 @@ watch(
     :groupStartDate="groupStartDate"
     :groupEndDate="groupEndDate"
     :title="task.title"
+    :color="color || task.color || 'var(--ui-gantt-task)'"
     :draggable="draggable"
+    :start-row-reorder="startRowReorder"
     @change="(d) => emit('change', d)"
     @contextmenu="(p) => emit('contextmenu', p)"
     @dragstart="(d) => setDragPreview(d)"
     @dragmove="(d) => setDragPreview(d)"
     @dragend="() => setDragPreview(null)"
-    @click="emit('open-comments', task.id)"
+    @click="emit('edit', task.id)"
     @tooltip-open="onTooltipOpen"
   >
     <span ref="contentRef" class="tb-content">
@@ -197,9 +207,10 @@ watch(
           v-for="r in task.resources"
           :key="r.resource_id"
           class="tb-badge"
+          :style="r.color ? { background: r.color } : undefined"
         >{{ badgeLabel(r) }}×{{ r.quantity }}</span>
       </span>
-      <span v-if="hasComments" class="tb-comments" :title="`Комментарии: ${task.comments_count}`">
+      <span v-if="hasComments" class="tb-comments" :title="`Комментарии: ${task.comments_count}`" @pointerdown.stop @click.stop="emit('open-comments', task.id)">
         <svg
           width="11"
           height="11"
@@ -219,9 +230,9 @@ watch(
     <template #tooltip="{ dateRange }">
       <BarTooltip
         :title="task.title"
-        :accent="'#34a853'"
+        :accent="color || task.color || 'var(--ui-gantt-task)'"
         :rows="tooltipRows(dateRange)"
-        :resources="(task.resources || []).map((r) => ({ label: r.title || r.code, quantity: r.quantity }))"
+        :resources="(task.resources || []).map((r) => ({ label: r.title || r.code, quantity: r.quantity, color: r.color }))"
         :comments="tooltipComments"
       />
     </template>
@@ -229,6 +240,7 @@ watch(
 </template>
 
 <style scoped>
+@import "../../../../../../../styles/tokens.css";
 .tb-content {
   display: flex;
   align-items: center;
@@ -240,7 +252,7 @@ watch(
   min-width: 0;
   font-size: 12px;
   font-weight: 700;
-  color: #fff;
+  color: var(--ui-accent-on);
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
   white-space: nowrap;
   overflow: hidden;
@@ -279,7 +291,7 @@ watch(
   flex-shrink: 0;
   white-space: nowrap;
 }
-/* Бейдж — прямой flex-элемент, размер строго по тексту; зазор между бейджами 6px */
+/* Badge — a plain flex item, sized exactly to the text; 6px gap between badges */
 .tb-badge {
   flex-shrink: 0;
   width: fit-content;
@@ -288,15 +300,15 @@ watch(
   font-weight: 700;
   line-height: 1.6;
   color: #fff;
-  background: #d93025;
+  background: var(--ui-danger);
   border: 1px solid rgba(255, 255, 255, 0.55);
   border-radius: 10px;
   padding: 0 7px;
   white-space: nowrap;
   pointer-events: none;
 }
-/* Бейджи не влезают рядом — складываем их стопкой: каждый следующий
-   наезжает на предыдущий, ховер по бару показывает тултип со всеми ресурсами */
+/* Badges do not fit side by side — stack them: each next one
+   overlaps the previous; hovering the bar shows a tooltip with all resources */
 .tb-badges .tb-badge:first-child {
   margin-left: 0;
 }
@@ -306,7 +318,7 @@ watch(
 .tb-badges.is-stacked .tb-badge:first-child {
   margin-left: 0;
 }
-/* Бейдж комментариев: пузырь диалога + счётчик; не мешает перетаскиванию */
+/* Comments badge: dialog bubble + counter; a click opens the comments panel */
 .tb-comments {
   flex-shrink: 0;
   display: inline-flex;
@@ -321,6 +333,10 @@ watch(
   border-radius: 10px;
   padding: 0 7px;
   white-space: nowrap;
-  pointer-events: none;
+  cursor: pointer;
+}
+/* Hover over the comments badge: highlight so it reads as clickable */
+.tb-comments:hover {
+  background: var(--ui-accent);
 }
 </style>

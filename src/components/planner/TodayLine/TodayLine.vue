@@ -5,25 +5,25 @@ import { DAY_MS } from '../../../utils'
 import type { TodayLineProps } from './types'
 
 const props = withDefaults(defineProps<TodayLineProps>(), {
-  color: '#e53935',
+  color: 'var(--ui-today)',
   width: 2,
   offset: 0,
 })
 
-/** Абсолютный индекс ячейки, содержащей сегодняшний день */
+/** Absolute index of the cell containing today */
 const todayIdx = computed(() =>
   cellIndexForDate(props.timeline.origin, props.timeline.unit, new Date()),
 )
-/** Луч скрывается вне видимого окна (±запас, как у баров) */
+/** The ray hides outside the visible window (±margin, like bars) */
 const visible = computed(() => {
   const t = props.timeline
   return todayIdx.value > t.windowStart - 4 && todayIdx.value < t.windowStart + t.viewportCells + 4
 })
 
 /**
- * Позиция границы «вчера/сегодня» в content-пикселях:
- * день — левый край ячейки «сегодня» (граница суток); декада — дробная
- * позиция текущего дня внутри ячейки-декады.
+ * Position of the "yesterday/today" boundary in content pixels:
+ * day — the left edge of the "today" cell (day boundary); decade — the fractional
+ * position of the current day inside the decade cell.
  */
 const left = computed<number | null>(() => {
   if (!visible.value) return null
@@ -52,15 +52,18 @@ const lineStyle = computed<Record<string, string> | null>(() =>
 </template>
 
 <style scoped>
+@import "../../../styles/tokens.css";
 .tl-line {
   position: absolute;
   top: 0;
   bottom: 0;
-  /* Свой уровень: над контентом (бары 2, вехи 3) и ячейками ресурсов (20),
-     но под календарной шапкой (30) и боковой панелью (65+): шапка, коды
-     ресурсов, merged/строчные лейблы, полоса вех и корнер остаются поверх
-     линии текущей даты */
-  z-index: 25;
+  /* Its own level: above the content (bars 2, milestones 3), the resource
+     cells (20) and the calendar date header (30) — the line crosses the
+     header on top. Still below the scale badge (50) and the side-panel
+     label layers (65/70/80/90: merged/row labels, resource codes, corner),
+     and below popups (30000+). The label layers never overlap the line in X
+     (it starts after LABEL_WIDTH), but keep the ordering strict anyway. */
+  z-index: 35;
   pointer-events: none;
 }
 </style>

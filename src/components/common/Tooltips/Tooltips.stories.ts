@@ -12,14 +12,14 @@ const meta: Meta = {
 export default meta
 type Story = StoryObj
 
-/** Общий тултип объекта диаграммы (задача/проект/процесс/веха) с акцентами */
+/** Generic tooltip for a diagram item (task/project/process/milestone) with accents */
 export const BarVariants: Story = {
   render: () => ({
     components: { BarTooltip },
     template: `
       <div style="font-family:sans-serif;display:grid;gap:16px;grid-template-columns:repeat(2,240px);align-items:start;">
         <div><div style="font-size:12px;color:#888;margin-bottom:4px;">Задача</div>
-          <BarTooltip title="Монтаж конструкций" :accent="'#34a853'" :rows="['18.07.2026 — 07.08.2026']" :resources="[{label:'Монтажник',quantity:3},{label:'Инженер',quantity:1}]" /></div>
+          <BarTooltip title="Монтаж конструкций" :accent="'#34a853'" :rows="['18.07.2026 — 07.08.2026']" :resources="[{label:'Монтажник',quantity:3,color:'#ea4335'},{label:'Инженер',quantity:1,color:'#1a73e8'}]" /></div>
         <div><div style="font-size:12px;color:#888;margin-bottom:4px;">Проект</div>
           <BarTooltip title="Склад-Логистика" :accent="'#1a73e8'" :rows="['Приоритет: высокий','Владелец: Иванов','01.08.2026 — 20.09.2026']" /></div>
         <div><div style="font-size:12px;color:#888;margin-bottom:4px;">Процесс</div>
@@ -31,7 +31,7 @@ export const BarVariants: Story = {
   }),
 }
 
-/** Тултип загрузки ресурсов по состояниям */
+/** Resource usage tooltip grouped by states */
 export const UsageVariants: Story = {
   render: () => ({
     components: { UsageTooltip },
@@ -46,7 +46,7 @@ export const UsageVariants: Story = {
   }),
 }
 
-/** Простые подсказки: лейблы, табельные состояния, инструкции */
+/** Simple hints: labels, timesheet states, instructions */
 export const InfoVariants: Story = {
   render: () => ({
     components: { InfoTooltip },
@@ -65,7 +65,7 @@ export const InfoVariants: Story = {
   }),
 }
 
-/** Тултип задачи с логом комментариев (до 4 записей + «…и ещё N») */
+/** Task tooltip with a comment log (up to 4 entries + "…and N more") */
 const commentLog = [
   { author: 'Иванов Иван', date: '01.02.2026, 10:00', text: 'Перенести сроки?' },
   { author: 'Петров Пётр', date: '01.02.2026, 11:30', text: 'Нет, сроки фиксированы.' },
@@ -74,7 +74,7 @@ const commentLog = [
   { author: 'Иванов Иван', date: '03.02.2026, 08:00', text: 'Ок, фиксируем.' },
 ]
 
-/** Полный лог в пределах лимита (4 записи) */
+/** Full log within the limit (4 entries) */
 export const CommentsLog: Story = {
   render: () => ({
     components: { BarTooltip },
@@ -92,7 +92,7 @@ export const CommentsLog: Story = {
   }),
 }
 
-/** Лог больше лимита — свёрнут с «…и ещё N» */
+/** Log exceeds the limit — collapsed with "…and N more" */
 export const CommentsLogCollapsed: Story = {
   tags: ['vitest'],
   render: () => ({
@@ -115,7 +115,7 @@ export const CommentsLogCollapsed: Story = {
     expect(root.textContent).toContain('Комментарии (10)')
     expect(root.textContent).toContain('Комментарий номер 1')
     expect(root.textContent).toContain('…и ещё 6')
-    // В логе только 4 карточки
+    // The log contains only 4 cards
     const cards = [...document.querySelectorAll('.bt-comment')]
     expect(cards.length).toBe(4)
   },

@@ -57,7 +57,7 @@ export const NoResources: Story = {
   }),
 }
 
-/** Много ресурсов на узком баре: бейджи не помещаются рядом и складываются стопкой */
+/** Many resources on a narrow bar: badges don't fit side by side and stack up */
 export const StackedBadges: Story = {
   render: withTask({
     id: 1,
@@ -73,7 +73,7 @@ export const StackedBadges: Story = {
   }, 'КО_505', 600),
 }
 
-/** У задачи есть комментарии — на баре значок-пузырь со счётчиком */
+/** The task has comments — a bubble icon with a counter on the bar */
 export const WithComments: Story = {
   render: withTask({
     id: 1,
@@ -85,7 +85,7 @@ export const WithComments: Story = {
   }),
 }
 
-/** Витрина тултипа задачи с логом комментариев (имя автора + дата + текст) */
+/** Task tooltip showcase with a comment log (author name + date + text) */
 export const TooltipComments: Story = {
   render: () => ({
     components: { TaskBar },
@@ -122,7 +122,7 @@ export const TooltipComments: Story = {
   }),
 }
 
-/** Тест: бейдж со счётчиком виден; без комментариев — бейджа нет */
+/** Test: the counter badge is visible; without comments — no badge */
 export const BadgeVisibility: Story = {
   tags: ['vitest'],
   render: () => ({
@@ -145,15 +145,19 @@ export const BadgeVisibility: Story = {
         resources: [],
         comments_count: 0,
       },
+      openedTaskId: null,
+      editFired: false,
     }),
     template: `
       <div style="max-width:800px;margin:0 auto;font-family:sans-serif;overflow-x:auto;">
         <div style="position:relative;width:3000px;height:40px;background:#f0f0f0;border-radius:6px;margin-bottom:8px;">
-          <TaskBar :timeline="timeline" :task="taskWith" />
+          <TaskBar :timeline="timeline" :task="taskWith" @open-comments="(id) => openedTaskId = id" @edit="editFired = true" />
         </div>
         <div style="position:relative;width:3000px;height:40px;background:#f0f0f0;border-radius:6px;">
           <TaskBar :timeline="timeline" :task="taskWithout" />
         </div>
+        <div v-if="openedTaskId" data-testid="open-comments-id">{{ openedTaskId }}</div>
+        <div v-if="editFired" data-testid="edit-fired">edit</div>
       </div>
     `,
   }),
@@ -162,5 +166,13 @@ export const BadgeVisibility: Story = {
     const badges = [...document.querySelectorAll('.tb-comments')]
     expect(badges.length).toBe(1)
     expect(badges[0].textContent).toContain('3')
+    // A click on the comments badge opens the comments panel (open-comments)
+    // and must not trigger the bar's edit event.
+    badges[0].dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    await new Promise((r) => setTimeout(r, 20))
+    const opened = document.querySelector('[data-testid="open-comments-id"]')
+    const edit = document.querySelector('[data-testid="edit-fired"]')
+    expect(opened?.textContent).toBe('1')
+    expect(edit).toBeNull()
   },
 }

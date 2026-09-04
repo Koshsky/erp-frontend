@@ -1,38 +1,86 @@
 'use strict'
 
 /**
- * Main-процесс Electron для MVS ERP.
+ * Electron main process for MVS ERP.
  *
- * Приложение подаёт собранный vite-фронтенд (services/frontend/dist) через
- * локальный HTTP-сервер на 127.0.0.1, а не через file://. Причина: фронтенд
- * жёстко использует корневые пути (/precache-manifest.json, /assets/*),
- * рассчитанные на http-контекст.
- * Локальный http-сервер сохраняет их рабочими без правок фронтенда.
+ * The app serves the built vite frontend (services/frontend/dist) through a
+ * local HTTP server on 127.0.0.1, not via file://. Reason: the frontend
+ * hard-codes root paths (/precache-manifest.json, /assets/*),
+ * designed for an http context.
+ * The local http server keeps them working without changing the frontend.
  *
- * API подключается внешний: пользователь задаёт URL бэкенда на экране
- * синхронизации (runtime-конфигурация фронтенда). Здесь хранится только
- * пароль автосинка — через safeStorage (шифрование на уровне ОС), доступ
- * к нему выдаётся renderer'у через ограниченный IPC-мост в preload.js.
+ * The API is external: the user sets the backend URL on the sync screen
+ * (the frontend's runtime configuration). Only the autosync password is
+ * stored here — via safeStorage (OS-level encryption), and access to it
+ * is granted to the renderer through a limited IPC bridge in preload.js.
  */
 
-const { app, BrowserWindow, ipcMain, safeStorage } = require('electron')
+const { app, BrowserWindow, ipcMain, safeStorage, dialog } = require('electron')
 const path = require('node:path')
 const fs = require('node:fs')
 const http = require('node:http')
 const { URL } = require('node:url')
 
+// ---------------------------------------------------------------------------
+// User data location — deterministic per-user folder on every platform.
+// ---------------------------------------------------------------------------
+// Pin the directory name explicitly so it never depends on productName and
+// never falls back to a temporary location:
+//   Linux   ~/.config/mvs-erp-desktop            (XDG_CONFIG_HOME-aware)
+//   Windows %APPDATA%\mvs-erp-desktop
+//   macOS   ~/Library/Application Support/mvs-erp-desktop
+// The Linux path matches the existing profile (session, cache, offline queue,
+// autosync password, singleton lock are NOT lost). Must be set before any
+// app.getPath('userData') call (singleton lock below) and before app ready.
+//
+// A CLI --user-data-dir override is honored (not overwritten): testing /
+// diagnostic launches use it on purpose and must keep working — otherwise the
+// app would silently keep the old profile data and never show the login page.
+const usesCliUserDataDir = process.argv.some(
+  (arg) => arg === '--user-data-dir' || arg.startsWith('--user-data-dir='),
+)
+if (!usesCliUserDataDir) {
+  app.setPath('userData', path.join(app.getPath('appData'), 'mvs-erp-desktop'))
+}
+
 const DEFAULT_PORT = 31880
+/** How many consecutive ports to try after DEFAULT_PORT when it is busy */
+const PORT_SEARCH_LIMIT = 20
 /**
- * Путь к собранному фронтенду.
+ * Path to the built frontend.
  *  - dev (electron .): desktop/../dist = services/frontend/dist
- *  - упаковано: extraResources кладёт dist в <resources>/web (вне app.asar)
+ *  - packaged: extraResources places dist into <resources>/web (outside app.asar)
  */
 const WEB_DIR = app.isPackaged
   ? path.join(process.resourcesPath, 'web')
   : path.join(__dirname, '..', 'dist')
 
+// Single instance: two windows (and two local HTTP servers on the same port)
+// must never run at once. A second launch focuses the existing window instead
+// of ending up with a blank/broken second instance.
+//
+// requestSingleInstanceLock() returns false BOTH when another instance owns the
+// lock AND when the lock cannot be created at all (read-only HOME, unusual
+// environments). So we only quit when the lock file really exists — otherwise
+// we run anyway (the dynamic port fallback below covers duplicate instances).
+const gotTheLock = app.requestSingleInstanceLock()
+const lockFile = path.join(app.getPath('userData'), 'SingletonLock')
+if (!gotTheLock && fs.existsSync(lockFile)) {
+  console.log('[desktop] приложение уже запущено — выходим (single instance)')
+  app.quit()
+} else {
+  app.on('second-instance', () => {
+    const win = BrowserWindow.getAllWindows()[0]
+    if (win) {
+      if (win.isMinimized()) win.restore()
+      win.show()
+      win.focus()
+    }
+  })
+}
+
 // ---------------------------------------------------------------------------
-// Локальный http-сервер для собранного фронтенда
+// Local http server for the built frontend
 // ---------------------------------------------------------------------------
 
 const MIME = {
@@ -56,7 +104,7 @@ const MIME = {
 const IMMUTABLE_EXT = new Set(['.js', '.mjs', '.css', '.ttf', '.woff', '.woff2', '.svg', '.png'])
 
 function normalizePath(urlPath) {
-  // Сбрасываем к корню и убираем traversal, но сохраняем "/" → index.html
+  // Normalize to the root and strip traversal, but keep "/" → index.html
   const decoded = decodeURIComponent(urlPath)
   const p = path.normalize('/' + decoded).replace(/^\/+/, '')
   const abs = path.join(WEB_DIR, p)
@@ -76,9 +124,9 @@ function serveStatic(req, res) {
     return
   }
 
-  // Резолвим целевой файл: если путь ведёт на каталог (trailing '/' и прочее)
-  // или не существует — отдаём SPA index.html. В readFileSync никогда не
-  // попадает директория (иначе EISDIR).
+  // Resolve the target file: if the path points to a directory (trailing '/' etc.)
+  // or does not exist — serve the SPA index.html. readFileSync never
+  // receives a directory (otherwise EISDIR).
   let resolved = filePath
   try {
     const st = fs.statSync(resolved)
@@ -103,8 +151,8 @@ function serveStatic(req, res) {
     'Content-Type': MIME[ext] || 'application/octet-stream',
   }
 
-  // Кэш по образцу nginx-конфига фронтенда: хэшированные ассеты — immutable,
-  // index.html/precache-manifest — без кэша (всегда свежая версия).
+  // Cache modeled after the frontend nginx config: hashed assets are immutable,
+  // index.html/precache-manifest are not cached (always the fresh version).
   const base = path.basename(resolved)
   if (IMMUTABLE_EXT.has(ext) && resolved.startsWith(path.join(WEB_DIR, 'assets'))) {
     headers['Cache-Control'] = 'public, max-age=31536000, immutable'
@@ -117,20 +165,41 @@ function serveStatic(req, res) {
   res.end(data)
 }
 
-function startHttpServer() {
+/**
+ * Starts the local HTTP server for the built frontend.
+ *
+ * The default port may already be taken (a leftover instance that crashed, or
+ * another app). We then fall back to the next free ports (up to
+ * PORT_SEARCH_LIMIT tries). If no port is free — reject; the caller shows an
+ * error dialog instead of silently leaving the user with a blank window.
+ */
+async function startHttpServer() {
+  for (let port = DEFAULT_PORT; port < DEFAULT_PORT + PORT_SEARCH_LIMIT; port++) {
+    try {
+      return await listenOnce(port)
+    } catch (err) {
+      // Only a busy port is retried; anything else (permissions, etc.) is fatal.
+      if (err.code !== 'EADDRINUSE') throw err
+      console.log(`[desktop] порт ${port} занят — пробуем следующий`)
+    }
+  }
+  throw new Error(`Не удалось найти свободный порт в диапазоне ${DEFAULT_PORT}–${DEFAULT_PORT + PORT_SEARCH_LIMIT - 1}`)
+}
+
+function listenOnce(port) {
   return new Promise((resolve, reject) => {
     const server = http.createServer(serveStatic)
-    server.on('error', reject)
-    server.listen(DEFAULT_PORT, '127.0.0.1', () => {
-      const { port } = server.address()
-      console.log(`[desktop] локальный http-сервер фронтенда: http://127.0.0.1:${port}`)
+    server.once('error', reject)
+    server.listen(port, '127.0.0.1', () => {
+      const { port: boundPort } = server.address()
+      console.log(`[desktop] локальный http-сервер фронтенда: http://127.0.0.1:${boundPort}`)
       resolve(server)
     })
   })
 }
 
 // ---------------------------------------------------------------------------
-// safeStorage: хранение пароля автосинка (доступен только через IPC)
+// safeStorage: autosync password storage (accessible only through IPC)
 // ---------------------------------------------------------------------------
 
 const PASSWORD_KEY = 'mvs_erp_sync_password'
@@ -165,7 +234,7 @@ function savePassword(password) {
     try {
       fs.unlinkSync(file)
     } catch {
-      // файла нет — ок
+      // file missing — ok
     }
     return
   }
@@ -173,7 +242,7 @@ function savePassword(password) {
 }
 
 // ---------------------------------------------------------------------------
-// Окно
+// Window
 // ---------------------------------------------------------------------------
 
 function createWindow(baseUrl) {
@@ -199,18 +268,18 @@ function createWindow(baseUrl) {
 }
 
 // ---------------------------------------------------------------------------
-// Жизненный цикл
+// Lifecycle
 // ---------------------------------------------------------------------------
 
 let server = null
 
 /**
- * Разрешаем самоподписанные TLS-сертификаты бэкенда (nginx генерирует
- * server.crt через generate-certs.sh). Chromium по умолчанию отклоняет
- * self-signed, поэтому без этого https://localhost (и др. internal-серверы)
- * не работали бы. Принимаем ТОЛЬКО самоподписанные сертификаты (issuer ==
- * subject); валидация для остальных (недоверенная цепочка, не тот домен,
- * протухший) сохраняется.
+ * Allow self-signed TLS certificates of the backend (nginx generates
+ * server.crt via generate-certs.sh). Chromium rejects self-signed
+ * by default, so without this https://localhost (and other internal servers)
+ * would not work. We accept ONLY self-signed certificates (issuer ==
+ * subject); validation for the rest (untrusted chain, wrong domain,
+ * expired) is preserved.
  */
 app.on('certificate-error', (event, webContents, url, error, certificate, callback) => {
   const isSelfSigned =
@@ -226,13 +295,19 @@ app.on('certificate-error', (event, webContents, url, error, certificate, callba
 })
 
 app.whenReady().then(async () => {
-  // setCertificateVerifyProc перехватывает ВСЕ проверки TLS сессии, включая
-  // fetch/axios из renderer (для них certificate-error срабатывает не всегда).
-  // Коды — net::Error Chromium:
-  //   0    — сертификат валиден;
-  //  -202  — ERR_CERT_AUTHORITY_INVALID (самоподписанный / недоверенный CA);
-  //  -207  — ERR_CERT_INVALID (некорректный, но часто самоподписанный).
-  // Остальные (протухший -201, чужой домен -200) отклоняем как обычно.
+  // Stop startup only when the lock is held by another instance (the lock
+  // file exists). If the lock could not be created at all (read-only
+  // userData, unusual environments) we run anyway — the dynamic port
+  // fallback below covers duplicate instances.
+  if (!gotTheLock && fs.existsSync(lockFile)) return
+
+  // setCertificateVerifyProc intercepts ALL TLS session verifications, including
+  // fetch/axios from the renderer (for them certificate-error does not always fire).
+  // Codes — Chromium net::Error:
+  //   0    — certificate is valid;
+  //  -202  — ERR_CERT_AUTHORITY_INVALID (self-signed / untrusted CA);
+  //  -207  — ERR_CERT_INVALID (invalid, but often self-signed).
+  // Others (expired -201, wrong domain -200) are rejected as usual.
   const { session } = require('electron')
   session.defaultSession.setCertificateVerifyProc((request, callback) => {
     if (request.errorCode !== 0 && request.errorCode !== -202 && request.errorCode !== -207) {
@@ -245,7 +320,19 @@ app.whenReady().then(async () => {
     }
   })
 
-  server = await startHttpServer()
+  try {
+    server = await startHttpServer()
+  } catch (err) {
+    // No free port at all (or a fatal bind error): tell the user instead of
+    // silently showing nothing / a blank window.
+    console.error('[desktop] не удалось запустить локальный http-сервер:', err)
+    dialog.showErrorBox(
+      'MVS ERP — ошибка запуска',
+      `Не удалось запустить локальный сервер приложения: ${err && err.message ? err.message : err}`,
+    )
+    app.quit()
+    return
+  }
   const { port } = server.address()
   const baseUrl = `http://127.0.0.1:${port}`
 
@@ -285,6 +372,6 @@ app.on('window-all-closed', () => {
 app.on('will-quit', () => {
   if (server) server.close()
   if (safeStorage.isEncryptionAvailable()) {
-    // сохраняем зашифрованный файл как есть — ничего дополнительно не нужно
+    // keep the encrypted file as is — nothing extra is needed
   }
 })

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import ProjectPlanning from '../components/planner/ProjectPlanning/ProjectPlanning.vue'
@@ -17,7 +17,7 @@ import { useUnitMenu } from '../composables/useUnitMenu'
 import { useRoleAccess } from '../composables/useRoleAccess'
 import { useFindPlanningItem } from '../composables/useFindPlanningItem'
 import { usePlanningStore, useAppStore } from '../store'
-import { addMonthsISO } from '../components/planner/calendar'
+import { addMonthsISO, fmtDate } from '../components/planner/calendar'
 import { CELL_WIDTH } from '../components/planner/layout'
 
 const store = usePlanningStore()
@@ -27,7 +27,7 @@ const { projectPlanning, loading, error } = storeToRefs(store)
 
 const { unit, origin } = usePlanningOrigin()
 
-/** Текущее видимое окно шкалы (период «как на экране») + зум — для печати в PDF */
+/** Current visible timeline window (the period "as on screen") + zoom — for PDF export */
 const viewRange = ref<{ from: string; to: string; cellWidthPx: number; scale: number }>({
   from: '',
   to: '',
@@ -38,7 +38,7 @@ function onVisibleRange(v: { from: string; to: string; cellWidthPx: number; scal
   viewRange.value = v
 }
 
-/** Печатная модель для PdfExport: одна группа «Проекты», строки = проекты */
+/** Print model for PdfExport: one "Projects" group, rows = projects */
 const projectGroups = computed<PdfGanttGroup[]>(() => {
   const rows = (projectPlanning.value?.projects ?? []).map((p: any) => ({
     id: p.id,
@@ -51,18 +51,18 @@ const projectGroups = computed<PdfGanttGroup[]>(() => {
   return rows.length ? [{ id: 'projects', title: 'Проекты', rows }] : []
 })
 
-// Меню ПКМ по шапке таблицы: переключение масштаба «День» / «Декада»
+// Right-click menu on the table header: switching the "Day" / "Decade" scale
 const { open: openUnitMenu, close: closeUnitMenu, select: selectUnit, bind: unitMenuBind } = useUnitMenu(unit)
 
-// === Права по ролям ===
-// dp (директор проектов): просматривает и редактирует все проекты, не удаляет
-// rp (руководитель проекта): создаёт проекты (сам становится owner), редактирует и удаляет свои
+// === Role permissions ===
+// dp (project director): views and edits all projects, cannot delete
+// rp (project manager): creates projects (becomes the owner), edits and deletes their own
 const { role, userId, canCreateProject, canReorderProjects, canManageProject, canDeleteProject } = useRoleAccess()
 
 const { findProject } = useFindPlanningItem()
 
-// ПКМ по пустому месту: меню создания проекта (дата под курсором, вставка в позицию ПКМ)
-// ПКМ по бару проекта: меню редактирования/удаления проекта
+// Right-click on an empty area: create-project menu (date under the cursor, inserted at the right-click position)
+// Right-click on a project bar: edit/delete menu for the project
 interface MenuState {
   x: number
   y: number
@@ -72,8 +72,23 @@ interface MenuState {
 }
 const menu = ref<MenuState | null>(null)
 
-// Диалог подтверждения удаления (вместо window.confirm — блокируется в iframe/песочнице)
+// Delete confirmation dialog (instead of window.confirm — it is blocked in iframes/sandboxes)
 const { confirm: confirmDialog, ask, proceed, cancel } = useConfirm()
+
+/** Transient success feedback (e.g. what the auto-create template added) */
+const feedback = ref('')
+let feedbackTimer: number | undefined
+function showFeedback(text: string) {
+  feedback.value = text
+  if (feedbackTimer) window.clearTimeout(feedbackTimer)
+  feedbackTimer = window.setTimeout(() => {
+    feedback.value = ''
+    feedbackTimer = undefined
+  }, 6000)
+}
+onBeforeUnmount(() => {
+  if (feedbackTimer) window.clearTimeout(feedbackTimer)
+})
 
 const menuItems = computed<ContextMenuItem[]>(() => {
   if (menu.value?.projectId != null) {
@@ -94,23 +109,25 @@ const menuItems = computed<ContextMenuItem[]>(() => {
 
 const ownerOptions = computed(() =>
   app.users
-    .filter((u) => u.role !== 'worker')
+    .filter((u) => u.preset !== 'worker')
     .sort(compareByName)
     .map((u) => ({ value: u.id ?? 0, label: u.name ?? '' })),
 )
 
-// Модалка редактирования проекта (код, владелец)
+// Project edit modal (code, owner, color)
 interface EditState {
   id: number
   code: string
   ownerId?: number
+  color?: string
 }
 const { open: openEdit, close: closeEdit, submit: submitEdit, bind: editBind } = useEditModal<EditState>(
   (state) => {
     const fields: ModalField[] = [
       { key: 'code', label: 'Код проекта', type: 'text', value: state.code, required: true },
+      { key: 'color', label: 'Цвет', type: 'color', value: state.color ?? '' },
     ]
-    // Владелец проекта не может быть изменён: у rp поле скрываем, admin его видит
+    // The project owner cannot be changed: the field is hidden for rp, admin sees it
     if (role.value === 'admin') {
       fields.push({
         key: 'owner_id',
@@ -123,8 +140,10 @@ const { open: openEdit, close: closeEdit, submit: submitEdit, bind: editBind } =
     return fields
   },
   async (state, values) => {
-    const patch: { code: string; owner_id?: number } = { code: String(values.code ?? '') }
-    // Владельца проекта изменить нельзя: owner_id отправляем только для admin
+    const patch: { code: string; owner_id?: number; color?: string } = { code: String(values.code ?? '') }
+    // '' means "no custom color" → the backend stores NULL (standard color)
+    patch.color = String(values.color ?? '')
+    // The project owner cannot be changed: owner_id is sent only for admin
     if (role.value === 'admin' && values.owner_id !== '' && values.owner_id != null) {
       patch.owner_id = Number(values.owner_id)
     }
@@ -135,18 +154,18 @@ const { open: openEdit, close: closeEdit, submit: submitEdit, bind: editBind } =
 )
 
 function onContextMenu(p: { clientX: number; clientY: number; date: string | null; rowIndex: number; projectId?: number }) {
-  // Бар проекта: меню открываем только если есть права на управление проектом
+  // Project bar: open the menu only if there are rights to manage the project
   if (p.projectId != null) {
     if (!canManageProject(p.projectId)) return
     openMenu({ x: p.clientX, y: p.clientY, date: p.date, rowIndex: p.rowIndex, projectId: p.projectId })
     return
   }
-  // Пустое место: меню создания только для ролей с правом создания и при известной дате
+  // Empty area: create menu only for roles with the create right and when the date is known
   if (!canCreateProject.value || p.date == null) return
   openMenu({ x: p.clientX, y: p.clientY, date: p.date, rowIndex: p.rowIndex })
 }
 
-/** ПКМ по шапке таблицы — меню масштаба «День»/«Декада» (закрыв меню действий) */
+/** Right-click on the table header — the "Day"/"Decade" scale menu (after closing the actions menu) */
 function onHeaderCtx(p: { clientX: number; clientY: number }) {
   closeMenu()
   openUnitMenu(p.clientX, p.clientY)
@@ -157,7 +176,30 @@ const { open: openMenu, close: closeMenu, select, bind: menuBind } = useContextM
 function openProjectEdit(id: number) {
   const p = findProject(id)
   if (p) {
-    openEdit({ id, code: p.project_code ?? '', ownerId: p.owner_id })
+    openEdit({ id, code: p.project_code ?? '', ownerId: p.owner_id, color: p.color ?? '' })
+  }
+}
+
+/** Creates a project starting at the given date (shared by the toolbar button
+ *  and the right-click menu); shows the auto-create template feedback. */
+async function createProjectAt(date: string) {
+  const res = await store.createProject({
+    code: 'КО_' + Date.now(),
+    start_date: date,
+    end_date: addMonthsISO(date, 6),
+  })
+  if (!res.ok) {
+    error.value = store.error
+  } else if (res.autoCreated) {
+    const a = res.autoCreated
+    showFeedback(
+      'Проект создан. По шаблону автосоздания добавлено: процессов — ' +
+        a.processes +
+        ', задач — ' +
+        a.tasks +
+        ', назначений ресурсов — ' +
+        a.assignments,
+    )
   }
 }
 
@@ -165,12 +207,7 @@ async function handleSelect(id: string) {
   if (!menu.value) return
   const { date, projectId } = menu.value
   if (id === 'create-project' && date != null) {
-    const ok = await store.createProject({
-      code: 'КО_' + Date.now(),
-      start_date: date,
-      end_date: addMonthsISO(date, 6),
-    })
-    if (!ok) error.value = store.error
+    await createProjectAt(date)
   } else if (id === 'edit-project' && projectId != null) {
     openProjectEdit(projectId)
   } else if (id === 'delete-project' && projectId != null) {
@@ -185,7 +222,7 @@ async function onReorder(e: { from: number; to: number }) {
   if (!ok) error.value = store.error
 }
 
-/** Клик по бару проекта — переход на вкладку процессов с якорем на начало проекта */
+/** Click on a project bar — navigate to the processes tab anchored at the project start */
 function goToProcesses(projectId: number) {
   router.push({ path: '/processes', query: { project: String(projectId) } })
 }
@@ -198,7 +235,7 @@ onMounted(() => {
 
 <template>
   <section class="pp">
-    <!-- Печать диаграммы проектов в PDF: период и ширина ячейки со страницы -->
+    <!-- Printing the projects diagram as PDF: the period and cell width from the page -->
     <div class="pp-toolbar">
       <PdfExport
         :groups="projectGroups"
@@ -214,6 +251,8 @@ onMounted(() => {
       />
     </div>
 
+    <p v-if="feedback" class="pp-fb" role="status">{{ feedback }}</p>
+
     <ProjectPlanning
       :projects="projectPlanning?.projects || []"
       :loading="loading"
@@ -223,11 +262,13 @@ onMounted(() => {
       :unit="unit"
       :reorderable="canReorderProjects"
       :can-manage="canManageProject"
+      :can-create="canCreateProject"
       @change="(p) => store.updateProjectDates(p.id, p.start_date, p.end_date)"
       @contextmenu="onContextMenu"
       @header-ctxmenu="onHeaderCtx"
       @reorder="onReorder"
       @navigate="goToProcesses"
+      @create="() => createProjectAt(fmtDate(new Date()))"
       @visible-range="onVisibleRange"
     />
 
@@ -248,16 +289,51 @@ onMounted(() => {
 </template>
 
 <style scoped>
+@import '../styles/tokens.css';
+
+.pp {
+  /* Diagram fills the exact viewport height; the page never scrolls —
+     only the timeline does (rows vertical, calendar horizontal). */
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  --planner-max-height: calc(100dvh - 112px);
+}
+
+/* PlannerStates (.pg) + timeline as a flex column: tg-scroll fills the rest */
+.pp :deep(.pg) {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.pp :deep(.tg-scroll) {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+}
+
 .pp-toolbar {
   display: flex;
   justify-content: flex-end;
   margin-bottom: 12px;
+  flex: none;
+}
+.pp-fb {
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  background: var(--ui-success-soft);
+  color: var(--ui-success);
+  border: 1px solid color-mix(in srgb, var(--ui-success) 30%, transparent);
+  border-radius: var(--ui-radius-sm);
+  font-size: 13px;
 }
 .pp-st {
-  color: #666;
+  color: var(--ui-text-2);
   font-size: 14px;
   padding: 30px;
   text-align: center;
 }
-.er { color: #d93025; }
+.er { color: var(--ui-danger); }
 </style>

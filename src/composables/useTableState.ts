@@ -1,22 +1,22 @@
-/** Состояние масштаба/прокрутки одной таблицы (сохраняется при размонтировании) */
+/** Scale/scroll state of a single table (kept across unmounts) */
 export interface TableScaleState {
-  /** Ширина ячейки в px (--cell-width) */
+  /** Cell width in px (--cell-width) */
   cellPx: number
-  /** Масштаб таблицы (zoom на .tg-content) */
+  /** Table scale (zoom on .tg-content) */
   scale: number
-  /** Горизонтальная прокрутка (в масштабированных px) */
+  /** Horizontal scroll (in scaled px) */
   scrollLeft: number
-  /** Вертикальная прокрутка */
+  /** Vertical scroll */
   scrollTop: number
 }
 
 /**
- * In-memory хранилище состояния таблиц по id: переживает размонтирование
- * (переключение вкладок), но сбрасывается перезагрузкой страницы.
+ * In-memory per-id table state storage: survives unmounting
+ * (tab switches), but is reset by a page reload.
  */
 const tableStates = new Map<string, TableScaleState>()
 
-/** Персист масштаба/прокрутки таблицы между монтированиями (по стабильному id) */
+/** Persist table scale/scroll between mounts (keyed by a stable id) */
 export function useTableState() {
   function get(id: string | undefined): TableScaleState | undefined {
     return id ? tableStates.get(id) : undefined

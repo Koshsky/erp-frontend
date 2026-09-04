@@ -7,9 +7,9 @@ export interface UsageStateInput {
 }
 
 /**
- * Состояние загрузки ячейки по проценту used/available (общий для UsageCell и
- * UsageTooltip): ≤100% норма, до 160% перегруз, >160% критично. available === 0
- * с занятостью — критично; без периода/доступности — unknown; выходной — weekend.
+ * Cell load state by used/available percentage (shared by UsageCell and
+ * UsageTooltip): ≤100% normal, up to 160% overload, >160% critical. available === 0
+ * with usage — critical; without a period/availability — unknown; a day off — weekend.
  */
 export function usageState({ used, available, isWeekend }: UsageStateInput): UsageState {
   if (isWeekend) return 'weekend'
@@ -21,17 +21,17 @@ export function usageState({ used, available, isWeekend }: UsageStateInput): Usa
   return 'critical'
 }
 
-/** Процент загрузки (null, если считать не из чего: нет данных или доступность 0) */
+/** Load percentage (null if there is nothing to compute from: no data or zero availability) */
 export function usagePercent(used: number, available: number | null): number | null {
   if (available == null || available === 0) return null
   return (used / available) * 100
 }
 
-/** Цвет состояния (фон ячейки) и подпись — для тултипа загрузки */
+/** State color (cell background) and label — for the usage tooltip */
 export const USAGE_STATE_META: Record<UsageState, { label: string; color: string }> = {
-  normal: { label: 'Норма', color: '#aacfcf' },
-  warn: { label: 'Перегруз', color: '#e6d488' },
-  critical: { label: 'Критично', color: '#e09a9a' },
-  unknown: { label: 'Нет данных', color: '#b0b0b0' },
-  weekend: { label: 'Выходной', color: '#f0f0f0' },
+  normal: { label: 'Норма', color: 'var(--ui-usage-ok)' },
+  warn: { label: 'Перегруз', color: 'var(--ui-usage-warn)' },
+  critical: { label: 'Критично', color: 'var(--ui-usage-crit)' },
+  unknown: { label: 'Нет данных', color: 'var(--ui-usage-unknown)' },
+  weekend: { label: 'Выходной', color: 'var(--ui-usage-weekend)' },
 }

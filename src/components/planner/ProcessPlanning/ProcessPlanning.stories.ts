@@ -11,8 +11,8 @@ const iso = (d: Date) =>
 let projectSeq = 0
 
 /**
- * Создаёт проект, границы которого сознательно шире, чем границы его процессов.
- * Процессы расположены с отступом от краёв проекта.
+ * Creates a project whose bounds are deliberately wider than those of its processes.
+ * Processes sit at an offset from the project's edges.
  */
 const project = (
   code: string,
@@ -74,7 +74,7 @@ export const MultipleProjects: Story = {
   },
 }
 
-/** Декады — проекты растянуты на несколько декад */
+/** Decades — projects stretch across several decades */
 export const YearDecades: Story = {
   args: {
     projects: [

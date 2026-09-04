@@ -8,22 +8,23 @@ export interface GroupGanttItem {
 }
 
 export interface GroupGanttProps {
-  /** Контекст бесконечной шкалы */
+  /** Infinite timeline context */
   timeline: TimelineCtx
   items: GroupGanttItem[]
-  /** Границы группы (опционально — подсветка на шкале) */
+  /** Group bounds (optional — highlight on the timeline) */
   groupStartDate?: string | Date | number | null
   groupEndDate?: string | Date | number | null
-  /** Включает перетаскивание строк (ручка в колонке названий) для смены порядка */
+  /** Enables row reordering: the bar rows of the group start reorder on a
+   *  vertical drag of the bar body (see the #bar slot's startReorder) */
   reorderable?: boolean
-  /** Сливает колонку названий в одну ячейку на всю высоту группы (слот #label) */
+  /** Merges the label column into one cell spanning the whole group height (#label slot) */
   mergedLabel?: boolean
-  /** Идентификатор родителя группы (project_id/process_id) — для создания внутри группы */
+  /** Parent group identifier (project_id/process_id) — for creating inside the group */
   groupId?: string | number | null
-  /** Высота строки в px (default 26); задаёт высоту .gg-row и merged-лейбла */
+  /** Row height in px (default 26); sets .gg-row and merged-label height */
   rowHeight?: number
-  /** Мин. высота объединённого лейбла (px): чтобы при 0–1 строках код/имя/даты не сжимались и не исчезали */
+  /** Min merged-label height (px): so code/name/dates don't shrink or vanish with 0–1 rows */
   minLabelHeight?: number
-  /** Минимальное число строк группы (пустые строки-заглушки добивают до этого количества) */
+  /** Minimum number of group rows (empty placeholder rows pad up to this count) */
   minRows?: number
 }
