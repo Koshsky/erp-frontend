@@ -173,7 +173,7 @@ const FIELD_LABELS: Record<string, string> = {
   middle_name: 'Отчество',
   username: 'Логин',
   position: 'Должность',
-  role: 'Роль',
+  preset: 'Пресет прав',
   priority: 'Приоритет',
   start_date: 'Начало',
   end_date: 'Конец',

@@ -1,15 +1,14 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { storeToRefs } from 'pinia'
-import { ContextMenu, ModalForm, ConfirmDialog } from '../components/common'
+import { ContextMenu, ModalForm } from '../components/common'
 import type { ContextMenuItem } from '../components/common/ContextMenu'
 import type { ModalField } from '../components/common/ModalForm'
-import { useConfirm } from '../composables/useConfirm'
 import { useContextMenu } from '../composables/useContextMenu'
 import { useEditModal } from '../composables/useEditModal'
 import { useRoleAccess } from '../composables/useRoleAccess'
+import { useEmployeeFilters } from '../composables/useEmployeeFilters'
 import { useAppStore, useTimesheetStore } from '../store'
-import { compareByName } from '../utils'
 import type { DtoResourceResponse, DtoUserResponse } from '@/api'
 
 const ts = useTimesheetStore()
@@ -19,9 +18,10 @@ const app = useAppStore()
 const { users } = storeToRefs(app)
 const { resources, resourcesError } = storeToRefs(app)
 
-// Edit/delete: admin can edit anyone, others (vp) — only their subordinates.
-// Creating employees — admin only (worker.create; vp has no such permission).
-const { role, userId, canCreateEmployee, canEditEmployee } = useRoleAccess()
+// Edit/delete are NOT available here: an employee IS a system user, so profile
+// editing happens only on the admin "Пользователи" page (user-edit right).
+// This page only changes the employee's resource.
+const { role, userId } = useRoleAccess()
 const isAdmin = computed(() => role.value === 'admin')
 
 /**
@@ -41,9 +41,6 @@ const byResourceLabel = (a: DtoResourceResponse, b: DtoResourceResponse): number
 const manageableResources = computed<DtoResourceResponse[]>(() =>
   resources.value.filter((r) => isAdmin.value || r.owner_id === userId.value).sort(byResourceLabel),
 )
-
-/** All resources (for the filter select), sorted by code/title */
-const resourcesSorted = computed<DtoResourceResponse[]>(() => [...resources.value].sort(byResourceLabel))
 
 /**
  * Badge style of the employee's resource: the custom resource color (soft
@@ -73,39 +70,23 @@ function managerLabel(managerId?: number | null): string {
   return u?.name ?? `#${managerId}`
 }
 
-/** Search by full name and position (case-insensitive) */
-const search = ref('')
+/**
+ * Shared employee filters (search / manager / resource) — synchronized with the
+ * "Timesheet" page: the state is a single module-level source of truth.
+ */
+const {
+  search,
+  managerFilter,
+  resourceFilter,
+  managerFilterOptions,
+  resourceFilterOptions,
+  applyFilters,
+} = useEmployeeFilters()
 
-/** Filter by manager (manager_id): '' — all, 'none' — no manager (client-side), number — server-side filter */
-const managerFilter = ref<number | 'none' | ''>('')
+const filteredEmployees = computed(() => applyFilters(employeesWithTitles.value))
 
-/** Filter by resource: '' — all, 'none' — no resource, number — a resource */
-const resourceFilter = ref<number | 'none' | ''>('')
-
-const filteredEmployees = computed(() => {
-  let list = employeesWithTitles.value
-  const q = search.value.trim().toLowerCase()
-  if (q) {
-    list = list.filter((e) => `${e.name ?? ''} ${e.position ?? ''}`.toLowerCase().includes(q))
-  }
-  // 'none' (no manager) is filtered on the client; numeric manager_id is already filtered by the server
-  if (managerFilter.value === 'none') {
-    list = list.filter((e) => e.manager_id == null)
-  }
-  if (resourceFilter.value === 'none') {
-    list = list.filter((e) => e.id != null && !app.resourceByUser[e.id])
-  } else if (typeof resourceFilter.value === 'number') {
-    list = list.filter((e) => e.id != null && app.resourceByUser[e.id]?.id === resourceFilter.value)
-  }
-  return list
-})
-
-// Changing the manager filter reloads the listing with manager_id (admin only)
-watch(managerFilter, (v) => {
-  if (isAdmin.value) ts.fetchEmployees(typeof v === 'number' ? v : undefined)
-})
-
-// Right-click on a row: edit/delete (own employees only / admin)
+// Right-click on a row: only the resource change. The employee's profile is a
+// system user — editing it happens solely on the admin "Пользователи" page.
 interface MenuState {
   x: number
   y: number
@@ -113,84 +94,22 @@ interface MenuState {
 }
 const menu = ref<MenuState | null>(null)
 const menuItems = computed<ContextMenuItem[]>(() => [
-  { id: 'edit-employee', label: 'Редактировать' },
-  { id: 'delete-employee', label: 'Удалить сотрудника' },
+  { id: 'change-resource', label: 'Изменить ресурс' },
 ])
 
-// Delete confirmation dialog
-const { confirm: confirmDialog, ask, proceed, cancel } = useConfirm()
+type ModalMode = {
+  type: 'resource'
+  id: number
+  resourceId?: number | null
+}
 
-type ModalMode =
-  | { type: 'create' }
-  | {
-      type: 'edit'
-      id: number
-      lastName: string
-      firstName: string
-      middleName?: string
-      position?: string
-      managerId?: number | null
-      hireDate?: string
-      terminationDate?: string
-      resourceId?: number | null
-    }
-
-/** Manager options (users, excluding workers) + the "No manager" option */
-const managerOptions = computed<ModalField['options']>(() => [
-  { value: '', label: 'Без руководителя' },
-  ...users.value
-    .filter((u) => u.id != null && u.role !== 'worker')
-    .sort(compareByName)
-    .map((u) => ({ value: u.id as number, label: u.name ?? `#${u.id}` })),
-])
-
+/** The resource dialog: one select (manageable resources) + "No resource" */
 const { open: openModal, close: closeModal, submit: submitModal, bind: modalBind } = useEditModal<ModalMode>(
   (state) => {
-    const fields: ModalField[] = [
-      {
-        key: 'lastName',
-        label: 'Фамилия',
-        type: 'text',
-        value: state.type === 'edit' ? state.lastName : '',
-        required: true,
-      },
-      {
-        key: 'firstName',
-        label: 'Имя',
-        type: 'text',
-        value: state.type === 'edit' ? state.firstName : '',
-        required: true,
-      },
-      {
-        key: 'middleName',
-        label: 'Отчество',
-        type: 'text',
-        value: state.type === 'edit' ? (state.middleName ?? '') : '',
-      },
-      {
-        key: 'position',
-        label: 'Должность',
-        type: 'text',
-        value: state.type === 'edit' ? (state.position ?? '') : '',
-        placeholder: 'Свободный текст, например «Ведущий инженер»',
-      },
-    ]
-    fields.push(
-      { key: 'hireDate', label: 'Дата приёма', type: 'date', value: state.type === 'edit' ? state.hireDate : '' },
-      { key: 'terminationDate', label: 'Дата увольнения', type: 'date', value: state.type === 'edit' ? state.terminationDate : '' },
-    )
-    // Manager is chosen by admin only (creating employees is admin-only)
-    if (isAdmin.value) {
-      fields.push({
-        key: 'managerId',
-        label: 'Руководитель',
-        type: 'select',
-        options: managerOptions.value,
-        value: state.type === 'edit' ? (state.managerId ?? '') : '',
-      })
-    }
-    // Resource is changed only when editing and only by those who can manage it
-    if (state.type === 'edit' && manageableResources.value.length) {
+    const fields: ModalField[] = []
+    // Only those who can manage a resource (admin — all, others — their own)
+    // may change the employee's resource; the backend gates it the same way.
+    if (manageableResources.value.length) {
       fields.push({
         key: 'resourceId',
         label: 'Ресурс',
@@ -202,75 +121,34 @@ const { open: openModal, close: closeModal, submit: submitModal, bind: modalBind
             label: `${r.code} — ${r.title}`,
           })),
         ],
-        value: state.type === 'edit' ? (state.resourceId != null ? state.resourceId : '') : '',
+        value: state.resourceId != null ? state.resourceId : '',
       })
     }
     return fields
   },
   async (state, values) => {
-    const payload: { last_name: string; first_name: string; middle_name?: string; role?: string; position?: string; manager_id?: number; hire_date?: string; termination_date?: string } = {
-      last_name: String(values.lastName ?? '').trim(),
-      first_name: String(values.firstName ?? '').trim(),
-      middle_name: String(values.middleName ?? '').trim() || undefined,
-    }
-    if (values.position != null) {
-      payload.position = String(values.position).trim()
-    }
-    if (values.hireDate) payload.hire_date = String(values.hireDate)
-    if (values.terminationDate) payload.termination_date = String(values.terminationDate)
-    // Send the manager only for admin and only when explicitly chosen (otherwise — unchanged)
-    if (isAdmin.value && values.managerId !== '' && values.managerId != null) {
-      payload.manager_id = Number(values.managerId)
-    }
-    const ok =
-      state.type === 'create'
-        ? await ts.createEmployee({ ...payload, role: 'worker' })
-        : await ts.updateEmployee(state.id, payload)
-    // Changing the employee's resource (only on edit and when it actually changed)
-    let resourceOk = true
-    let resourceError: string | null = null
-    if (state.type === 'edit' && ok) {
-      const toResourceId = values.resourceId === '' || values.resourceId == null ? null : Number(values.resourceId)
-      const fromResourceId = state.resourceId ?? null
-      if (fromResourceId !== toResourceId) {
-        resourceOk = await app.changeEmployeeResource(state.id, fromResourceId, toResourceId)
-        if (!resourceOk) {
-          resourceError = app.resourcesError ?? 'Не удалось изменить ресурс сотрудника'
-        }
-      }
-    }
-    if (!ok) return { ok, error: error.value }
-    if (!resourceOk) return { ok: false, error: resourceError }
+    const toResourceId = values.resourceId === '' || values.resourceId == null ? null : Number(values.resourceId)
+    const ok = await app.changeEmployeeResource(state.id, state.resourceId ?? null, toResourceId)
+    if (!ok) return { ok: false, error: app.resourcesError ?? 'Не удалось изменить ресурс сотрудника' }
     return { ok: true, error: null }
   },
-  (state) => (state.type === 'create' ? 'Создать сотрудника' : 'Редактировать сотрудника'),
-  (state) => (state.type === 'create' ? 'Создать' : 'Сохранить'),
+  () => 'Изменить ресурс',
+  () => 'Сохранить',
 )
 
 function onRowContextMenu(e: MouseEvent, emp: DtoUserResponse) {
-  if (emp.id == null || !canEditEmployee(emp)) return
+  if (emp.id == null || !manageableResources.value.length) return
   openMenu({ x: e.clientX, y: e.clientY, employeeId: emp.id })
 }
 
 const { open: openMenu, close: closeMenu, select, bind: menuBind } = useContextMenu(menu, menuItems, handleSelect)
 
-function openCreate() {
-  openModal({ type: 'create' })
-}
-
-function openEdit(id: number) {
+function openChangeResource(id: number) {
   const emp = employees.value.find((e) => e.id === id)
   if (emp) {
     openModal({
-      type: 'edit',
+      type: 'resource',
       id,
-      lastName: emp.last_name ?? '',
-      firstName: emp.first_name ?? '',
-      middleName: emp.middle_name ?? '',
-      position: emp.position ?? '',
-      managerId: emp.manager_id ?? null,
-      hireDate: emp.hire_date,
-      terminationDate: emp.termination_date,
       resourceId: resourceOf(emp.id)?.id ?? null,
     })
   }
@@ -278,23 +156,19 @@ function openEdit(id: number) {
 
 function handleSelect(id: string) {
   if (!menu.value) return
-  if (id === 'edit-employee') {
-    openEdit(menu.value.employeeId)
-  } else if (id === 'delete-employee') {
-    const employeeId = menu.value.employeeId
-    ask('Удалить сотрудника?', () => {
-      void ts.deleteEmployee(employeeId)
-    })
+  if (id === 'change-resource') {
+    openChangeResource(menu.value.employeeId)
   }
 }
 
 onMounted(async () => {
-  if (!employees.value.length) await ts.fetchEmployees()
+  if (!employees.value.length) await ts.loadEmployees()
   if (isAdmin.value && !users.value.length) await app.loadUsers()
   // Load resources and their members unconditionally: resources are often already in the store
   // (dashboard/planner load them earlier), but members — only here;
   // a gate on resources.length would leave everyone "without a resource" without badges.
-  await app.ensureResourceMembers(true)
+  // Local-first: hydrate from the cache (no network from the render path).
+  await app.ensureResourceMembers(false)
 })
 </script>
 
@@ -307,14 +181,13 @@ onMounted(async () => {
         <select v-if="isAdmin" v-model="managerFilter" class="ep-filter">
           <option value="">Все руководители</option>
           <option value="none">Без руководителя</option>
-          <option v-for="u in users.filter((u) => u.role !== 'worker').sort(compareByName)" :key="u.id" :value="u.id">{{ u.name ?? `#${u.id}` }}</option>
+          <option v-for="u in managerFilterOptions" :key="u.id" :value="u.id">{{ u.name ?? `#${u.id}` }}</option>
         </select>
         <select v-if="resources.length" v-model="resourceFilter" class="ep-filter" title="Фильтр по ресурсу">
           <option value="">Все ресурсы</option>
           <option value="none">Без ресурса</option>
-          <option v-for="r in resourcesSorted" :key="r.id" :value="r.id">{{ r.code }} — {{ r.title }}</option>
+          <option v-for="r in resourceFilterOptions" :key="r.id" :value="r.id">{{ r.code }} — {{ r.title }}</option>
         </select>
-        <button v-if="canCreateEmployee" type="button" class="ep-add" @click="openCreate">Создать сотрудника</button>
       </div>
     </div>
 
@@ -328,22 +201,23 @@ onMounted(async () => {
       instead of replacing it, so the header and filter controls remain usable.
     -->
     <div v-if="employees.length || (!loading && !error)" class="table">
-      <div class="tr th">
+      <div class="tr th" :class="{ 'tr--no-manager': !isAdmin }">
         <div>ФИО</div>
         <div>Должность</div>
         <div>Дата приёма</div>
         <div>Дата увольнения</div>
-        <div>Руководитель</div>
+        <div v-if="isAdmin">Руководитель</div>
       </div>
       <template v-if="filteredEmployees.length">
         <div
           v-for="emp in filteredEmployees"
           :key="emp.id"
           class="tr"
+          :class="{ 'tr--no-manager': !isAdmin }"
           @contextmenu.prevent.stop="onRowContextMenu($event, emp)"
         >
-          <div class="name-cell">
-            <span class="name">{{ emp.name }}</span>
+          <div class="name">{{ emp.name }}</div>
+          <div class="pos-cell">
             <span
               v-if="resourceOf(emp.id)"
               class="ep-badge"
@@ -352,25 +226,17 @@ onMounted(async () => {
             >
               {{ resourceOf(emp.id)?.code }}
             </span>
+            <span class="pos-text">{{ emp.position || '—' }}</span>
           </div>
-          <div>{{ emp.position || '—' }}</div>
           <div>{{ fmtDate(emp.hire_date) }}</div>
           <div>{{ fmtDate(emp.termination_date) }}</div>
-          <div>{{ managerLabel(emp.manager_id) }}</div>
+          <div v-if="isAdmin">{{ managerLabel(emp.manager_id) }}</div>
         </div>
       </template>
       <p v-else class="ep-st">{{ employees.length ? 'Ничего не найдено' : 'Нет данных о сотрудниках' }}</p>
     </div>
 
     <ContextMenu v-bind="menuBind" @select="select" @close="closeMenu" />
-
-    <ConfirmDialog
-      :open="!!confirmDialog"
-      :message="confirmDialog?.message ?? ''"
-      :confirm-label="confirmDialog?.confirmLabel"
-      @confirm="proceed"
-      @close="cancel"
-    />
 
     <ModalForm v-bind="modalBind" @save="submitModal" @close="closeModal" />
   </section>
@@ -466,6 +332,10 @@ onMounted(async () => {
   font-size: 14px;
 }
 .tr:last-child { border-bottom: none; }
+/* Non-admin (sees only own employees): the "Руководитель" column is hidden */
+.tr--no-manager {
+  grid-template-columns: 1.4fr 1.3fr 110px 140px;
+}
 .tr:not(.th):hover {
   background: var(--ui-surface-3);
 }
@@ -478,14 +348,23 @@ onMounted(async () => {
   font-weight: 700;
   color: var(--ui-text);
 }
-.name-cell {
+.pos-cell {
   display: flex;
   align-items: center;
   gap: 8px;
   min-width: 0;
 }
+.pos-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .ep-badge {
   flex: none;
+  /* A uniform badge width so the position text starts at the same x
+     in every row regardless of the code length */
+  min-width: 56px;
+  text-align: center;
   border-radius: 999px;
   padding: 2px 10px;
   font-size: 12px;

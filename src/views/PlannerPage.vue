@@ -80,7 +80,25 @@ const focusGroupId = computed(() => {
 
 // vp owns the tasks/milestones/assignments of their processes; rp — view only
 // (the task list for them is already filtered by the backend), dp — read-only.
-const { canManageTasks, canViewTasks, canViewProjects, role, userId } = useRoleAccess()
+const {
+  canCreateTask,
+  canManageTask,
+  canDeleteTask,
+  canAssignTaskResources,
+  canCreateMilestone,
+  canManageMilestone,
+  canDeleteMilestone,
+  canViewTasks,
+  canDeleteOthersComments,
+  canViewProjects,
+  role,
+  userId,
+} = useRoleAccess()
+
+/** Drag/resize/reorder/assign are enabled when the user can manage at least one visible process */
+const anyManageableTask = computed(() =>
+  (taskPlanning.value?.processes ?? []).some((p: any) => canManageTask(p.id)),
+)
 
 const { findTask, findMilestone } = useFindPlanningItem()
 
@@ -103,30 +121,31 @@ const { confirm: confirmDialog, ask, proceed, cancel } = useConfirm()
 
 const menuItems = computed<ContextMenuItem[]>(() => {
   if (!canViewTasks.value) return []
-  // Task: "Comments" is available to everyone who can see the task; the rest — to managing roles.
+  // Task: "Comments" is available to everyone who can see the task; the rest
+  // follow the exact backend rights for the task's process.
   if (menu.value?.taskId != null) {
+    const processId = findTask(menu.value.taskId)?.process_id
     const items: ContextMenuItem[] = [{ id: 'comments', label: 'Комментарии' }]
-    if (canManageTasks.value) {
-      items.push(
-        { id: 'edit-task', label: 'Редактировать' },
-        { id: 'manage-resources', label: 'Управление ресурсами' },
-        { id: 'delete-task', label: 'Удалить задачу' },
-      )
+    if (canManageTask(processId)) items.push({ id: 'edit-task', label: 'Редактировать' })
+    if (canAssignTaskResources(processId)) {
+      items.push({ id: 'manage-resources', label: 'Управление ресурсами' })
     }
+    if (canDeleteTask(processId)) items.push({ id: 'delete-task', label: 'Удалить задачу' })
     return items
   }
   if (menu.value?.milestoneId != null) {
-    if (!canManageTasks.value) return []
-    return [
-      { id: 'edit-milestone', label: 'Редактировать' },
-      { id: 'delete-milestone', label: 'Удалить веху' },
-    ]
+    const processId = findMilestone(menu.value.milestoneId)?.process_id
+    const items: ContextMenuItem[] = []
+    if (canManageMilestone(processId)) items.push({ id: 'edit-milestone', label: 'Редактировать' })
+    if (canDeleteMilestone(processId)) items.push({ id: 'delete-milestone', label: 'Удалить веху' })
+    return items
   }
-  if (!canManageTasks.value) return []
-  return [
-    { id: 'create-task', label: 'Создать задачу' },
-    { id: 'create-milestone', label: 'Создать веху' },
-  ]
+  const items: ContextMenuItem[] = []
+  if (canCreateTask(menu.value?.processId)) items.push({ id: 'create-task', label: 'Создать задачу' })
+  if (canCreateMilestone(menu.value?.processId)) {
+    items.push({ id: 'create-milestone', label: 'Создать веху' })
+  }
+  return items
 })
 
 // Edit modal for a task (title, assignee, color) or a milestone (title + content, color)
@@ -193,10 +212,15 @@ const { open: openEdit, close: closeEdit, submit: submitEdit, bind: editBind } =
 
 function onContextMenu(p: { clientX: number; clientY: number; date: string | null; rowIndex: number; processId?: number; taskId?: number; milestoneId?: number }) {
   if (!canViewTasks.value) return
-  // Empty group area: creating tasks/milestones — managing roles only.
-  if (p.taskId == null && p.milestoneId == null && !canManageTasks.value) return
-  // Empty group area: creation requires a parent process and a known date
-  if (p.taskId == null && p.milestoneId == null && (p.processId == null || p.date == null)) return
+  // Empty group area: creation requires the corresponding right, a parent process and a known date.
+  // A task row opens the menu for viewers (Comments); a milestone — only with a right on it.
+  if (p.taskId == null && p.milestoneId == null) {
+    if (!canCreateTask(p.processId) && !canCreateMilestone(p.processId)) return
+    if (p.processId == null || p.date == null) return
+  } else if (p.milestoneId != null) {
+    const processId = findMilestone(p.milestoneId)?.process_id
+    if (!canManageMilestone(processId) && !canDeleteMilestone(processId)) return
+  }
   openMenu({ x: p.clientX, y: p.clientY, date: p.date, rowIndex: p.rowIndex, processId: p.processId, taskId: p.taskId, milestoneId: p.milestoneId })
 }
 
@@ -208,9 +232,10 @@ function onHeaderCtx(p: { clientX: number; clientY: number }) {
 
 const { open: openMenu, close: closeMenu, select, bind: menuBind } = useContextMenu(menu, menuItems, handleSelect)
 
-/** Click on a task bar — open the task editor (managing roles only) */
+/** Click on a task bar — open the task editor (task.update on the task's process) */
 function onTaskBarEdit(id: number) {
-  if (!canManageTasks.value) return
+  const task = findTask(id)
+  if (!task || !canManageTask(task.process_id)) return
   openTaskEdit(id)
 }
 
@@ -370,6 +395,7 @@ const taskComments = computed(() => {
 })
 
 function openComments(taskId: number) {
+  if (!canViewTasks.value) return
   commentsTaskId.value = taskId
   void planning.loadTaskComments(taskId)
 }
@@ -481,8 +507,8 @@ const taskGroups = computed<PdfGanttGroup[]>(() =>
       :error="error"
       :origin="origin"
       :unit="unit"
-      :can-manage="canManageTasks"
-      :reorderable="canManageTasks"
+      :can-manage="anyManageableTask"
+      :reorderable="anyManageableTask"
       :focus-date="focusDate"
       :focus-group-id="focusGroupId"
       :comments-by-task="planning.commentsByTask"
@@ -495,6 +521,7 @@ const taskGroups = computed<PdfGanttGroup[]>(() =>
       @visible-range="onVisibleRange"
       @edit="onTaskBarEdit"
       @request-comments="(id) => planning.loadTaskComments(id, { fresh: false })"
+      @open-comments="openComments"
     />
 
     <ContextMenu v-bind="menuBind" @select="select" @close="closeMenu" />
@@ -533,7 +560,7 @@ const taskGroups = computed<PdfGanttGroup[]>(() =>
       :busy="planning.commentsLoading"
       :error="planning.commentsError"
       :disabled-reason="isOffline ? 'Недоступно в офлайне' : null"
-      :can-manage="canManageTasks"
+      :can-manage="canDeleteOthersComments"
       :user-id="userId"
       @send="onSendComment"
       @delete="onDeleteComment"
@@ -546,11 +573,34 @@ const taskGroups = computed<PdfGanttGroup[]>(() =>
 @import '../styles/tokens.css';
 
 .pp {
-  --planner-max-height: calc(100vh - 112px);
+  /* The diagram fills the exact remaining viewport height (shell is vh-locked):
+     the page itself never scrolls — only the timeline does (rows — vertical,
+     calendar — horizontal). */
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  /* kept for nested previews (PdfExport / TaskComments) that still use the var */
+  --planner-max-height: calc(100dvh - 112px);
 }
 .pp-toolbar {
   display: flex;
   justify-content: flex-end;
   margin-bottom: 12px;
+  flex: none;
+}
+
+/* PlannerStates (.pg) and the timeline become a flex column: tg-scroll takes
+   exactly the remaining height, internal overflow instead of a page scroll. */
+.pp :deep(.pg) {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.pp :deep(.tg-scroll) {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
 }
 </style>

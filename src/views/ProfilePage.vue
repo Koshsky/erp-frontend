@@ -15,7 +15,7 @@ const profile = computed<ProfileField[]>(() => {
   return [
     { label: 'Логин', value: u?.username || '—' },
     { label: 'Имя', value: u?.name || '—' },
-    { label: 'Роль', value: u?.role || '—' },
+    { label: 'Пресет прав', value: u?.preset || '—' },
     { label: 'ID', value: u?.id != null ? String(u.id) : '—' },
   ]
 })

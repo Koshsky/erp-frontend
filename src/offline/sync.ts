@@ -73,35 +73,50 @@ function reload(name: string, run: () => Promise<unknown>): Reloader {
   return { name, run }
 }
 
-/** Reload set per role (heavy ones — on demand) */
+/** Reload set per role (heavy ones — on demand). Network refreshes only
+ *  (refreshX): rendering is local-first, so reconcile must NOT re-fetch via
+ *  the local loaders. */
 function reloadersFor(entity: MutationEntity): Reloader[] {
   const app = useAppStore()
   const planning = usePlanningStore()
   const ts = useTimesheetStore()
   const auth = useAuthStore()
-  const isStaff = auth.user?.role === 'vp' || auth.user?.role === 'admin'
+  const isStaff = auth.user?.preset === 'vp' || auth.user?.preset === 'admin'
 
   switch (entity) {
     case 'resource':
-      return [reload('resources', () => app.loadResources()), reload('calendar', () => app.loadCalendar())]
+      return [reload('resources', () => app.refreshResources()), reload('calendar', () => app.refreshCalendar())]
     case 'user':
-      return isStaff ? [reload('employees', () => ts.loadEmployees())] : []
+      return isStaff ? [reload('employees', () => ts.refreshEmployees())] : []
     case 'member':
-      return isStaff ? [reload('resources', () => app.loadResources())] : []
+      return isStaff ? [reload('resources', () => app.refreshResources())] : []
     case 'state':
-      return isStaff ? [reload('states', () => ts.loadStates())] : []
+      return isStaff ? [reload('states', () => ts.refreshStates())] : []
     case 'period':
-      return isStaff ? [reload('periods', () => ts.loadEmployees())] : []
+      return isStaff
+        ? [
+            reload('employees', () => ts.refreshEmployees()),
+            ...(ts.windowStart
+              ? [reload('periods', () => ts.refreshPeriods(ts.windowStart, ts.windowEnd))]
+              : []),
+          ]
+        : []
     case 'project':
-      return [reload('project-plan', () => planning.loadProjectPlanning()), reload('projects', () => app.loadProjects())]
+      return [
+        reload('project-plan', () => planning.refreshProjectPlanning(true)),
+        reload('projects', () => app.refreshProjects()),
+      ]
     case 'process':
-      return [reload('process-plan', () => planning.loadProcessPlanning())]
+      return [reload('process-plan', () => planning.refreshProcessPlanning(true))]
     case 'task':
     case 'milestone':
     case 'assignment':
-      return [reload('task-plan', () => planning.loadTaskPlanning())]
+      return [reload('task-plan', () => planning.refreshTaskPlanning(true))]
     case 'reorder':
-      return [reload('project-plan', () => planning.loadProjectPlanning()), reload('projects', () => app.loadProjects())]
+      return [
+        reload('project-plan', () => planning.refreshProjectPlanning(true)),
+        reload('projects', () => app.refreshProjects()),
+      ]
     default:
       return []
   }
@@ -180,8 +195,7 @@ export async function retryFailed(): Promise<void> {
 /** The "Skip" button: removes rejected entries (see outbox) */
 export { discardFailed } from './outbox'
 
-/** Queue polling interval for a "quiet" network return (without an online event) */
-const SYNC_POLL_MS = 15000
+/** Queue flushing & PULL are driven by the single 10-second maintenance cycle (offline/cycle.ts). */
 
 /** Initialization: reconcile at startup with a queue + trigger on network return */
 export async function initOfflineSync(): Promise<void> {
@@ -198,12 +212,7 @@ export async function initOfflineSync(): Promise<void> {
       if (shouldAutoSync() && !isLoggedOut() && pendingCount.value > 0) void runSync()
     })
   }
-  // The internet can return without an online event (the interface is always "up").
-  // runSync checks server availability itself (probe in flushOutbox), so the
-  // polling is safe and cheap — it only runs while there is a queue.
-  window.setInterval(() => {
-    if (shouldAutoSync() && !isLoggedOut() && pendingCount.value > 0 && !isOffline.value) void runSync()
-  }, SYNC_POLL_MS)
+  // Periodic flushing & the PULL cycle live in offline/cycle.ts (10 s loop).
 }
 
 /**

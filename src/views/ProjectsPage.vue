@@ -109,7 +109,7 @@ const menuItems = computed<ContextMenuItem[]>(() => {
 
 const ownerOptions = computed(() =>
   app.users
-    .filter((u) => u.role !== 'worker')
+    .filter((u) => u.preset !== 'worker')
     .sort(compareByName)
     .map((u) => ({ value: u.id ?? 0, label: u.name ?? '' })),
 )
@@ -291,10 +291,34 @@ onMounted(() => {
 <style scoped>
 @import '../styles/tokens.css';
 
+.pp {
+  /* Diagram fills the exact viewport height; the page never scrolls —
+     only the timeline does (rows vertical, calendar horizontal). */
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  --planner-max-height: calc(100dvh - 112px);
+}
+
+/* PlannerStates (.pg) + timeline as a flex column: tg-scroll fills the rest */
+.pp :deep(.pg) {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.pp :deep(.tg-scroll) {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+}
+
 .pp-toolbar {
   display: flex;
   justify-content: flex-end;
   margin-bottom: 12px;
+  flex: none;
 }
 .pp-fb {
   margin: 0 0 12px;

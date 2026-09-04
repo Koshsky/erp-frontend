@@ -2,22 +2,33 @@
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
-import { PasswordDialog } from '../components/common'
-import { useAppStore, useRbacStore } from '../store'
+import { PasswordDialog, UserPermissionsEditor } from '../components/common'
+import { useAppStore, useAuthStore, useRbacStore } from '../store'
 import { compareByName, translitPhio } from '../utils'
 import type { DtoAdminUserResponse, DtoCreateUserRequest, DtoUpdateUserRequest } from '@/api'
+import type { PermissionOverride } from '../components/common/UserPermissionsEditor/types'
 
 const route = useRoute()
 const router = useRouter()
 const app = useAppStore()
+const auth = useAuthStore()
 const rbac = useRbacStore()
 const { adminUsers, adminUsersError, users } = storeToRefs(app)
 
 /**
- * Dedicated route page for both create (users/new) and edit (users/:id/edit)
- * of an admin user. The mode is decided by the route name; the edit page loads
- * the user list itself (works on a direct URL / page reload) and shows an
- * error state instead of the form when the id is missing or unknown.
+ * Назначение пресета и индивидуальные права — admin-only бизнес-правила
+ * (сервис + гейт rbac.manage): не-админ с правом user_admin не видит ни
+ * селекта пресета, ни карточки прав, и никогда не отправляет их в Payload —
+ * иначе бэкенд отклонит сохранение.
+ */
+const isAdmin = computed(() => auth.user?.preset === 'admin')
+
+/**
+ * Одна страница для создания (users/new) и редактирования (users/:id/edit):
+ * карточка профиля + карточка «Права доступа» (админ). Режим определяется
+ * роутом; страница редактирования сама загружает список пользователей
+ * (работает на прямом URL/перезагрузке) и показывает ошибку, если id
+ * отсутствует или неизвестен.
  */
 const isEdit = computed(() => route.name === 'user-edit')
 
@@ -33,31 +44,31 @@ const form = reactive({
   firstName: '',
   middleName: '',
   login: '',
-  role: 'worker',
-  managerId: '', // '' — no manager
+  preset: 'worker',
+  managerId: '', // '' — нет руководителя
   position: '',
   hireDate: '',
   terminationDate: '',
 })
-/** The login field was edited manually — stop auto-filling from the full name */
+/** Логин редактировался вручную — автозаполнение из ФИО выключается */
 const loginTouched = ref(false)
 
-/** Error from the last submit (user-facing) */
+/** Ошибка последней отправки (для пользователя) */
 const error = ref<string | null>(null)
 const busy = ref(false)
-/** Edit mode: the admin user list is being loaded before the form shows */
+/** Режим редактирования: список пользователей грузится перед показом формы */
 const loadingEdit = ref(isEdit.value && adminUsers.value.length === 0)
-/** Edit mode: the user could not be loaded (bad id, unknown user, load failure) */
+/** Режим редактирования: пользователь не найден (плохой id/нет прав/ошибка) */
 const missing = ref(false)
-/** Manager id of the user as loaded — to detect a change on save */
+/** manager_id пользователя при загрузке — для определения изменения при сохранении */
 const savedManagerId = ref<number | null>(null)
-/** True after the first submit attempt — enables the validation message */
+/** true после первой попытки отправки — включает сообщение валидации */
 const submitAttempted = ref(false)
 
-/** First field, focused on entry for an immediate keyboard flow */
+/** Первое поле, фокус при входе для немедленного ввода с клавиатуры */
 const lastNameInput = ref<HTMLInputElement | null>(null)
 
-// Live default login (create mode only): translit of the full name, updated as ФИО is typed
+// Живой дефолтный логин (только создание): транслит ФИО, обновляется при вводе
 watch(
   () => [form.lastName, form.firstName, form.middleName] as const,
   () => {
@@ -66,7 +77,7 @@ watch(
   },
 )
 
-const ROLE_LABELS: Record<string, string> = {
+const PRESET_LABELS: Record<string, string> = {
   admin: 'Администратор',
   dp: 'Директор проектов',
   rp: 'Руководитель проекта',
@@ -74,20 +85,20 @@ const ROLE_LABELS: Record<string, string> = {
   worker: 'Работник',
 }
 
-const STATIC_ROLE_OPTIONS = Object.entries(ROLE_LABELS).map(([value, label]) => ({ value, label }))
+const STATIC_PRESET_OPTIONS = Object.entries(PRESET_LABELS).map(([value, label]) => ({ value, label }))
 
-/** Roles from the /rbac/roles catalog; fallback — the static list. */
-const roleOptions = computed(() =>
-  rbac.roles.length
-    ? rbac.roles.map((r) => ({ value: r.name ?? '', label: ROLE_LABELS[r.name ?? ''] ?? r.name ?? '' }))
-    : STATIC_ROLE_OPTIONS,
+/** Пресеты из /rbac/presets; запасной вариант — статический список. */
+const presetOptions = computed(() =>
+  rbac.presets.length
+    ? rbac.presets.map((p) => ({ value: p.name ?? '', label: PRESET_LABELS[p.name ?? ''] ?? p.name ?? '' }))
+    : STATIC_PRESET_OPTIONS,
 )
 
-/** Manager options: users with a non-worker role + "No manager" */
+/** Руководители: пользователи с пресетом не «worker» + «Без руководителя» */
 const managerOptions = computed(() => [
   { value: '', label: 'Без руководителя' },
   ...users.value
-    .filter((u) => u.id != null && u.role !== 'worker')
+    .filter((u) => u.id != null && u.preset !== 'worker')
     .sort(compareByName)
     .map((u) => ({ value: u.id as number, label: u.name ?? `#${u.id}` })),
 ])
@@ -97,18 +108,39 @@ function fillForm(u: DtoAdminUserResponse) {
   form.firstName = u.first_name ?? ''
   form.middleName = u.middle_name ?? ''
   form.login = u.username ?? ''
-  form.role = u.role ?? 'worker'
+  form.preset = u.preset ?? 'worker'
   form.managerId = u.manager_id != null ? String(u.manager_id) : ''
   form.position = u.position ?? ''
   form.hireDate = u.hire_date ?? ''
   form.terminationDate = u.termination_date ?? ''
   savedManagerId.value = u.manager_id ?? null
-  // In edit mode the login is entered manually — no auto-fill
+  // В редактировании логин вводится вручную — без автозаполнения
   loginTouched.value = true
 }
 
+// === Индивидуальные права (admin) ===
+/** Staged-переопределения (полный набор) */
+const permissionOverrides = ref<PermissionOverride[]>([])
+/** Есть ли несохранённые изменения прав */
+const permissionDirty = ref(false)
+/** Ошибка сохранения прав (показывается у карточки прав) */
+const permissionError = ref<string | null>(null)
+
+async function savePermissions(): Promise<boolean> {
+  const id = editingUserId.value
+  if (id == null) return false
+  permissionError.value = null
+  const ok = await rbac.saveUserPermissions(id, permissionOverrides.value)
+  if (!ok) {
+    permissionError.value = rbac.userPermissionsError ?? 'Не удалось сохранить права'
+    return false
+  }
+  permissionDirty.value = false
+  return true
+}
+
 onMounted(async () => {
-  void rbac.ensureRoles()
+  void rbac.ensurePresets()
   if (!users.value.length) void app.loadUsers()
   if (!isEdit.value) {
     await nextTick()
@@ -130,7 +162,7 @@ const canSubmit = computed(() => {
   return true
 })
 
-/** User-facing hint shown after a submit attempt left the form invalid */
+/** Подсказка после попытки отправки с невалидной формой */
 const validationMessage = computed(() => {
   if (!submitAttempted.value || canSubmit.value) return null
   if (form.lastName.trim() === '' || form.firstName.trim() === '') {
@@ -140,7 +172,7 @@ const validationMessage = computed(() => {
   return null
 })
 
-/** Generated password shown once after creation; close navigates back to the list */
+/** Сгенерированный пароль показывается один раз; закрытие — назад к списку */
 const passwordModal = ref<{ password: string; caption: string } | null>(null)
 
 function onPasswordClose() {
@@ -159,38 +191,54 @@ async function onSubmit() {
     const common = {
       last_name: form.lastName.trim(),
       first_name: form.firstName.trim(),
-      role: form.role,
-    }
+    } as const
     if (isEdit.value) {
       const id = editingUserId.value
       if (id == null) return
-      // Empty strings clear the field (unlike undefined, which would keep it)
+      // Пустые строки очищают поля (в отличие от undefined, оставляющего значение)
       const patch: DtoUpdateUserRequest = {
         ...common,
         middle_name: form.middleName.trim(),
         username: form.login.trim(),
         position: form.position.trim(),
       }
+      // Смена пресета — admin-only (сервис); не-админ не отправляет пресет вовсе
+      if (isAdmin.value) patch.preset = form.preset
       if (form.hireDate) patch.hire_date = form.hireDate
       if (form.terminationDate) patch.termination_date = form.terminationDate
       const ok = await app.updateUser(id, patch)
       const nextManager = form.managerId === '' ? null : Number(form.managerId)
       if (ok && nextManager !== savedManagerId.value) await app.updateManager(id, nextManager)
-      if (ok) {
+      // Индивидуальные права сохраняются отдельно (admin-only редактор)
+      let permsOk = true
+      if (ok && isAdmin.value && permissionDirty.value) permsOk = await savePermissions()
+      if (ok && permsOk) {
         void router.push('/users')
       } else {
-        error.value = adminUsersError.value
+        error.value = permsOk ? adminUsersError.value : permissionError.value
       }
       return
     }
     const payload: DtoCreateUserRequest = {
       ...common,
       middle_name: form.middleName.trim() || undefined,
+      // Не-админ с user_admin.create может создавать только workers.
+      preset: isAdmin.value ? form.preset : 'worker',
       position: form.position.trim(),
     }
+    // Переопределения черновика создаются вместе с пользователем (admin-only,
+    // бэкенд валидирует как /rbac/users/{id}/permissions).
+    if (isAdmin.value && permissionOverrides.value.length) {
+      payload.permissions = permissionOverrides.value.map((o) => ({
+        resource: o.resource,
+        action: o.action,
+        scope: o.scope ?? '',
+        granted: o.granted,
+      }))
+    }
     const login = form.login.trim()
-    // Send the login only if entered; an empty one lets the backend generate it
-    // (transliteration of the last name, uniqueness ensured by a numeric suffix).
+    // Логин отправляется только если введён; пустой — генерируется на бэкенде
+    // (транслит фамилии, уникальность — числовой суффикс).
     if (login) payload.username = login
     if (form.hireDate) payload.hire_date = form.hireDate
     if (form.terminationDate) payload.termination_date = form.terminationDate
@@ -214,88 +262,116 @@ async function onSubmit() {
 <template>
   <section class="ufp">
     <div class="ufp-head">
-      <RouterLink to="/users" class="ufp-back">← К списку пользователей</RouterLink>
       <h2 class="ufp-title">{{ isEdit ? 'Редактировать пользователя' : 'Создать пользователя' }}</h2>
     </div>
 
-    <!-- Edit mode: the user list is loading — show a placeholder, not an empty form -->
+    <!-- Редактирование: список грузится — заглушка вместо пустой формы -->
     <p v-if="loadingEdit" class="ufp-st">Загрузка...</p>
 
-    <!-- Edit mode: user could not be loaded — error state instead of the form -->
+    <!-- Редактирование: пользователь не найден — ошибка вместо формы -->
     <div v-else-if="missing" class="ufp-st">
       <p class="ufp-error">{{ error || 'Пользователь не найден' }}</p>
     </div>
 
-    <div v-else class="ufp-card">
-      <label class="ufp-field">
-        <span class="ufp-label">Фамилия *</span>
-        <input ref="lastNameInput" v-model="form.lastName" type="text" class="ufp-input" autocomplete="off" />
-      </label>
-      <label class="ufp-field">
-        <span class="ufp-label">Имя *</span>
-        <input v-model="form.firstName" type="text" class="ufp-input" autocomplete="off" />
-      </label>
-      <label class="ufp-field">
-        <span class="ufp-label">Отчество</span>
-        <input v-model="form.middleName" type="text" class="ufp-input" autocomplete="off" />
-      </label>
-      <label class="ufp-field">
-        <span class="ufp-label">Логин{{ isEdit ? ' *' : '' }}</span>
-        <input
-          v-model="form.login"
-          type="text"
-          class="ufp-input"
-          autocomplete="off"
-          placeholder="Автозаполняется из ФИО"
-          @input="loginTouched = true"
-        />
-        <span v-if="!isEdit && !loginTouched" class="ufp-hint">Заполняется автоматически по ФИО (транслит); можно изменить</span>
-      </label>
-      <label class="ufp-field">
-        <span class="ufp-label">Роль *</span>
-        <select v-model="form.role" class="ufp-input ufp-select">
-          <option v-for="opt in roleOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-        </select>
-      </label>
-      <label class="ufp-field">
-        <span class="ufp-label">Руководитель</span>
-        <select v-model="form.managerId" class="ufp-input ufp-select">
-          <option v-for="opt in managerOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-        </select>
-      </label>
-      <label class="ufp-field">
-        <span class="ufp-label">Должность</span>
-        <input v-model="form.position" type="text" class="ufp-input" placeholder="Свободный текст, например «Ведущий инженер»" />
-      </label>
-      <div class="ufp-row">
-        <label class="ufp-field">
-          <span class="ufp-label">Дата приёма</span>
-          <input v-model="form.hireDate" type="date" class="ufp-input" />
-        </label>
-        <label class="ufp-field">
-          <span class="ufp-label">Дата увольнения</span>
-          <input v-model="form.terminationDate" type="date" class="ufp-input" />
-        </label>
-      </div>
+    <div v-else class="ufp-layout">
+      <!-- Левая колонка: профиль в один столбик, закреплён на экране при
+           прокрутке длинной правой колонки прав -->
+      <aside class="ufp-aside">
+        <div class="ufp-card">
+          <label class="ufp-field">
+            <span class="ufp-label">Фамилия *</span>
+            <input ref="lastNameInput" v-model="form.lastName" type="text" class="ufp-input" autocomplete="off" />
+          </label>
+          <label class="ufp-field">
+            <span class="ufp-label">Имя *</span>
+            <input v-model="form.firstName" type="text" class="ufp-input" autocomplete="off" />
+          </label>
+          <label class="ufp-field">
+            <span class="ufp-label">Отчество</span>
+            <input v-model="form.middleName" type="text" class="ufp-input" autocomplete="off" placeholder="необязательно" />
+          </label>
+          <label class="ufp-field">
+            <span class="ufp-label">Логин{{ isEdit ? ' *' : '' }}</span>
+            <input
+              v-model="form.login"
+              type="text"
+              class="ufp-input"
+              autocomplete="off"
+              placeholder="Автозаполняется из ФИО"
+              @input="loginTouched = true"
+            />
+            <span v-if="!isEdit && !loginTouched" class="ufp-hint">Заполняется автоматически по ФИО (транслит); можно изменить</span>
+          </label>
+          <label class="ufp-field">
+            <span class="ufp-label">Руководитель</span>
+            <select v-model="form.managerId" class="ufp-input ufp-select">
+              <option v-for="opt in managerOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+            </select>
+          </label>
+          <label class="ufp-field">
+            <span class="ufp-label">Должность</span>
+            <input v-model="form.position" type="text" class="ufp-input" placeholder="Свободный текст, например «Ведущий инженер»" />
+          </label>
+          <div class="ufp-field">
+            <span class="ufp-label">Даты</span>
+            <div class="ufp-row">
+              <input v-model="form.hireDate" type="date" class="ufp-input" aria-label="Дата приёма" />
+              <input v-model="form.terminationDate" type="date" class="ufp-input" aria-label="Дата увольнения" />
+            </div>
+          </div>
 
-      <p v-if="error" class="ufp-error" role="alert">{{ error }}</p>
-      <p v-if="validationMessage" class="ufp-error" role="alert">{{ validationMessage }}</p>
-      <p v-if="!isEdit" class="ufp-note">Пароль генерируется автоматически и будет показан один раз.</p>
+          <p v-if="error" class="ufp-error" role="alert">{{ error }}</p>
+          <p v-if="validationMessage" class="ufp-error" role="alert">{{ validationMessage }}</p>
+          <p v-if="!isEdit" class="ufp-note">Пароль генерируется автоматически и будет показан один раз.</p>
 
-      <div class="ufp-actions">
-        <button type="button" class="ufp-btn" @click="router.push('/users')">Отмена</button>
-        <button type="button" class="ufp-add" :disabled="!canSubmit" @click="onSubmit">
-          {{
-            busy
-              ? isEdit
-                ? 'Сохранение…'
-                : 'Создание…'
-              : isEdit
-                ? 'Сохранить'
-                : 'Создать'
-          }}
-        </button>
-      </div>
+          <div class="ufp-actions">
+            <button type="button" class="ufp-btn" @click="router.push('/users')">Отмена</button>
+            <button type="button" class="ufp-add" :disabled="!canSubmit" @click="onSubmit">
+              {{
+                busy
+                  ? isEdit
+                    ? 'Сохранение…'
+                    : 'Создание…'
+                  : isEdit
+                    ? 'Сохранить'
+                    : 'Создать'
+              }}
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Правая колонка: права пользователя (admin only; гейт rbac.manage на
+           бэкенде). Общая страница для создания и редактирования: draft-режим
+           строится из выбранного пресета и отдаёт переопределения в payload. -->
+      <main class="ufp-main">
+        <div v-if="isAdmin" class="ufp-perms">
+          <!-- Переключатель пресета живёт в шапке карточки прав (см.
+               UserPermissionsEditor): смена пресета сразу перестраивает
+               базис правил ниже и отправляется вместе с профилем. -->
+          <UserPermissionsEditor
+            v-if="isEdit"
+            mode="user"
+            :user-id="editingUserId ?? 0"
+            :preset="form.preset"
+            :preset-options="presetOptions"
+            @update:preset="form.preset = $event"
+            @update:overrides="permissionOverrides = $event"
+            @update:dirty="permissionDirty = $event"
+          />
+          <UserPermissionsEditor
+            v-else
+            mode="draft"
+            :preset="form.preset"
+            :preset-options="presetOptions"
+            :user-id="0"
+            @update:preset="form.preset = $event"
+            @update:overrides="permissionOverrides = $event"
+            @update:dirty="permissionDirty = $event"
+          />
+          <p v-if="permissionError" class="ufp-error" role="alert">{{ permissionError }}</p>
+        </div>
+      </main>
     </div>
 
     <PasswordDialog
@@ -310,21 +386,18 @@ async function onSubmit() {
 <style scoped>
 @import '../styles/tokens.css';
 
+.ufp {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
 .ufp-head {
   display: flex;
   align-items: center;
   gap: 16px;
-  margin-bottom: 20px;
   flex-wrap: wrap;
-}
-.ufp-back {
-  color: var(--ui-accent);
-  text-decoration: none;
-  font-size: 14px;
-  white-space: nowrap;
-}
-.ufp-back:hover {
-  text-decoration: underline;
 }
 .ufp-title {
   font-size: 24px;
@@ -332,20 +405,53 @@ async function onSubmit() {
   color: var(--ui-text);
   margin: 0;
 }
+/* Две колонки одинаковой ширины, центрированы */
+.ufp-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  align-items: start;
+}
+.ufp-aside {
+  position: sticky;
+  top: 16px;
+  min-width: 0;
+}
+.ufp-main {
+  min-width: 0;
+}
+@media (max-width: 860px) {
+  .ufp-layout {
+    grid-template-columns: 1fr;
+  }
+  .ufp-aside {
+    position: static;
+  }
+}
 .ufp-card {
   background: var(--ui-surface);
   border-radius: var(--ui-radius-md);
   box-shadow: var(--ui-shadow-sm);
   padding: 24px;
-  max-width: 520px;
   display: flex;
   flex-direction: column;
   gap: 14px;
+}
+.ufp-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.ufp-perms {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 .ufp-field {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  min-width: 0;
 }
 .ufp-label {
   font-size: 13px;
@@ -374,11 +480,6 @@ async function onSubmit() {
 .ufp-hint {
   font-size: 12px;
   color: var(--ui-text-muted);
-}
-.ufp-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
 }
 .ufp-error {
   margin: 0;

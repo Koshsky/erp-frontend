@@ -2,8 +2,9 @@
 import { computed, onMounted, ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useRouter } from 'vue-router'
-import { ContextMenu, PasswordDialog } from '../components/common'
+import { ContextMenu, ConfirmDialog, PasswordDialog } from '../components/common'
 import type { ContextMenuItem } from '../components/common/ContextMenu'
+import { useConfirm } from '../composables/useConfirm'
 import { useContextMenu } from '../composables/useContextMenu'
 import { useAppStore, useRbacStore } from '../store'
 import type { DtoAdminUserResponse } from '@/api'
@@ -11,25 +12,19 @@ import type { DtoAdminUserResponse } from '@/api'
 const router = useRouter()
 const app = useAppStore()
 const rbac = useRbacStore()
-const { adminUsers, adminUsersLoading, adminUsersError, users } = storeToRefs(app)
+const { adminUsers, adminUsersLoading, adminUsersError } = storeToRefs(app)
 
-type ColumnKey = 'name' | 'username' | 'created_at' | 'role' | 'manager'
+type ColumnKey = 'name' | 'username'
 
-/** Table columns: header labels, per-column filters and sortable keys */
+/** Table columns: header labels and sortable keys */
 const COLUMNS: { key: ColumnKey; label: string }[] = [
   { key: 'name', label: 'ФИО' },
   { key: 'username', label: 'Логин' },
-  { key: 'created_at', label: 'Регистрация' },
-  { key: 'role', label: 'Роль' },
-  { key: 'manager', label: 'Руководитель' },
 ]
 
 /** Per-column filters, rendered under the table header */
 const fName = ref('')
 const fLogin = ref('')
-const fManager = ref('')
-const fRole = ref('') // '' — all roles
-const fRegDate = ref('') // yyyy-mm-dd
 
 /** Active sort: column key + direction (1 asc, -1 desc); default ФИО ↑ */
 const sortBy = ref<{ key: ColumnKey; dir: 1 | -1 }>({ key: 'name', dir: 1 })
@@ -47,63 +42,31 @@ function cmp(a: string, b: string): number {
   return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })
 }
 
-/** Sort-key value of a user for a column; dates compare fine as ISO strings */
+/** Sort-key value of a user for a column */
 function sortValue(u: DtoAdminUserResponse, key: ColumnKey): string {
   switch (key) {
     case 'name': return u.name ?? ''
     case 'username': return u.username ?? ''
-    case 'created_at': return u.created_at ?? ''
-    case 'role': return roleLabel(u.role)
-    case 'manager': return managerLabel(u)
   }
 }
 
 const filteredUsers = computed(() => {
   const qName = fName.value.trim().toLowerCase()
   const qLogin = fLogin.value.trim().toLowerCase()
-  const qManager = fManager.value.trim().toLowerCase()
   const list = adminUsers.value.filter((u) => {
     if (qName && !(u.name ?? '').toLowerCase().includes(qName)) return false
     if (qLogin && !(u.username ?? '').toLowerCase().includes(qLogin)) return false
-    if (qManager && !managerLabel(u).toLowerCase().includes(qManager)) return false
-    if (fRole.value && u.role !== fRole.value) return false
-    if (fRegDate.value && (u.created_at ?? '').slice(0, 10) !== fRegDate.value) return false
     return true
   })
   const { key, dir } = sortBy.value
   return list.sort((a, b) => dir * cmp(sortValue(a, key), sortValue(b, key)))
 })
 
-const ROLE_LABELS: Record<string, string> = {
-  admin: 'Администратор',
-  dp: 'Директор проектов',
-  rp: 'Руководитель проекта',
-  vp: 'Владелец процесса',
-  worker: 'Работник',
-}
-
-const STATIC_ROLE_OPTIONS = Object.entries(ROLE_LABELS).map(([value, label]) => ({ value, label }))
-
-/** Roles from the /rbac/roles catalog; fallback — the static list. */
-const roleOptions = computed(() =>
-  rbac.roles.length
-    ? rbac.roles.map((r) => ({ value: r.name ?? '', label: ROLE_LABELS[r.name ?? ''] ?? r.name ?? '' }))
-    : STATIC_ROLE_OPTIONS,
-)
-
-/** Date as DD.MM.YYYY (works with plain dates and RFC3339 datetimes), or «—» */
-function fmtDate(iso?: string): string {
-  if (!iso) return '—'
-  const [datePart] = iso.split('T')
-  const [y, m, d] = datePart.split('-')
-  return `${d}.${m}.${y}`
-}
-
-function roleLabel(role?: string): string {
-  return role ? (ROLE_LABELS[role] ?? role) : '—'
-}
-
-// === Row actions (context menu) ===
+/**
+ * Row actions (context menu), gated by the user-admin rights: editing a user
+ * (who is also an employee) happens only in this admin section and only with
+ * the user.edit permission.
+ */
 interface RowMenuState {
   x: number
   y: number
@@ -111,13 +74,20 @@ interface RowMenuState {
 }
 const menu = ref<RowMenuState | null>(null)
 
-const menuItems = computed<ContextMenuItem[]>(() => [
-  { id: 'edit-user', label: 'Редактировать' },
-  { id: 'reset-password', label: 'Сбросить пароль' },
-])
+const menuItems = computed<ContextMenuItem[]>(() => {
+  const items: ContextMenuItem[] = []
+  if (rbac.can('user_admin', 'update')) {
+    items.push({ id: 'edit-user', label: 'Редактировать' })
+    items.push({ id: 'reset-password', label: 'Сбросить пароль' })
+  }
+  if (rbac.can('user_admin', 'delete')) {
+    items.push({ id: 'delete-user', label: 'Удалить пользователя' })
+  }
+  return items
+})
 
 function onRowContextMenu(e: MouseEvent, u: DtoAdminUserResponse) {
-  if (u.id == null) return
+  if (u.id == null || !menuItems.value.length) return
   openMenu({ x: e.clientX, y: e.clientY, userId: u.id })
 }
 
@@ -130,11 +100,26 @@ function handleSelect(id: string) {
   if (id === 'edit-user') {
     goToEdit(u)
   } else if (id === 'reset-password') onResetPassword(u)
+  else if (id === 'delete-user') askDelete(u)
 }
 
-/** Row click → the user's edit page (users/:id/edit) */
+// === Deleting a user (soft delete; lifecycle lives in this admin section) ===
+const { confirm: confirmDialog, ask, proceed, cancel } = useConfirm()
+const deleteTarget = ref<string | null>(null)
+
+function askDelete(u: DtoAdminUserResponse) {
+  deleteTarget.value = u.id != null ? String(u.id) : null
+  ask(`Удалить пользователя «${u.name ?? u.username ?? ''}»?`, async () => {
+    const id = Number(deleteTarget.value)
+    if (!Number.isFinite(id) || id <= 0) return
+    deleteTarget.value = null
+    await app.deleteUser(id)
+  })
+}
+
+/** Row click → the user's edit page (users/:id/edit); requires the user.edit right */
 function goToEdit(u: DtoAdminUserResponse) {
-  if (u.id == null) return
+  if (u.id == null || !rbac.can('user_admin', 'update')) return
   void router.push(`/users/${u.id}/edit`)
 }
 
@@ -145,12 +130,6 @@ function onRowKeydown(e: KeyboardEvent, u: DtoAdminUserResponse) {
     e.preventDefault()
     goToEdit(u)
   }
-}
-
-// === Manager (for the label; editing is on the user form page) ===
-function managerLabel(user: DtoAdminUserResponse): string {
-  if (user.manager_id == null) return '—'
-  return users.value.find((u) => u.id === user.manager_id)?.name ?? `#${user.manager_id}`
 }
 
 // === Showing the generated password (once) ===
@@ -167,20 +146,8 @@ async function onResetPassword(user: DtoAdminUserResponse) {
   showPassword(password ?? undefined, `Новый пароль для «${user.name}»`)
 }
 
-// === Changing the role (fast, inline) ===
-const roleChanging = ref(false)
-async function onChangeRole(user: DtoAdminUserResponse, event: Event) {
-  const role = (event.target as HTMLSelectElement).value
-  if (user.id == null || role === user.role) return
-  roleChanging.value = true
-  await app.updateUser(user.id, { role })
-  roleChanging.value = false
-}
-
 onMounted(() => {
   void app.loadAdminUsers()
-  if (!users.value.length) void app.loadUsers()
-  void rbac.ensureRoles()
 })
 </script>
 
@@ -189,7 +156,9 @@ onMounted(() => {
     <div class="up-head">
       <h2 class="up-title">Пользователи</h2>
       <div class="up-actions">
-        <button type="button" class="up-add" @click="router.push('/users/new')">Создать пользователя</button>
+        <button v-if="rbac.can('user_admin', 'create')" type="button" class="up-add" @click="router.push('/users/new')">
+          Создать пользователя
+        </button>
       </div>
     </div>
 
@@ -219,12 +188,6 @@ onMounted(() => {
       <div class="tr th th-filters">
         <input v-model="fName" type="search" class="th-filter" placeholder="по ФИО" />
         <input v-model="fLogin" type="search" class="th-filter" placeholder="по логину" />
-        <input v-model="fRegDate" type="date" class="th-filter" :title="'Фильтр по дате регистрации'" />
-        <select v-model="fRole" class="th-filter" :title="'Фильтр по роли'">
-          <option value="">Все роли</option>
-          <option v-for="opt in roleOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-        </select>
-        <input v-model="fManager" type="search" class="th-filter" placeholder="по руководителю" />
       </div>
       <template v-if="filteredUsers.length">
         <div
@@ -240,25 +203,20 @@ onMounted(() => {
         >
           <div class="name">{{ u.name }}</div>
           <div class="mono">{{ u.username }}</div>
-          <div>{{ fmtDate(u.created_at) }}</div>
-          <div>
-            <select
-              class="up-role"
-              :value="u.role"
-              :disabled="roleChanging"
-              @click.stop
-              @change="onChangeRole(u, $event)"
-            >
-              <option v-for="opt in roleOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-            </select>
-          </div>
-          <div>{{ managerLabel(u) }}</div>
         </div>
       </template>
       <p v-else class="up-st">{{ adminUsers.length ? 'Ничего не найдено' : 'Нет данных' }}</p>
     </div>
 
     <ContextMenu v-bind="menuBind" @select="select" @close="closeMenu" />
+
+    <ConfirmDialog
+      :open="!!confirmDialog"
+      :message="confirmDialog?.message ?? ''"
+      :confirm-label="confirmDialog?.confirmLabel"
+      @confirm="proceed"
+      @close="cancel"
+    />
 
     <!-- Generated password shown once (after reset) -->
     <PasswordDialog
@@ -310,20 +268,6 @@ onMounted(() => {
   opacity: 0.55;
   cursor: not-allowed;
 }
-.up-role {
-  box-sizing: border-box;
-  border: 1px solid var(--ui-border-strong);
-  border-radius: var(--ui-radius-sm);
-  padding: 6px 10px;
-  font-size: 13px;
-  font-family: inherit;
-  color: var(--ui-text);
-  background: var(--ui-surface);
-  outline: none;
-}
-.up-role:focus {
-  border-color: var(--ui-accent);
-}
 .up-st {
   color: var(--ui-text-2);
   font-size: 14px;
@@ -343,7 +287,7 @@ onMounted(() => {
 }
 .tr {
   display: grid;
-  grid-template-columns: 1.3fr 1fr 110px 1fr 1fr;
+  grid-template-columns: 1.3fr 1fr;
   gap: 8px;
   padding: 12px 20px;
   border-bottom: 1px solid var(--ui-border);

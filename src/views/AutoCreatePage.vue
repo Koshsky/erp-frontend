@@ -4,6 +4,7 @@ import { onBeforeRouteLeave } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import { useAppStore } from '../store'
 import { ColorField, ConfirmDialog } from '../components/common'
+import { randomPaletteColor } from '../components/common/ColorField/palette'
 import { useConfirm } from '../composables/useConfirm'
 import type { DtoAutoCreateConfig } from '@/api'
 
@@ -33,6 +34,30 @@ const LIMITS = {
   maxQuantity: 99,
 } as const
 
+/**
+ * Neutral "background" color of auto-created tasks — the two-type color scheme:
+ * accent (vivid) marks a few important tasks, neutral (this shared constant)
+ * is the calm backdrop for the rest. The type is encoded in the task color
+ * value; the constant must match the seed migration
+ * (migrations/plugins/V905__auto_create_two_type_colors.sql).
+ */
+const NEUTRAL_TASK_COLOR = '#94A3B8'
+
+/** Task color type: accent (a vivid custom color) vs neutral (the shared background tone) */
+function isAccentTask(color: string): boolean {
+  return color !== '' && color !== NEUTRAL_TASK_COLOR
+}
+
+/** Switches a task's color type; switching to accent picks a random vivid color */
+function setTaskType(t: LocalTask, type: 'accent' | 'neutral') {
+  if (type === 'neutral') {
+    t.color = NEUTRAL_TASK_COLOR
+  } else if (!isAccentTask(t.color)) {
+    t.color = randomPaletteColor()
+  }
+  dirty.value = true
+}
+
 const app = useAppStore()
 const { autoCreateConfig, autoCreateLoading, autoCreateError, users, resources } = storeToRefs(app)
 
@@ -47,7 +72,7 @@ const { confirm: confirmDialog, ask, proceed, cancel } = useConfirm()
 /** Process owner candidates (excluding workers) */
 const ownerOptions = computed(() =>
   users.value
-    .filter((u) => u.role !== 'worker')
+    .filter((u) => u.preset !== 'worker')
     .sort((a, b) => (a.name ?? '').localeCompare(b.name ?? '', 'ru'))
     .map((u) => ({ value: u.id as number, label: u.name ?? `#${u.id}` })),
 )
@@ -173,7 +198,7 @@ function moveProcess(i: number, dir: -1 | 1) {
 }
 
 function addTask(p: LocalProcess) {
-  p.tasks.push({ title: '', color: '', resources: [] })
+  p.tasks.push({ title: '', color: NEUTRAL_TASK_COLOR, resources: [] })
   dirty.value = true
 }
 
@@ -266,7 +291,9 @@ async function onSave() {
       color: p.color || undefined,
       tasks: p.tasks.map((t) => ({
         title: t.title.trim(),
-        color: t.color || undefined,
+        // The two-type scheme is explicit in the payload: accent keeps its
+        // vivid color, neutral always stores the shared background tone.
+        color: isAccentTask(t.color) ? (t.color || undefined) : NEUTRAL_TASK_COLOR,
         resources: t.resources.map((r) => ({ resource_id: r.resource_id, quantity: r.quantity })),
       })),
     })),
@@ -311,6 +338,10 @@ async function onSave() {
           <div v-for="(p, pi) in form.processes" :key="pi" class="ac-preview-node">
             <div class="ac-preview-p">{{ p.title || `Процесс ${pi + 1}` }}</div>
             <div v-for="(t, ti) in p.tasks" :key="ti" class="ac-preview-task">
+              <span
+                class="ac-swatch"
+                :style="{ background: isAccentTask(t.color) ? (t.color || 'var(--ui-accent)') : NEUTRAL_TASK_COLOR }"
+              />
               <span class="ac-preview-t">{{ t.title || `Задача ${ti + 1}` }}</span>
               <span v-if="t.resources.length" class="ac-preview-res">
                 {{ t.resources.map((r) => `${resourceLabel(r.resource_id)} × ${r.quantity}`).join(', ') }}
@@ -340,7 +371,38 @@ async function onSave() {
               <button type="button" class="ac-move" :disabled="ti === 0" @click="moveTask(pi, ti, -1)" aria-label="Переместить задачу вверх">↑</button>
               <button type="button" class="ac-move" :disabled="ti === p.tasks.length - 1" @click="moveTask(pi, ti, 1)" aria-label="Переместить задачу вниз">↓</button>
               <input v-model="t.title" type="text" class="ac-input" placeholder="Название задачи" aria-label="Название задачи" @input="dirty = true" />
-              <ColorField v-model="t.color" size="sm" label="Цвет задачи" class="ac-color" @update:model-value="dirty = true" />
+              <div class="ac-type" role="group" :aria-label="`Тип цвета задачи «${t.title || ti + 1}»`">
+                <button
+                  type="button"
+                  class="ac-type-btn"
+                  :class="{ active: !isAccentTask(t.color) }"
+                  @click="setTaskType(t, 'neutral')"
+                >
+                  Фон
+                </button>
+                <button
+                  type="button"
+                  class="ac-type-btn"
+                  :class="{ active: isAccentTask(t.color) }"
+                  @click="setTaskType(t, 'accent')"
+                >
+                  Акцент
+                </button>
+              </div>
+              <ColorField
+                v-if="isAccentTask(t.color)"
+                v-model="t.color"
+                size="sm"
+                label="Цвет задачи"
+                class="ac-color"
+                @update:model-value="dirty = true"
+              />
+              <span
+                v-else
+                class="ac-swatch ac-swatch-neutral"
+                :style="{ background: NEUTRAL_TASK_COLOR }"
+                :title="`Фоновый цвет: ${NEUTRAL_TASK_COLOR}`"
+              />
               <button type="button" class="ac-del" @click="removeTask(p, ti)">×</button>
             </div>
             <div v-if="t.resources.length" class="ac-resources">
@@ -473,8 +535,45 @@ async function onSave() {
 .ac-preview-task {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 6px;
   padding-left: 14px;
+}
+.ac-swatch {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  border: 1px solid var(--ui-border);
+}
+.ac-swatch-neutral {
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+}
+.ac-type {
+  display: inline-flex;
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius-sm);
+  overflow: hidden;
+  flex: none;
+}
+.ac-type-btn {
+  border: none;
+  background: var(--ui-surface);
+  color: var(--ui-text-2);
+  font-size: 12px;
+  padding: 6px 10px;
+  cursor: pointer;
+  transition: background var(--ui-duration), color var(--ui-duration);
+}
+.ac-type-btn + .ac-type-btn {
+  border-left: 1px solid var(--ui-border-strong);
+}
+.ac-type-btn.active {
+  background: var(--ui-accent-soft);
+  color: var(--ui-accent);
+  font-weight: 700;
 }
 .ac-preview-t {
   color: var(--ui-text-2);

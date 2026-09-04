@@ -21,7 +21,7 @@ async function onPush() {
 <template>
   <transition name="offline-fade">
     <div v-if="isOffline" class="offline-banner" role="status">
-      <span>Бэкенд недоступен: показаны сохранённые данные, изменения копятся в очереди</span>
+      <span>Сервер недоступен — показаны сохранённые данные. Изменения отправятся автоматически при появлении сети.</span>
       <button
         v-if="pendingCount > 0"
         type="button"

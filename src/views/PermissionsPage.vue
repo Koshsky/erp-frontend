@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
- * Access permissions — a role-centric editor.
- * Roles on the left, capabilities of the selected role by section on the right.
+ * Access permissions — a preset-centric editor.
+ * Presets on the left, capabilities of the selected preset by section on the right.
  * Scopes are rendered in human language in the resource context
  * ("in own processes", "in own projects", "own only", "all").
  * Source of truth — the matrix on the backend (/api/v1/rbac/*); edits are
@@ -14,9 +14,9 @@ import { useRbacStore } from '../store'
 import { useConfirm } from '../composables/useConfirm'
 
 const rbac = useRbacStore()
-const { roles, rules, matrix, loading, error, saving } = storeToRefs(rbac)
+const { presets, presetRules, matrix, loading, error, saving } = storeToRefs(rbac)
 
-/** Selected role (by default — the first one from the catalog, not admin). */
+/** Selected preset (by default — the first one from the catalog, not admin). */
 const selected = ref('')
 
 /** Resource and action codes (mirror the backend codecs). */
@@ -38,6 +38,7 @@ const RESOURCE_LABELS: Record<string, string> = {
   resource: 'ресурсов табеля',
   worker: 'сотрудников',
   user_catalog: 'каталога пользователей',
+  user_admin: 'пользователей',
   rbac_config: 'настроек администрирования',
 }
 
@@ -52,6 +53,7 @@ const ENTITY_NAMES: Record<string, string> = {
   resource: 'Ресурсы табеля',
   worker: 'Сотрудники',
   user_catalog: 'Каталог пользователей',
+  user_admin: 'Пользователи (администрирование)',
   rbac_config: 'Настройки администрирования',
 }
 
@@ -124,6 +126,10 @@ const SCOPE_OPTIONS: Record<string, { value: string; label: string }[]> = {
     { value: 'none', label: 'Нет доступа' },
     { value: 'all', label: 'Доступен' },
   ],
+  user_admin: [
+    { value: 'none', label: 'Нет доступа' },
+    { value: 'all', label: 'Доступен' },
+  ],
   rbac_config: [
     { value: 'none', label: 'Нет доступа' },
     { value: 'all', label: 'Доступен' },
@@ -134,7 +140,7 @@ const SCOPE_OPTIONS: Record<string, { value: string; label: string }[]> = {
 const GROUPS = [
   { key: 'planning', title: 'Планирование', resources: ['project', 'process', 'task', 'milestone', 'assignment'] },
   { key: 'timesheet', title: 'Табель', resources: ['state', 'resource', 'worker'] },
-  { key: 'advanced', title: 'Дополнительные ресурсы', resources: ['user_catalog', 'rbac_config'] },
+  { key: 'advanced', title: 'Дополнительные ресурсы', resources: ['user_catalog', 'user_admin', 'rbac_config'] },
 ] as const
 
 const ACTIONS = ['view', 'create', 'update', 'delete'] as const
@@ -143,8 +149,8 @@ const ACTIONS = ['view', 'create', 'update', 'delete'] as const
 const effective = computed<Record<string, string>>(() => {
   const map: Record<string, string> = {}
   for (const cell of matrix.value) {
-    if (!cell.role || !cell.resource || !cell.action || !cell.scope) continue
-    map[cellKey(cell.role, cell.resource, cell.action)] = cell.scope
+    if (!cell.preset || !cell.resource || !cell.action || !cell.scope) continue
+    map[cellKey(cell.preset, cell.resource, cell.action)] = cell.scope
   }
   return map
 })
@@ -152,19 +158,19 @@ const effective = computed<Record<string, string>>(() => {
 /** Rule id for deletion. */
 const ruleIdByCell = computed<Record<string, number>>(() => {
   const map: Record<string, number> = {}
-  for (const rule of rules.value) {
+  for (const rule of presetRules.value) {
     if (rule.id == null) continue
-    map[cellKey(rule.role ?? '', rule.resource ?? '', rule.action ?? '')] = rule.id
+    map[cellKey(rule.preset ?? '', rule.resource ?? '', rule.action ?? '')] = rule.id
   }
   return map
 })
 
-function cellKey(role: string, resource: string, action: string): string {
-  return `${role}|${resource}|${action}`
+function cellKey(preset: string, resource: string, action: string): string {
+  return `${preset}|${resource}|${action}`
 }
 
-function cellValue(role: string, resource: string, action: string): string {
-  return staged[cellKey(role, resource, action)] ?? effective.value[cellKey(role, resource, action)] ?? 'none'
+function cellValue(preset: string, resource: string, action: string): string {
+  return staged[cellKey(preset, resource, action)] ?? effective.value[cellKey(preset, resource, action)] ?? 'none'
 }
 
 /** Human-readable scope label in the resource context. */
@@ -173,8 +179,8 @@ function scopeLabel(resource: string, scope: string): string {
   return opt?.label ?? 'Нет доступа'
 }
 
-/** Human-readable names of known roles (the DB catalog keeps descriptions in English). */
-const ROLE_TITLES: Record<string, string> = {
+/** Human-readable names of known presets (the DB catalog keeps descriptions in English). */
+const PRESET_TITLES: Record<string, string> = {
   admin: 'Администратор',
   dp: 'Директор проектов',
   rp: 'Руководитель проекта',
@@ -182,14 +188,14 @@ const ROLE_TITLES: Record<string, string> = {
   worker: 'Работник',
 }
 
-function roleTitle(code: string): string {
-  return ROLE_TITLES[code] ?? code
+function presetTitle(code: string): string {
+  return PRESET_TITLES[code] ?? code
 }
 
-/** Role tabs: the catalog without the admin bypass (admin is a code invariant, not an editable tab). */
-const roleList = computed(() => {
+/** Preset tabs: the catalog without the admin bypass (admin is a code invariant, not an editable tab). */
+const presetList = computed(() => {
   const names: string[] = []
-  for (const r of roles.value) {
+  for (const r of presets.value) {
     if (r.name && r.name !== 'admin' && !names.includes(r.name)) names.push(r.name)
   }
   return names
@@ -204,7 +210,7 @@ const dirtyKeys = computed<string[]>(() =>
 /** Change descriptions for the save bar. */
 const dirtyChanges = computed(() =>
   dirtyKeys.value.map((key) => {
-    const [role, resource, action] = key.split('|')
+    const [preset, resource, action] = key.split('|')
     const from = effective.value[key] ?? 'none'
     const to = staged[key]
     return `${ACTION_LABELS[action] ?? action} ${RESOURCE_LABELS[resource] ?? resource}: ${scopeLabel(resource, to)}${from !== 'none' ? ` (было: ${scopeLabel(resource, from)})` : ''}`
@@ -228,17 +234,17 @@ async function save() {
   saveMsg.value = null
   const failures: string[] = []
   for (const key of keys) {
-    const [role, resource, action] = key.split('|')
+    const [preset, resource, action] = key.split('|')
     const scope = staged[key]
     let ok: boolean
     if (scope === 'none') {
       const id = ruleIdByCell.value[key]
       ok = id != null ? await rbac.deleteRule(id) : true
     } else {
-      ok = await rbac.upsertRule({ role, resource, action, scope })
+      ok = await rbac.upsertRule({ preset, resource, action, scope })
     }
     if (!ok) {
-      failures.push(`${role} · ${ACTION_LABELS[action] ?? action} ${RESOURCE_LABELS[resource] ?? resource}`)
+      failures.push(`${preset} · ${ACTION_LABELS[action] ?? action} ${RESOURCE_LABELS[resource] ?? resource}`)
     }
   }
   await rbac.reloadRules()
@@ -261,62 +267,62 @@ const { confirm: confirmDialog, ask, proceed, cancel } = useConfirm()
 
 // === Role management (catalog) ===
 
-/** Role name pattern: latin letters, digits, «-», «_» (mirrors the backend codec). */
-const ROLE_NAME_RE = /^[a-zA-Z0-9_-]+$/
-const newRoleName = ref('')
-const newRoleDesc = ref('')
-const roleMsg = ref<{ ok: boolean; text: string } | null>(null)
-/** Client-side validation error of the required role-name field (null = valid). */
-const newRoleNameError = ref<string | null>(null)
+/** Preset name pattern: latin letters, digits, «-», «_» (mirrors the backend codec). */
+const PRESET_NAME_RE = /^[a-zA-Z0-9_-]+$/
+const newPresetName = ref('')
+const newPresetDesc = ref('')
+const presetMsg = ref<{ ok: boolean; text: string } | null>(null)
+/** Client-side validation error of the required preset-name field (null = valid). */
+const newPresetNameError = ref<string | null>(null)
 const nameInput = ref<HTMLInputElement | null>(null)
 
-function failRoleName(message: string) {
-  newRoleNameError.value = message
+function failPresetName(message: string) {
+  newPresetNameError.value = message
   nameInput.value?.focus()
 }
 
 /** Drop the highlight as soon as the user starts typing. */
-watch(newRoleName, () => {
-  newRoleNameError.value = null
+watch(newPresetName, () => {
+  newPresetNameError.value = null
 })
 
-async function onCreateRole() {
-  const name = newRoleName.value.trim()
+async function onCreatePreset() {
+  const name = newPresetName.value.trim()
   if (!name) {
-    failRoleName('Укажите имя роли (латиница, цифры, «-», «_»), описание можно не заполнять')
+    failPresetName('Укажите имя пресета (латиница, цифры, «-», «_»), описание можно не заполнять')
     return
   }
-  if (!ROLE_NAME_RE.test(name)) {
-    failRoleName('Имя роли: только латиница, цифры, «-», «_»')
+  if (!PRESET_NAME_RE.test(name)) {
+    failPresetName('Имя пресета: только латиница, цифры, «-», «_»')
     return
   }
-  newRoleNameError.value = null
-  const ok = await rbac.createRole({ name, description: newRoleDesc.value.trim() })
-  roleMsg.value = ok ? { ok: true, text: 'Роль создана' } : { ok: false, text: error.value ?? 'Не удалось создать роль' }
+  newPresetNameError.value = null
+  const ok = await rbac.createPreset({ name, description: newPresetDesc.value.trim() })
+  presetMsg.value = ok ? { ok: true, text: 'Пресет создан' } : { ok: false, text: error.value ?? 'Не удалось создать пресет' }
   if (ok) {
-    newRoleName.value = ''
-    newRoleDesc.value = ''
+    newPresetName.value = ''
+    newPresetDesc.value = ''
   }
 }
 
-async function onUpdateRoleDesc(roleName: string) {
-  const desc = window.prompt('Новое описание роли', rbac.roles.find((r) => r.name === roleName)?.description ?? '')
+async function onUpdatePresetDesc(presetName: string) {
+  const desc = window.prompt('Новое описание пресета', rbac.presets.find((r) => r.name === presetName)?.description ?? '')
   if (desc == null) return
-  const ok = await rbac.updateRole(roleName, desc.trim())
-  roleMsg.value = ok ? { ok: true, text: 'Описание обновлено' } : { ok: false, text: 'Не удалось обновить описание' }
+  const ok = await rbac.updatePreset(presetName, desc.trim())
+  presetMsg.value = ok ? { ok: true, text: 'Описание обновлено' } : { ok: false, text: 'Не удалось обновить описание' }
 }
 
-function onDeleteRole(roleName: string) {
-  if (roleName === 'admin') return
+function onDeletePreset(presetName: string) {
+  if (presetName === 'admin') return
   ask(
-    'Удалить роль «' + roleName + '»? Назначенные пользователи сохранятся, но потеряют права этой роли; правила роли будут удалены.',
+    'Удалить пресет «' + presetName + '»? Назначенные пользователи сохранятся, но потеряют базовые права этого пресета; правила пресета будут удалены.',
     () => {
       void (async () => {
-        const ok = await rbac.deleteRole(roleName)
-        roleMsg.value = ok ? null : { ok: false, text: 'Не удалось удалить роль' }
+        const ok = await rbac.deletePreset(presetName)
+        presetMsg.value = ok ? null : { ok: false, text: 'Не удалось удалить пресет' }
       })()
     },
-    'Удалить роль',
+    'Удалить пресет',
   )
 }
 
@@ -330,15 +336,15 @@ function onReset() {
   }, 'Сбросить')
 }
 
-/** Select the default role after the catalog is loaded. */
-watch(roleList, (list) => {
+/** Select the default preset after the catalog is loaded. */
+watch(presetList, (list) => {
   if ((!selected.value || !list.includes(selected.value)) && list.length) {
     selected.value = list[0]
   }
 })
 
 onMounted(() => {
-  if (!rules.value.length && !loading.value) {
+  if (!presetRules.value.length && !loading.value) {
     void rbac.loadRbac()
   }
 })
@@ -349,7 +355,7 @@ onMounted(() => {
     <div class="pm-head">
       <h2 class="pm-title">Права доступа</h2>
       <p class="pm-note">
-        Выберите роль — ниже показано, что она умеет. Правки применяются сразу; на других
+        Выберите пресет — ниже показано, какие права он даёт. Правки применяются сразу; на других
         сессиях — в пределах TTL (до 30 секунд). «Только своё» — записи, владельцем
         которых является сам пользователь; «Свои и в своих…» — владелец записи или
         любой из вышестоящих по цепочке (для задач — владелец задачи, процесса или
@@ -357,28 +363,28 @@ onMounted(() => {
       </p>
     </div>
 
-    <p v-if="loading && !rules.length" class="pm-load">Загрузка...</p>
-    <p v-if="error && !rules.length" class="pm-load er">{{ error }}</p>
+    <p v-if="loading && !presetRules.length" class="pm-load">Загрузка...</p>
+    <p v-if="error && !presetRules.length" class="pm-load er">{{ error }}</p>
 
-    <div v-if="rules.length && roleList.length" class="pm-layout">
+    <div v-if="presetRules.length && presetList.length" class="pm-layout">
       <!-- Roles -->
-      <nav class="pm-roles">
+      <nav class="pm-presets">
         <button
-          v-for="role in roleList"
-          :key="role"
+          v-for="preset in presetList"
+          :key="preset"
           type="button"
-          class="pm-role-btn"
-          :class="{ active: role === selected }"
-          @click="selected = role"
+          class="pm-preset-btn"
+          :class="{ active: preset === selected }"
+          @click="selected = preset"
         >
-          <span class="pm-role-code">{{ role }}</span>
-          <span class="pm-role-name">
-            {{ roleTitle(role) }}
+          <span class="pm-preset-code">{{ preset }}</span>
+          <span class="pm-preset-name">
+            {{ presetTitle(preset) }}
           </span>
         </button>
       </nav>
 
-      <!-- Editor of the selected role -->
+      <!-- Editor of the selected preset -->
       <div class="pm-editor">
         <div v-for="group in GROUPS" :key="group.key" class="pm-group">
           <h3 class="pm-group-title">{{ group.title }}</h3>
@@ -416,42 +422,42 @@ onMounted(() => {
           </p>
         </div>
 
-        <h3 class="pm-section-title">Роли</h3>
+        <h3 class="pm-section-title">Пресеты</h3>
         <p class="pm-hint">
-          Каталог ролей: создание даёт право назначать роль пользователям; удаление снимает
-          правила роли и права назначенных пользователей (роль «admin» защищена инвариантом).
+          Каталог пресетов: создание даёт право назначать пресет пользователям; удаление снимает
+          правила пресета и базовые права назначенных пользователей (пресет «admin» защищён инвариантом).
         </p>
-        <div class="pm-roles-editor">
-          <div class="pm-role-create">
+        <div class="pm-presets-editor">
+          <div class="pm-preset-create">
             <label class="pm-field">
-              <span class="pm-field-label">Имя роли<span class="pm-req" title="обязательное поле">*</span></span>
+              <span class="pm-field-label">Имя пресета<span class="pm-req" title="обязательное поле">*</span></span>
               <input
                 ref="nameInput"
-                v-model="newRoleName"
+                v-model="newPresetName"
                 class="pm-input"
-                :class="{ invalid: !!newRoleNameError }"
-                :aria-invalid="!!newRoleNameError"
+                :class="{ invalid: !!newPresetNameError }"
+                :aria-invalid="!!newPresetNameError"
                 maxlength="32"
-                placeholder="имя роли, напр. auditor"
+                placeholder="имя пресета, напр. auditor"
               />
             </label>
             <label class="pm-field">
               <span class="pm-field-label">Описание</span>
-              <input v-model="newRoleDesc" class="pm-input" maxlength="80" placeholder="описание" />
+              <input v-model="newPresetDesc" class="pm-input" maxlength="80" placeholder="описание" />
             </label>
-            <button type="button" class="pm-btn primary" @click="onCreateRole">Создать роль</button>
+            <button type="button" class="pm-btn primary" @click="onCreatePreset">Создать пресет</button>
           </div>
-          <p v-if="newRoleNameError" class="pm-field-error" role="alert">{{ newRoleNameError }}</p>
-          <p v-if="roleMsg" class="pm-save-msg" :class="{ er: !roleMsg.ok }">{{ roleMsg.text }}</p>
-          <div class="pm-role-list">
-            <div v-for="r in roles" :key="r.name" class="pm-role-editable">
-              <div class="pm-role-editable-main">
-                <span class="pm-role-code">{{ r.name }}</span>
-                <span class="pm-role-editable-desc">{{ r.description || '—' }}</span>
+          <p v-if="newPresetNameError" class="pm-field-error" role="alert">{{ newPresetNameError }}</p>
+          <p v-if="presetMsg" class="pm-save-msg" :class="{ er: !presetMsg.ok }">{{ presetMsg.text }}</p>
+          <div class="pm-preset-list">
+            <div v-for="r in presets" :key="r.name" class="pm-preset-editable">
+              <div class="pm-preset-editable-main">
+                <span class="pm-preset-code">{{ r.name }}</span>
+                <span class="pm-preset-editable-desc">{{ r.description || '—' }}</span>
               </div>
-              <div class="pm-role-editable-actions">
-                <button type="button" class="pm-btn" @click="onUpdateRoleDesc(r.name ?? '')">Описание</button>
-                <button type="button" class="pm-btn danger" :disabled="r.name === 'admin'" @click="onDeleteRole(r.name ?? '')" title="админ — инвариант в коде">Удалить</button>
+              <div class="pm-preset-editable-actions">
+                <button type="button" class="pm-btn" @click="onUpdatePresetDesc(r.name ?? '')">Описание</button>
+                <button type="button" class="pm-btn danger" :disabled="r.name === 'admin'" @click="onDeletePreset(r.name ?? '')" title="админ — инвариант в коде">Удалить</button>
               </div>
             </div>
           </div>
@@ -519,14 +525,14 @@ onMounted(() => {
   gap: 20px;
   align-items: start;
 }
-.pm-roles {
+.pm-presets {
   display: flex;
   flex-direction: column;
   gap: 8px;
   position: sticky;
   top: 16px;
 }
-.pm-role-btn {
+.pm-preset-btn {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -540,23 +546,23 @@ onMounted(() => {
   color: var(--ui-text);
   transition: border-color var(--ui-duration), background var(--ui-duration);
 }
-.pm-role-btn:hover {
+.pm-preset-btn:hover {
   border-color: var(--ui-border-strong);
   background: var(--ui-surface-3);
 }
-.pm-role-btn.active {
+.pm-preset-btn.active {
   border-color: var(--ui-accent);
   background: var(--ui-accent);
   color: var(--ui-accent-on);
 }
-.pm-role-btn.active .pm-role-code {
+.pm-preset-btn.active .pm-preset-code {
   background: rgba(255, 255, 255, 0.2);
   color: var(--ui-accent-on);
 }
-.pm-role-btn.active .pm-role-name {
+.pm-preset-btn.active .pm-preset-name {
   color: var(--ui-accent-on);
 }
-.pm-role-code {
+.pm-preset-code {
   font-size: 11px;
   font-weight: 700;
   background: var(--ui-accent-soft);
@@ -568,7 +574,7 @@ onMounted(() => {
   min-width: 42px;
   text-align: center;
 }
-.pm-role-name {
+.pm-preset-name {
   font-weight: 600;
   color: var(--ui-text);
 }
@@ -775,10 +781,10 @@ onMounted(() => {
   margin: 0 0 10px;
   line-height: 1.5;
 }
-.pm-roles-editor {
+.pm-presets-editor {
   margin-bottom: 14px;
 }
-.pm-role-create {
+.pm-preset-create {
   display: flex;
   gap: 8px;
   margin-bottom: 10px;
@@ -828,12 +834,12 @@ onMounted(() => {
   box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.12);
   outline: none;
 }
-.pm-role-list {
+.pm-preset-list {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
-.pm-role-editable {
+.pm-preset-editable {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -844,23 +850,23 @@ onMounted(() => {
   border-radius: 10px;
   transition: border-color var(--ui-duration);
 }
-.pm-role-editable:hover {
+.pm-preset-editable:hover {
   border-color: var(--ui-border-strong);
 }
-.pm-role-editable-main {
+.pm-preset-editable-main {
   display: flex;
   align-items: center;
   gap: 10px;
   min-width: 0;
 }
-.pm-role-editable-desc {
+.pm-preset-editable-desc {
   color: var(--ui-text-2);
   font-size: 13px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.pm-role-editable-actions {
+.pm-preset-editable-actions {
   display: flex;
   gap: 6px;
   flex-shrink: 0;

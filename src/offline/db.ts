@@ -97,6 +97,10 @@ export async function idbCount(store: string): Promise<number> {
   return typeof result === 'number' ? result : 0
 }
 
+export async function idbClear(store: string): Promise<void> {
+  await txAll(store, 'readwrite', (s) => s.clear())
+}
+
 export const IDMAP_STORE_NAME = IDMAP_STORE
 
 /** Mapping of a temporary (negative) offline-creation id to the real server id */

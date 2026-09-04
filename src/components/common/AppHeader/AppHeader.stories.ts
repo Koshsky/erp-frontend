@@ -11,6 +11,4 @@ const meta: Meta<typeof AppHeader> = {
 export default meta
 type Story = StoryObj<typeof meta>
 
-export const Default: Story = {
-  args: { brand: 'MVS ERP' },
-}
+export const Default: Story = {}

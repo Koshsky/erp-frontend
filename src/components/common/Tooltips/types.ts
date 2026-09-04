@@ -13,7 +13,7 @@ export interface BarTooltipProps {
   /** Additional rows (dates, owner, priority, content, etc.) */
   rows?: string[]
   /** Resource list with quantities — as a separate block with a divider */
-  resources?: { label: string; quantity?: number }[]
+  resources?: { label: string; quantity?: number; color?: string }[]
   /** Task comment log (shows up to 4 entries + "…and N more") */
   comments?: BarTooltipComment[]
   /** Accent color of the header (task=green, project/process=blue, milestone=amber) */

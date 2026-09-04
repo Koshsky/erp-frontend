@@ -119,7 +119,7 @@ const makeResource = (b: any, tempId?: number) => ({
 const makeEmployee = (b: any, tempId?: number) => ({
   id: tempId ?? -1,
   name: b?.name,
-  role: b?.role ?? 'worker',
+  preset: b?.preset ?? 'worker',
   position: b?.position,
   manager_id: b?.manager_id,
   hire_date: b?.hire_date,
@@ -484,7 +484,7 @@ async function getUserFields(userId: number | undefined): Promise<Record<string,
     if (u) {
       return {
         name: u.name,
-        role: u.role,
+        preset: u.preset,
         position: u.position,
         manager_id: u.manager_id,
         hire_date: u.hire_date,

@@ -20,7 +20,7 @@ const auth = useAuthStore()
 
 // dp (project director) — read-only: can change only project priorities,
 // so creating/editing/deleting resources is not available to them.
-const { canManageResources, role, userId } = useRoleAccess()
+const { canCreateResource, canManageResource, canDeleteResource, role, userId } = useRoleAccess()
 const isAdmin = computed(() => role.value === 'admin')
 
 /** Resource owner label: admin — name, vp — "Me" */
@@ -38,10 +38,14 @@ interface MenuState {
   resourceId: number
 }
 const menu = ref<MenuState | null>(null)
-const menuItems = computed<ContextMenuItem[]>(() => [
-  { id: 'edit-resource', label: 'Редактировать' },
-  { id: 'delete-resource', label: 'Удалить ресурс' },
-])
+const menuItems = computed<ContextMenuItem[]>(() => {
+  const res = resources.value.find((r) => r.id === menu.value?.resourceId)
+  if (!res) return []
+  const items: ContextMenuItem[] = []
+  if (canManageResource(res.owner_id)) items.push({ id: 'edit-resource', label: 'Редактировать' })
+  if (canDeleteResource(res.owner_id)) items.push({ id: 'delete-resource', label: 'Удалить ресурс' })
+  return items
+})
 
 // Delete confirmation dialog (instead of window.confirm — it is blocked in iframes/sandboxes)
 const { confirm: confirmDialog, ask, proceed, cancel } = useConfirm()
@@ -53,18 +57,18 @@ type ModalMode =
 /** Owner options (users, excluding workers) */
 const ownerOptions = computed<ModalField['options']>(() =>
   users.value
-    .filter((u) => u.id != null && u.role !== 'worker')
+    .filter((u) => u.id != null && u.preset !== 'worker')
     .sort(compareByName)
     .map((u) => ({ value: u.id as number, label: u.name ?? `#${u.id}` })),
 )
 
-/** Filter by owner (owner_id): admin picks the owner, the backend filters by scope */
+/** Filter by owner (owner_id) — client-side: rendering always reads local data */
 const ownerFilter = ref<number | ''>('')
-const filteredResources = computed(() => resources.value)
-
-// Changing the owner filter reloads the listing with owner_id (admin only)
-watch(ownerFilter, (v) => {
-  if (isAdmin.value) store.loadResources(typeof v === 'number' ? v : undefined)
+const filteredResources = computed(() => {
+  const list = resources.value
+  return typeof ownerFilter.value === 'number'
+    ? list.filter((r) => (r as { owner_id?: number | null }).owner_id === ownerFilter.value)
+    : list
 })
 
 const { open: openModal, close: closeModal, submit: submitModal, bind: modalBind } = useEditModal<ModalMode>(
@@ -112,7 +116,9 @@ const { open: openModal, close: closeModal, submit: submitModal, bind: modalBind
 )
 
 function onRowContextMenu(e: MouseEvent, res: DtoResourceResponse) {
-  if (res.id == null || !canManageResources.value) return
+  if (res.id == null) return
+  const ownerId = res.owner_id
+  if (!canManageResource(ownerId) && !canDeleteResource(ownerId)) return
   openMenu({ x: e.clientX, y: e.clientY, resourceId: res.id })
 }
 
@@ -186,7 +192,7 @@ async function onRemoveMember(resourceId: number, userId: number) {
 onMounted(() => {
   if (!resources.value.length) store.loadResources()
   if (isAdmin.value && !users.value.length) store.loadUsers()
-  if (!employees.value.length) void ts.fetchEmployees()
+  if (!employees.value.length) void ts.loadEmployees()
 })
 </script>
 
@@ -197,9 +203,9 @@ onMounted(() => {
       <div class="rp-actions">
         <select v-if="isAdmin" v-model="ownerFilter" class="rp-filter">
           <option value="">Все владельцы</option>
-          <option v-for="u in users.filter((u) => u.role !== 'worker').sort(compareByName)" :key="u.id" :value="u.id">{{ u.name ?? `#${u.id}` }}</option>
+          <option v-for="u in users.filter((u) => u.preset !== 'worker').sort(compareByName)" :key="u.id" :value="u.id">{{ u.name ?? `#${u.id}` }}</option>
         </select>
-        <button v-if="canManageResources" type="button" class="rp-add" @click="openCreate">Создать ресурс</button>
+        <button v-if="canCreateResource" type="button" class="rp-add" @click="openCreate">Создать ресурс</button>
       </div>
     </div>
 
@@ -234,7 +240,7 @@ onMounted(() => {
           <div v-if="expandedId === res.id" class="rp-members">
             <div class="rp-members-head">
               <span class="rp-members-title">Пользователи ({{ membersFor(res.id ?? 0).length }})</span>
-              <div class="rp-members-add">
+              <div v-if="canManageResource(res.owner_id)" class="rp-members-add">
                 <select v-model="addMemberId" class="rp-filter">
                   <option value="">Добавить пользователя...</option>
                   <option v-for="w in workersNotIn(res.id ?? 0)" :key="w.id" :value="w.id">
@@ -256,6 +262,7 @@ onMounted(() => {
                 <span class="rp-member-name">{{ m.name }}</span>
                 <span class="rp-member-pos">{{ m.position || '—' }}</span>
                 <button
+                  v-if="canManageResource(res.owner_id)"
                   type="button"
                   class="rp-member-btn rp-member-remove"
                   @click="onRemoveMember(res.id ?? 0, m.id ?? 0)"

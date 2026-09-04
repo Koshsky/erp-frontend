@@ -8,7 +8,7 @@ import type { DtoAdminUserResponse } from '@/api'
 const app = useAppStore()
 const { adminUsers, adminUsersLoading, adminUsersError, users } = storeToRefs(app)
 
-const ROLE_LABELS: Record<string, string> = {
+const PRESET_LABELS: Record<string, string> = {
   admin: 'Администратор',
   dp: 'Директор проектов',
   rp: 'Руководитель проекта',
@@ -16,8 +16,8 @@ const ROLE_LABELS: Record<string, string> = {
   worker: 'Работник',
 }
 
-function roleLabel(role?: string): string {
-  return role ? (ROLE_LABELS[role] ?? role) : '—'
+function presetLabel(preset?: string | null): string {
+  return preset ? (PRESET_LABELS[preset] ?? preset) : '—'
 }
 
 interface TreeNode {
@@ -156,7 +156,7 @@ onMounted(() => {
             <span class="name">{{ node.user.name }}</span>
             <span class="mono">{{ node.user.username }}</span>
           </div>
-          <div>{{ roleLabel(node.user.role) }}</div>
+          <div>{{ presetLabel(node.user.preset) }}</div>
           <div class="col-mgr">
             <select
               class="cs-mgr"

@@ -7,6 +7,7 @@ import { autoSync, saveSyncSettings } from '../settings'
 import { isElectron, hasDesktopPassword } from '../electron'
 import { getSavedLogin, saveSyncCredentials } from '../syncCredentials'
 import { warmNow, warmupProgress, lastWarmedAt } from '../offline/warmup'
+import { lastPullAt } from '../offline/cycle'
 import { syncNow, syncAll, syncNotice, dismissSyncNotice, retryFailed, discardFailed, lastPushAt } from '../offline/sync'
 import { pendingCount, pushProgress, refreshPendingCount, getFailedEntries, queueItems, type QueueViewItem } from '../offline/outbox'
 import { idbCount } from '../offline/db'
@@ -57,6 +58,13 @@ const lastWarmedLabel = computed(() =>
 const lastPushLabel = computed(() =>
   lastPushAt.value != null
     ? new Date(lastPushAt.value).toLocaleString('ru-RU')
+    : 'ещё не было',
+)
+
+/** Last successful background PULL (the 10-second maintenance cycle) */
+const lastPullLabel = computed(() =>
+  lastPullAt.value != null
+    ? new Date(lastPullAt.value).toLocaleString('ru-RU')
     : 'ещё не было',
 )
 
@@ -626,7 +634,7 @@ onBeforeUnmount(() => {
             </div>
             <div class="sp-row">
               <span class="sp-label">Последний PULL</span>
-              <span class="sp-value">{{ lastWarmedLabel }}</span>
+              <span class="sp-value">{{ lastPullLabel }}</span>
             </div>
             <div class="sp-row">
               <span class="sp-label">Последний PUSH</span>

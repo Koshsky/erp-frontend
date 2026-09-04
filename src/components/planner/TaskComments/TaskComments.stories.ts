@@ -4,9 +4,9 @@ import TaskComments from './TaskComments.vue'
 import type { DtoCommentResponse, DtoUserInfo } from '@/api'
 
 const users: DtoUserInfo[] = [
-  { id: 1, name: 'Иванов Иван', last_name: 'Иванов', first_name: 'Иван', username: 'ivanov', role: 'vp' },
-  { id: 2, name: 'Петров Пётр', last_name: 'Петров', first_name: 'Пётр', username: 'petrov', role: 'rp' },
-  { id: 3, name: 'Сидоров Сидор', last_name: 'Сидоров', first_name: 'Сидор', username: 'sidorov', role: 'worker' },
+  { id: 1, name: 'Иванов Иван', last_name: 'Иванов', first_name: 'Иван', username: 'ivanov', preset: 'vp' },
+  { id: 2, name: 'Петров Пётр', last_name: 'Петров', first_name: 'Пётр', username: 'petrov', preset: 'rp' },
+  { id: 3, name: 'Сидоров Сидор', last_name: 'Сидоров', first_name: 'Сидор', username: 'sidorov', preset: 'worker' },
 ]
 
 /** Thread: c1 ← c2 ← c3 (three levels), a separate root c4 and an "orphaned" c5 (parent 999 deleted) */
