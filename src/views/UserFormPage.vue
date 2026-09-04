@@ -326,7 +326,6 @@ async function onSubmit() {
               placeholder="Автозаполняется из ФИО"
               @input="loginTouched = true"
             />
-            <span v-if="!isEdit && !loginTouched" class="ufp-hint">Заполняется автоматически по ФИО (транслит); можно изменить</span>
             <span v-if="loginErrorMsg" class="ufp-hint er" role="alert">{{ loginErrorMsg }}</span>
           </label>
           <label class="ufp-field">
@@ -349,7 +348,6 @@ async function onSubmit() {
 
           <p v-if="error" class="ufp-error" role="alert">{{ error }}</p>
           <p v-if="validationMessage" class="ufp-error" role="alert">{{ validationMessage }}</p>
-          <p v-if="!isEdit" class="ufp-note">Пароль генерируется автоматически и будет показан один раз.</p>
 
           <div class="ufp-actions">
             <button type="button" class="ufp-btn" @click="router.push('/users')">Отмена</button>
@@ -516,11 +514,6 @@ async function onSubmit() {
   margin: 0;
   font-size: 13px;
   color: var(--ui-danger);
-}
-.ufp-note {
-  margin: 0;
-  font-size: 12px;
-  color: var(--ui-text-muted);
 }
 .ufp-st {
   color: var(--ui-text-2);

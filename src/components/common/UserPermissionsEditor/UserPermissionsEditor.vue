@@ -259,11 +259,6 @@ document.addEventListener('click', (e: Event) => {
         </div>
       </div>
     </div>
-
-    <p class="uped-note">
-      Dropdown всегда виден → переключение состояния не сдвигает элементы.
-      Сохраняется кнопкой «Сохранить».
-    </p>
   </section>
 </template>
 
@@ -390,8 +385,6 @@ document.addEventListener('click', (e: Event) => {
 .dd-opt:hover { background: var(--ui-surface-2); }
 .dd-opt.active::before { content: '✓'; color: var(--ui-ok, var(--ui-accent)); font-weight: 700; }
 .dd-opt.revert { color: var(--ui-accent); font-style: italic; }
-
-.uped-note { margin: 2px 0 0; font-size: 11px; color: var(--ui-text-muted); }
 
 @media (max-width: 640px) {
   .uped-row {
