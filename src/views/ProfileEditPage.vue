@@ -12,7 +12,17 @@ const confirmPassword = ref('')
 const changeMsg = ref<string | null>(null)
 const changeOk = ref(false)
 
-const passwordChecks = passwordRules()
+const passwordChecks = [
+  ...passwordRules(),
+  {
+    id: 'no-login',
+    label: 'не содержит ваш логин',
+    test: (value: string) => {
+      const login = auth.user?.username?.toLowerCase() ?? ''
+      return login === '' || !value.toLowerCase().includes(login)
+    },
+  },
+]
 
 const newPasswordValid = computed(() => validatePassword(newPassword.value, passwordChecks))
 const passwordConfirmed = computed(() => confirmPassword.value === newPassword.value)
