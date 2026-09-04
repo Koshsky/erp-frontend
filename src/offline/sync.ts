@@ -81,7 +81,7 @@ function reloadersFor(entity: MutationEntity): Reloader[] {
   const planning = usePlanningStore()
   const ts = useTimesheetStore()
   const auth = useAuthStore()
-  const isStaff = auth.user?.role === 'vp' || auth.user?.role === 'admin'
+  const isStaff = auth.user?.preset === 'vp' || auth.user?.preset === 'admin'
 
   switch (entity) {
     case 'resource':

@@ -1,148 +1,20 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../../../store'
-import { useNavigation } from '../../../composables/useNavigation'
 import { isElectron } from '../../../electron'
-import { isOffline } from '../../../offline/state'
-import { pendingCount } from '../../../offline/outbox'
-import { lastPullAt } from '../../../offline/cycle'
 import { resolvedScheme, toggleScheme } from '../../../theme'
+import { isNavOpen, toggleNav } from '../../../composables/useNavDrawer'
+import { useSyncStatus } from '../../../composables/useSyncStatus'
 import { AppIcon } from '../AppIcon'
-import { AppNavDrawer } from '../AppNavDrawer'
-import type { DrawerSyncStats } from '../AppNavDrawer/types'
 
 const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
-
-// Local computed wrapping the imported ref — guaranteed reactivity
-// in the template (imported refs are bound without auto-unwrapping).
-const offline = computed(() => isOffline.value)
-
-// Pending changes awaiting sync (badge next to «Синхронизация» in the drawer)
-const pending = computed(() => pendingCount.value)
-
-// Reactive clock so the freshness label keeps advancing while mounted
-// (a computed reading Date.now() alone would freeze after the last pull).
-const CLOCK_TICK_MS = 30_000
-const now = ref(Date.now())
-let clockTimer: number | undefined
-
-// Data freshness (desktop): how long ago the background PULL last updated the cache
-const lastPullLabel = computed(() => {
-  const ts = lastPullAt.value
-  if (ts == null) return null
-  const s = Math.max(0, Math.round((now.value - ts) / 1000))
-  if (s < 60) return `${s} с`
-  const m = Math.round(s / 60)
-  if (m < 60) return `${m} мин`
-  const h = Math.round(m / 60)
-  return `${h} ч`
-})
-
-// Route name as a plain string (route.name can also be a symbol in edge cases)
-const routeName = computed(() => (typeof route.name === 'string' ? route.name : undefined))
-
-// Permission-filtered categories; the drawer is the only place they render now
-const { visibleCategories } = useNavigation()
+const { offline } = useSyncStatus()
 
 // Theme toggle label (Russian UI copy)
 const themeLabel = computed(() => (resolvedScheme.value === 'dark' ? 'Светлая' : 'Тёмная'))
-
-// ---------------------------------------------------------------------------
-// Left drawer state:
-//   'closed' — hidden,
-//   'pinned' — opened by the burger / Ctrl+B, stays open,
-//   'peek'   — edge-opened by holding the pointer at the left screen edge;
-//              slides back when the pointer leaves the panel.
-// ---------------------------------------------------------------------------
-const navState = ref<'closed' | 'peek' | 'pinned'>('closed')
-const burgerRef = ref<HTMLElement | null>(null)
-
-/** Drawer is visible in every state except 'closed' */
-const navOpen = computed(() => navState.value !== 'closed')
-
-function toggleNav(): void {
-  // Burger / Ctrl+B: toggle pinned <-> closed; a peeked drawer becomes pinned.
-  navState.value = navState.value === 'pinned' ? 'closed' : 'pinned'
-}
-
-function onCloseNav(): void {
-  navState.value = 'closed'
-  // Return focus to the burger that opened the drawer
-  void nextTick(() => burgerRef.value?.focus())
-}
-
-// ---------------------------------------------------------------------------
-// Edge-open behaviour:
-//  - closing the mouse against the left screen edge (x <= EDGE_X) peeks the
-//    drawer after a short hold (avoids accidental opens when moving across
-//    the edge);
-//  - a peeked drawer closes again once the pointer leaves the panel area
-//    (with a short grace period so it does not slam shut on tiny movements);
-//  - a pinned drawer is unaffected by pointer position.
-// ---------------------------------------------------------------------------
-const EDGE_X = 12
-const EDGE_HOLD_MS = 120
-const EDGE_CLOSE_MS = 220
-const PANEL_WIDTH = 280
-
-let edgeHoverTimer: number | undefined
-let edgeLeaveTimer: number | undefined
-
-function clearEdgeTimers(): void {
-  if (edgeHoverTimer != null) {
-    window.clearTimeout(edgeHoverTimer)
-    edgeHoverTimer = undefined
-  }
-  if (edgeLeaveTimer != null) {
-    window.clearTimeout(edgeLeaveTimer)
-    edgeLeaveTimer = undefined
-  }
-}
-
-function onGlobalMouseMove(e: MouseEvent): void {
-  const x = e.clientX
-
-  if (navState.value === 'closed') {
-    if (x <= EDGE_X && edgeHoverTimer == null) {
-      edgeHoverTimer = window.setTimeout(() => {
-        edgeHoverTimer = undefined
-        if (navState.value === 'closed') navState.value = 'peek'
-      }, EDGE_HOLD_MS)
-    } else if (x > EDGE_X && edgeHoverTimer != null) {
-      window.clearTimeout(edgeHoverTimer)
-      edgeHoverTimer = undefined
-    }
-  } else if (navState.value === 'peek') {
-    if (x > PANEL_WIDTH + EDGE_X && edgeLeaveTimer == null) {
-      edgeLeaveTimer = window.setTimeout(() => {
-        edgeLeaveTimer = undefined
-        if (navState.value === 'peek') navState.value = 'closed'
-      }, EDGE_CLOSE_MS)
-    } else if (x <= PANEL_WIDTH + EDGE_X && edgeLeaveTimer != null) {
-      window.clearTimeout(edgeLeaveTimer)
-      edgeLeaveTimer = undefined
-    }
-  }
-}
-
-// Ctrl/Cmd+B toggles the drawer (common desktop shortcut)
-function onGlobalKeydown(e: KeyboardEvent): void {
-  if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.code === 'KeyB') {
-    e.preventDefault()
-    toggleNav()
-  }
-}
-
-// Close the drawer on any programmatic navigation (router guards, redirects)
-watch(
-  () => route.name,
-  () => {
-    if (navState.value !== 'closed') navState.value = 'closed'
-  },
-)
 
 function onLogout(): void {
   // Handler-level safeguard: offline logout is not performed (logout
@@ -158,44 +30,38 @@ const burgerTitle = computed(() =>
     : 'Меню (Ctrl+B)',
 )
 
-// Sync stats block for the drawer footer (can be passed live)
-const syncStats = computed<DrawerSyncStats>(() => ({
-  enabled: isElectron,
-  offline: offline.value,
-  pending: pending.value,
-  lastPullLabel: lastPullLabel.value,
-}))
-
-onMounted(() => {
-  window.addEventListener('keydown', onGlobalKeydown)
-  window.addEventListener('mousemove', onGlobalMouseMove, { passive: true })
-  clockTimer = window.setInterval(() => {
-    now.value = Date.now()
-  }, CLOCK_TICK_MS)
-})
-
-onBeforeUnmount(() => {
-  window.removeEventListener('keydown', onGlobalKeydown)
-  window.removeEventListener('mousemove', onGlobalMouseMove)
-  clearEdgeTimers()
-  if (clockTimer != null) window.clearInterval(clockTimer)
-})
+const burgerLabel = computed(() => (isNavOpen.value ? 'Закрыть меню' : 'Открыть меню'))
 </script>
 
 <template>
   <header class="ah">
-    <!-- Burger: the only entry point to the left drawer; a status dot on top
-         (desktop) shows the sync state without cluttering the topbar -->
+    <!-- Burger: a single glyph that morphs between the hamburger (drawer
+         closed) and an × (drawer visible) — the three bars rotate into the
+         cross with a smooth transition -->
     <button
-      ref="burgerRef"
       type="button"
       class="ah-burger"
-      :aria-label="'Открыть меню'"
-      :aria-expanded="navOpen"
+      :aria-label="burgerLabel"
+      :aria-expanded="isNavOpen"
       :title="burgerTitle"
       @click="toggleNav"
     >
-      <AppIcon name="menu" :size="22" />
+      <span class="ah-burger-glyph" :class="{ open: isNavOpen }" aria-hidden="true">
+        <svg
+          viewBox="0 0 24 24"
+          width="22"
+          height="22"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.8"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <line class="ah-line ah-line--top" x1="4" y1="6" x2="20" y2="6" />
+          <line class="ah-line ah-line--mid" x1="4" y1="12" x2="20" y2="12" />
+          <line class="ah-line ah-line--bot" x1="4" y1="18" x2="20" y2="18" />
+        </svg>
+      </span>
       <span v-if="isElectron" class="ah-burger-dot" :class="{ on: !offline }"></span>
     </button>
 
@@ -229,15 +95,6 @@ onBeforeUnmount(() => {
       </button>
     </div>
   </header>
-
-  <!-- Navigation drawer: the only place modules live now -->
-  <AppNavDrawer
-    :open="navOpen"
-    :categories="visibleCategories"
-    :active-name="routeName"
-    :sync="syncStats"
-    @close="onCloseNav"
-  />
 </template>
 
 <style scoped>
@@ -245,7 +102,7 @@ onBeforeUnmount(() => {
 
 .ah {
   width: 100%; /* the header width never depends on the page or scrollbars */
-  /* The header is a flex item of .ml (column flex): without this the flex
+  /* The header is a flex item of .ml-col (column flex): without this the flex
      shrink distribution on viewport-filling diagram pages squeezes the header
      height below 60px (the timeline is taller than the container). flex: none
      keeps the header size dependent only on the screen, never on page content. */
@@ -261,9 +118,7 @@ onBeforeUnmount(() => {
   border-bottom: 1px solid var(--ui-border);
   position: sticky;
   top: 0;
-  /* Header and the drawer sit above page content; modal dialogs
-     (z-40000) render above them and dim everything */
-  z-index: 30000;
+  z-index: 100; /* above page content inside the column */
 }
 
 .ah-burger {
@@ -289,6 +144,40 @@ onBeforeUnmount(() => {
 .ah-burger:focus-visible {
   outline: 2px solid var(--ui-focus);
   outline-offset: 2px;
+}
+
+/* Morphing burger glyph — universal (works in Chromium, Firefox, Safari).
+   One SVG whose three bars transform into a full centred ×:
+   - top/bottom bars slide to the middle line (translateY) and tilt ±45°
+     around the canvas centre (transform-box: view-box → origin 12,12);
+   - the middle bar fades out.
+   Function order matters: `rotate(45deg) translateY(6px)` applies the
+   translate FIRST (bar reaches the centre line) and the rotate LAST,
+   yielding a proper centred diagonal. */
+.ah-burger-glyph {
+  display: block;
+  width: 22px;
+  height: 22px;
+}
+
+.ah-line {
+  transform-box: view-box;
+  transform-origin: center;
+  transition:
+    transform 0.34s cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 0.22s ease;
+}
+
+.ah-burger-glyph.open .ah-line--top {
+  transform: rotate(45deg) translateY(6px);
+}
+
+.ah-burger-glyph.open .ah-line--mid {
+  opacity: 0;
+}
+
+.ah-burger-glyph.open .ah-line--bot {
+  transform: rotate(-45deg) translateY(-6px);
 }
 
 /* Sync state dot on the burger (desktop): green = online, amber = offline */

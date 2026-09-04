@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed, onScopeDispose } from 'vue'
 import axios, { type AxiosError, type Method } from 'axios'
 import { AuthApi, ProjectsApi, ProcessesApi, TasksApi, TimesheetResourcesApi, TimesheetCalendarApi, TimesheetStatesApi, PlanningApi, MilestonesApi, UsersApi, AssignmentsApi, AutoCreateApi, RBACApi, PermissionsApi, AuditApi, Configuration } from '@/api'
-import type { DtoUserInfo, DtoProject, DtoResourceResponse, DtoResourceCalendar, DtoResourceMemberResponse, DtoResourceAbsenceResponse, DtoUserResponse, DtoUserStateResponse, DtoStateResponse, DtoCreateResourceRequest, DtoUpdateResourceRequest, DtoCreateUserRequest, DtoUpdateUserRequest, DtoSetDaysRequest, DtoAdminUserResponse, DtoCreateUserResult, DtoResetPasswordResponse, DtoAutoCreateConfig, DtoAutoCreatedCounts, DtoCommentResponse, DomainRole, DtoRuleInput, DtoRuleView, DtoMatrixCell, DtoRoutePolicyView, PoliciesKindInfo, DtoPermission, DtoAuditEventView } from '@/api'
+import type { DtoUserInfo, DtoProject, DtoResourceResponse, DtoResourceCalendar, DtoResourceMemberResponse, DtoResourceAbsenceResponse, DtoUserResponse, DtoUserStateResponse, DtoStateResponse, DtoCreateResourceRequest, DtoUpdateResourceRequest, DtoCreateUserRequest, DtoUpdateUserRequest, DtoSetDaysRequest, DtoAdminUserResponse, DtoCreateUserResult, DtoResetPasswordResponse, DtoAutoCreateConfig, DtoAutoCreatedCounts, DtoCommentResponse, DomainPreset, DtoPresetRuleInput, DtoPresetRuleView, DtoMatrixCell, DtoRoutePolicyView, PoliciesKindInfo, DtoPermission, DtoUserPermissionsView, DtoUserPermissionsInput, DtoAuditEventView } from '@/api'
 import { apiErrorMessage } from '@/utils'
 import { getApiUrl } from '@/config'
 import { isOffline } from '@/offline/state'
@@ -494,10 +494,10 @@ export const useAppStore = defineStore('app', () => {
   }
 
   async function refreshProjects(): Promise<void> {
-    // Only admin/dp/rp can see projects (per the RBAC matrix). For other roles the
+    // Only admin/dp/rp can see projects (per the RBAC matrix). For other presets the
     // listing is forbidden by the backend (403) — we do not send the request at all.
-    const role = useAuthStore().user?.role
-    if (role && role !== 'admin' && role !== 'dp' && role !== 'rp') {
+    const preset = useAuthStore().user?.preset
+    if (preset && preset !== 'admin' && preset !== 'dp' && preset !== 'rp') {
       projects.value = []
       return
     }
@@ -671,7 +671,7 @@ export const useAppStore = defineStore('app', () => {
           list.push({
             id: userId,
             name: w?.name ?? `#${userId}`,
-            role: 'worker',
+            preset: 'worker',
             position: w?.position,
             manager_id: w?.manager_id,
             hire_date: w?.hire_date,
@@ -2116,7 +2116,7 @@ export const usePlanningStore = defineStore('planning', () => {
     quantity: number,
   ): Promise<boolean> {
     const auth = useAuthStore()
-    const owners = auth.user?.role === 'admin' ? [] : taskOwnerIds(taskId)
+    const owners = auth.user?.preset === 'admin' ? [] : taskOwnerIds(taskId)
     if (owners.length > 0) {
       const res = useAppStore().resources.find((r: any) => r.id === resourceId)
       if (res?.owner_id == null || !owners.includes(res.owner_id)) {
@@ -2456,12 +2456,13 @@ export const usePlanningStore = defineStore('planning', () => {
 
 // =============================================================
 // RBAC policies (permission matrix) — the admin editor.
+// Roles are now presets of permissions; users get individual overrides.
 // All operations are online-only (no outbox/offline support needed).
 // =============================================================
 export const useRbacStore = defineStore('rbac', () => {
-  const roles = ref<DomainRole[]>([])
-  /** Active matrix rules (with id — needed to delete "no access" entries). */
-  const rules = ref<DtoRuleView[]>([])
+  const presets = ref<DomainPreset[]>([])
+  /** Active preset matrix rules (with id — needed to delete "no access" entries). */
+  const presetRules = ref<DtoPresetRuleView[]>([])
   /** Effective matrix (with the admin bypass) — the display source. */
   const matrix = ref<DtoMatrixCell[]>([])
   /** Route checks (read-only reference). */
@@ -2471,6 +2472,11 @@ export const useRbacStore = defineStore('rbac', () => {
   const loading = ref(false)
   const saving = ref(false)
   const error = ref<string | null>(null)
+
+  /** Per-user permissions of the edited user (the UserPermissionsEditor). */
+  const userPermissions = ref<DtoUserPermissionsView | null>(null)
+  const userPermissionsLoading = ref(false)
+  const userPermissionsError = ref<string | null>(null)
 
   function setError(e: unknown) {
     error.value = e instanceof Error ? e.message : String(e)
@@ -2483,15 +2489,15 @@ export const useRbacStore = defineStore('rbac', () => {
     error.value = null
     try {
       const api = new RBACApi(apiConfig())
-      const [rolesR, rulesR, matrixR, routesR, kindsR] = await Promise.all([
-        api.rbacRolesGet(),
-        api.rbacRulesGet(),
+      const [presetsR, rulesR, matrixR, routesR, kindsR] = await Promise.all([
+        api.rbacPresetsGet(),
+        api.rbacPresetRulesGet(),
         api.rbacMatrixGet(),
         api.rbacPoliciesGet(),
         api.rbacKindsGet(),
       ])
-      roles.value = rolesR.data?.data ?? []
-      rules.value = rulesR.data?.data ?? []
+      presets.value = presetsR.data?.data ?? []
+      presetRules.value = rulesR.data?.data ?? []
       matrix.value = matrixR.data?.data ?? []
       routePolicies.value = routesR.data?.data ?? []
       kinds.value = kindsR.data?.data ?? []
@@ -2640,23 +2646,23 @@ export const useRbacStore = defineStore('rbac', () => {
     }
   }
 
-  /** Lightweight load of the roles catalog (for selects without a full loadRbac). */
-  async function ensureRoles(): Promise<void> {
-    if (roles.value.length) return
+  /** Lightweight load of the presets catalog (for selects without a full loadRbac). */
+  async function ensurePresets(): Promise<void> {
+    if (presets.value.length) return
     try {
-      const rolesR = await new RBACApi(apiConfig()).rbacRolesGet()
-      roles.value = rolesR.data?.data ?? []
+      const presetsR = await new RBACApi(apiConfig()).rbacPresetsGet()
+      presets.value = presetsR.data?.data ?? []
     } catch {
-      // catalog unavailable — the UI works off a static role list
+      // catalog unavailable — the UI works off a static preset list
     }
   }
 
-  /** Re-reads the rules and matrix after a change (an "immediate" effect). */
+  /** Re-reads the preset rules and matrix after a change (an "immediate" effect). */
   async function reloadRules(): Promise<boolean> {
     try {
       const api = new RBACApi(apiConfig())
-      const [rulesR, matrixR] = await Promise.all([api.rbacRulesGet(), api.rbacMatrixGet()])
-      rules.value = rulesR.data?.data ?? []
+      const [rulesR, matrixR] = await Promise.all([api.rbacPresetRulesGet(), api.rbacMatrixGet()])
+      presetRules.value = rulesR.data?.data ?? []
       matrix.value = matrixR.data?.data ?? []
       return true
     } catch (e) {
@@ -2665,10 +2671,10 @@ export const useRbacStore = defineStore('rbac', () => {
     }
   }
 
-  /** Writes a rule (upsert by role+resource+action). */
-  async function upsertRule(input: DtoRuleInput): Promise<boolean> {
+  /** Writes a preset rule (upsert by preset+resource+action). */
+  async function upsertRule(input: DtoPresetRuleInput): Promise<boolean> {
     try {
-      await new RBACApi(apiConfig()).rbacRulesPut(input)
+      await new RBACApi(apiConfig()).rbacPresetRulesPut(input)
       return true
     } catch (e) {
       setError(e)
@@ -2676,10 +2682,10 @@ export const useRbacStore = defineStore('rbac', () => {
     }
   }
 
-  /** Soft deletion of a rule (the "no access" zone). */
+  /** Soft deletion of a preset rule (the "no access" zone). */
   async function deleteRule(id: number): Promise<boolean> {
     try {
-      await new RBACApi(apiConfig()).rbacRulesIdDelete(id)
+      await new RBACApi(apiConfig()).rbacPresetRulesIdDelete(id)
       return true
     } catch (e) {
       setError(e)
@@ -2687,12 +2693,12 @@ export const useRbacStore = defineStore('rbac', () => {
     }
   }
 
-  /** Creates (or revives) a role and updates the local catalog. */
-  async function createRole(input: { name: string; description?: string }): Promise<boolean> {
+  /** Creates (or revives) a preset and updates the local catalog. */
+  async function createPreset(input: { name: string; description?: string }): Promise<boolean> {
     try {
-      const resp = await new RBACApi(apiConfig()).rbacRolesPost({ name: input.name, description: input.description ?? '' })
+      const resp = await new RBACApi(apiConfig()).rbacPresetsPost({ name: input.name, description: input.description ?? '' })
       if (resp.data?.data) {
-        roles.value = [...roles.value.filter((r) => r.name !== resp.data?.data?.name), resp.data.data]
+        presets.value = [...presets.value.filter((r) => r.name !== resp.data?.data?.name), resp.data.data]
       }
       return true
     } catch {
@@ -2700,24 +2706,52 @@ export const useRbacStore = defineStore('rbac', () => {
     }
   }
 
-  /** Updates a role's description. */
-  async function updateRole(name: string, description: string): Promise<boolean> {
+  /** Updates a preset's description. */
+  async function updatePreset(name: string, description: string): Promise<boolean> {
     try {
-      await new RBACApi(apiConfig()).rbacRolesNamePut(name, { description })
-      roles.value = roles.value.map((r) => (r.name === name ? { ...r, description } : r))
+      await new RBACApi(apiConfig()).rbacPresetsNamePut(name, { description })
+      presets.value = presets.value.map((r) => (r.name === name ? { ...r, description } : r))
       return true
     } catch {
       return false
     }
   }
 
-  /** Softly deletes a role (and its rules) and removes it from the local catalog. */
-  async function deleteRole(name: string): Promise<boolean> {
+  /** Softly deletes a preset (and its rules) and removes it from the local catalog. */
+  async function deletePreset(name: string): Promise<boolean> {
     try {
-      await new RBACApi(apiConfig()).rbacRolesNameDelete(name)
-      roles.value = roles.value.filter((r) => r.name !== name)
+      await new RBACApi(apiConfig()).rbacPresetsNameDelete(name)
+      presets.value = presets.value.filter((r) => r.name !== name)
       return true
     } catch {
+      return false
+    }
+  }
+
+  /** Loads the per-user permissions view (assigned preset + overrides + effective). */
+  async function loadUserPermissions(id: number): Promise<boolean> {
+    userPermissionsLoading.value = true
+    userPermissionsError.value = null
+    try {
+      const resp = await new RBACApi(apiConfig()).rbacUsersIdPermissionsGet(id)
+      userPermissions.value = resp.data?.data ?? null
+      return true
+    } catch (e: any) {
+      userPermissionsError.value = apiErrorMessage(e)
+      return false
+    } finally {
+      userPermissionsLoading.value = false
+    }
+  }
+
+  /** Replaces the user's overrides (full replacement, applied immediately). */
+  async function saveUserPermissions(id: number, overrides: DtoUserPermissionsInput['overrides']): Promise<boolean> {
+    try {
+      const body: DtoUserPermissionsInput = { overrides }
+      await new RBACApi(apiConfig()).rbacUsersIdPermissionsPut(id, body)
+      return true
+    } catch (e: any) {
+      userPermissionsError.value = apiErrorMessage(e)
       return false
     }
   }
@@ -2735,8 +2769,8 @@ export const useRbacStore = defineStore('rbac', () => {
   }
 
   return {
-    roles,
-    rules,
+    presets,
+    presetRules,
     matrix,
     routePolicies,
     kinds,
@@ -2744,10 +2778,10 @@ export const useRbacStore = defineStore('rbac', () => {
     saving,
     error,
     loadRbac,
-    ensureRoles,
-    createRole,
-    updateRole,
-    deleteRole,
+    ensurePresets,
+    createPreset,
+    updatePreset,
+    deletePreset,
     myPermissions,
     permsLoaded,
     can,
@@ -2760,6 +2794,11 @@ export const useRbacStore = defineStore('rbac', () => {
     upsertRule,
     deleteRule,
     resetRbac,
+    userPermissions,
+    userPermissionsLoading,
+    userPermissionsError,
+    loadUserPermissions,
+    saveUserPermissions,
   }
 })
 

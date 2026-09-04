@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import type { NavCategory, NavItem } from '../../../composables/useNavigation'
+import { NAV_WIDTH } from '../../../composables/useNavDrawer'
 import { AppIcon, type AppIconName } from '../AppIcon'
 import type { AppNavDrawerEmits, AppNavDrawerProps } from './types'
 
@@ -127,54 +128,11 @@ const ITEM_ICONS: Record<string, AppIconName> = {
 function iconFor(item: NavItem): AppIconName {
   return ITEM_ICONS[item.name] ?? 'list'
 }
-
-// ---------------------------------------------------------------------------
-// Focus management: focus the dialog on open, trap Tab inside, Esc closes.
-// On close the focus returns to the burger (handled by AppHeader).
-// ---------------------------------------------------------------------------
-const panelEl = ref<HTMLElement | null>(null)
-
-function onKeydown(e: KeyboardEvent): void {
-  if (e.key === 'Escape') {
-    e.stopPropagation()
-    emit('close')
-    return
-  }
-  if (e.key !== 'Tab' || !panelEl.value) return
-  const focusables = panelEl.value.querySelectorAll<HTMLElement>(
-    'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])',
-  )
-  if (focusables.length === 0) return
-  const first = focusables[0]
-  const last = focusables[focusables.length - 1]
-  if (e.shiftKey && document.activeElement === first) {
-    e.preventDefault()
-    last.focus()
-  } else if (!e.shiftKey && document.activeElement === last) {
-    e.preventDefault()
-    first.focus()
-  }
-}
-
-watch(
-  () => props.open,
-  (open) => {
-    if (open) {
-      panelEl.value?.addEventListener('keydown', onKeydown)
-      void nextTick(() => panelEl.value?.focus())
-    } else {
-      panelEl.value?.removeEventListener('keydown', onKeydown)
-    }
-  },
-)
-
-onBeforeUnmount(() => {
-  panelEl.value?.removeEventListener('keydown', onKeydown)
-})
 </script>
 
 <template>
-  <!-- Scrim behind the panel (fades in, closes on click) -->
+  <!-- Scrim for the narrow-screen (overlay) mode; invisible on desktop where
+       the drawer is a real layout column -->
   <div
     class="nd-overlay"
     :class="{ 'nd-overlay--on': props.open }"
@@ -182,97 +140,89 @@ onBeforeUnmount(() => {
   ></div>
 
   <aside
-    ref="panelEl"
     class="nd"
     :class="{ 'nd--open': props.open }"
-    role="dialog"
-    aria-modal="true"
-    aria-label="Навигация"
-    tabindex="-1"
+    role="navigation"
+    aria-label="Разделы"
   >
-    <!-- Drawer header: the only place the product brand lives -->
-    <div class="nd-top">
-      <div class="nd-brand">{{ props.brand }}</div>
-      <button
-        type="button"
-        class="nd-icon-btn"
-        aria-label="Закрыть меню"
-        title="Закрыть (Esc)"
-        @click="emit('close')"
-      >
-        <AppIcon name="close" :size="20" />
-      </button>
-    </div>
-
-    <nav class="nd-scroll">
-      <section
-        v-for="cat in props.categories"
-        :key="cat.label"
-        class="nd-group"
-        :class="{ 'nd-group--open': isOpen(cat) }"
-      >
-        <button
-          type="button"
-          class="nd-group-head"
-          :aria-expanded="isOpen(cat)"
-          @click="toggleGroup(cat)"
-        >
-          <span class="nd-group-title">{{ cat.label }}</span>
-          <AppIcon name="chevron-down" :size="16" class="nd-caret" />
-        </button>
-        <Transition
-          :duration="320"
-          @before-enter="onBeforeEnter"
-          @enter="onEnter"
-          @after-enter="onAfterClear"
-          @before-leave="onBeforeLeave"
-          @leave="onLeave"
-          @after-leave="onAfterClear"
-        >
-          <div v-show="isOpen(cat)" :key="cat.label" class="nd-items-clip">
-            <div class="nd-items">
-              <RouterLink
-                v-for="item in cat.items"
-                :key="item.to"
-                :to="item.to"
-                class="nd-item"
-                :class="{ active: item.name === props.activeName }"
-                @click="emit('close')"
-              >
-                <AppIcon :name="iconFor(item)" :size="22" />
-                <span class="nd-item-label">{{ item.label }}</span>
-                <span v-if="item.badge" class="nd-badge">{{ item.badge }}</span>
-              </RouterLink>
-            </div>
-          </div>
-        </Transition>
-      </section>
-    </nav>
-
-    <!-- System section (desktop/Electron): sync status + the sync page -->
-    <div v-if="props.sync?.enabled" class="nd-foot">
-      <div class="nd-status">
-        <span class="nd-dot" :class="{ 'nd-dot--off': props.sync.offline }"></span>
-        <span>
-          {{
-            props.sync.offline && props.sync.lastPullLabel
-              ? `Офлайн · данные от ${props.sync.lastPullLabel}`
-              : `Онлайн · данные ${props.sync.lastPullLabel ?? '—'}`
-          }}
-        </span>
+    <div class="nd-inner">
+      <!-- Drawer header: the only place the product brand lives. Closing the
+           drawer is done by the burger (which turns into an ×), Escape, a
+           menu item click, or the scrim on narrow screens -->
+      <div class="nd-top">
+        <div class="nd-brand">{{ props.brand }}</div>
       </div>
-      <RouterLink
-        to="/sync"
-        class="nd-item"
-        :class="{ active: props.activeName === 'sync' }"
-        @click="emit('close')"
-      >
-        <AppIcon name="refresh" :size="22" />
-        <span class="nd-item-label">Синхронизация</span>
-        <span v-if="props.sync.pending > 0" class="nd-badge nd-badge--num">
-          {{ props.sync.pending }}
-        </span>
-      </RouterLink>
+
+      <nav class="nd-scroll">
+        <section
+          v-for="cat in props.categories"
+          :key="cat.label"
+          class="nd-group"
+          :class="{ 'nd-group--open': isOpen(cat) }"
+        >
+          <button
+            type="button"
+            class="nd-group-head"
+            :aria-expanded="isOpen(cat)"
+            @click="toggleGroup(cat)"
+          >
+            <span class="nd-group-title">{{ cat.label }}</span>
+            <AppIcon name="chevron-down" :size="16" class="nd-caret" />
+          </button>
+          <Transition
+            :duration="320"
+            @before-enter="onBeforeEnter"
+            @enter="onEnter"
+            @after-enter="onAfterClear"
+            @before-leave="onBeforeLeave"
+            @leave="onLeave"
+            @after-leave="onAfterClear"
+          >
+            <div v-show="isOpen(cat)" :key="cat.label" class="nd-items-clip">
+              <div class="nd-items">
+                <RouterLink
+                  v-for="item in cat.items"
+                  :key="item.to"
+                  :to="item.to"
+                  class="nd-item"
+                  :class="{ active: item.name === props.activeName }"
+                  @click="emit('close')"
+                >
+                  <AppIcon :name="iconFor(item)" :size="22" />
+                  <span class="nd-item-label">{{ item.label }}</span>
+                  <span v-if="item.badge" class="nd-badge">{{ item.badge }}</span>
+                </RouterLink>
+              </div>
+            </div>
+          </Transition>
+        </section>
+      </nav>
+
+      <!-- System section (desktop/Electron): sync status + the sync page -->
+      <div v-if="props.sync?.enabled" class="nd-foot">
+        <div class="nd-status">
+          <span class="nd-dot" :class="{ 'nd-dot--off': props.sync.offline }"></span>
+          <span>
+            {{
+              props.sync.offline && props.sync.lastPullLabel
+                ? `Офлайн · данные от ${props.sync.lastPullLabel}`
+                : `Онлайн · данные ${props.sync.lastPullLabel ?? '—'}`
+            }}
+          </span>
+        </div>
+        <RouterLink
+          to="/sync"
+          class="nd-item"
+          :class="{ active: props.activeName === 'sync' }"
+          @click="emit('close')"
+        >
+          <AppIcon name="refresh" :size="22" />
+          <span class="nd-item-label">Синхронизация</span>
+          <span v-if="props.sync.pending > 0" class="nd-badge nd-badge--num">
+            {{ props.sync.pending }}
+          </span>
+        </RouterLink>
+      </div>
     </div>
   </aside>
 </template>
@@ -280,61 +230,51 @@ onBeforeUnmount(() => {
 <style scoped>
 @import '../../../styles/tokens.css';
 
-/* Scrim: covers the whole viewport, sits between content and the panel */
-.nd-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 34990;
-  background: rgba(15, 23, 42, 0.45);
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity var(--ui-duration) ease;
-}
-
-.nd-overlay--on {
-  opacity: 1;
-  pointer-events: auto;
-}
-
-/* Panel: fixed left drawer, above the header, below modals (z-40000) */
+/* Desktop: the drawer is a real layout column. Its outer width animates
+   between 0 and NAV_WIDTH, shifting the content column; the inner panel is
+   fixed-width so items never reflow while the column opens. */
 .nd {
-  position: fixed;
-  top: 0;
-  left: 0;
-  bottom: 0;
-  z-index: 35000;
-  width: min(280px, 92vw);
+  flex: none;
+  height: 100%;
+  width: 0;
+  overflow: hidden;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    width 0.33s cubic-bezier(0.16, 1, 0.3, 1),
+    visibility 0s linear 0.33s;
+}
+
+.nd--open {
+  width: v-bind('NAV_WIDTH + "px"');
+  visibility: visible;
+  pointer-events: auto;
+  /* visibility flips immediately on open, delayed 0.33s on close */
+  transition:
+    width 0.33s cubic-bezier(0.16, 1, 0.3, 1),
+    visibility 0s;
+}
+
+/* Fixed inner width: content never squashes while the column animates */
+.nd-inner {
+  width: v-bind('NAV_WIDTH + "px"');
+  height: 100%;
   display: flex;
   flex-direction: column;
   background: var(--ui-surface);
   color: var(--ui-text);
   border-right: 1px solid var(--ui-border);
-  box-shadow: var(--ui-shadow-lg);
-  transform: translateX(-104%);
-  transition: transform 0.26s cubic-bezier(0.16, 1, 0.3, 1);
-  outline: none;
 }
 
-/* Custom dark-mode scrim (the base rule targets the light rgba) */
-:root[data-scheme='dark'] .nd-overlay {
-  background: rgba(0, 0, 0, 0.55);
-}
-/* OS-dark fallback, skipped when an explicit light scheme is set */
-@media (prefers-color-scheme: dark) {
-  :root:not([data-scheme='light']) .nd-overlay {
-    background: rgba(0, 0, 0, 0.55);
-  }
-}
-
-.nd--open {
-  transform: translateX(0);
+/* Scrim: only in the narrow overlay mode (see media query below) */
+.nd-overlay {
+  display: none;
 }
 
 .nd-top {
   flex: none;
   display: flex;
   align-items: center;
-  justify-content: space-between;
   height: 64px;
   padding: 0 16px 0 20px;
   border-bottom: 1px solid var(--ui-surface-3);
@@ -346,25 +286,6 @@ onBeforeUnmount(() => {
   letter-spacing: 0.2px;
   color: var(--ui-text);
   white-space: nowrap;
-}
-
-.nd-icon-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  border: none;
-  border-radius: var(--ui-radius-sm);
-  background: transparent;
-  color: var(--ui-text-2);
-  cursor: pointer;
-  transition: background var(--ui-duration), color var(--ui-duration);
-}
-
-.nd-icon-btn:hover {
-  background: var(--ui-surface-3);
-  color: var(--ui-text);
 }
 
 .nd-scroll {
@@ -534,5 +455,64 @@ onBeforeUnmount(() => {
 
 .nd-dot--off {
   background: var(--ui-warning);
+}
+
+/* ---------------------------------------------------------------------------
+ * Narrow screens: the drawer becomes a classic overlay (fixed, slides over
+ * the content with a scrim) — shifting the content is impractical there.
+ * ---------------------------------------------------------------------------
+ */
+@media (max-width: 720px) {
+  .nd-overlay {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 34990;
+    background: rgba(15, 23, 42, 0.45);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--ui-duration) ease;
+  }
+
+  .nd-overlay--on {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .nd {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    z-index: 35000;
+    width: min(280px, 92vw);
+    height: auto;
+    overflow: visible;
+    visibility: visible;
+    pointer-events: auto;
+    transform: translateX(-104%);
+    transition: transform 0.33s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .nd--open {
+    width: min(280px, 92vw);
+    transform: translateX(0);
+    transition: transform 0.33s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .nd-inner {
+    width: auto;
+    box-shadow: var(--ui-shadow-lg);
+  }
+}
+
+/* Custom dark-mode scrim (narrow mode only) */
+:root[data-scheme='dark'] .nd-overlay {
+  background: rgba(0, 0, 0, 0.55);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-scheme='light']) .nd-overlay {
+    background: rgba(0, 0, 0, 0.55);
+  }
 }
 </style>

@@ -83,7 +83,7 @@ export function useNavigation() {
   const rbac = useRbacStore()
   const route = useRoute()
 
-  const role = computed(() => auth.user?.role ?? '')
+  const role = computed(() => auth.user?.preset ?? '')
 
   /** Permissions arrived (or were cached) — the permission filter is authoritative */
   const permsReady = computed(() => rbac.permsLoaded || rbac.myPermissions.length > 0)

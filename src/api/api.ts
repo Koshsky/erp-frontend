@@ -63,7 +63,7 @@ export interface AutoCreateConfigGet200Response {
     'data'?: DtoAutoCreateConfig;
     'error'?: object;
 }
-export interface DomainRole {
+export interface DomainPreset {
     'description'?: string;
     'id'?: number;
     'name'?: string;
@@ -85,7 +85,7 @@ export interface DtoAdminUserResponse {
     'name'?: string;
     'password_hash'?: string;
     'position'?: string;
-    'role'?: string;
+    'preset'?: string;
     'termination_date'?: string;
     'username'?: string;
 }
@@ -224,8 +224,12 @@ export interface DtoCreateUserRequest {
     'manager_id'?: number;
     'middle_name'?: string;
     'password_hash'?: string;
+    /**
+     * Individual permission overrides created together with the user (admin-only, same validation as /rbac/users/{id}/permissions).
+     */
+    'permissions'?: Array<DtoUserPermissionInput>;
     'position'?: string;
-    'role'?: string;
+    'preset'?: string;
     'termination_date'?: string;
     'username'?: string;
 }
@@ -287,8 +291,8 @@ export interface DtoLoginRequest {
 }
 export interface DtoMatrixCell {
     'action'?: string;
+    'preset'?: string;
     'resource'?: string;
-    'role'?: string;
     'scope'?: string;
 }
 export interface DtoMilestone {
@@ -311,6 +315,34 @@ export interface DtoPermission {
     'action'?: string;
     'resource'?: string;
     'scope'?: string;
+}
+export interface DtoPermissionOverride {
+    'action': string;
+    'granted'?: boolean;
+    'resource': string;
+    'scope'?: string;
+}
+export interface DtoPresetRuleInput {
+    'action': string;
+    'preset': string;
+    'resource': string;
+    'scope': string;
+}
+export interface DtoPresetRuleView {
+    'action'?: string;
+    'id'?: number;
+    'preset'?: string;
+    'resource'?: string;
+    'scope'?: string;
+    'updated_at'?: string;
+    'updated_by'?: number;
+}
+export interface DtoPresetUpdateInput {
+    'description'?: string;
+}
+export interface DtoPresetUpsertInput {
+    'description'?: string;
+    'name': string;
 }
 export interface DtoProcess {
     'color'?: string;
@@ -413,7 +445,7 @@ export interface DtoResourceMemberResponse {
     'manager_id'?: number;
     'name'?: string;
     'position'?: string;
-    'role'?: string;
+    'preset'?: string;
     'termination_date'?: string;
 }
 export interface DtoResourceResponse {
@@ -423,13 +455,6 @@ export interface DtoResourceResponse {
     'id'?: number;
     'owner_id'?: number;
     'title'?: string;
-}
-export interface DtoRoleUpdateInput {
-    'description'?: string;
-}
-export interface DtoRoleUpsertInput {
-    'description'?: string;
-    'name': string;
 }
 export interface DtoRoutePolicyInput {
     'active'?: boolean;
@@ -442,21 +467,6 @@ export interface DtoRoutePolicyView {
     'kind'?: string;
     'name'?: string;
     'params'?: { [key: string]: object; };
-    'updated_at'?: string;
-    'updated_by'?: number;
-}
-export interface DtoRuleInput {
-    'action': string;
-    'resource': string;
-    'role': string;
-    'scope': string;
-}
-export interface DtoRuleView {
-    'action'?: string;
-    'id'?: number;
-    'resource'?: string;
-    'role'?: string;
-    'scope'?: string;
     'updated_at'?: string;
     'updated_by'?: number;
 }
@@ -549,7 +559,7 @@ export interface DtoUpdateUserRequest {
     'manager_id'?: number;
     'middle_name'?: string;
     'position'?: string;
-    'role'?: string;
+    'preset'?: string;
     'termination_date'?: string;
     'username'?: string;
 }
@@ -559,8 +569,25 @@ export interface DtoUserInfo {
     'last_name'?: string;
     'middle_name'?: string;
     'name'?: string;
-    'role'?: string;
+    'preset'?: string;
     'username'?: string;
+}
+export interface DtoUserPermissionInput {
+    'action': string;
+    'granted'?: boolean;
+    'resource': string;
+    'scope'?: string;
+}
+export interface DtoUserPermissionsInput {
+    'overrides'?: Array<DtoPermissionOverride>;
+}
+export interface DtoUserPermissionsView {
+    'admin'?: boolean;
+    'effective'?: Array<DtoPermission>;
+    'overrides'?: Array<DtoPermissionOverride>;
+    'preset'?: string;
+    'preset_scope'?: Array<DtoPermission>;
+    'user_id'?: number;
 }
 export interface DtoUserResponse {
     'first_name'?: string;
@@ -574,7 +601,7 @@ export interface DtoUserResponse {
      */
     'name'?: string;
     'position'?: string;
-    'role'?: string;
+    'preset'?: string;
     'termination_date'?: string;
     'username'?: string;
 }
@@ -683,20 +710,28 @@ export interface RbacPoliciesPut200Response {
     'data'?: DtoRoutePolicyView;
     'error'?: object;
 }
-export interface RbacRolesGet200Response {
-    'data'?: Array<DomainRole>;
+export interface RbacPresetRulesGet200Response {
+    'data'?: Array<DtoPresetRuleView>;
     'error'?: object;
 }
-export interface RbacRolesPost201Response {
-    'data'?: DomainRole;
+export interface RbacPresetRulesPut200Response {
+    'data'?: DtoPresetRuleView;
     'error'?: object;
 }
-export interface RbacRulesGet200Response {
-    'data'?: Array<DtoRuleView>;
+export interface RbacPresetsGet200Response {
+    'data'?: Array<DomainPreset>;
     'error'?: object;
 }
-export interface RbacRulesPut200Response {
-    'data'?: DtoRuleView;
+export interface RbacPresetsPost201Response {
+    'data'?: DomainPreset;
+    'error'?: object;
+}
+export interface RbacUsersIdPermissionsGet200Response {
+    'data'?: DtoUserPermissionsView;
+    'error'?: object;
+}
+export interface RbacUsersIdPermissionsPut200Response {
+    'data'?: DtoUserPermissionsInput;
     'error'?: object;
 }
 export interface ResourcesGet200Response {
@@ -1237,7 +1272,7 @@ export const AuditApiAxiosParamCreator = function (configuration?: Configuration
          * @param {string} [to] Upper bound (RFC3339, inclusive)
          * @param {string} [search] Substring search on path / actor email
          * @param {string} [id] Filter by the ID shown in the ID column (entity_id or actor_user_id)
-         * @param {string} [ip] Filter by actor IP (case-insensitive substring)
+         * @param {string} [ip] Filter by exact actor IP (e.g. 172.18.0.1)
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
@@ -1339,7 +1374,7 @@ export const AuditApiFp = function(configuration?: Configuration) {
          * @param {string} [to] Upper bound (RFC3339, inclusive)
          * @param {string} [search] Substring search on path / actor email
          * @param {string} [id] Filter by the ID shown in the ID column (entity_id or actor_user_id)
-         * @param {string} [ip] Filter by actor IP (case-insensitive substring)
+         * @param {string} [ip] Filter by exact actor IP (e.g. 172.18.0.1)
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
@@ -1372,7 +1407,7 @@ export const AuditApiFactory = function (configuration?: Configuration, basePath
          * @param {string} [to] Upper bound (RFC3339, inclusive)
          * @param {string} [search] Substring search on path / actor email
          * @param {string} [id] Filter by the ID shown in the ID column (entity_id or actor_user_id)
-         * @param {string} [ip] Filter by actor IP (case-insensitive substring)
+         * @param {string} [ip] Filter by exact actor IP (e.g. 172.18.0.1)
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
@@ -1400,7 +1435,7 @@ export class AuditApi extends BaseAPI {
      * @param {string} [to] Upper bound (RFC3339, inclusive)
      * @param {string} [search] Substring search on path / actor email
      * @param {string} [id] Filter by the ID shown in the ID column (entity_id or actor_user_id)
-     * @param {string} [ip] Filter by actor IP (case-insensitive substring)
+     * @param {string} [ip] Filter by exact actor IP (e.g. 172.18.0.1)
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      */
@@ -3448,7 +3483,7 @@ export const RBACApiAxiosParamCreator = function (configuration?: Configuration)
         /**
          * 
          * @summary Explain a decision
-         * @param {string} role Role
+         * @param {string} preset Preset
          * @param {string} resource Resource
          * @param {string} action Action
          * @param {number} [userId] User ID
@@ -3458,9 +3493,9 @@ export const RBACApiAxiosParamCreator = function (configuration?: Configuration)
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        rbacExplainGet: async (role: string, resource: string, action: string, userId?: number, projectOwner?: number, processOwner?: number, owner?: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
-            // verify required parameter 'role' is not null or undefined
-            assertParamExists('rbacExplainGet', 'role', role)
+        rbacExplainGet: async (preset: string, resource: string, action: string, userId?: number, projectOwner?: number, processOwner?: number, owner?: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'preset' is not null or undefined
+            assertParamExists('rbacExplainGet', 'preset', preset)
             // verify required parameter 'resource' is not null or undefined
             assertParamExists('rbacExplainGet', 'resource', resource)
             // verify required parameter 'action' is not null or undefined
@@ -3480,8 +3515,8 @@ export const RBACApiAxiosParamCreator = function (configuration?: Configuration)
             // authentication ApiKeyAuth required
             await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
 
-            if (role !== undefined) {
-                localVarQueryParameter['role'] = role;
+            if (preset !== undefined) {
+                localVarQueryParameter['preset'] = preset;
             }
 
             if (resource !== undefined) {
@@ -3694,193 +3729,12 @@ export const RBACApiAxiosParamCreator = function (configuration?: Configuration)
         },
         /**
          * 
-         * @summary Reset policies to defaults
-         * @param {*} [options] Override http request option.
-         * @throws {RequiredError}
-         */
-        rbacResetPost: async (options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
-            const localVarPath = `/rbac/reset`;
-            // use dummy base URL string because the URL constructor only accepts absolute URLs.
-            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
-            let baseOptions;
-            if (configuration) {
-                baseOptions = configuration.baseOptions;
-            }
-
-            const localVarRequestOptions = { method: 'POST', ...baseOptions, ...options};
-            const localVarHeaderParameter = {} as any;
-            const localVarQueryParameter = {} as any;
-
-            // authentication ApiKeyAuth required
-            await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
-
-
-            setSearchParams(localVarUrlObj, localVarQueryParameter);
-            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
-            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
-
-            return {
-                url: toPathString(localVarUrlObj),
-                options: localVarRequestOptions,
-            };
-        },
-        /**
-         * 
-         * @summary List roles
-         * @param {*} [options] Override http request option.
-         * @throws {RequiredError}
-         */
-        rbacRolesGet: async (options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
-            const localVarPath = `/rbac/roles`;
-            // use dummy base URL string because the URL constructor only accepts absolute URLs.
-            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
-            let baseOptions;
-            if (configuration) {
-                baseOptions = configuration.baseOptions;
-            }
-
-            const localVarRequestOptions = { method: 'GET', ...baseOptions, ...options};
-            const localVarHeaderParameter = {} as any;
-            const localVarQueryParameter = {} as any;
-
-            // authentication ApiKeyAuth required
-            await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
-
-            localVarHeaderParameter['Accept'] = 'application/json';
-
-            setSearchParams(localVarUrlObj, localVarQueryParameter);
-            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
-            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
-
-            return {
-                url: toPathString(localVarUrlObj),
-                options: localVarRequestOptions,
-            };
-        },
-        /**
-         * 
-         * @summary Delete a role
-         * @param {string} name Role name
-         * @param {*} [options] Override http request option.
-         * @throws {RequiredError}
-         */
-        rbacRolesNameDelete: async (name: string, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
-            // verify required parameter 'name' is not null or undefined
-            assertParamExists('rbacRolesNameDelete', 'name', name)
-            const localVarPath = `/rbac/roles/{name}`
-                .replace('{name}', encodeURIComponent(String(name)));
-            // use dummy base URL string because the URL constructor only accepts absolute URLs.
-            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
-            let baseOptions;
-            if (configuration) {
-                baseOptions = configuration.baseOptions;
-            }
-
-            const localVarRequestOptions = { method: 'DELETE', ...baseOptions, ...options};
-            const localVarHeaderParameter = {} as any;
-            const localVarQueryParameter = {} as any;
-
-            // authentication ApiKeyAuth required
-            await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
-
-
-            setSearchParams(localVarUrlObj, localVarQueryParameter);
-            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
-            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
-
-            return {
-                url: toPathString(localVarUrlObj),
-                options: localVarRequestOptions,
-            };
-        },
-        /**
-         * 
-         * @summary Update a role
-         * @param {string} name Role name
-         * @param {DtoRoleUpdateInput} role Role
-         * @param {*} [options] Override http request option.
-         * @throws {RequiredError}
-         */
-        rbacRolesNamePut: async (name: string, role: DtoRoleUpdateInput, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
-            // verify required parameter 'name' is not null or undefined
-            assertParamExists('rbacRolesNamePut', 'name', name)
-            // verify required parameter 'role' is not null or undefined
-            assertParamExists('rbacRolesNamePut', 'role', role)
-            const localVarPath = `/rbac/roles/{name}`
-                .replace('{name}', encodeURIComponent(String(name)));
-            // use dummy base URL string because the URL constructor only accepts absolute URLs.
-            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
-            let baseOptions;
-            if (configuration) {
-                baseOptions = configuration.baseOptions;
-            }
-
-            const localVarRequestOptions = { method: 'PUT', ...baseOptions, ...options};
-            const localVarHeaderParameter = {} as any;
-            const localVarQueryParameter = {} as any;
-
-            // authentication ApiKeyAuth required
-            await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
-
-            localVarHeaderParameter['Content-Type'] = 'application/json';
-            localVarHeaderParameter['Accept'] = 'application/json';
-
-            setSearchParams(localVarUrlObj, localVarQueryParameter);
-            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
-            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
-            localVarRequestOptions.data = serializeDataIfNeeded(role, localVarRequestOptions, configuration)
-
-            return {
-                url: toPathString(localVarUrlObj),
-                options: localVarRequestOptions,
-            };
-        },
-        /**
-         * 
-         * @summary Create a role
-         * @param {DtoRoleUpsertInput} role Role
-         * @param {*} [options] Override http request option.
-         * @throws {RequiredError}
-         */
-        rbacRolesPost: async (role: DtoRoleUpsertInput, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
-            // verify required parameter 'role' is not null or undefined
-            assertParamExists('rbacRolesPost', 'role', role)
-            const localVarPath = `/rbac/roles`;
-            // use dummy base URL string because the URL constructor only accepts absolute URLs.
-            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
-            let baseOptions;
-            if (configuration) {
-                baseOptions = configuration.baseOptions;
-            }
-
-            const localVarRequestOptions = { method: 'POST', ...baseOptions, ...options};
-            const localVarHeaderParameter = {} as any;
-            const localVarQueryParameter = {} as any;
-
-            // authentication ApiKeyAuth required
-            await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
-
-            localVarHeaderParameter['Content-Type'] = 'application/json';
-            localVarHeaderParameter['Accept'] = 'application/json';
-
-            setSearchParams(localVarUrlObj, localVarQueryParameter);
-            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
-            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
-            localVarRequestOptions.data = serializeDataIfNeeded(role, localVarRequestOptions, configuration)
-
-            return {
-                url: toPathString(localVarUrlObj),
-                options: localVarRequestOptions,
-            };
-        },
-        /**
-         * 
          * @summary List matrix rules
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        rbacRulesGet: async (options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
-            const localVarPath = `/rbac/rules`;
+        rbacPresetRulesGet: async (options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            const localVarPath = `/rbac/preset-rules`;
             // use dummy base URL string because the URL constructor only accepts absolute URLs.
             const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
             let baseOptions;
@@ -3913,10 +3767,10 @@ export const RBACApiAxiosParamCreator = function (configuration?: Configuration)
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        rbacRulesIdDelete: async (id: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+        rbacPresetRulesIdDelete: async (id: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
             // verify required parameter 'id' is not null or undefined
-            assertParamExists('rbacRulesIdDelete', 'id', id)
-            const localVarPath = `/rbac/rules/{id}`
+            assertParamExists('rbacPresetRulesIdDelete', 'id', id)
+            const localVarPath = `/rbac/preset-rules/{id}`
                 .replace('{id}', encodeURIComponent(String(id)));
             // use dummy base URL string because the URL constructor only accepts absolute URLs.
             const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
@@ -3945,14 +3799,14 @@ export const RBACApiAxiosParamCreator = function (configuration?: Configuration)
         /**
          * 
          * @summary Upsert a matrix rule
-         * @param {DtoRuleInput} rule Matrix rule
+         * @param {DtoPresetRuleInput} rule Matrix rule
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        rbacRulesPut: async (rule: DtoRuleInput, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+        rbacPresetRulesPut: async (rule: DtoPresetRuleInput, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
             // verify required parameter 'rule' is not null or undefined
-            assertParamExists('rbacRulesPut', 'rule', rule)
-            const localVarPath = `/rbac/rules`;
+            assertParamExists('rbacPresetRulesPut', 'rule', rule)
+            const localVarPath = `/rbac/preset-rules`;
             // use dummy base URL string because the URL constructor only accepts absolute URLs.
             const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
             let baseOptions;
@@ -3980,6 +3834,266 @@ export const RBACApiAxiosParamCreator = function (configuration?: Configuration)
                 options: localVarRequestOptions,
             };
         },
+        /**
+         * 
+         * @summary List presets
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        rbacPresetsGet: async (options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            const localVarPath = `/rbac/presets`;
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'GET', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication ApiKeyAuth required
+            await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
+
+            localVarHeaderParameter['Accept'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * 
+         * @summary Delete a preset
+         * @param {string} name Preset name
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        rbacPresetsNameDelete: async (name: string, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'name' is not null or undefined
+            assertParamExists('rbacPresetsNameDelete', 'name', name)
+            const localVarPath = `/rbac/presets/{name}`
+                .replace('{name}', encodeURIComponent(String(name)));
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'DELETE', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication ApiKeyAuth required
+            await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
+
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * 
+         * @summary Update a preset
+         * @param {string} name Preset name
+         * @param {DtoPresetUpdateInput} preset Preset
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        rbacPresetsNamePut: async (name: string, preset: DtoPresetUpdateInput, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'name' is not null or undefined
+            assertParamExists('rbacPresetsNamePut', 'name', name)
+            // verify required parameter 'preset' is not null or undefined
+            assertParamExists('rbacPresetsNamePut', 'preset', preset)
+            const localVarPath = `/rbac/presets/{name}`
+                .replace('{name}', encodeURIComponent(String(name)));
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'PUT', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication ApiKeyAuth required
+            await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
+
+            localVarHeaderParameter['Content-Type'] = 'application/json';
+            localVarHeaderParameter['Accept'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+            localVarRequestOptions.data = serializeDataIfNeeded(preset, localVarRequestOptions, configuration)
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * 
+         * @summary Create a preset
+         * @param {DtoPresetUpsertInput} preset Preset
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        rbacPresetsPost: async (preset: DtoPresetUpsertInput, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'preset' is not null or undefined
+            assertParamExists('rbacPresetsPost', 'preset', preset)
+            const localVarPath = `/rbac/presets`;
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'POST', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication ApiKeyAuth required
+            await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
+
+            localVarHeaderParameter['Content-Type'] = 'application/json';
+            localVarHeaderParameter['Accept'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+            localVarRequestOptions.data = serializeDataIfNeeded(preset, localVarRequestOptions, configuration)
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * 
+         * @summary Reset policies to defaults
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        rbacResetPost: async (options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            const localVarPath = `/rbac/reset`;
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'POST', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication ApiKeyAuth required
+            await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
+
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * 
+         * @summary User permissions
+         * @param {number} id User ID
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        rbacUsersIdPermissionsGet: async (id: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'id' is not null or undefined
+            assertParamExists('rbacUsersIdPermissionsGet', 'id', id)
+            const localVarPath = `/rbac/users/{id}/permissions`
+                .replace('{id}', encodeURIComponent(String(id)));
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'GET', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication ApiKeyAuth required
+            await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
+
+            localVarHeaderParameter['Accept'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * 
+         * @summary Replace user permissions
+         * @param {number} id User ID
+         * @param {DtoUserPermissionsInput} perms Permissions
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        rbacUsersIdPermissionsPut: async (id: number, perms: DtoUserPermissionsInput, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'id' is not null or undefined
+            assertParamExists('rbacUsersIdPermissionsPut', 'id', id)
+            // verify required parameter 'perms' is not null or undefined
+            assertParamExists('rbacUsersIdPermissionsPut', 'perms', perms)
+            const localVarPath = `/rbac/users/{id}/permissions`
+                .replace('{id}', encodeURIComponent(String(id)));
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'PUT', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication ApiKeyAuth required
+            await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
+
+            localVarHeaderParameter['Content-Type'] = 'application/json';
+            localVarHeaderParameter['Accept'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+            localVarRequestOptions.data = serializeDataIfNeeded(perms, localVarRequestOptions, configuration)
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
     }
 };
 
@@ -3992,7 +4106,7 @@ export const RBACApiFp = function(configuration?: Configuration) {
         /**
          * 
          * @summary Explain a decision
-         * @param {string} role Role
+         * @param {string} preset Preset
          * @param {string} resource Resource
          * @param {string} action Action
          * @param {number} [userId] User ID
@@ -4002,8 +4116,8 @@ export const RBACApiFp = function(configuration?: Configuration) {
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async rbacExplainGet(role: string, resource: string, action: string, userId?: number, projectOwner?: number, processOwner?: number, owner?: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<RbacExplainGet200Response>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.rbacExplainGet(role, resource, action, userId, projectOwner, processOwner, owner, options);
+        async rbacExplainGet(preset: string, resource: string, action: string, userId?: number, projectOwner?: number, processOwner?: number, owner?: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<RbacExplainGet200Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.rbacExplainGet(preset, resource, action, userId, projectOwner, processOwner, owner, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
             const localVarOperationServerBasePath = operationServerMap['RBACApi.rbacExplainGet']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
@@ -4072,6 +4186,96 @@ export const RBACApiFp = function(configuration?: Configuration) {
         },
         /**
          * 
+         * @summary List matrix rules
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async rbacPresetRulesGet(options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<RbacPresetRulesGet200Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.rbacPresetRulesGet(options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['RBACApi.rbacPresetRulesGet']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
+         * 
+         * @summary Delete a matrix rule
+         * @param {number} id Rule ID
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async rbacPresetRulesIdDelete(id: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<void>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.rbacPresetRulesIdDelete(id, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['RBACApi.rbacPresetRulesIdDelete']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
+         * 
+         * @summary Upsert a matrix rule
+         * @param {DtoPresetRuleInput} rule Matrix rule
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async rbacPresetRulesPut(rule: DtoPresetRuleInput, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<RbacPresetRulesPut200Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.rbacPresetRulesPut(rule, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['RBACApi.rbacPresetRulesPut']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
+         * 
+         * @summary List presets
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async rbacPresetsGet(options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<RbacPresetsGet200Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.rbacPresetsGet(options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['RBACApi.rbacPresetsGet']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
+         * 
+         * @summary Delete a preset
+         * @param {string} name Preset name
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async rbacPresetsNameDelete(name: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<void>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.rbacPresetsNameDelete(name, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['RBACApi.rbacPresetsNameDelete']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
+         * 
+         * @summary Update a preset
+         * @param {string} name Preset name
+         * @param {DtoPresetUpdateInput} preset Preset
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async rbacPresetsNamePut(name: string, preset: DtoPresetUpdateInput, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<RbacPresetsPost201Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.rbacPresetsNamePut(name, preset, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['RBACApi.rbacPresetsNamePut']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
+         * 
+         * @summary Create a preset
+         * @param {DtoPresetUpsertInput} preset Preset
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async rbacPresetsPost(preset: DtoPresetUpsertInput, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<RbacPresetsPost201Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.rbacPresetsPost(preset, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['RBACApi.rbacPresetsPost']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
+         * 
          * @summary Reset policies to defaults
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
@@ -4084,92 +4288,29 @@ export const RBACApiFp = function(configuration?: Configuration) {
         },
         /**
          * 
-         * @summary List roles
+         * @summary User permissions
+         * @param {number} id User ID
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async rbacRolesGet(options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<RbacRolesGet200Response>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.rbacRolesGet(options);
+        async rbacUsersIdPermissionsGet(id: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<RbacUsersIdPermissionsGet200Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.rbacUsersIdPermissionsGet(id, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
-            const localVarOperationServerBasePath = operationServerMap['RBACApi.rbacRolesGet']?.[localVarOperationServerIndex]?.url;
+            const localVarOperationServerBasePath = operationServerMap['RBACApi.rbacUsersIdPermissionsGet']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
          * 
-         * @summary Delete a role
-         * @param {string} name Role name
+         * @summary Replace user permissions
+         * @param {number} id User ID
+         * @param {DtoUserPermissionsInput} perms Permissions
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async rbacRolesNameDelete(name: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<void>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.rbacRolesNameDelete(name, options);
+        async rbacUsersIdPermissionsPut(id: number, perms: DtoUserPermissionsInput, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<RbacUsersIdPermissionsPut200Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.rbacUsersIdPermissionsPut(id, perms, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
-            const localVarOperationServerBasePath = operationServerMap['RBACApi.rbacRolesNameDelete']?.[localVarOperationServerIndex]?.url;
-            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
-        },
-        /**
-         * 
-         * @summary Update a role
-         * @param {string} name Role name
-         * @param {DtoRoleUpdateInput} role Role
-         * @param {*} [options] Override http request option.
-         * @throws {RequiredError}
-         */
-        async rbacRolesNamePut(name: string, role: DtoRoleUpdateInput, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<RbacRolesPost201Response>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.rbacRolesNamePut(name, role, options);
-            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
-            const localVarOperationServerBasePath = operationServerMap['RBACApi.rbacRolesNamePut']?.[localVarOperationServerIndex]?.url;
-            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
-        },
-        /**
-         * 
-         * @summary Create a role
-         * @param {DtoRoleUpsertInput} role Role
-         * @param {*} [options] Override http request option.
-         * @throws {RequiredError}
-         */
-        async rbacRolesPost(role: DtoRoleUpsertInput, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<RbacRolesPost201Response>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.rbacRolesPost(role, options);
-            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
-            const localVarOperationServerBasePath = operationServerMap['RBACApi.rbacRolesPost']?.[localVarOperationServerIndex]?.url;
-            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
-        },
-        /**
-         * 
-         * @summary List matrix rules
-         * @param {*} [options] Override http request option.
-         * @throws {RequiredError}
-         */
-        async rbacRulesGet(options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<RbacRulesGet200Response>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.rbacRulesGet(options);
-            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
-            const localVarOperationServerBasePath = operationServerMap['RBACApi.rbacRulesGet']?.[localVarOperationServerIndex]?.url;
-            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
-        },
-        /**
-         * 
-         * @summary Delete a matrix rule
-         * @param {number} id Rule ID
-         * @param {*} [options] Override http request option.
-         * @throws {RequiredError}
-         */
-        async rbacRulesIdDelete(id: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<void>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.rbacRulesIdDelete(id, options);
-            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
-            const localVarOperationServerBasePath = operationServerMap['RBACApi.rbacRulesIdDelete']?.[localVarOperationServerIndex]?.url;
-            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
-        },
-        /**
-         * 
-         * @summary Upsert a matrix rule
-         * @param {DtoRuleInput} rule Matrix rule
-         * @param {*} [options] Override http request option.
-         * @throws {RequiredError}
-         */
-        async rbacRulesPut(rule: DtoRuleInput, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<RbacRulesPut200Response>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.rbacRulesPut(rule, options);
-            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
-            const localVarOperationServerBasePath = operationServerMap['RBACApi.rbacRulesPut']?.[localVarOperationServerIndex]?.url;
+            const localVarOperationServerBasePath = operationServerMap['RBACApi.rbacUsersIdPermissionsPut']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
     }
@@ -4184,7 +4325,7 @@ export const RBACApiFactory = function (configuration?: Configuration, basePath?
         /**
          * 
          * @summary Explain a decision
-         * @param {string} role Role
+         * @param {string} preset Preset
          * @param {string} resource Resource
          * @param {string} action Action
          * @param {number} [userId] User ID
@@ -4194,8 +4335,8 @@ export const RBACApiFactory = function (configuration?: Configuration, basePath?
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        rbacExplainGet(role: string, resource: string, action: string, userId?: number, projectOwner?: number, processOwner?: number, owner?: number, options?: RawAxiosRequestConfig): AxiosPromise<RbacExplainGet200Response> {
-            return localVarFp.rbacExplainGet(role, resource, action, userId, projectOwner, processOwner, owner, options).then((request) => request(axios, basePath));
+        rbacExplainGet(preset: string, resource: string, action: string, userId?: number, projectOwner?: number, processOwner?: number, owner?: number, options?: RawAxiosRequestConfig): AxiosPromise<RbacExplainGet200Response> {
+            return localVarFp.rbacExplainGet(preset, resource, action, userId, projectOwner, processOwner, owner, options).then((request) => request(axios, basePath));
         },
         /**
          * 
@@ -4246,6 +4387,75 @@ export const RBACApiFactory = function (configuration?: Configuration, basePath?
         },
         /**
          * 
+         * @summary List matrix rules
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        rbacPresetRulesGet(options?: RawAxiosRequestConfig): AxiosPromise<RbacPresetRulesGet200Response> {
+            return localVarFp.rbacPresetRulesGet(options).then((request) => request(axios, basePath));
+        },
+        /**
+         * 
+         * @summary Delete a matrix rule
+         * @param {number} id Rule ID
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        rbacPresetRulesIdDelete(id: number, options?: RawAxiosRequestConfig): AxiosPromise<void> {
+            return localVarFp.rbacPresetRulesIdDelete(id, options).then((request) => request(axios, basePath));
+        },
+        /**
+         * 
+         * @summary Upsert a matrix rule
+         * @param {DtoPresetRuleInput} rule Matrix rule
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        rbacPresetRulesPut(rule: DtoPresetRuleInput, options?: RawAxiosRequestConfig): AxiosPromise<RbacPresetRulesPut200Response> {
+            return localVarFp.rbacPresetRulesPut(rule, options).then((request) => request(axios, basePath));
+        },
+        /**
+         * 
+         * @summary List presets
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        rbacPresetsGet(options?: RawAxiosRequestConfig): AxiosPromise<RbacPresetsGet200Response> {
+            return localVarFp.rbacPresetsGet(options).then((request) => request(axios, basePath));
+        },
+        /**
+         * 
+         * @summary Delete a preset
+         * @param {string} name Preset name
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        rbacPresetsNameDelete(name: string, options?: RawAxiosRequestConfig): AxiosPromise<void> {
+            return localVarFp.rbacPresetsNameDelete(name, options).then((request) => request(axios, basePath));
+        },
+        /**
+         * 
+         * @summary Update a preset
+         * @param {string} name Preset name
+         * @param {DtoPresetUpdateInput} preset Preset
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        rbacPresetsNamePut(name: string, preset: DtoPresetUpdateInput, options?: RawAxiosRequestConfig): AxiosPromise<RbacPresetsPost201Response> {
+            return localVarFp.rbacPresetsNamePut(name, preset, options).then((request) => request(axios, basePath));
+        },
+        /**
+         * 
+         * @summary Create a preset
+         * @param {DtoPresetUpsertInput} preset Preset
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        rbacPresetsPost(preset: DtoPresetUpsertInput, options?: RawAxiosRequestConfig): AxiosPromise<RbacPresetsPost201Response> {
+            return localVarFp.rbacPresetsPost(preset, options).then((request) => request(axios, basePath));
+        },
+        /**
+         * 
          * @summary Reset policies to defaults
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
@@ -4255,72 +4465,24 @@ export const RBACApiFactory = function (configuration?: Configuration, basePath?
         },
         /**
          * 
-         * @summary List roles
+         * @summary User permissions
+         * @param {number} id User ID
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        rbacRolesGet(options?: RawAxiosRequestConfig): AxiosPromise<RbacRolesGet200Response> {
-            return localVarFp.rbacRolesGet(options).then((request) => request(axios, basePath));
+        rbacUsersIdPermissionsGet(id: number, options?: RawAxiosRequestConfig): AxiosPromise<RbacUsersIdPermissionsGet200Response> {
+            return localVarFp.rbacUsersIdPermissionsGet(id, options).then((request) => request(axios, basePath));
         },
         /**
          * 
-         * @summary Delete a role
-         * @param {string} name Role name
+         * @summary Replace user permissions
+         * @param {number} id User ID
+         * @param {DtoUserPermissionsInput} perms Permissions
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        rbacRolesNameDelete(name: string, options?: RawAxiosRequestConfig): AxiosPromise<void> {
-            return localVarFp.rbacRolesNameDelete(name, options).then((request) => request(axios, basePath));
-        },
-        /**
-         * 
-         * @summary Update a role
-         * @param {string} name Role name
-         * @param {DtoRoleUpdateInput} role Role
-         * @param {*} [options] Override http request option.
-         * @throws {RequiredError}
-         */
-        rbacRolesNamePut(name: string, role: DtoRoleUpdateInput, options?: RawAxiosRequestConfig): AxiosPromise<RbacRolesPost201Response> {
-            return localVarFp.rbacRolesNamePut(name, role, options).then((request) => request(axios, basePath));
-        },
-        /**
-         * 
-         * @summary Create a role
-         * @param {DtoRoleUpsertInput} role Role
-         * @param {*} [options] Override http request option.
-         * @throws {RequiredError}
-         */
-        rbacRolesPost(role: DtoRoleUpsertInput, options?: RawAxiosRequestConfig): AxiosPromise<RbacRolesPost201Response> {
-            return localVarFp.rbacRolesPost(role, options).then((request) => request(axios, basePath));
-        },
-        /**
-         * 
-         * @summary List matrix rules
-         * @param {*} [options] Override http request option.
-         * @throws {RequiredError}
-         */
-        rbacRulesGet(options?: RawAxiosRequestConfig): AxiosPromise<RbacRulesGet200Response> {
-            return localVarFp.rbacRulesGet(options).then((request) => request(axios, basePath));
-        },
-        /**
-         * 
-         * @summary Delete a matrix rule
-         * @param {number} id Rule ID
-         * @param {*} [options] Override http request option.
-         * @throws {RequiredError}
-         */
-        rbacRulesIdDelete(id: number, options?: RawAxiosRequestConfig): AxiosPromise<void> {
-            return localVarFp.rbacRulesIdDelete(id, options).then((request) => request(axios, basePath));
-        },
-        /**
-         * 
-         * @summary Upsert a matrix rule
-         * @param {DtoRuleInput} rule Matrix rule
-         * @param {*} [options] Override http request option.
-         * @throws {RequiredError}
-         */
-        rbacRulesPut(rule: DtoRuleInput, options?: RawAxiosRequestConfig): AxiosPromise<RbacRulesPut200Response> {
-            return localVarFp.rbacRulesPut(rule, options).then((request) => request(axios, basePath));
+        rbacUsersIdPermissionsPut(id: number, perms: DtoUserPermissionsInput, options?: RawAxiosRequestConfig): AxiosPromise<RbacUsersIdPermissionsPut200Response> {
+            return localVarFp.rbacUsersIdPermissionsPut(id, perms, options).then((request) => request(axios, basePath));
         },
     };
 };
@@ -4332,7 +4494,7 @@ export class RBACApi extends BaseAPI {
     /**
      * 
      * @summary Explain a decision
-     * @param {string} role Role
+     * @param {string} preset Preset
      * @param {string} resource Resource
      * @param {string} action Action
      * @param {number} [userId] User ID
@@ -4342,8 +4504,8 @@ export class RBACApi extends BaseAPI {
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      */
-    public rbacExplainGet(role: string, resource: string, action: string, userId?: number, projectOwner?: number, processOwner?: number, owner?: number, options?: RawAxiosRequestConfig) {
-        return RBACApiFp(this.configuration).rbacExplainGet(role, resource, action, userId, projectOwner, processOwner, owner, options).then((request) => request(this.axios, this.basePath));
+    public rbacExplainGet(preset: string, resource: string, action: string, userId?: number, projectOwner?: number, processOwner?: number, owner?: number, options?: RawAxiosRequestConfig) {
+        return RBACApiFp(this.configuration).rbacExplainGet(preset, resource, action, userId, projectOwner, processOwner, owner, options).then((request) => request(this.axios, this.basePath));
     }
 
     /**
@@ -4400,6 +4562,82 @@ export class RBACApi extends BaseAPI {
 
     /**
      * 
+     * @summary List matrix rules
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    public rbacPresetRulesGet(options?: RawAxiosRequestConfig) {
+        return RBACApiFp(this.configuration).rbacPresetRulesGet(options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * 
+     * @summary Delete a matrix rule
+     * @param {number} id Rule ID
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    public rbacPresetRulesIdDelete(id: number, options?: RawAxiosRequestConfig) {
+        return RBACApiFp(this.configuration).rbacPresetRulesIdDelete(id, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * 
+     * @summary Upsert a matrix rule
+     * @param {DtoPresetRuleInput} rule Matrix rule
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    public rbacPresetRulesPut(rule: DtoPresetRuleInput, options?: RawAxiosRequestConfig) {
+        return RBACApiFp(this.configuration).rbacPresetRulesPut(rule, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * 
+     * @summary List presets
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    public rbacPresetsGet(options?: RawAxiosRequestConfig) {
+        return RBACApiFp(this.configuration).rbacPresetsGet(options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * 
+     * @summary Delete a preset
+     * @param {string} name Preset name
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    public rbacPresetsNameDelete(name: string, options?: RawAxiosRequestConfig) {
+        return RBACApiFp(this.configuration).rbacPresetsNameDelete(name, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * 
+     * @summary Update a preset
+     * @param {string} name Preset name
+     * @param {DtoPresetUpdateInput} preset Preset
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    public rbacPresetsNamePut(name: string, preset: DtoPresetUpdateInput, options?: RawAxiosRequestConfig) {
+        return RBACApiFp(this.configuration).rbacPresetsNamePut(name, preset, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * 
+     * @summary Create a preset
+     * @param {DtoPresetUpsertInput} preset Preset
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    public rbacPresetsPost(preset: DtoPresetUpsertInput, options?: RawAxiosRequestConfig) {
+        return RBACApiFp(this.configuration).rbacPresetsPost(preset, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * 
      * @summary Reset policies to defaults
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
@@ -4410,78 +4648,25 @@ export class RBACApi extends BaseAPI {
 
     /**
      * 
-     * @summary List roles
+     * @summary User permissions
+     * @param {number} id User ID
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      */
-    public rbacRolesGet(options?: RawAxiosRequestConfig) {
-        return RBACApiFp(this.configuration).rbacRolesGet(options).then((request) => request(this.axios, this.basePath));
+    public rbacUsersIdPermissionsGet(id: number, options?: RawAxiosRequestConfig) {
+        return RBACApiFp(this.configuration).rbacUsersIdPermissionsGet(id, options).then((request) => request(this.axios, this.basePath));
     }
 
     /**
      * 
-     * @summary Delete a role
-     * @param {string} name Role name
+     * @summary Replace user permissions
+     * @param {number} id User ID
+     * @param {DtoUserPermissionsInput} perms Permissions
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      */
-    public rbacRolesNameDelete(name: string, options?: RawAxiosRequestConfig) {
-        return RBACApiFp(this.configuration).rbacRolesNameDelete(name, options).then((request) => request(this.axios, this.basePath));
-    }
-
-    /**
-     * 
-     * @summary Update a role
-     * @param {string} name Role name
-     * @param {DtoRoleUpdateInput} role Role
-     * @param {*} [options] Override http request option.
-     * @throws {RequiredError}
-     */
-    public rbacRolesNamePut(name: string, role: DtoRoleUpdateInput, options?: RawAxiosRequestConfig) {
-        return RBACApiFp(this.configuration).rbacRolesNamePut(name, role, options).then((request) => request(this.axios, this.basePath));
-    }
-
-    /**
-     * 
-     * @summary Create a role
-     * @param {DtoRoleUpsertInput} role Role
-     * @param {*} [options] Override http request option.
-     * @throws {RequiredError}
-     */
-    public rbacRolesPost(role: DtoRoleUpsertInput, options?: RawAxiosRequestConfig) {
-        return RBACApiFp(this.configuration).rbacRolesPost(role, options).then((request) => request(this.axios, this.basePath));
-    }
-
-    /**
-     * 
-     * @summary List matrix rules
-     * @param {*} [options] Override http request option.
-     * @throws {RequiredError}
-     */
-    public rbacRulesGet(options?: RawAxiosRequestConfig) {
-        return RBACApiFp(this.configuration).rbacRulesGet(options).then((request) => request(this.axios, this.basePath));
-    }
-
-    /**
-     * 
-     * @summary Delete a matrix rule
-     * @param {number} id Rule ID
-     * @param {*} [options] Override http request option.
-     * @throws {RequiredError}
-     */
-    public rbacRulesIdDelete(id: number, options?: RawAxiosRequestConfig) {
-        return RBACApiFp(this.configuration).rbacRulesIdDelete(id, options).then((request) => request(this.axios, this.basePath));
-    }
-
-    /**
-     * 
-     * @summary Upsert a matrix rule
-     * @param {DtoRuleInput} rule Matrix rule
-     * @param {*} [options] Override http request option.
-     * @throws {RequiredError}
-     */
-    public rbacRulesPut(rule: DtoRuleInput, options?: RawAxiosRequestConfig) {
-        return RBACApiFp(this.configuration).rbacRulesPut(rule, options).then((request) => request(this.axios, this.basePath));
+    public rbacUsersIdPermissionsPut(id: number, perms: DtoUserPermissionsInput, options?: RawAxiosRequestConfig) {
+        return RBACApiFp(this.configuration).rbacUsersIdPermissionsPut(id, perms, options).then((request) => request(this.axios, this.basePath));
     }
 }
 
@@ -6521,14 +6706,14 @@ export const UsersApiAxiosParamCreator = function (configuration?: Configuration
          * Returns a paged list of users; admin sees all, vp sees own subordinates + self.
          * @summary List users
          * @param {number} [limit] Page size (default 50, max 500)
-         * @param {string} [role] Filter by role (e.g. worker)
+         * @param {string} [preset] Filter by preset (e.g. worker)
          * @param {number} [managerId] Filter by manager (admin)
          * @param {boolean} [includeHash] Include password_hash (admin only)
          * @param {number} [offset] Page offset
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        userGet: async (limit?: number, role?: string, managerId?: number, includeHash?: boolean, offset?: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+        userGet: async (limit?: number, preset?: string, managerId?: number, includeHash?: boolean, offset?: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
             const localVarPath = `/user`;
             // use dummy base URL string because the URL constructor only accepts absolute URLs.
             const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
@@ -6548,8 +6733,8 @@ export const UsersApiAxiosParamCreator = function (configuration?: Configuration
                 localVarQueryParameter['limit'] = limit;
             }
 
-            if (role !== undefined) {
-                localVarQueryParameter['role'] = role;
+            if (preset !== undefined) {
+                localVarQueryParameter['preset'] = preset;
             }
 
             if (managerId !== undefined) {
@@ -6995,15 +7180,15 @@ export const UsersApiFp = function(configuration?: Configuration) {
          * Returns a paged list of users; admin sees all, vp sees own subordinates + self.
          * @summary List users
          * @param {number} [limit] Page size (default 50, max 500)
-         * @param {string} [role] Filter by role (e.g. worker)
+         * @param {string} [preset] Filter by preset (e.g. worker)
          * @param {number} [managerId] Filter by manager (admin)
          * @param {boolean} [includeHash] Include password_hash (admin only)
          * @param {number} [offset] Page offset
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async userGet(limit?: number, role?: string, managerId?: number, includeHash?: boolean, offset?: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<UserGet200Response>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.userGet(limit, role, managerId, includeHash, offset, options);
+        async userGet(limit?: number, preset?: string, managerId?: number, includeHash?: boolean, offset?: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<UserGet200Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.userGet(limit, preset, managerId, includeHash, offset, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
             const localVarOperationServerBasePath = operationServerMap['UsersApi.userGet']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
@@ -7165,15 +7350,15 @@ export const UsersApiFactory = function (configuration?: Configuration, basePath
          * Returns a paged list of users; admin sees all, vp sees own subordinates + self.
          * @summary List users
          * @param {number} [limit] Page size (default 50, max 500)
-         * @param {string} [role] Filter by role (e.g. worker)
+         * @param {string} [preset] Filter by preset (e.g. worker)
          * @param {number} [managerId] Filter by manager (admin)
          * @param {boolean} [includeHash] Include password_hash (admin only)
          * @param {number} [offset] Page offset
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        userGet(limit?: number, role?: string, managerId?: number, includeHash?: boolean, offset?: number, options?: RawAxiosRequestConfig): AxiosPromise<UserGet200Response> {
-            return localVarFp.userGet(limit, role, managerId, includeHash, offset, options).then((request) => request(axios, basePath));
+        userGet(limit?: number, preset?: string, managerId?: number, includeHash?: boolean, offset?: number, options?: RawAxiosRequestConfig): AxiosPromise<UserGet200Response> {
+            return localVarFp.userGet(limit, preset, managerId, includeHash, offset, options).then((request) => request(axios, basePath));
         },
         /**
          * Clear state ranges of a worker overlapping a date range (splits overlaps, optional state filter)
@@ -7305,15 +7490,15 @@ export class UsersApi extends BaseAPI {
      * Returns a paged list of users; admin sees all, vp sees own subordinates + self.
      * @summary List users
      * @param {number} [limit] Page size (default 50, max 500)
-     * @param {string} [role] Filter by role (e.g. worker)
+     * @param {string} [preset] Filter by preset (e.g. worker)
      * @param {number} [managerId] Filter by manager (admin)
      * @param {boolean} [includeHash] Include password_hash (admin only)
      * @param {number} [offset] Page offset
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      */
-    public userGet(limit?: number, role?: string, managerId?: number, includeHash?: boolean, offset?: number, options?: RawAxiosRequestConfig) {
-        return UsersApiFp(this.configuration).userGet(limit, role, managerId, includeHash, offset, options).then((request) => request(this.axios, this.basePath));
+    public userGet(limit?: number, preset?: string, managerId?: number, includeHash?: boolean, offset?: number, options?: RawAxiosRequestConfig) {
+        return UsersApiFp(this.configuration).userGet(limit, preset, managerId, includeHash, offset, options).then((request) => request(this.axios, this.basePath));
     }
 
     /**

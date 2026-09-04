@@ -14,7 +14,7 @@ export function useRoleAccess() {
   const planning = usePlanningStore()
   const rbac = useRbacStore()
 
-  const role = computed(() => auth.user?.role)
+  const role = computed(() => auth.user?.preset)
   const userId = computed(() => auth.user?.id)
 
   // === Projects ===

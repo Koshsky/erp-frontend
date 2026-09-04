@@ -77,7 +77,7 @@ function pause(): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, PAUSE_MS))
 }
 
-/** PULL steps per user role (heavy requests at the end of the queue) */
+/** PULL steps per user preset (heavy requests at the end of the queue) */
 export function buildPullSteps(): PullStep[] {
   const auth = useAuthStore()
   const app = useAppStore()
@@ -85,12 +85,12 @@ export function buildPullSteps(): PullStep[] {
   const ts = useTimesheetStore()
   const rbac = useRbacStore()
 
-  const role = auth.user?.role ?? ''
-  const isStaff = role === 'vp' || role === 'admin'
+  const preset = auth.user?.preset ?? ''
+  const isStaff = preset === 'vp' || preset === 'admin'
   const userId = auth.user?.id
 
   // worker does not read data (profile only) — nothing to warm
-  if (role === 'worker') return []
+  if (preset === 'worker') return []
 
   const steps: PullStep[] = [
     {

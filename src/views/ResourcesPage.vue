@@ -57,7 +57,7 @@ type ModalMode =
 /** Owner options (users, excluding workers) */
 const ownerOptions = computed<ModalField['options']>(() =>
   users.value
-    .filter((u) => u.id != null && u.role !== 'worker')
+    .filter((u) => u.id != null && u.preset !== 'worker')
     .sort(compareByName)
     .map((u) => ({ value: u.id as number, label: u.name ?? `#${u.id}` })),
 )
@@ -203,7 +203,7 @@ onMounted(() => {
       <div class="rp-actions">
         <select v-if="isAdmin" v-model="ownerFilter" class="rp-filter">
           <option value="">Все владельцы</option>
-          <option v-for="u in users.filter((u) => u.role !== 'worker').sort(compareByName)" :key="u.id" :value="u.id">{{ u.name ?? `#${u.id}` }}</option>
+          <option v-for="u in users.filter((u) => u.preset !== 'worker').sort(compareByName)" :key="u.id" :value="u.id">{{ u.name ?? `#${u.id}` }}</option>
         </select>
         <button v-if="canCreateResource" type="button" class="rp-add" @click="openCreate">Создать ресурс</button>
       </div>

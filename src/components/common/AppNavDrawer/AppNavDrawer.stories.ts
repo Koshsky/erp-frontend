@@ -39,7 +39,6 @@ const testCategories: NavCategory[] = [
 const meta: Meta<typeof AppNavDrawer> = {
   title: 'Components/Common/AppNavDrawer',
   component: AppNavDrawer,
-  parameters: { layout: 'fullscreen' },
   tags: ['autodocs'],
   args: {
     open: true,

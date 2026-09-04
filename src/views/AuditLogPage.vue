@@ -44,11 +44,12 @@ const ACTION_LABELS: Record<string, string> = {
   change_password: 'Смена пароля',
   set_days: 'Установка дней',
   delete_days: 'Удаление дней',
-  create_role: 'Создание роли',
-  update_role: 'Изменение роли',
-  delete_role: 'Удаление роли',
-  upsert_rule: 'Изменение правила',
-  delete_rule: 'Удаление правила',
+  create_preset: 'Создание пресета',
+  update_preset: 'Изменение пресета',
+  delete_preset: 'Удаление пресета',
+  upsert_preset_rule: 'Изменение правила пресета',
+  delete_preset_rule: 'Удаление правила пресета',
+  replace_user_permissions: 'Замена прав пользователя',
   upsert_policy: 'Изменение политики',
   delete_policy: 'Удаление политики',
   reset: 'Сброс прав',
@@ -73,7 +74,7 @@ const ENTITY_ACTIONS: Record<string, string[]> = {
   state: ['create', 'update', 'delete'],
   user: ['create', 'update', 'update_manager', 'delete', 'reset_password', 'set_days', 'delete_days', 'change_password'],
   auto_create: ['update'],
-  rbac: ['create_role', 'update_role', 'delete_role', 'upsert_rule', 'delete_rule', 'upsert_policy', 'delete_policy', 'reset'],
+  rbac: ['create_preset', 'update_preset', 'delete_preset', 'upsert_preset_rule', 'delete_preset_rule', 'upsert_policy', 'delete_policy', 'replace_user_permissions', 'reset'],
   auth: ['login', 'logout'],
 }
 
@@ -101,12 +102,12 @@ function onEntityChange() {
  * auth / anything else — gray (non-mutation). */
 type ActionKind = 'create' | 'update' | 'delete' | 'other'
 const ACTION_KIND: Record<string, ActionKind> = {
-  create: 'create', add: 'create', create_role: 'create',
+  create: 'create', add: 'create', create_preset: 'create',
   update: 'update', update_manager: 'update', reorder: 'update',
-  set_days: 'update', upsert_rule: 'update', upsert_policy: 'update',
+  set_days: 'update', upsert_preset_rule: 'update', upsert_policy: 'update', replace_user_permissions: 'update',
   reset_password: 'update', change_password: 'update', reset: 'update',
   delete: 'delete', remove: 'delete', delete_days: 'delete',
-  delete_rule: 'delete', delete_role: 'delete', delete_policy: 'delete',
+  delete_preset_rule: 'delete', delete_preset: 'delete', delete_policy: 'delete',
 }
 
 /** HTTP status groups for the filter (each has its own badge color). */

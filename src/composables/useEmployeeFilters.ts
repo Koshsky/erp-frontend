@@ -66,7 +66,7 @@ export function useEmployeeFilters(): EmployeeFilters {
       .filter(
         (u) =>
           u.id != null &&
-          u.role !== 'worker' &&
+          u.preset !== 'worker' &&
           managerPool.value.some((e) => e.manager_id === u.id),
       )
       .sort(compareByName),

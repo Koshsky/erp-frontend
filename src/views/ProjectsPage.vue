@@ -109,7 +109,7 @@ const menuItems = computed<ContextMenuItem[]>(() => {
 
 const ownerOptions = computed(() =>
   app.users
-    .filter((u) => u.role !== 'worker')
+    .filter((u) => u.preset !== 'worker')
     .sort(compareByName)
     .map((u) => ({ value: u.id ?? 0, label: u.name ?? '' })),
 )

@@ -45,7 +45,7 @@ const router = createRouter({
             const rbac = useRbacStore()
             const auth = useAuthStore()
             const permsReady = rbac.permsLoaded || rbac.myPermissions.length > 0
-            const role = auth.user?.role ?? ''
+            const role = auth.user?.preset ?? ''
             const tab = FIRST_ACCESSIBLE_TABS.find(([, perm, roles]) =>
               permsReady ? !perm || rbac.can(perm[0], perm[1]) : roles.includes(role),
             )
@@ -279,7 +279,7 @@ router.beforeEach(async (to) => {
     // Decide access by matrix permissions after WAITING for them: on a cold
     // start (F5 / Ctrl+Shift+R) rbac.can() evaluated before the permissions
     // arrive sees an empty list and wrongly redirects the page to the profile.
-    const allowed = await pageAccessible(rbac, auth.user?.role, needed[0], needed[1])
+    const allowed = await pageAccessible(rbac, auth.user?.preset, needed[0], needed[1])
     if (!allowed) {
       return { name: 'profile' }
     }
@@ -298,7 +298,7 @@ router.beforeEach(async (to) => {
     !rbac.can('task', 'view') &&
     !rbac.can('resource', 'view') &&
     !rbac.can('worker', 'view') &&
-    auth.user?.role !== 'admin'
+    auth.user?.preset !== 'admin'
   ) {
     return { name: 'profile' }
   }

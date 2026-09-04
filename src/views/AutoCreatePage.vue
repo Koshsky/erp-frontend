@@ -72,7 +72,7 @@ const { confirm: confirmDialog, ask, proceed, cancel } = useConfirm()
 /** Process owner candidates (excluding workers) */
 const ownerOptions = computed(() =>
   users.value
-    .filter((u) => u.role !== 'worker')
+    .filter((u) => u.preset !== 'worker')
     .sort((a, b) => (a.name ?? '').localeCompare(b.name ?? '', 'ru'))
     .map((u) => ({ value: u.id as number, label: u.name ?? `#${u.id}` })),
 )
