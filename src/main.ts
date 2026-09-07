@@ -6,7 +6,7 @@ import { setupHttp } from './http'
 import { initTheme } from './theme'
 import { useAuthStore } from './store'
 import { initOfflineSync, startSessionMaintenance } from './offline/sync'
-import { startOfflineCycle } from './offline/cycle'
+import { startConnectionMonitor } from './offline/connection'
 import { ensureCacheVersion } from './offline/cache'
 
 setupHttp()
@@ -28,14 +28,16 @@ setActivePinia(pinia)
 // below. The boot itself is still capped (BOOT_BOUND_MS) as a safety net.
 const BOOT_BOUND_MS = 4000
 
-async function bootstrapDesktop(): Promise<void> {
+async function bootstrapApp(): Promise<void> {
   try {
     // Drop the GET cache when the app version changed (payload shape may differ
     // between releases); the mutation queue is never touched.
     await ensureCacheVersion()
     await initOfflineSync()
-    // The single 10-second maintenance cycle: probe + PUSH + PULL (see cycle.ts)
-    startOfflineCycle()
+    // The connection monitor runs in EVERY environment (web + desktop): it keeps
+    // isOffline/reconnectCountdown up to date via the /health probe and drives the
+    // auto-PUSH/PULL loops while the connection is healthy. Idempotent.
+    startConnectionMonitor()
     startSessionMaintenance()
   } catch (err) {
     // Never block the UI because of a broken offline/autosync init — surface it
@@ -45,7 +47,7 @@ async function bootstrapDesktop(): Promise<void> {
 }
 
 await Promise.race([
-  bootstrapDesktop(),
+  bootstrapApp(),
   new Promise((resolve) => setTimeout(resolve, BOOT_BOUND_MS)),
 ])
 

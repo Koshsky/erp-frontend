@@ -1,9 +1,8 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import OfflineBanner from './offline/OfflineBanner.vue'
+import ReconnectToast from './offline/ReconnectToast.vue'
 import SyncToast from './offline/SyncToast.vue'
-import { isElectron } from './electron'
 
 const router = useRouter()
 
@@ -28,8 +27,8 @@ void Promise.race([
     <div class="boot-logo">MVS ERP</div>
     <div class="boot-spinner" aria-hidden="true"></div>
   </div>
-  <OfflineBanner v-if="isElectron" />
-  <SyncToast v-if="isElectron" />
+  <ReconnectToast />
+  <SyncToast />
   <RouterView />
 </template>
 

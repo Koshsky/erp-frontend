@@ -2,34 +2,23 @@
 import { computed } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../../../store'
-import { isElectron } from '../../../electron'
 import { resolvedScheme, toggleScheme } from '../../../theme'
 import { isNavOpen, toggleNav } from '../../../composables/useNavDrawer'
-import { useSyncStatus } from '../../../composables/useSyncStatus'
 import { AppIcon } from '../AppIcon'
 
 const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
-const { offline } = useSyncStatus()
 
 // Theme toggle label (Russian UI copy)
 const themeLabel = computed(() => (resolvedScheme.value === 'dark' ? 'Светлая' : 'Тёмная'))
 
 function onLogout(): void {
-  // Handler-level safeguard: offline logout is not performed (logout
-  // clears the outbox), even if the disabled attribute did not fire.
-  if (offline.value) return
   authStore.logout()
   router.push('/login')
 }
 
-const burgerTitle = computed(() =>
-  isElectron
-    ? `Меню · ${offline.value ? 'офлайн: данные из кэша' : 'онлайн'} (Ctrl+B)`
-    : 'Меню (Ctrl+B)',
-)
-
+const burgerTitle = 'Меню (Ctrl+B)'
 const burgerLabel = computed(() => (isNavOpen.value ? 'Закрыть меню' : 'Открыть меню'))
 </script>
 
@@ -62,7 +51,6 @@ const burgerLabel = computed(() => (isNavOpen.value ? 'Закрыть меню' 
           <line class="ah-line ah-line--bot" x1="4" y1="18" x2="20" y2="18" />
         </svg>
       </span>
-      <span v-if="isElectron" class="ah-burger-dot" :class="{ on: !offline }"></span>
     </button>
 
     <div class="ah-spacer"></div>
@@ -81,13 +69,10 @@ const burgerLabel = computed(() => (isNavOpen.value ? 'Закрыть меню' 
       >
         <AppIcon :name="resolvedScheme === 'dark' ? 'sun' : 'moon'" :size="18" />
       </button>
-      <!-- Logout is unavailable offline: logout clears the outbox, which must be kept until the network is back -->
       <button
         type="button"
         class="ah-act ah-act--icon ah-act--logout"
-        :class="{ 'ah-act--off': offline }"
-        :disabled="offline"
-        :title="offline ? 'Выход недоступен офлайн: очередь изменений сохранится до возврата сети' : 'Выйти из системы'"
+        :title="'Выйти из системы'"
         :aria-label="'Выйти из системы'"
         @click="onLogout"
       >
@@ -180,22 +165,6 @@ const burgerLabel = computed(() => (isNavOpen.value ? 'Закрыть меню' 
   transform: rotate(-45deg) translateY(-6px);
 }
 
-/* Sync state dot on the burger (desktop): green = online, amber = offline */
-.ah-burger-dot {
-  position: absolute;
-  top: 7px;
-  right: 7px;
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  border: 2px solid var(--ui-surface);
-  background: var(--ui-warning);
-}
-
-.ah-burger-dot.on {
-  background: var(--ui-success);
-}
-
 .ah-spacer {
   flex: 1;
 }
@@ -247,8 +216,7 @@ const burgerLabel = computed(() => (isNavOpen.value ? 'Закрыть меню' 
   color: var(--ui-danger);
 }
 
-.ah-act:disabled,
-.ah-act--off {
+.ah-act:disabled {
   opacity: 0.45;
   cursor: not-allowed;
   pointer-events: none;

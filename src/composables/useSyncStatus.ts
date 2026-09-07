@@ -1,14 +1,13 @@
 import { computed, ref } from 'vue'
-import { isElectron } from '../electron'
 import { isOffline } from '../offline/state'
 import { pendingCount } from '../offline/outbox'
-import { lastPullAt } from '../offline/cycle'
+import { lastPullAt } from '../offline/connection'
 import type { DrawerSyncStats } from '../components/common/AppNavDrawer/types'
 
 /**
- * Shared sync/freshness status (desktop offline-first UX): how long ago the
- * background PULL last updated the cache, pending queue size and offline
- * flag, plus the desktop-only sync footer block for the nav drawer.
+ * Shared sync/freshness status: how long ago the background PULL last updated
+ * the cache, pending queue size and the offline flag, plus the sync footer
+ * block for the nav drawer. Works in every environment (web + desktop).
  *
  * A single module-level clock (started by the first consumer, app-lifetime)
  * advances `now`, so the relative freshness label keeps ticking even when
@@ -46,9 +45,9 @@ export function useSyncStatus() {
     return `${h} ч`
   })
 
-  /** Footer block for the drawer (desktop only) */
+  /** Footer block for the drawer */
   const syncStats = computed<DrawerSyncStats>(() => ({
-    enabled: isElectron,
+    enabled: true,
     offline: offline.value,
     pending: pending.value,
     lastPullLabel: lastPullLabel.value,

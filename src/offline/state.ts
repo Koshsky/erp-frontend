@@ -1,22 +1,23 @@
 import { ref } from 'vue'
 import type { Ref } from 'vue'
-import { isElectron } from '@/electron'
 import { getApiUrl } from '@/config'
 
 /**
- * Reactive network state. Updated by window online/offline events and a
- * background API ping (startConnectivityMonitor). Used so that being offline
- * does not bounce the user to /login (token refresh) and for the "offline mode" banner.
+ * Reactive backend-connection state, active in EVERY environment (web and
+ * desktop). It drives the offline UI (the reconnect toast) and the shared
+ * `isOffline` flag that other offline modules read.
  *
- * Offline mode exists ONLY in the desktop (Electron) build. On the web the
- * frontend is considered strictly online: isOffline is always false, the monitor and
- * window listeners are not activated.
+ * The flag is initialised from the browser's `navigator.onLine` and kept in
+ * sync with the window `online`/`offline` events (both fire in the browser and
+ * under Electron). The authoritative reachability of the backend is decided by
+ * `probeBackend()`/the connection monitor (offline/connection.ts) which flips
+ * this flag on every probe.
  */
 export const isOffline: Ref<boolean> = ref(
-  isElectron && typeof navigator !== 'undefined' && navigator.onLine === false,
+  typeof navigator !== 'undefined' && navigator.onLine === false,
 )
 
-if (isElectron && typeof window !== 'undefined') {
+if (typeof window !== 'undefined') {
   window.addEventListener('online', () => {
     isOffline.value = false
   })
@@ -51,5 +52,9 @@ export async function probeBackend(): Promise<boolean> {
   }
 }
 
-// Backend availability is monitored by the single 10-second maintenance
-// cycle (offline/cycle.ts), which probes /health and flips isOffline.
+/**
+ * Seconds remaining until the next automatic reconnect probe while offline.
+ * `null` means not offline (no probe is being awaited) or the monitor is not
+ * running the reconnect countdown yet.
+ */
+export const reconnectCountdown = ref<number | null>(null)
