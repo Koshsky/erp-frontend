@@ -14,6 +14,12 @@ import { getAccessToken } from '../token'
  *
  * FIFO: entries are executed strictly in order — later edits/deletes of
  * entities created offline depend on previous ones.
+ *
+ * STORAGE: the queue is stored indefinitely — it has no TTL and is never
+ * swept by age/timers. Entries are removed only after a successful send, on
+ * logout (clearOutbox), or by explicit user actions (discardFailed /
+ * discardEntry / clearLocalData). Backoff and quarantined flags only gate
+ * auto-retries; they never delete an entry. See docs/no-ttl-local-storage.md.
  */
 
 const OUTBOX_STORE = 'outbox'

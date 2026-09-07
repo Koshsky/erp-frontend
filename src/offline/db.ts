@@ -6,6 +6,16 @@
  *  - `idmap`  — persistent mapping of temporary (negative) ids of created
  *    offline entities to real ids, so dependent records are sent with the
  *    real id (not a fake one) after sync interruptions.
+ *
+ * NO-TTL INVARIANT: the local stores (cache/outbox/idmap) have no TTL and are
+ * never cleaned up by time/age/timers. Data is removed only by:
+ *  - explicit user actions (clearLocalData / clearOutbox, discardFailed /
+ *    discardEntry for rejected queue entries);
+ *  - an app-version change (ensureCacheVersion — clears ONLY the cache);
+ *  - logout (the mutation queue is cleared so a foreign token never flushes
+ *    someone else's queue).
+ * Server-side TTLs (refresh session 168h, access token 15m) are validated only
+ * by the backend. See docs/no-ttl-local-storage.md.
  */
 
 const DB_NAME = 'erp-offline'
