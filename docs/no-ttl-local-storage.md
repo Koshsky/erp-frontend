@@ -1,0 +1,80 @@
+# No-TTL local storage invariant
+
+**Goal.** Cache and tokens are kept in non-volatile memory **without any
+TTL**: nothing is deleted locally by age, timers or elapsed-time sweeps. Cache
+of GET-responses and the mutation queue live in IndexedDB indefinitely; the
+access token stays in process memory (AD-05, XSS protection) and the refresh
+token lives in an HttpOnly cookie/safeStorage. TTLs are validated **only by the
+backend**.
+
+This document is the audit trail and the invariant to preserve. It is intended
+for any agent working on `src/offline/*` so that changed cycle/connection logic
+does not silently introduce age- or timer-driven cleanup.
+
+## Invariant (final wording)
+
+Local stores (`cache` / `outbox` / `idmap`) have **no TTL** and are **not
+cleaned up by time**. Data is only every removed by:
+
+1. explicit user actions — `clearLocalData()` / `clearOutbox()`
+   (queue), `discardFailed()` / `discardEntry()` (rejected entries);
+2. app-version change — `ensureCacheVersion()` clears **only** the cache
+   (payload schema may differ between releases). This is version invalidation,
+   **not** a TTL;
+3. logout — the mutation queue (`clearOutbox()` on logout), so a foreign token
+   never flushes someone else's queue;
+4. successful delivery / idempotent terminal states — a sent queue entry is
+   deleted after its request succeeds (and its temp→real idmap entry afterwards).
+
+Server-side TTLs (refresh session 168h, access 15m) are validated **only** by
+the backend.
+
+## Audit of timer / time-based cleanup (`src/offline/*`)
+
+Scope scanned: `setInterval` / `setTimeout` / `requestIdleCallback`,
+`Date.now()` / `getTime()`, `idbClear` / `idbDel` / `localStorage.removeItem`
+/ `.clear()`. Read-only files (cycle, sync, warmup, state) were inspected but
+not modified.
+
+Result: apart from the two explicitly-allowed exceptions below, **no local data
+is deleted by time/age anywhere in the offline layer**.
+
+- `warmup.ts` — `PULL_TTL_MS = 60_000` gates **freshness of a background PULL**
+  (`cacheGetFresh` on `read`), it never deletes an entry. Re-fetch decision only.
+- `cache.ts : ensureCacheVersion()` — full `'cache'` clear **only** when
+  `__APP_VERSION__` changed. Version invalidation, retained invariant.
+
+All other timer/`Date.now()` uses are **not** data cleanup:
+
+- `warmup.ts` — `PAUSE_MS` pacing between pull steps; idle scheduling.
+- `outbox.ts` — `PAUSE_MS` rate limit between sends; `FAILED_BACKOFF_MS`
+  **retry backoff** and `MAX_FAILED_ATTEMPTS` → `quarantined` flag (entry is
+  kept, just not auto-retried; user can `resetFailedRetries` / `discardFailed`);
+  `ts` field is FIFO order, `failed.at` is bookkeeping. None deletes.
+- `sync.ts` / `cycle.ts` — maintenance timers drive PULL/sync runs, timestamp
+  localStorage keys (`mvs_erp_last_*`) are **UI timestamps only**.
+- `state.ts` — `PROBE_TIMEOUT_MS` aborts a health probe request.
+- `SyncToast.vue` — dismiss timer for the transient toast UI.
+- `db.ts` / `cache.ts`/`outbox.ts` — `idbClear` / `idbDel` only from the
+  explicit-user / version / post-delivery paths enumerated above.
+
+## Guardrails for future changes
+
+- Do **not** add age-based sweeps, expiry pruning or `setInterval` cleanup that
+  deletes cache/outbox/idmap entries.
+- `Date.now()` is allowed to *record* timestamps (`ts`) and to gate *re-fetch*
+  freshness; it must never be the trigger for deleting stored data.
+- Version invalidation of the GET cache (`ensureCacheVersion`) is fine; keep the
+  mutation queue and idmap untouched there.
+- Server holds the only truth about token/session TTL. The frontend must not
+  drop its tokens by measuring elapsed time.
+
+## Reusable cleanup module
+
+`src/offline/reset.ts` exports `clearLocalData()` (full local reset: mutation
+queue + cache + idmap via `deleteDatabase`, in-memory access token via logout,
+session + `mvs_erp_*` keys via `useAuthStore().logout()`, then reload). A "Clear
+local data" button in the sync/settings UI must call this one function, so the
+invariant has a single, explicit route. `src/offline/outbox.ts` additionally
+exports `clearOutbox`, `discardFailed`, `discardEntry`, `resetFailedRetries` for
+targeted, user-initiated removals.
