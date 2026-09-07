@@ -6,16 +6,20 @@ import type { DtoUserInfo, DtoProject, DtoResourceResponse, DtoResourceCalendar,
 import { apiErrorMessage } from '@/utils'
 import { getApiUrl } from '@/config'
 import { isOffline } from '@/offline/state'
-import { isElectron, setDesktopPassword } from '@/electron'
 import { offlineFailFastAdapter } from '@/offline/failFast'
 import { scheduleWarmup } from '@/offline/warmup'
 import { enqueueMutation, isNetworkError, clearOutbox, type MutationEntity } from '@/offline/outbox'
 import { applyRangeSplit } from '@/offline/periodSplit'
 import { getAccessToken, setAccessToken } from '@/token'
-import { tryAcquireRefreshLock, releaseRefreshLock, publishToken, subscribeToken } from '@/sessionSync'
+import {
+  tryAcquireRefreshLock,
+  releaseRefreshLock,
+  publishSession,
+  subscribeSession,
+  subscribeToken,
+} from '@/sessionSync'
 import { isLoggedOut, clearLoggedOut, setLoggedOut } from '@/loggedOut'
-import { getSavedLogin } from '@/syncCredentials'
-import { shouldAutoSync } from '@/settings'
+import { saveRefreshToken, loadRefreshToken, clearRefreshToken } from '@/offline/session'
 import { hydrateFromCache, apiPath } from '@/offline/hydrate'
 
 const USER_KEY = 'mvs_erp_user'
@@ -228,6 +232,11 @@ export const useAuthStore = defineStore('auth', () => {
       const errBody = body?.error as { code?: unknown; message?: string } | undefined
       if (errBody && errBody.code != null) throw new Error(apiErrorMessage(errBody))
       applySession(body?.data)
+      // Persist the rotation-eligible refresh token (the backend returns it in
+      // the login body) so the session survives reloads without the cookie.
+      if (body?.data?.refresh_token) {
+        await saveRefreshToken(body.data.refresh_token)
+      }
       // Manual login clears the "logged out" flag — auto-sync is allowed again
       clearLoggedOut()
       sessionMode.value = 'online'
@@ -252,18 +261,6 @@ export const useAuthStore = defineStore('auth', () => {
       const body = resp.data
       const errBody = body?.error as { code?: unknown; message?: string } | undefined
       if (errBody && errBody.code != null) throw new Error(apiErrorMessage(errBody))
-      // Update the password saved for auto-sync so auto-sync does not break after a
-      // password change: credentials are tied to the last manual login (Desktop).
-      if (isElectron) {
-        const saved = getSavedLogin()
-        if (saved && user.value?.username && saved === user.value.username) {
-          try {
-            await setDesktopPassword(newPassword)
-          } catch {
-            // not critical: auto-sync will simply ask for credentials at login
-          }
-        }
-      }
       return true
     } catch (e: any) {
       error.value = apiErrorMessage(e?.response?.data?.error, e?.message ?? String(e))
@@ -280,17 +277,17 @@ export const useAuthStore = defineStore('auth', () => {
   /** Proactive refresh: timer + tab visibility return, so the access token never expires prematurely */
   function scheduleProactiveRefresh() {
     if (proactiveTimer != null) return
-    // Desktop + auto-sync: session renewal is done by session-maintenance
-    // (silent re-login with auto-sync credentials) — the refresh cookie does not work
-    // cross-site, so we skip it here to avoid a logout on 401.
+    // Refresh is unified across environments: the refresh token lives in the
+    // IndexedDB 'session' store (body of /auth/refresh), so the timer works the
+    // same on web and desktop.
     const renew = () => {
-      if (accessTokenExpiring() && !(isElectron && shouldAutoSync())) {
+      if (accessTokenExpiring()) {
         void refreshSession()
       }
     }
     proactiveTimer = window.setInterval(renew, REFRESH_INTERVAL_MS)
     onVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && accessTokenExpiring() && !(isElectron && shouldAutoSync())) {
+      if (document.visibilityState === 'visible' && accessTokenExpiring()) {
         void refreshSession()
       }
     }
@@ -321,7 +318,10 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function doRefresh(): Promise<boolean> {
-    // The refresh token lives in an HttpOnly cookie (AD-05): we do not send a body; the cookie is attached itself.
+    // The refresh token lives in the non-volatile IndexedDB 'session' store (offline/session).
+    // We send it in the body of /auth/refresh; if the store is empty we send no body and the
+    // backend falls back to the HttpOnly refresh cookie (legacy web path). The backend returns
+    // the rotated refresh token in the response body and we persist it for the next refresh.
     // Offline refresh is impossible: we do not log out; the session lives until the network returns.
     if (isOffline.value) return true
     // After an explicit logout (logout) we do not call /auth/refresh: the cookie is already revoked,
@@ -329,14 +329,14 @@ export const useAuthStore = defineStore('auth', () => {
     // the revoked token would trigger reuse detection (revoking all of the
     // user's sessions). We return false without the network — the caller is logged out.
     if (isLoggedOut()) return false
-    // Web only: coordinate the refresh across tabs. The refresh cookie is shared, and two tabs
-    // refreshing the same (rotating) session pair at once make the second tab hit the backend
-    // reuse detection — which revokes ALL of the user's sessions and logs every tab out.
-    // Only one tab refreshes at a time; the rest adopt the token it broadcasts.
-    const coordinated = !isElectron
+    // Cross-tab coordination for ALL environments: the refresh token is shared (the body/IndexedDB
+    // value or the cookie), so two tabs refreshing the same (rotating) session pair at once make the
+    // second tab hit the backend reuse detection — revoking ALL of the user's sessions and logging
+    // every tab out. Only one tab refreshes at a time; the rest adopt the token it broadcasts.
+    const coordinated = true
     if (coordinated && !tryAcquireRefreshLock()) {
       // Another tab is refreshing — wait briefly for its token, otherwise defer:
-      // the next 401 retry will use the already-rotated cookie (safe — the new
+      // the next 401 retry will use the already-rotated refresh (safe — the new
       // token is not revoked).
       return await waitForExternalToken()
     }
@@ -344,13 +344,20 @@ export const useAuthStore = defineStore('auth', () => {
     error.value = null
     try {
       const api = new AuthApi(apiConfig())
-      const resp = await api.authRefreshPost()
+      const stored = await loadRefreshToken()
+      const resp = await api.authRefreshPost(stored ? { refresh_token: stored } : undefined)
       const body = resp.data
       const errBody = body?.error as { code?: unknown; message?: string } | undefined
       if (errBody && errBody.code != null) throw new Error(apiErrorMessage(errBody))
       applySession(body?.data)
+      // Rotate: persist the refresh token returned by the backend for the next refresh.
+      if (body?.data?.refresh_token) {
+        await saveRefreshToken(body.data.refresh_token)
+      }
       const token = getAccessToken()
-      if (coordinated && token) publishToken(token)
+      if (coordinated && token) {
+        publishSession({ access: token, refresh: body?.data?.refresh_token })
+      }
       return true
     } catch (e: any) {
       // Network error (no HTTP response): the server is unreachable. We do not log out —
@@ -374,18 +381,27 @@ export const useAuthStore = defineStore('auth', () => {
     stopProactiveRefresh()
     // Do not let the queue flush under a new user/token
     void clearOutbox()
-    // Revoke the refresh session on the server and clear the cookie (best-effort)
-    try {
-      void new AuthApi(apiConfig()).authLogoutPost()
-    } catch {
-      // the cookie will also be cleared on the client below
-    }
+    // Revoke the refresh session on the server: read the stored token and send it
+    // in the body of /auth/logout (falling back to the cookie when none is stored),
+    // then clear our local copy. Best-effort — the cookie is also cleared by the backend.
+    void (async () => {
+      try {
+        const stored = await loadRefreshToken()
+        await new AuthApi(apiConfig()).authLogoutPost(
+          stored ? { refresh_token: stored } : undefined,
+        )
+      } catch {
+        // the session is revoked/expired on the client regardless
+      } finally {
+        await clearRefreshToken()
+      }
+    })()
     setAccessToken(null)
     localStorage.removeItem(USER_KEY)
     user.value = null
     isAuthenticated.value = false
     sessionMode.value = 'online'
-    // After an explicit logout, auto-sync does not log in until a manual login (Desktop)
+    // After an explicit logout, auto-sync does not log in until a manual login
     setLoggedOut()
   }
 
@@ -435,17 +451,20 @@ export const useAuthStore = defineStore('auth', () => {
     scheduleWarmup()
   }
 
-  // Web: adopt fresher access tokens published by sibling tabs (cross-tab refresh
-  // coordination — the refresh cookie is shared and rotated once per family).
+  // Adopt fresher sessions (access token + rotated refresh token) published by
+  // sibling tabs (cross-tab refresh coordination in ALL environments — the
+  // refresh token is shared and rotated once per family).
   let unsubscribeSessionToken: (() => void) | null = null
-  if (!isElectron) {
-    unsubscribeSessionToken = subscribeToken((token) => {
+  unsubscribeSessionToken = subscribeSession(({ access, refresh }) => {
+    if (access) {
       const cur = decodeTokenExp(getAccessToken())
-      const next = decodeTokenExp(token)
-      if (next != null && (cur == null || next > cur)) setAccessToken(token)
-    })
-    onScopeDispose(() => unsubscribeSessionToken?.())
-  }
+      const next = decodeTokenExp(access)
+      if (next != null && (cur == null || next > cur)) setAccessToken(access)
+    }
+    // Every tab keeps its IndexedDB refresh store in sync with the rotation.
+    if (refresh) void saveRefreshToken(refresh)
+  })
+  onScopeDispose(() => unsubscribeSessionToken?.())
 
   return {
     user,
