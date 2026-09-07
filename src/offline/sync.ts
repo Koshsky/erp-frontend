@@ -1,8 +1,6 @@
 import { ref, watch } from 'vue'
 import { useAppStore, useAuthStore, usePlanningStore, useTimesheetStore } from '@/store'
 import { shouldAutoSync } from '@/settings'
-import { isElectron } from '@/electron'
-import { getSyncCredentials } from '@/syncCredentials'
 import { isLoggedOut } from '@/loggedOut'
 import { warmNow } from './warmup'
 import {
@@ -216,56 +214,26 @@ export async function initOfflineSync(): Promise<void> {
 }
 
 /**
- * Auto re-login for the desktop build (Electron).
- * If autosync is enabled, there is no session (tokens expired/missing) and the
- * safeStorage holds login+password — silently log in so autosync can
- * work without manual input. In the browser (no safeStorage) it does nothing.
- * After an explicit logout (mvs_erp_logged_out flag) it does not log in until manual login.
- */
-export async function ensureDesktopAutoSyncSession(): Promise<void> {
-  if (!isElectron || !shouldAutoSync()) return
-  if (isLoggedOut()) return
-  const auth = useAuthStore()
-  // Session already alive — don't touch it.
-  if (auth.isAuthenticated && !auth.accessExpired) return
-  if (isOffline.value) return
-  const creds = await getSyncCredentials()
-  if (!creds?.login || !creds.password) return
-  await auth.login(creds.login, creds.password)
-}
-
-/**
- * Unified session renewal used by 401 handling and the router guard.
- * Dispatches by environment:
- *  - desktop (Electron): silent re-login with the stored auto-sync credentials —
- *    the refresh cookie does not survive a cross-site API base, so the session is
- *    extended by logging in. Returns whether a fresh session is available.
- *  - web/browser: renew the access token via the HttpOnly refresh cookie
- *    (auth.refreshSession).
- * Each 401 triggers this in the same way for both environments.
+ * Unified session renewal used by 401 handling and the router guard — the
+ * single path for ALL environments (web + desktop). The refresh token lives in
+ * the non-volatile IndexedDB 'session' store and is sent in the body of
+ * /auth/refresh (falling back to the HttpOnly cookie on the web when the store
+ * is empty). Returns whether a fresh session is available.
  */
 export async function ensureAutoSession(): Promise<boolean> {
-  if (isElectron && shouldAutoSync() && !isLoggedOut()) {
-    await ensureDesktopAutoSyncSession()
-    const auth = useAuthStore()
-    return auth.isAuthenticated && !auth.accessExpired
-  }
   return useAuthStore().refreshSession()
 }
 
-/** Background session maintenance period (extending the access token with a silent login) */
+/** Background session maintenance period (extending the access token silently) */
 const SESSION_MAINTENANCE_MS = 30 * 1000
 
 let maintenanceTimer: number | null = null
 
 /**
  * Background session maintenance: every 30 s renew a session that is about to
- * expire (or a desktop session that can be restored from the auto-sync
- * credentials). On desktop the silent re-login extends the session (the refresh
- * cookie does not work cross-site); on the web the token is renewed via the
- * HttpOnly cookie. A fresh session and an unauthenticated visitor are left
- * alone — the guard only fires when the access token is actually expiring.
- * Runs in both environments; ensureAutoSession itself picks the right path.
+ * expire (or already expired). The unified refresh path (ensureAutoSession)
+ * picks the right source — the stored refresh token in all environments.
+ * A fresh session and an unauthenticated visitor are left alone.
  */
 export function startSessionMaintenance(): void {
   if (maintenanceTimer != null) return
