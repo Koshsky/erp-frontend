@@ -18,7 +18,7 @@ const password = ref('')
 
 const localError = ref<string | null>(null)
 
-const offline = computed(() => isElectron && isOffline.value)
+const offline = computed(() => isOffline.value)
 /** Server address to show on the login page (if set) */
 const serverBase = computed(() => getServerBase())
 /** Single login button: the label depends on the network state, the behavior is in onSubmit */
@@ -31,7 +31,7 @@ const pinging = ref(false)
 /** Ping result: null — not attempted yet, true — reachable, false — unreachable */
 const pingOk = ref<boolean | null>(null)
 // If the server is already known to be unreachable (offline) — the indicator is red right away
-if (isElectron && isOffline.value) pingOk.value = false
+if (isOffline.value) pingOk.value = false
 
 const pingSymbol = computed(() => (pinging.value ? '⏳' : '⇄'))
 
@@ -116,7 +116,7 @@ function goToRedirect() {
 
 // Offline: prefill the saved autosync login — the user only needs
 // to press one button.
-if (isElectron && isOffline.value && !username.value) {
+if (isOffline.value && !username.value) {
   username.value = getSavedLogin() ?? ''
 }
 </script>
@@ -145,11 +145,13 @@ if (isElectron && isOffline.value && !username.value) {
         </button>
       </form>
 
-      <!-- The "Server: …" row + ping and server settings — desktop (Electron)
-           build only. In the online (web) version the address is set by the
-           deployment and cannot be changed — the block is not shown at all. -->
-      <div v-if="isElectron && serverBase" class="lp-server-row">
-        <span class="lp-server">Сервер: {{ serverBase }}</span>
+      <!-- The connection ping — available in every environment (offline cache
+           now works in the web too). The server-address text is shown where a
+           settable base exists (desktop); on the web the address is fixed by
+           the deployment. The "Настройки сервера" link stays desktop-only
+           (same-origin restriction on the web). -->
+      <div class="lp-server-row" :class="{ 'lp-server-row--no-base': !serverBase }">
+        <span v-if="serverBase" class="lp-server">Сервер: {{ serverBase }}</span>
         <button
           type="button"
           class="lp-ping"
