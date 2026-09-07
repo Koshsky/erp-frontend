@@ -116,6 +116,7 @@ export interface DtoAuditEventView {
 export interface DtoAuthResponse {
     'access_token'?: string;
     'expires_in'?: number;
+    'refresh_token'?: string;
     'token_type'?: string;
     'user'?: DtoUserInfo;
 }
@@ -400,6 +401,9 @@ export interface DtoProjectResponse {
     'owner_id'?: number;
     'priority'?: number;
     'start_date'?: string;
+}
+export interface DtoRefreshRequest {
+    'refresh_token'?: string;
 }
 export interface DtoReorderProcessRequest {
     'ids'?: Array<number>;
@@ -1452,7 +1456,7 @@ export class AuditApi extends BaseAPI {
 export const AuthApiAxiosParamCreator = function (configuration?: Configuration) {
     return {
         /**
-         * Authenticate user; the refresh token goes into an HttpOnly cookie
+         * Authenticate user; the refresh token is returned both in the response body and in an HttpOnly cookie
          * @summary Login
          * @param {DtoLoginRequest} request Login credentials
          * @param {*} [options] Override http request option.
@@ -1487,12 +1491,13 @@ export const AuthApiAxiosParamCreator = function (configuration?: Configuration)
             };
         },
         /**
-         * Revoke the refresh session and clear the cookie (idempotent)
+         * Revoke the refresh session and clear the cookie; the token is read from the body ({refresh_token}) or the HttpOnly cookie (idempotent)
          * @summary Logout
+         * @param {DtoRefreshRequest} [request] Refresh token (optional; falls back to the HttpOnly cookie)
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        authLogoutPost: async (options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+        authLogoutPost: async (request?: DtoRefreshRequest, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
             const localVarPath = `/auth/logout`;
             // use dummy base URL string because the URL constructor only accepts absolute URLs.
             const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
@@ -1505,11 +1510,13 @@ export const AuthApiAxiosParamCreator = function (configuration?: Configuration)
             const localVarHeaderParameter = {} as any;
             const localVarQueryParameter = {} as any;
 
+            localVarHeaderParameter['Content-Type'] = 'application/json';
             localVarHeaderParameter['Accept'] = 'application/json';
 
             setSearchParams(localVarUrlObj, localVarQueryParameter);
             let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
             localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+            localVarRequestOptions.data = serializeDataIfNeeded(request, localVarRequestOptions, configuration)
 
             return {
                 url: toPathString(localVarUrlObj),
@@ -1517,12 +1524,13 @@ export const AuthApiAxiosParamCreator = function (configuration?: Configuration)
             };
         },
         /**
-         * Rotate the refresh session from the HttpOnly cookie; returns a new access token
+         * Rotate the refresh session; the token is read from the body ({refresh_token}) or the HttpOnly cookie, and a new refresh token is returned in both
          * @summary Refresh Token
+         * @param {DtoRefreshRequest} [request] Refresh token (optional; falls back to the HttpOnly cookie)
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        authRefreshPost: async (options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+        authRefreshPost: async (request?: DtoRefreshRequest, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
             const localVarPath = `/auth/refresh`;
             // use dummy base URL string because the URL constructor only accepts absolute URLs.
             const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
@@ -1535,11 +1543,13 @@ export const AuthApiAxiosParamCreator = function (configuration?: Configuration)
             const localVarHeaderParameter = {} as any;
             const localVarQueryParameter = {} as any;
 
+            localVarHeaderParameter['Content-Type'] = 'application/json';
             localVarHeaderParameter['Accept'] = 'application/json';
 
             setSearchParams(localVarUrlObj, localVarQueryParameter);
             let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
             localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+            localVarRequestOptions.data = serializeDataIfNeeded(request, localVarRequestOptions, configuration)
 
             return {
                 url: toPathString(localVarUrlObj),
@@ -1556,7 +1566,7 @@ export const AuthApiFp = function(configuration?: Configuration) {
     const localVarAxiosParamCreator = AuthApiAxiosParamCreator(configuration)
     return {
         /**
-         * Authenticate user; the refresh token goes into an HttpOnly cookie
+         * Authenticate user; the refresh token is returned both in the response body and in an HttpOnly cookie
          * @summary Login
          * @param {DtoLoginRequest} request Login credentials
          * @param {*} [options] Override http request option.
@@ -1569,25 +1579,27 @@ export const AuthApiFp = function(configuration?: Configuration) {
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
-         * Revoke the refresh session and clear the cookie (idempotent)
+         * Revoke the refresh session and clear the cookie; the token is read from the body ({refresh_token}) or the HttpOnly cookie (idempotent)
          * @summary Logout
+         * @param {DtoRefreshRequest} [request] Refresh token (optional; falls back to the HttpOnly cookie)
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async authLogoutPost(options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<AuthLogoutPost200Response>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.authLogoutPost(options);
+        async authLogoutPost(request?: DtoRefreshRequest, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<AuthLogoutPost200Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.authLogoutPost(request, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
             const localVarOperationServerBasePath = operationServerMap['AuthApi.authLogoutPost']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
-         * Rotate the refresh session from the HttpOnly cookie; returns a new access token
+         * Rotate the refresh session; the token is read from the body ({refresh_token}) or the HttpOnly cookie, and a new refresh token is returned in both
          * @summary Refresh Token
+         * @param {DtoRefreshRequest} [request] Refresh token (optional; falls back to the HttpOnly cookie)
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async authRefreshPost(options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<AuthLoginPost200Response>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.authRefreshPost(options);
+        async authRefreshPost(request?: DtoRefreshRequest, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<AuthLoginPost200Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.authRefreshPost(request, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
             const localVarOperationServerBasePath = operationServerMap['AuthApi.authRefreshPost']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
@@ -1602,7 +1614,7 @@ export const AuthApiFactory = function (configuration?: Configuration, basePath?
     const localVarFp = AuthApiFp(configuration)
     return {
         /**
-         * Authenticate user; the refresh token goes into an HttpOnly cookie
+         * Authenticate user; the refresh token is returned both in the response body and in an HttpOnly cookie
          * @summary Login
          * @param {DtoLoginRequest} request Login credentials
          * @param {*} [options] Override http request option.
@@ -1612,22 +1624,24 @@ export const AuthApiFactory = function (configuration?: Configuration, basePath?
             return localVarFp.authLoginPost(request, options).then((request) => request(axios, basePath));
         },
         /**
-         * Revoke the refresh session and clear the cookie (idempotent)
+         * Revoke the refresh session and clear the cookie; the token is read from the body ({refresh_token}) or the HttpOnly cookie (idempotent)
          * @summary Logout
+         * @param {DtoRefreshRequest} [request] Refresh token (optional; falls back to the HttpOnly cookie)
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        authLogoutPost(options?: RawAxiosRequestConfig): AxiosPromise<AuthLogoutPost200Response> {
-            return localVarFp.authLogoutPost(options).then((request) => request(axios, basePath));
+        authLogoutPost(request?: DtoRefreshRequest, options?: RawAxiosRequestConfig): AxiosPromise<AuthLogoutPost200Response> {
+            return localVarFp.authLogoutPost(request, options).then((request) => request(axios, basePath));
         },
         /**
-         * Rotate the refresh session from the HttpOnly cookie; returns a new access token
+         * Rotate the refresh session; the token is read from the body ({refresh_token}) or the HttpOnly cookie, and a new refresh token is returned in both
          * @summary Refresh Token
+         * @param {DtoRefreshRequest} [request] Refresh token (optional; falls back to the HttpOnly cookie)
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        authRefreshPost(options?: RawAxiosRequestConfig): AxiosPromise<AuthLoginPost200Response> {
-            return localVarFp.authRefreshPost(options).then((request) => request(axios, basePath));
+        authRefreshPost(request?: DtoRefreshRequest, options?: RawAxiosRequestConfig): AxiosPromise<AuthLoginPost200Response> {
+            return localVarFp.authRefreshPost(request, options).then((request) => request(axios, basePath));
         },
     };
 };
@@ -1637,7 +1651,7 @@ export const AuthApiFactory = function (configuration?: Configuration, basePath?
  */
 export class AuthApi extends BaseAPI {
     /**
-     * Authenticate user; the refresh token goes into an HttpOnly cookie
+     * Authenticate user; the refresh token is returned both in the response body and in an HttpOnly cookie
      * @summary Login
      * @param {DtoLoginRequest} request Login credentials
      * @param {*} [options] Override http request option.
@@ -1648,23 +1662,25 @@ export class AuthApi extends BaseAPI {
     }
 
     /**
-     * Revoke the refresh session and clear the cookie (idempotent)
+     * Revoke the refresh session and clear the cookie; the token is read from the body ({refresh_token}) or the HttpOnly cookie (idempotent)
      * @summary Logout
+     * @param {DtoRefreshRequest} [request] Refresh token (optional; falls back to the HttpOnly cookie)
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      */
-    public authLogoutPost(options?: RawAxiosRequestConfig) {
-        return AuthApiFp(this.configuration).authLogoutPost(options).then((request) => request(this.axios, this.basePath));
+    public authLogoutPost(request?: DtoRefreshRequest, options?: RawAxiosRequestConfig) {
+        return AuthApiFp(this.configuration).authLogoutPost(request, options).then((request) => request(this.axios, this.basePath));
     }
 
     /**
-     * Rotate the refresh session from the HttpOnly cookie; returns a new access token
+     * Rotate the refresh session; the token is read from the body ({refresh_token}) or the HttpOnly cookie, and a new refresh token is returned in both
      * @summary Refresh Token
+     * @param {DtoRefreshRequest} [request] Refresh token (optional; falls back to the HttpOnly cookie)
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      */
-    public authRefreshPost(options?: RawAxiosRequestConfig) {
-        return AuthApiFp(this.configuration).authRefreshPost(options).then((request) => request(this.axios, this.basePath));
+    public authRefreshPost(request?: DtoRefreshRequest, options?: RawAxiosRequestConfig) {
+        return AuthApiFp(this.configuration).authRefreshPost(request, options).then((request) => request(this.axios, this.basePath));
     }
 }
 
