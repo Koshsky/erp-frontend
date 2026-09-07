@@ -6,7 +6,7 @@ import { setupHttp } from './http'
 import { initTheme } from './theme'
 import { useAuthStore } from './store'
 import { initOfflineSync, startSessionMaintenance } from './offline/sync'
-import { startOfflineCycle } from './offline/cycle'
+import { startConnectionMonitor } from './offline/connection'
 import { ensureCacheVersion } from './offline/cache'
 import { isElectron } from './electron'
 
@@ -35,8 +35,6 @@ async function bootstrapDesktop(): Promise<void> {
     // between releases); the mutation queue is never touched.
     await ensureCacheVersion()
     await initOfflineSync()
-    // The single 10-second maintenance cycle: probe + PUSH + PULL (see cycle.ts)
-    startOfflineCycle()
     startSessionMaintenance()
   } catch (err) {
     // Never block the UI because of a broken offline/autosync init — surface it
@@ -51,6 +49,11 @@ if (isElectron) {
     new Promise((resolve) => setTimeout(resolve, BOOT_BOUND_MS)),
   ])
 }
+
+// The connection monitor runs in EVERY environment (web + desktop): it keeps
+// isOffline/reconnectCountdown up to date via the /health probe and drives the
+// auto-PUSH/PULL loops while the connection is healthy. Idempotent.
+startConnectionMonitor()
 
 // Desktop: when a silent re-login (autosync) finishes AFTER the router guard
 // already gave up waiting and redirected to /login, move the user into the app
