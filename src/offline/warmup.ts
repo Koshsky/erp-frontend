@@ -5,6 +5,7 @@ import { isOffline } from './state'
 import { isElectron } from '@/electron'
 import { cacheGetFresh } from './cache'
 import { apiPath } from './hydrate'
+import { warmupEnabled } from '@/settings'
 
 /**
  * Background PULL: refreshes the offline data cache from the backend.
@@ -158,7 +159,8 @@ export function buildPullSteps(): PullStep[] {
   }
   // Availability calendar (540 days) — the heaviest, warmed last
   steps.push({ name: 'calendar', path: apiPath('/timesheet/calendar'), refresh: () => app.refreshCalendar() })
-  return steps
+  // Skip domains the user turned off on the "Какие данные прогревать" screen.
+  return steps.filter((s) => warmupEnabled[s.name] !== false)
 }
 
 /** Whether the cached copy of `step` is still fresh (younger than its TTL). */
