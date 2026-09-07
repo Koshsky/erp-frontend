@@ -410,9 +410,8 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  /** Local-first profile (desktop): hydrate from the cache; web fetches live */
+  /** Local-first profile: hydrate from the cache; network refresh via fetchProfile */
   async function loadProfile(userId: number): Promise<boolean> {
-    if (!isElectron) return fetchProfile(userId)
     if (user.value) return true
     await hydrateFromCache([
       {
@@ -472,15 +471,10 @@ export const useAppStore = defineStore('app', () => {
   const projectsError = ref<string | null>(null)
 
   /**
-   * Local-first (desktop only): fill the projects list from the cache if empty.
-   * The web build has no offline cache — it reads straight from the server
-   * (refreshProjects), as before the offline-first refactor.
+   * Local-first: fill the projects list from the cache if empty. Network refresh
+   * happens only through the background PULL cycle (refreshProjects).
    */
   async function loadProjects(): Promise<void> {
-    if (!isElectron) {
-      await refreshProjects()
-      return
-    }
     if (projects.value.length) return
     await hydrateFromCache([
       {
@@ -521,10 +515,6 @@ export const useAppStore = defineStore('app', () => {
   const resourcesError = ref<string | null>(null)
 
   async function loadResources(): Promise<void> {
-    if (!isElectron) {
-      await refreshResources()
-      return
-    }
     if (resources.value.length) return
     await hydrateFromCache([
       {
@@ -624,10 +614,6 @@ export const useAppStore = defineStore('app', () => {
 
   /** Loads the member (user) list of a resource — local-first (cache) */
   async function loadResourceMembers(resourceId: number): Promise<void> {
-    if (!isElectron) {
-      await refreshResourceMembers(resourceId)
-      return
-    }
     if (resourceMembers.value[resourceId] != null) return
     await hydrateFromCache([
       {
@@ -778,10 +764,6 @@ export const useAppStore = defineStore('app', () => {
 
   /** Loads resource availability for the "180 days back / 360 days forward" window (within the backend limit) */
   async function loadCalendar(): Promise<void> {
-    if (!isElectron) {
-      await refreshCalendar()
-      return
-    }
     if (calendar.value.length) return
     await hydrateFromCache([
       {
@@ -838,10 +820,6 @@ export const useAppStore = defineStore('app', () => {
   const myStaffLoading = ref(false)
 
   async function loadUsers(): Promise<void> {
-    if (!isElectron) {
-      await refreshUsers()
-      return
-    }
     if (users.value.length) return
     await hydrateFromCache([
       {
@@ -871,10 +849,6 @@ export const useAppStore = defineStore('app', () => {
 
   /** Loads "own staff" (scoped /users without a role filter). */
   async function loadMyStaff(): Promise<void> {
-    if (!isElectron) {
-      await refreshMyStaff()
-      return
-    }
     if (myStaff.value.length) return
     await hydrateFromCache([
       {
