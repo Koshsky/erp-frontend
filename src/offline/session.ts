@@ -2,11 +2,11 @@
  * Non-volatile refresh-token store (IndexedDB), shared by the web build and
  * the desktop (Electron) build.
  *
- * The refresh token is the single "remember me" mechanism: it used to live in
- * an HttpOnly cookie (web) or be reconstructed from a safeStorage password
- * (desktop auto-sync). Now — in all environments — the refresh token returned
- * by /auth/login and /auth/refresh is saved here and sent in the body of
- * /auth/refresh for silent session renewal.
+ * The refresh token is the single "remember me" mechanism, replacing the
+ * desktop auto-sync password (safeStorage) that was removed. The token
+ * returned by /auth/login and /auth/refresh is saved here in all
+ * environments and sent in the body of /auth/refresh for silent session
+ * renewal; the HttpOnly cookie stays only as a legacy web fallback.
  *
  * The token is kept indefinitely — no TTL (see the no-TTL invariant in
  * db.ts): the refresh session itself expires server-side (168 h). The store is

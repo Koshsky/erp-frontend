@@ -239,9 +239,9 @@ router.beforeEach(async (to) => {
       ])
     } else {
       // Desktop without autosync (disabled or after logout): the refresh
-      // request is bounded by the axios timeout, but a stale server must not
-      // hold first paint — cap the wait on desktop too. Web keeps the normal
-      // cookie refresh (fast and same-origin).
+      // request is bounded by the timeout below, but a stale server must not
+      // hold first paint — cap the wait on desktop too. Web relies on the
+      // same unified IndexedDB refresh token (fast, same-origin).
       const refresh =
         isElectron && !isOffline.value
           ? Promise.race([
