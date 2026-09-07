@@ -1207,23 +1207,14 @@ export const useTimesheetStore = defineStore('timesheet', () => {
   }
 
   /** Loads employees and initializes the states window (for the timesheet).
-   *  Desktop — local-first; web reads from the server as before. */
+   *  Local-first — the cache is filled by the background PULL cycle. */
   async function loadEmployees(): Promise<void> {
-    if (!isElectron) {
-      await refreshEmployees()
-      await loadInitialWindow()
-      return
-    }
     if (!employees.value.length) await loadEmployeesList()
     await loadInitialWindow()
   }
 
-  /** Loads the states reference — desktop local-first, web reads from the server */
+  /** Loads the states reference — local-first (cache) */
   async function loadStates(): Promise<void> {
-    if (!isElectron) {
-      await refreshStates()
-      return
-    }
     if (states.value.length) return
     await hydrateFromCache([
       {
@@ -1327,15 +1318,10 @@ export const useTimesheetStore = defineStore('timesheet', () => {
     }
   }
 
-  /** Initializes the "180 back / 360 forward" window: desktop — local hydrate,
-   *  web — network period load (as before the offline-first refactor). */
+  /** Initializes the "180 back / 360 forward" window: local hydrate from the cache */
   async function loadInitialWindow(): Promise<void> {
     windowStart.value = shiftDate(todayISO(), -WINDOW_BACK_DAYS)
     windowEnd.value = shiftDate(todayISO(), WINDOW_FORWARD_DAYS)
-    if (!isElectron) {
-      await refreshPeriods(windowStart.value, windowEnd.value)
-      return
-    }
     await fetchPeriodsLocal()
   }
 
