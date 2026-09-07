@@ -5,7 +5,6 @@ import { useAuthStore } from '../store'
 import { PasswordField } from '../components/common'
 import { isOffline, probeBackend } from '../offline/state'
 import { isElectron } from '../electron'
-import { getSavedLogin, saveSyncCredentials } from '../syncCredentials'
 import { getServerBase } from '../config'
 
 const router = useRouter()
@@ -70,11 +69,11 @@ function getError(): string | null {
 /**
  * Offline login: a local session without a token (data from the cache, mutations
  * go to a queue), the password is neither checked nor saved. Identity: typed
- * login → saved profile → autosync login (see the prefilled value below).
+ * login → the saved profile (see the prefilled value below).
  */
 function enterOffline() {
   const typed = username.value.trim()
-  const identity = typed || auth.user?.username || getSavedLogin()
+  const identity = typed || auth.user?.username
   if (!identity) {
     localError.value = 'Нет сохранённой сессии: войдите онлайн хотя бы один раз'
     return
@@ -96,15 +95,6 @@ async function onSubmit() {
   }
   const ok = await auth.login(username.value, password.value)
   if (ok) {
-    // Desktop: credentials of a successful login — the autosync safeguard credentials (password in
-    // safeStorage). Only the verified password is saved.
-    if (isElectron) {
-      try {
-        await saveSyncCredentials(username.value, password.value)
-      } catch {
-        // autosync will simply remain without a password — not critical
-      }
-    }
     goToRedirect()
   }
 }
@@ -112,12 +102,6 @@ async function onSubmit() {
 function goToRedirect() {
   const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/'
   router.push(redirect)
-}
-
-// Offline: prefill the saved autosync login — the user only needs
-// to press one button.
-if (isOffline.value && !username.value) {
-  username.value = getSavedLogin() ?? ''
 }
 </script>
 

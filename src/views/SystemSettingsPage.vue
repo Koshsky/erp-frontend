@@ -3,7 +3,6 @@ import { onMounted, ref, watch } from 'vue'
 import { getApiUrl, setApiUrl, hasApiUrlOverride, httpSchemeWarning } from '../config'
 import { autoSync, saveSyncSettings, getWarmupStep, toggleWarmupStep } from '../settings'
 import { clearLocalData } from '../offline/reset'
-import { isElectron } from '../electron'
 
 const apiUrl = ref('')
 const apiUrlWarn = ref<string | null>(null)
@@ -93,11 +92,6 @@ onMounted(() => {
         <input v-model="autoSync" type="checkbox" />
         <span>Автосинхронизация при запуске и возврате сети</span>
       </label>
-      <p v-if="isElectron" class="st-hint">
-        Логин и пароль для автосинка сохраняются автоматически при входе
-        в систему (пароль шифруется хранилищем ОС — safeStorage). При запуске
-        приложение само восстановит сессию и выполнит синхронизацию.
-      </p>
     </div>
 
     <div class="st-card">
