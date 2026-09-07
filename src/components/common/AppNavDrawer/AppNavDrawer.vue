@@ -121,7 +121,10 @@ const ITEM_ICONS: Record<string, AppIconName> = {
   statuses: 'tag',
   permissions: 'key',
   audit: 'scroll',
-  sync: 'refresh',
+  'system-console': 'kanban',
+  'system-queue': 'list',
+  'system-status': 'checklist',
+  'system-settings': 'key',
   profile: 'user',
 }
 
@@ -197,32 +200,6 @@ function iconFor(item: NavItem): AppIconName {
           </Transition>
         </section>
       </nav>
-
-      <!-- System section (desktop/Electron): sync status + the sync page -->
-      <div v-if="props.sync?.enabled" class="nd-foot">
-        <div class="nd-status">
-          <span class="nd-dot" :class="{ 'nd-dot--off': props.sync.offline }"></span>
-          <span>
-            {{
-              props.sync.offline && props.sync.lastPullLabel
-                ? `Офлайн · данные от ${props.sync.lastPullLabel}`
-                : `Онлайн · данные ${props.sync.lastPullLabel ?? '—'}`
-            }}
-          </span>
-        </div>
-        <RouterLink
-          to="/sync"
-          class="nd-item"
-          :class="{ active: props.activeName === 'sync' }"
-          @click="emit('close')"
-        >
-          <AppIcon name="refresh" :size="22" />
-          <span class="nd-item-label">Синхронизация</span>
-          <span v-if="props.sync.pending > 0" class="nd-badge nd-badge--num">
-            {{ props.sync.pending }}
-          </span>
-        </RouterLink>
-      </div>
     </div>
   </aside>
 </template>
@@ -424,37 +401,6 @@ function iconFor(item: NavItem): AppIconName {
   line-height: 1;
   background: var(--ui-accent-soft);
   color: var(--ui-accent);
-}
-
-.nd-badge--num {
-  background: var(--ui-warning-soft);
-  color: var(--ui-warning);
-}
-
-.nd-foot {
-  flex: none;
-  border-top: 1px solid var(--ui-border);
-  padding: 10px 10px 14px;
-}
-
-.nd-status {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 9px 12px 9px;
-  font-size: 13px;
-  color: var(--ui-text-muted);
-}
-
-.nd-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--ui-success);
-}
-
-.nd-dot--off {
-  background: var(--ui-warning);
 }
 
 /* ---------------------------------------------------------------------------

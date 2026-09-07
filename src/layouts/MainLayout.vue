@@ -6,12 +6,10 @@ import AppNavDrawer from '../components/common/AppNavDrawer/AppNavDrawer.vue'
 import { useRbacStore } from '../store'
 import { useNavigation } from '../composables/useNavigation'
 import { installDrawerEdgeDetection, isNavOpen } from '../composables/useNavDrawer'
-import { useSyncStatus } from '../composables/useSyncStatus'
 
 const route = useRoute()
 const rbac = useRbacStore()
 const { visibleCategories } = useNavigation()
-const { syncStats } = useSyncStatus()
 
 // Route name as a plain string (route.name can also be a symbol in edge cases)
 const routeName = computed(() => (typeof route.name === 'string' ? route.name : undefined))
@@ -59,7 +57,6 @@ onBeforeUnmount(() => {
       :open="isNavOpen"
       :categories="visibleCategories"
       :active-name="routeName"
-      :sync="syncStats"
     />
     <div class="ml-col">
       <AppHeader />
