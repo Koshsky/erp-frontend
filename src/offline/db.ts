@@ -6,23 +6,27 @@
  *  - `idmap`  — persistent mapping of temporary (negative) ids of created
  *    offline entities to real ids, so dependent records are sent with the
  *    real id (not a fake one) after sync interruptions.
+ *  - `session` — the single non-volatile refresh token store (for all
+ *    environments: web + desktop), the "remember me" for auto-session.
  *
- * NO-TTL INVARIANT: the local stores (cache/outbox/idmap) have no TTL and are
- * never cleaned up by time/age/timers. Data is removed only by:
+ * NO-TTL INVARIANT: the local stores (cache/outbox/idmap/session) have no
+ * TTL and are never cleaned up by time/age/timers. Data is removed only by:
  *  - explicit user actions (clearLocalData / clearOutbox, discardFailed /
  *    discardEntry for rejected queue entries);
  *  - an app-version change (ensureCacheVersion — clears ONLY the cache);
- *  - logout (the mutation queue is cleared so a foreign token never flushes
- *    someone else's queue).
+ *  - logout (on logout the mutation queue is cleared so a foreign token never
+ *    flushes someone else's queue, and the refresh token is cleared so a
+ *    foreign token never fires a refresh).
  * Server-side TTLs (refresh session 168h, access token 15m) are validated only
  * by the backend. See docs/no-ttl-local-storage.md.
  */
 
 const DB_NAME = 'erp-offline'
-const DB_VERSION = 3
+const DB_VERSION = 4
 const CACHE_STORE = 'cache'
 const OUTBOX_STORE = 'outbox'
 const IDMAP_STORE = 'idmap'
+const SESSION_STORE = 'session'
 
 let dbPromise: Promise<IDBDatabase> | null = null
 
@@ -43,6 +47,10 @@ function openDb(): Promise<IDBDatabase> {
       }
       if (!db.objectStoreNames.contains(IDMAP_STORE)) {
         db.createObjectStore(IDMAP_STORE)
+      }
+      // DB v4 — refresh-token store for the unified refresh flow (all environments).
+      if (!db.objectStoreNames.contains(SESSION_STORE)) {
+        db.createObjectStore(SESSION_STORE)
       }
     }
     req.onsuccess = () => resolve(req.result)
