@@ -12,6 +12,13 @@ const VERSION_KEY = 'meta:app-version'
  * and the network is used only by the background PULL cycle (which writes fresh
  * responses here) and by mutations. No TTL is enforced on reads — stale data
  * is better than nothing; freshness is surfaced in the UI (cacheGetFresh).
+ *
+ * NO-TTL: entries are never removed by age or timers. The `ts` timestamp is
+ * stored solely to surface freshness in the UI and to let the PULL cycle decide
+ * whether a background re-fetch is worthwhile (PULL_TTL_MS) — it is never used
+ * to delete data. The cache as a whole is cleared only on an app-version change
+ * (ensureCacheVersion) or by the explicit user reset (clearLocalData).
+ * See docs/no-ttl-local-storage.md.
  */
 
 export interface CachedEntry<T> {
@@ -86,8 +93,16 @@ export async function cacheGetByPath<T>(
 /** Cached value together with its write time (for the freshness UX) */
 export interface FreshEntry<T> {
   data: T
+  /** Write time (epoch ms). For UI freshness only — never used to delete data. */
   ts: number
 }
+
+/**
+ * The freshest cached response for a pathname together with its write time.
+ * `ts` is exposed purely for UI/cycle freshness (e.g. "cached X ago", PULL
+ * staleness gating); reading it never deletes or evicts an entry — the cache
+ * has no TTL (see file header).
+ */
 
 export async function cacheGetFresh<T>(
   pathname: string,
