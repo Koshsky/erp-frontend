@@ -1966,6 +1966,9 @@ export const usePlanningStore = defineStore('planning', () => {
       call: async () => {
         const resp = await new TasksApi(apiConfig()).taskPost({
           parent_id: parentId,
+          // The RBAC middleware authorizes task.create by the process from the
+          // body; a subtask always lives in its parent's process.
+          process_id: parent?.process_id,
           title: payload.title,
           color: payload.color,
           status: payload.status,

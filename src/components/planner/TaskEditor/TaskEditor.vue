@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { ModalForm } from '../../common'
-import { ColorField } from '../../common'
+import { ModalForm, ColorField, PendingMark } from '../../common'
 import type {
   TaskEditorProps,
   NewSubtaskPayload,
@@ -184,6 +183,7 @@ function onDeleteSubtask(id: number) {
               @click="cycleStatus(s)"
             />
             <span class="te-item-title" :title="s.title">{{ s.title }}</span>
+            <PendingMark entity="task" :id="s.id" />
             <button
               type="button"
               class="te-remove"
