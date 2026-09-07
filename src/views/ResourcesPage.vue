@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue'
 import { storeToRefs } from 'pinia'
-import { ContextMenu, ModalForm, ConfirmDialog } from '../components/common'
+import { ContextMenu, ModalForm, ConfirmDialog, PendingMark } from '../components/common'
 import type { ContextMenuItem } from '../components/common/ContextMenu'
 import type { ModalField } from '../components/common/ModalForm'
 import { useConfirm } from '../composables/useConfirm'
@@ -232,7 +232,10 @@ onMounted(() => {
             @click="toggleExpanded(res)"
             @contextmenu.prevent.stop="onRowContextMenu($event, res)"
           >
-            <div class="code">{{ res.code }}</div>
+            <div class="code">
+              {{ res.code }}
+              <PendingMark entity="resource" :id="res.id" />
+            </div>
             <div>{{ res.title }}</div>
             <div>{{ res.employees_count }}</div>
             <div>{{ ownerLabel(res.owner_id) }}</div>
