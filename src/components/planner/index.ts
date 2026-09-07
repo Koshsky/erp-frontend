@@ -17,3 +17,5 @@ export { default as ResourceManagerModal } from './ResourceManagerModal/Resource
 export * from './ResourceManagerModal/types'
 export { default as TaskComments } from './TaskComments/TaskComments.vue'
 export * from './TaskComments/types'
+export { default as TaskEditor } from './TaskEditor/TaskEditor.vue'
+export * from './TaskEditor/types'

@@ -1586,9 +1586,25 @@ export const usePlanningStore = defineStore('planning', () => {
     return undefined
   }
 
+  /** Finds a task (top-level or subtask) anywhere in the planning data. */
   function findTaskRow(id: number): any {
     for (const p of taskPlanning.value?.processes ?? []) {
       const t = (p.tasks ?? []).find((x: any) => x.id === id)
+      if (t) return t
+      const s = (p.tasks ?? [])
+        .flatMap((x: any) => x.subtasks ?? [])
+        .find((x: any) => x.id === id)
+      if (s) return s
+    }
+    return undefined
+  }
+
+  /** Locates the object holding a subtask list (a top-level task with subtasks). */
+  function findSubtaskOwner(id: number): any {
+    for (const p of taskPlanning.value?.processes ?? []) {
+      const t = (p.tasks ?? []).find((x: any) =>
+        (x.subtasks ?? []).some((s: any) => s.id === id),
+      )
       if (t) return t
     }
     return undefined
@@ -1714,7 +1730,10 @@ export const usePlanningStore = defineStore('planning', () => {
     })
   }
 
-  async function updateTaskMeta(id: number, patch: { title?: string; owner_id?: number; color?: string }): Promise<boolean> {
+  async function updateTaskMeta(
+    id: number,
+    patch: { title?: string; owner_id?: number; color?: string; status?: string },
+  ): Promise<boolean> {
     return runMutation({
       entity: 'task',
       call: () => new TasksApi(apiConfig()).taskIdPut(id, patch),
@@ -1886,6 +1905,7 @@ export const usePlanningStore = defineStore('planning', () => {
       start_date: string
       end_date: string
       color?: string
+      status?: string
     },
     index?: number,
   ): Promise<boolean> {
@@ -1901,7 +1921,7 @@ export const usePlanningStore = defineStore('planning', () => {
       },
       apply: (dto) => {
         if (!dto) return
-        const d = dto as { id?: number; title?: string; start_date?: string; end_date?: string; color?: string }
+        const d = dto as { id?: number; title?: string; start_date?: string; end_date?: string; color?: string; status?: string }
         const proc = taskPlanning.value?.processes?.find((p: any) => p.id === payload.process_id)
         insertAt(proc?.tasks, index, {
           id: d.id ?? 0,
@@ -1910,6 +1930,7 @@ export const usePlanningStore = defineStore('planning', () => {
           end_date: d.end_date ?? payload.end_date,
           resources: [],
           color: d.color ?? payload.color,
+          status: d.status ?? payload.status ?? 'not_started',
         })
       },
       optimistic: () => {
@@ -1921,8 +1942,102 @@ export const usePlanningStore = defineStore('planning', () => {
           end_date: payload.end_date,
           resources: [],
           color: payload.color,
+          status: payload.status ?? 'not_started',
         })
       },
+      onError: (m) => {
+        error.value = m
+      },
+    })
+  }
+
+  /** Creates a subtask (operation) attached to a top-level task. The backend
+   *  inherits the parent's process and dates, so only title/color/status are
+   *  sent. Optimistically appended to the parent's subtasks list. */
+  async function createSubtask(
+    parentId: number,
+    payload: { title: string; color?: string; status?: string },
+  ): Promise<boolean> {
+    const tempId = nextTempId()
+    const parent = findTaskRow(parentId)
+    return runMutation({
+      entity: 'task',
+      tempId,
+      call: async () => {
+        const resp = await new TasksApi(apiConfig()).taskPost({
+          parent_id: parentId,
+          title: payload.title,
+          color: payload.color,
+          status: payload.status,
+        })
+        const errBody = resp.data?.error as { code?: unknown; message?: string } | undefined
+        if (errBody && errBody.code != null) throw new Error(apiErrorMessage(errBody))
+        return resp
+      },
+      apply: (dto) => {
+        if (!dto) return
+        const d = dto as { id?: number; title?: string; color?: string; status?: string }
+        const p = findTaskRow(parentId)
+        if (!p) return
+        ;(p.subtasks ??= []).push({
+          id: d.id ?? 0,
+          title: d.title ?? payload.title,
+          color: d.color ?? payload.color,
+          status: d.status ?? payload.status ?? 'not_started',
+          resources: [],
+          subtasks: [],
+        })
+      },
+      optimistic: () => {
+        if (!parent) return
+        ;(parent.subtasks ??= []).push({
+          id: tempId,
+          title: payload.title,
+          color: payload.color,
+          status: payload.status ?? 'not_started',
+          resources: [],
+          subtasks: [],
+        })
+      },
+      onError: (m) => {
+        error.value = m
+      },
+    })
+  }
+
+  /** Updates a subtask: title/color/status via PUT /task/{id}. */
+  async function updateSubtask(
+    id: number,
+    patch: { title?: string; color?: string; status?: string },
+  ): Promise<boolean> {
+    return runMutation({
+      entity: 'task',
+      call: () => new TasksApi(apiConfig()).taskIdPut(id, patch),
+      apply: async () => {
+        await refreshTaskPlanning(true)
+      },
+      optimistic: () => {
+        const s = findTaskRow(id)
+        if (s) Object.assign(s, patch)
+      },
+      onError: (m) => {
+        error.value = m
+      },
+    })
+  }
+
+  /** Deletes a subtask (or a top-level task — both share PUT/Delete routes). */
+  async function deleteSubtask(id: number): Promise<boolean> {
+    const remove = () => {
+      const owner = findSubtaskOwner(id)
+      if (owner) removeById(owner.subtasks, id)
+      else for (const p of taskPlanning.value?.processes ?? []) removeById(p.tasks, id)
+    }
+    return runMutation({
+      entity: 'task',
+      call: () => new TasksApi(apiConfig()).taskIdDelete(id),
+      apply: remove,
+      optimistic: remove,
       onError: (m) => {
         error.value = m
       },
@@ -2014,7 +2129,9 @@ export const usePlanningStore = defineStore('planning', () => {
 
   async function deleteTask(id: number): Promise<boolean> {
     const remove = () => {
-      for (const p of taskPlanning.value?.processes ?? []) removeById(p.tasks, id)
+      const owner = findSubtaskOwner(id)
+      if (owner) removeById(owner.subtasks, id)
+      else for (const p of taskPlanning.value?.processes ?? []) removeById(p.tasks, id)
     }
     return runMutation({
       entity: 'task',
@@ -2044,14 +2161,11 @@ export const usePlanningStore = defineStore('planning', () => {
 
   /** Finds a task's resource (from /planning/tasks) by resource_id together with assignment_id */
   function findAssigned(taskId: number, resourceId: number) {
-    for (const p of taskPlanning.value?.processes ?? []) {
-      const t = (p.tasks ?? []).find((x: any) => x.id === taskId)
-      if (!t) continue
-      return (t.resources ?? []).find((r: any) => r.id === resourceId) as
-        | { id?: number; assignment_id?: number }
-        | undefined
-    }
-    return undefined
+    const t = findTaskRow(taskId)
+    if (!t) return undefined
+    return (t.resources ?? []).find((r: any) => r.id === resourceId) as
+      | { id?: number; assignment_id?: number }
+      | undefined
   }
 
   /**
@@ -2061,8 +2175,10 @@ export const usePlanningStore = defineStore('planning', () => {
    */
   function taskOwnerIds(taskId: number): number[] {
     const owners: number[] = []
-    const process = (taskPlanning.value?.processes ?? []).find((p: any) =>
-      (p.tasks ?? []).some((t: any) => t.id === taskId),
+    // Subtasks share their parent's process (enforced by the backend).
+    const process = (taskPlanning.value?.processes ?? []).find(
+      (p: any) =>
+        (p.tasks ?? []).some((t: any) => t.id === taskId || (t.subtasks ?? []).some((s: any) => s.id === taskId)),
     )
     if (!process) return owners
     if (process.owner_id != null) owners.push(process.owner_id)
@@ -2404,6 +2520,9 @@ export const usePlanningStore = defineStore('planning', () => {
     createProject,
     createProcess,
     createTask,
+    createSubtask,
+    updateSubtask,
+    deleteSubtask,
     createMilestone,
     deleteProject,
     deleteProcess,

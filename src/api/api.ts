@@ -214,8 +214,13 @@ export interface DtoCreateTaskRequest {
     'color'?: string;
     'end_date'?: string;
     'owner_id'?: number;
+    /**
+     * ParentID — optional subtask (operation) link: task of the given parent. When set, process_id must point to the parent\'s process; dates and owner may be omitted and are inherited from the parent by the service.
+     */
+    'parent_id'?: number;
     'process_id'?: number;
     'start_date'?: string;
+    'status'?: string;
     'title'?: string;
 }
 export interface DtoCreateUserRequest {
@@ -273,13 +278,25 @@ export interface DtoDetailedTask {
     'end_date'?: string;
     'id'?: number;
     /**
-     * Order of the task within its process (ascending display order).
+     * Order of the task within its parent group (ascending display order): top-level tasks sort within the process, subtasks within the parent.
      */
     'order'?: number;
     'owner_id'?: number;
+    /**
+     * ParentID — subtask (operation) link; NULL for top-level tasks.
+     */
+    'parent_id'?: number;
     'process_id'?: number;
     'resources'?: Array<DtoResource>;
     'start_date'?: string;
+    /**
+     * Execution status: not_started | in_progress | done.
+     */
+    'status'?: string;
+    /**
+     * Subtasks (operations) attached to this task, in display order. Present only on top-level tasks; subtasks cannot have subtasks.
+     */
+    'subtasks'?: Array<DtoDetailedTask>;
     'title'?: string;
 }
 export interface DtoExplainResult {
@@ -493,12 +510,20 @@ export interface DtoTaskResponse {
     'end_date'?: string;
     'id'?: number;
     /**
-     * Order of the task within its process (ascending display order).
+     * Order of the task within its parent group (ascending display order): top-level tasks sort within the process, subtasks within the parent.
      */
     'order'?: number;
     'owner_id'?: number;
+    /**
+     * ParentID — subtask (operation) link; NULL for top-level tasks.
+     */
+    'parent_id'?: number;
     'process_id'?: number;
     'start_date'?: string;
+    /**
+     * Execution status: not_started | in_progress | done.
+     */
+    'status'?: string;
     'title'?: string;
 }
 export interface DtoTaskTemplate {
@@ -551,9 +576,12 @@ export interface DtoUpdateStateRequest {
 export interface DtoUpdateTaskRequest {
     'color'?: string;
     'end_date'?: string;
+    /**
+     * ProcessID is intentionally absent: a task never changes its process. ParentID is absent too: the parent is fixed at creation.
+     */
     'owner_id'?: number;
-    'process_id'?: number;
     'start_date'?: string;
+    'status'?: string;
     'title'?: string;
 }
 export interface DtoUpdateUserRequest {

@@ -48,12 +48,27 @@ const emit = defineEmits<{
   'open-comments': [payload: number]
 }>()
 
-/** Tooltip rows: owner (if assigned) + date range */
+/** Tooltip rows: owner (if assigned) + execution status + date range */
 const tooltipRows = (dateRange: string): string[] =>
-  [taskOwnerLabel.value, dateRange].filter(Boolean)
+  [taskOwnerLabel.value, statusLabel.value, dateRange].filter(Boolean)
 
 const taskOwnerLabel = computed<string>(() =>
   props.task.owner_name ? `Ответственный: ${props.task.owner_name}` : '',
+)
+
+/** Execution status label + color (fixed catalog, mirrors the badge stripe) */
+const statusInfo = computed<{ label: string; color: string }>(() => {
+  switch (props.task.status) {
+    case 'done':
+      return { label: 'Завершена', color: '#22c55e' }
+    case 'in_progress':
+      return { label: 'В работе', color: '#0f83c4' }
+    default:
+      return { label: 'Не начата', color: '#94a3b8' }
+  }
+})
+const statusLabel = computed<string>(() =>
+  props.task.status ? `Статус: ${statusInfo.value.label}` : '',
 )
 
 /** The task has comments — show a badge and the log in the tooltip */
@@ -199,6 +214,12 @@ watch(
     @tooltip-open="onTooltipOpen"
   >
     <span ref="contentRef" class="tb-content">
+      <span
+        v-if="task.status"
+        class="tb-status"
+        :style="{ background: statusInfo.color }"
+        :title="statusInfo.label"
+      ></span>
       <span ref="titleRef" class="tb-title">{{ task.title }}</span>
       <span v-show="showProj" ref="projRef" class="tb-proj">{{ projectCode }}</span>
       <span v-show="showOwner" ref="ownerRef" class="tb-owner" :title="task.owner_name">{{ task.owner_short }}</span>
@@ -257,6 +278,15 @@ watch(
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  pointer-events: none;
+}
+/* Execution status stripe (left edge of the bar) */
+.tb-status {
+  flex-shrink: 0;
+  width: 5px;
+  height: 100%;
+  margin-right: 6px;
+  border-radius: 3px 0 0 3px;
   pointer-events: none;
 }
 .tb-proj {

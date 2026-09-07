@@ -27,6 +27,8 @@ export interface Task {
   owner_short?: string
   /** Number of active task comments (from /planning/tasks); 0 — no badge */
   comments_count?: number
+  /** Execution status: not_started | in_progress | done (fixed catalog) */
+  status?: string
 }
 
 export interface TaskBarProps {
