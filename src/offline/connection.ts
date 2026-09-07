@@ -38,6 +38,8 @@ let started = false
 /** Guards against overlapping auto-push/recovery while a flush is in flight */
 let pushing = false
 let recovering = false
+/** Guards against overlapping probes (a probe can take up to PROBE_TIMEOUT_MS) */
+let probing = false
 
 /**
  * Background PULL freshness marker (survives reloads via localStorage).
@@ -135,9 +137,14 @@ async function handleBackendUp(): Promise<void> {
 
 /** A single online heartbeat probe → offline when it fails. */
 async function onlineHeartbeat(): Promise<void> {
-  if (!canWork()) return
-  const alive = await probeBackend()
-  if (!alive) gotoOffline()
+  if (probing || !canWork()) return
+  probing = true
+  try {
+    const alive = await probeBackend()
+    if (!alive) gotoOffline()
+  } finally {
+    probing = false
+  }
 }
 
 /** Auto-push queued mutations while online (only when the queue is non-empty). */
@@ -171,24 +178,34 @@ function countdownTick(): void {
   }
 }
 
+async function pingBackend(): Promise<void> {
+  if (probing) return
+  probing = true
+  try {
+    const alive = await probeBackend()
+    if (alive) {
+      await handleBackendUp()
+    } else if (!isOffline.value) {
+      // Lost connection between probes — enter offline + countdown.
+      gotoOffline()
+    } else {
+      reconnectCountdown.value = OFFLINE_RETRY_MS
+    }
+  } finally {
+    probing = false
+  }
+}
+
 /**
  * Immediate reconnect attempt — the "Повторить" action. Probes the backend now
  * instead of waiting for the countdown to reach zero. A success goes back
  * online right away; a failure restarts a full countdown.
  */
 export async function retryConnectionNow(): Promise<void> {
-  if (recovering) return
+  if (recovering || probing) return
   // Reset the countdown so it reads as "currently probing" while we wait.
   if (reconnectCountdown.value != null) reconnectCountdown.value = 0
-  const alive = await probeBackend()
-  if (alive) {
-    await handleBackendUp()
-  } else if (!isOffline.value) {
-    // Lost connection between probes — enter offline + countdown.
-    gotoOffline()
-  } else {
-    reconnectCountdown.value = OFFLINE_RETRY_MS
-  }
+  await pingBackend()
 }
 
 function onWindowOffline(): void {
@@ -214,9 +231,11 @@ export function startConnectionMonitor(): void {
   if (started || typeof window === 'undefined') return
   started = true
 
-  // navigator.onLine reported offline at init → start the reconnect flow.
+  // navigator.onLine reported offline at init → start the reconnect countdown
+  // (gotoOffline early-returns when already offline, so start it directly).
   if (isOffline.value) {
-    gotoOffline()
+    reconnectCountdown.value = OFFLINE_RETRY_MS
+    startCountdown()
   } else {
     startOnlineLoop()
   }

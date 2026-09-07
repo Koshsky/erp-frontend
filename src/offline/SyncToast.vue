@@ -112,9 +112,10 @@ function onClose() {
 
 .sync-toast {
   position: fixed;
-  bottom: 20px;
-  left: 50%;
-  transform: translateX(-50%);
+  /* Bottom-left corner, stacked ABOVE the reconnect toast when both are
+     visible (reconnect = bottom 20px, sync = 110px) so they never overlap. */
+  bottom: 110px;
+  left: 20px;
   z-index: 1001;
   background: var(--ui-success);
   color: var(--ui-accent-on);
@@ -221,6 +222,6 @@ function onClose() {
 .toast-fade-enter-from,
 .toast-fade-leave-to {
   opacity: 0;
-  transform: translateX(-50%) translateY(10px);
+  transform: translateY(10px);
 }
 </style>
