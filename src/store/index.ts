@@ -60,9 +60,10 @@ async function runMutation(opts: MutationOptions): Promise<boolean> {
     return true
   } catch (e: any) {
     const err = e as AxiosError
-    if (err?.config && isElectron && isNetworkError(e)) {
-      // Offline queue (outbox) — only in the desktop (Electron) build.
-      // On the web, a network failure in a mutation is a regular error (no optimistic path).
+    if (err?.config && isNetworkError(e)) {
+      // Mutation queue (outbox): on a network failure the request is stored in
+      // IndexedDB and the optimistic change is applied — in every environment
+      // (web and desktop share the same offline-first logic).
       try {
         await enqueueMutation({
           entity: opts.entity,
@@ -97,7 +98,7 @@ function apiConfig(): Configuration {
       // queue, GETs are served from cache. The adapter is only placed here (store clients)
       // so that the queue flush (flushOutbox, raw axios) goes to the network as
       // usual: otherwise, once the network is back, writes would fail with Network Error.
-      ...(isElectron && isOffline.value ? { adapter: offlineFailFastAdapter } : {}),
+      ...(isOffline.value ? { adapter: offlineFailFastAdapter } : {}),
     },
     apiKey: () => `Bearer ${getAccessToken()}`,
   })
@@ -352,12 +353,12 @@ export const useAuthStore = defineStore('auth', () => {
       if (coordinated && token) publishToken(token)
       return true
     } catch (e: any) {
-      // Network error (no HTTP response): the server is unreachable. We do not log out.
-      // In the desktop build we switch to offline mode (the session and the change queue in
-      // IndexedDB live until the network returns); on the web there is no offline mode — we simply
-      // do not kick the user out. Logout happens only on a real server failure.
+      // Network error (no HTTP response): the server is unreachable. We do not log out —
+      // we switch to offline mode (the session and the change queue in IndexedDB live
+      // until the network returns), in every environment. Logout happens only on a
+      // real server failure.
       if (isNetworkError(e)) {
-        if (isElectron) isOffline.value = true
+        isOffline.value = true
         return true
       }
       error.value = e.message || String(e)
