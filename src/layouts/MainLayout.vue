@@ -6,13 +6,11 @@ import AppNavDrawer from '../components/common/AppNavDrawer/AppNavDrawer.vue'
 import { useRbacStore } from '../store'
 import { useNavigation } from '../composables/useNavigation'
 import { installDrawerEdgeDetection, isNavOpen } from '../composables/useNavDrawer'
-import { useSyncStatus } from '../composables/useSyncStatus'
 import { isOffline } from '../offline/state'
 
 const route = useRoute()
 const rbac = useRbacStore()
 const { visibleCategories } = useNavigation()
-const { syncStats } = useSyncStatus()
 
 // Local computed wrapping the imported ref — guaranteed reactivity in the template
 const offline = computed(() => isOffline.value)
@@ -63,7 +61,6 @@ onBeforeUnmount(() => {
       :open="isNavOpen"
       :categories="visibleCategories"
       :active-name="routeName"
-      :sync="syncStats"
     />
     <div class="ml-col">
       <AppHeader />
