@@ -70,6 +70,10 @@ export const APP_ICONS = {
     'M4.5 20.5a7.5 7.5 0 0 1 15 0',
   ],
   list: ['M3 6h2', 'M3 12h2', 'M3 18h2', 'M8 6h13', 'M8 12h13', 'M8 18h13'],
+  clock: [
+    'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z',
+    'M12 7v5l3 3',
+  ],
 } as const
 
 /** Available icon names */

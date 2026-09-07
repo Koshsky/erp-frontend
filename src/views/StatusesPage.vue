@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { storeToRefs } from 'pinia'
-import { ContextMenu, ModalForm, ConfirmDialog } from '../components/common'
+import { ContextMenu, ModalForm, ConfirmDialog, PendingMark } from '../components/common'
 import type { ContextMenuItem } from '../components/common/ContextMenu'
 import type { ModalField } from '../components/common/ModalForm'
 import { useConfirm } from '../composables/useConfirm'
@@ -142,7 +142,10 @@ onMounted(() => {
           class="tr"
           @contextmenu.prevent.stop="onRowContextMenu($event, st)"
         >
-          <div class="code">{{ st.code }}</div>
+          <div class="code">
+            {{ st.code }}
+            <PendingMark entity="state" :id="st.id" />
+          </div>
           <div>{{ st.name }}</div>
           <div>
             <span class="avail" :class="{ off: !st.is_available }">

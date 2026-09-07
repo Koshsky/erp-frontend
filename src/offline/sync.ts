@@ -234,21 +234,43 @@ export async function ensureDesktopAutoSyncSession(): Promise<void> {
   await auth.login(creds.login, creds.password)
 }
 
+/**
+ * Unified session renewal used by 401 handling and the router guard.
+ * Dispatches by environment:
+ *  - desktop (Electron): silent re-login with the stored auto-sync credentials —
+ *    the refresh cookie does not survive a cross-site API base, so the session is
+ *    extended by logging in. Returns whether a fresh session is available.
+ *  - web/browser: renew the access token via the HttpOnly refresh cookie
+ *    (auth.refreshSession).
+ * Each 401 triggers this in the same way for both environments.
+ */
+export async function ensureAutoSession(): Promise<boolean> {
+  if (isElectron && shouldAutoSync() && !isLoggedOut()) {
+    await ensureDesktopAutoSyncSession()
+    const auth = useAuthStore()
+    return auth.isAuthenticated && !auth.accessExpired
+  }
+  return useAuthStore().refreshSession()
+}
+
 /** Background session maintenance period (extending the access token with a silent login) */
 const SESSION_MAINTENANCE_MS = 30 * 1000
 
 let maintenanceTimer: number | null = null
 
 /**
- * Background session maintenance in Desktop: every 30 s silently refresh the access
- * token with autosync credentials when it is about to expire (the refresh cookie does
- * not work cross-site, so we extend it by logging in). Idempotent: ensure... itself
- * filters out a fresh session, offline, and the "after logout" flag. An offline session
- * (login without network) automatically becomes real when the network returns.
+ * Background session maintenance: every 30 s renew a session that is about to
+ * expire (or a desktop session that can be restored from the auto-sync
+ * credentials). On desktop the silent re-login extends the session (the refresh
+ * cookie does not work cross-site); on the web the token is renewed via the
+ * HttpOnly cookie. A fresh session and an unauthenticated visitor are left
+ * alone — the guard only fires when the access token is actually expiring.
+ * Runs in both environments; ensureAutoSession itself picks the right path.
  */
 export function startSessionMaintenance(): void {
-  if (!isElectron || maintenanceTimer != null) return
+  if (maintenanceTimer != null) return
   maintenanceTimer = window.setInterval(() => {
-    void ensureDesktopAutoSyncSession()
+    const auth = useAuthStore()
+    if (auth.isAuthenticated && auth.accessExpired) void ensureAutoSession()
   }, SESSION_MAINTENANCE_MS)
 }

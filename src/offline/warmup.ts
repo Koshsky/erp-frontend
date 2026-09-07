@@ -2,7 +2,6 @@ import { ref } from 'vue'
 import { AssignmentsApi } from '@/api'
 import { apiConfig, useAppStore, useAuthStore, usePlanningStore, useRbacStore, useTimesheetStore } from '@/store'
 import { isOffline } from './state'
-import { isElectron } from '@/electron'
 import { cacheGetFresh } from './cache'
 import { apiPath } from './hydrate'
 
@@ -205,10 +204,9 @@ async function runPull(settings: { cycle: boolean }): Promise<number> {
 
 /**
  * Full (TTL-aware) warmup — the "Warm data"/"Обновить" path. Returns true if
- * actually started.
+ * actually started. Runs in every environment.
  */
 export function warmNow(): Promise<boolean> {
-  if (!isElectron) return Promise.resolve(false)
   if (running || isOffline.value) return Promise.resolve(false)
   running = true
   return runPull({ cycle: false })
@@ -253,10 +251,8 @@ export function pullStaleCycle(): Promise<number> {
     })
 }
 
-/** Schedules full warmup when idle. Idempotent (one run at a time).
- *  Offline cache warmup — only in the desktop (Electron) build. */
+/** Schedules full warmup when idle. Idempotent (one run at a time). */
 export function scheduleWarmup(): void {
-  if (!isElectron) return
   if (running || scheduled) return
   if (isOffline.value) return
   if (!useAuthStore().isAuthenticated) return

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { GroupGantt } from '../../../GroupGantt'
+import { PendingMark } from '@/components/common'
 import ProjectBar from '../ProjectBar/ProjectBar.vue'
 import type { ProjectGanttProps } from './types'
 
@@ -36,6 +37,13 @@ function onBarChange(id: number, d: { start_date: string; end_date: string }) {
 function onContextMenu(p: { clientX: number; clientY: number; id: number }) {
   emit('contextmenu', { ...p, date: '', rowIndex: -1, projectId: p.id })
 }
+
+/** Short Russian date for the row label (start — end) */
+function fmt(d: string): string {
+  if (!d) return ''
+  const [y, m, day] = d.split('-')
+  return `${day}.${m}.${y}`
+}
 </script>
 
 <template>
@@ -46,6 +54,14 @@ function onContextMenu(p: { clientX: number; clientY: number; id: number }) {
     :rowHeight="52"
     @reorder="(p) => emit('reorder', p)"
   >
+    <!-- Row label: project code + the "awaiting sync" clock mark (pending queue) -->
+    <template #row="{ item }">
+      <span class="item-title">
+        {{ item.title }}
+        <PendingMark entity="project" :id="item.id" />
+      </span>
+      <div class="item-dates">{{ fmt(item.start_date) }} — {{ fmt(item.end_date) }}</div>
+    </template>
     <template #bar="{ item, startReorder }">
       <ProjectBar
         :timeline="timeline"
@@ -66,4 +82,24 @@ function onContextMenu(p: { clientX: number; clientY: number; id: number }) {
 </template>
 
 <style scoped>
+/* Row label styling mirrors GroupGantt's default label (the #row slot is
+   rendered from here, so the shared component's scoped classes do not reach it) */
+.item-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 400;
+  font-size: 11px;
+  color: var(--ui-text-2);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.item-dates {
+  font-size: 9px;
+  color: var(--ui-text-muted);
+  font-weight: 400;
+  margin-top: 1px;
+}
 </style>

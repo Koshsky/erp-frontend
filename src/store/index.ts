@@ -60,9 +60,10 @@ async function runMutation(opts: MutationOptions): Promise<boolean> {
     return true
   } catch (e: any) {
     const err = e as AxiosError
-    if (err?.config && isElectron && isNetworkError(e)) {
-      // Offline queue (outbox) — only in the desktop (Electron) build.
-      // On the web, a network failure in a mutation is a regular error (no optimistic path).
+    if (err?.config && isNetworkError(e)) {
+      // Mutation queue (outbox): on a network failure the request is stored in
+      // IndexedDB and the optimistic change is applied — in every environment
+      // (web and desktop share the same offline-first logic).
       try {
         await enqueueMutation({
           entity: opts.entity,
@@ -97,7 +98,7 @@ function apiConfig(): Configuration {
       // queue, GETs are served from cache. The adapter is only placed here (store clients)
       // so that the queue flush (flushOutbox, raw axios) goes to the network as
       // usual: otherwise, once the network is back, writes would fail with Network Error.
-      ...(isElectron && isOffline.value ? { adapter: offlineFailFastAdapter } : {}),
+      ...(isOffline.value ? { adapter: offlineFailFastAdapter } : {}),
     },
     apiKey: () => `Bearer ${getAccessToken()}`,
   })
@@ -352,12 +353,12 @@ export const useAuthStore = defineStore('auth', () => {
       if (coordinated && token) publishToken(token)
       return true
     } catch (e: any) {
-      // Network error (no HTTP response): the server is unreachable. We do not log out.
-      // In the desktop build we switch to offline mode (the session and the change queue in
-      // IndexedDB live until the network returns); on the web there is no offline mode — we simply
-      // do not kick the user out. Logout happens only on a real server failure.
+      // Network error (no HTTP response): the server is unreachable. We do not log out —
+      // we switch to offline mode (the session and the change queue in IndexedDB live
+      // until the network returns), in every environment. Logout happens only on a
+      // real server failure.
       if (isNetworkError(e)) {
-        if (isElectron) isOffline.value = true
+        isOffline.value = true
         return true
       }
       error.value = e.message || String(e)
@@ -409,9 +410,8 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  /** Local-first profile (desktop): hydrate from the cache; web fetches live */
+  /** Local-first profile: hydrate from the cache; network refresh via fetchProfile */
   async function loadProfile(userId: number): Promise<boolean> {
-    if (!isElectron) return fetchProfile(userId)
     if (user.value) return true
     await hydrateFromCache([
       {
@@ -471,15 +471,10 @@ export const useAppStore = defineStore('app', () => {
   const projectsError = ref<string | null>(null)
 
   /**
-   * Local-first (desktop only): fill the projects list from the cache if empty.
-   * The web build has no offline cache — it reads straight from the server
-   * (refreshProjects), as before the offline-first refactor.
+   * Local-first: fill the projects list from the cache if empty. Network refresh
+   * happens only through the background PULL cycle (refreshProjects).
    */
   async function loadProjects(): Promise<void> {
-    if (!isElectron) {
-      await refreshProjects()
-      return
-    }
     if (projects.value.length) return
     await hydrateFromCache([
       {
@@ -520,10 +515,6 @@ export const useAppStore = defineStore('app', () => {
   const resourcesError = ref<string | null>(null)
 
   async function loadResources(): Promise<void> {
-    if (!isElectron) {
-      await refreshResources()
-      return
-    }
     if (resources.value.length) return
     await hydrateFromCache([
       {
@@ -623,10 +614,6 @@ export const useAppStore = defineStore('app', () => {
 
   /** Loads the member (user) list of a resource — local-first (cache) */
   async function loadResourceMembers(resourceId: number): Promise<void> {
-    if (!isElectron) {
-      await refreshResourceMembers(resourceId)
-      return
-    }
     if (resourceMembers.value[resourceId] != null) return
     await hydrateFromCache([
       {
@@ -777,10 +764,6 @@ export const useAppStore = defineStore('app', () => {
 
   /** Loads resource availability for the "180 days back / 360 days forward" window (within the backend limit) */
   async function loadCalendar(): Promise<void> {
-    if (!isElectron) {
-      await refreshCalendar()
-      return
-    }
     if (calendar.value.length) return
     await hydrateFromCache([
       {
@@ -837,10 +820,6 @@ export const useAppStore = defineStore('app', () => {
   const myStaffLoading = ref(false)
 
   async function loadUsers(): Promise<void> {
-    if (!isElectron) {
-      await refreshUsers()
-      return
-    }
     if (users.value.length) return
     await hydrateFromCache([
       {
@@ -870,10 +849,6 @@ export const useAppStore = defineStore('app', () => {
 
   /** Loads "own staff" (scoped /users without a role filter). */
   async function loadMyStaff(): Promise<void> {
-    if (!isElectron) {
-      await refreshMyStaff()
-      return
-    }
     if (myStaff.value.length) return
     await hydrateFromCache([
       {
@@ -1232,23 +1207,14 @@ export const useTimesheetStore = defineStore('timesheet', () => {
   }
 
   /** Loads employees and initializes the states window (for the timesheet).
-   *  Desktop — local-first; web reads from the server as before. */
+   *  Local-first — the cache is filled by the background PULL cycle. */
   async function loadEmployees(): Promise<void> {
-    if (!isElectron) {
-      await refreshEmployees()
-      await loadInitialWindow()
-      return
-    }
     if (!employees.value.length) await loadEmployeesList()
     await loadInitialWindow()
   }
 
-  /** Loads the states reference — desktop local-first, web reads from the server */
+  /** Loads the states reference — local-first (cache) */
   async function loadStates(): Promise<void> {
-    if (!isElectron) {
-      await refreshStates()
-      return
-    }
     if (states.value.length) return
     await hydrateFromCache([
       {
@@ -1352,15 +1318,10 @@ export const useTimesheetStore = defineStore('timesheet', () => {
     }
   }
 
-  /** Initializes the "180 back / 360 forward" window: desktop — local hydrate,
-   *  web — network period load (as before the offline-first refactor). */
+  /** Initializes the "180 back / 360 forward" window: local hydrate from the cache */
   async function loadInitialWindow(): Promise<void> {
     windowStart.value = shiftDate(todayISO(), -WINDOW_BACK_DAYS)
     windowEnd.value = shiftDate(todayISO(), WINDOW_FORWARD_DAYS)
-    if (!isElectron) {
-      await refreshPeriods(windowStart.value, windowEnd.value)
-      return
-    }
     await fetchPeriodsLocal()
   }
 
@@ -1542,10 +1503,6 @@ export const usePlanningStore = defineStore('planning', () => {
   }
 
   async function loadProjectPlanning(): Promise<void> {
-    if (!isElectron) {
-      await refreshProjectPlanning()
-      return
-    }
     await hydratePlanning(
       () => projectPlanning.value,
       (v) => {
@@ -1556,10 +1513,6 @@ export const usePlanningStore = defineStore('planning', () => {
   }
 
   async function loadProcessPlanning(): Promise<void> {
-    if (!isElectron) {
-      await refreshProcessPlanning()
-      return
-    }
     await hydratePlanning(
       () => processPlanning.value,
       (v) => {
@@ -1570,10 +1523,6 @@ export const usePlanningStore = defineStore('planning', () => {
   }
 
   async function loadTaskPlanning(): Promise<void> {
-    if (!isElectron) {
-      await refreshTaskPlanning()
-      return
-    }
     await hydratePlanning(
       () => taskPlanning.value,
       (v) => {
@@ -2223,9 +2172,8 @@ export const usePlanningStore = defineStore('planning', () => {
       )
     } catch (e: any) {
       const err = e as AxiosError
-      if (err?.config && isElectron && isNetworkError(e)) {
+      if (err?.config && isNetworkError(e)) {
         // Offline: the local reorder is already applied; the PUTs go to the queue.
-        // (the queue — only in the desktop build)
         const base = axios.getUri(err.config).replace(/\d+$/, '')
         for (const c of changes) {
           try {
@@ -2280,7 +2228,7 @@ export const usePlanningStore = defineStore('planning', () => {
       await new ProcessesApi(apiConfig()).processOrderPut({ project_id: projectId, ids })
     } catch (e: any) {
       const err = e as AxiosError
-      if (err?.config && isElectron && isNetworkError(e)) {
+      if (err?.config && isNetworkError(e)) {
         try {
           await enqueueMutation({
             entity: 'reorder',
@@ -2322,7 +2270,7 @@ export const usePlanningStore = defineStore('planning', () => {
       await new TasksApi(apiConfig()).taskOrderPut({ process_id: processId, ids })
     } catch (e: any) {
       const err = e as AxiosError
-      if (err?.config && isElectron && isNetworkError(e)) {
+      if (err?.config && isNetworkError(e)) {
         try {
           await enqueueMutation({
             entity: 'reorder',
@@ -2578,12 +2526,11 @@ export const useRbacStore = defineStore('rbac', () => {
   }
 
   /**
-   * Loads my permissions — desktop LOCAL-FIRST (read the cached copy, never
-   * issue a GET from the render/guard path). The web build reads straight from
-   * the server (refreshPermissions) as before the offline-first refactor.
+   * Loads my permissions — LOCAL-FIRST (read the cached copy, never issue a GET
+   * from the render/guard path). The background PULL cycle owns the network
+   * refresh (refreshPermissions).
    */
   async function loadMyPermissions(): Promise<boolean> {
-    if (!isElectron) return refreshPermissions()
     if (permsLoaded.value) return true
     try {
       const cached = localStorage.getItem(PERMS_KEY)
