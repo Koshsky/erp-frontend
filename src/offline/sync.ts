@@ -259,15 +259,18 @@ const SESSION_MAINTENANCE_MS = 30 * 1000
 let maintenanceTimer: number | null = null
 
 /**
- * Background session maintenance: every 30 s silently renew a session that is
- * about to expire. On desktop it logs in with the auto-sync credentials (the refresh
- * cookie does not work cross-site); on the web it refreshes via the HttpOnly cookie.
- * Runs in both environments — ensureAutoSession itself picks the right path, and the
- * underlying helpers filter out a fresh session, offline, and the "after logout" flag.
+ * Background session maintenance: every 30 s renew a session that is about to
+ * expire (or a desktop session that can be restored from the auto-sync
+ * credentials). On desktop the silent re-login extends the session (the refresh
+ * cookie does not work cross-site); on the web the token is renewed via the
+ * HttpOnly cookie. A fresh session and an unauthenticated visitor are left
+ * alone — the guard only fires when the access token is actually expiring.
+ * Runs in both environments; ensureAutoSession itself picks the right path.
  */
 export function startSessionMaintenance(): void {
   if (maintenanceTimer != null) return
   maintenanceTimer = window.setInterval(() => {
-    void ensureAutoSession()
+    const auth = useAuthStore()
+    if (auth.isAuthenticated && auth.accessExpired) void ensureAutoSession()
   }, SESSION_MAINTENANCE_MS)
 }

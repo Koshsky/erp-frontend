@@ -1503,10 +1503,6 @@ export const usePlanningStore = defineStore('planning', () => {
   }
 
   async function loadProjectPlanning(): Promise<void> {
-    if (!isElectron) {
-      await refreshProjectPlanning()
-      return
-    }
     await hydratePlanning(
       () => projectPlanning.value,
       (v) => {
@@ -1517,10 +1513,6 @@ export const usePlanningStore = defineStore('planning', () => {
   }
 
   async function loadProcessPlanning(): Promise<void> {
-    if (!isElectron) {
-      await refreshProcessPlanning()
-      return
-    }
     await hydratePlanning(
       () => processPlanning.value,
       (v) => {
@@ -1531,10 +1523,6 @@ export const usePlanningStore = defineStore('planning', () => {
   }
 
   async function loadTaskPlanning(): Promise<void> {
-    if (!isElectron) {
-      await refreshTaskPlanning()
-      return
-    }
     await hydratePlanning(
       () => taskPlanning.value,
       (v) => {
@@ -2184,9 +2172,8 @@ export const usePlanningStore = defineStore('planning', () => {
       )
     } catch (e: any) {
       const err = e as AxiosError
-      if (err?.config && isElectron && isNetworkError(e)) {
+      if (err?.config && isNetworkError(e)) {
         // Offline: the local reorder is already applied; the PUTs go to the queue.
-        // (the queue — only in the desktop build)
         const base = axios.getUri(err.config).replace(/\d+$/, '')
         for (const c of changes) {
           try {
@@ -2241,7 +2228,7 @@ export const usePlanningStore = defineStore('planning', () => {
       await new ProcessesApi(apiConfig()).processOrderPut({ project_id: projectId, ids })
     } catch (e: any) {
       const err = e as AxiosError
-      if (err?.config && isElectron && isNetworkError(e)) {
+      if (err?.config && isNetworkError(e)) {
         try {
           await enqueueMutation({
             entity: 'reorder',
@@ -2283,7 +2270,7 @@ export const usePlanningStore = defineStore('planning', () => {
       await new TasksApi(apiConfig()).taskOrderPut({ process_id: processId, ids })
     } catch (e: any) {
       const err = e as AxiosError
-      if (err?.config && isElectron && isNetworkError(e)) {
+      if (err?.config && isNetworkError(e)) {
         try {
           await enqueueMutation({
             entity: 'reorder',
@@ -2539,12 +2526,11 @@ export const useRbacStore = defineStore('rbac', () => {
   }
 
   /**
-   * Loads my permissions — desktop LOCAL-FIRST (read the cached copy, never
-   * issue a GET from the render/guard path). The web build reads straight from
-   * the server (refreshPermissions) as before the offline-first refactor.
+   * Loads my permissions — LOCAL-FIRST (read the cached copy, never issue a GET
+   * from the render/guard path). The background PULL cycle owns the network
+   * refresh (refreshPermissions).
    */
   async function loadMyPermissions(): Promise<boolean> {
-    if (!isElectron) return refreshPermissions()
     if (permsLoaded.value) return true
     try {
       const cached = localStorage.getItem(PERMS_KEY)
