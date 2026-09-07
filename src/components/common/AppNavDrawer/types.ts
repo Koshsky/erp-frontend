@@ -21,8 +21,6 @@ export interface AppNavDrawerProps {
   activeName?: string
   /** Brand shown in the drawer header; this is the only place the brand lives */
   brand?: string
-  /** Desktop sync status; undefined hides the "Система" section (web) */
-  sync?: DrawerSyncStats
 }
 
 export interface AppNavDrawerEmits {

@@ -75,6 +75,16 @@ export const NAV_CATEGORIES: NavCategory[] = [
       { label: 'Журнал действий', to: '/audit', name: 'audit', perm: ['audit', 'view'] },
     ],
   },
+  {
+    label: 'Система',
+    roles: null,
+    items: [
+      { label: 'Пульт', to: '/system/console', name: 'system-console' },
+      { label: 'Очередь изменений', to: '/system/queue', name: 'system-queue' },
+      { label: 'Статус', to: '/system/status', name: 'system-status' },
+      { label: 'Настройки', to: '/system/settings', name: 'system-settings' },
+    ],
+  },
 ]
 
 /** Navigation aware of the current user's RBAC permissions (role — only as a cold-start fallback) */
