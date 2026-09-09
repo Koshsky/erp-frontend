@@ -20,10 +20,9 @@ const localError = ref<string | null>(null)
 const offline = computed(() => isOffline.value)
 /** Server address to show on the login page (if set) */
 const serverBase = computed(() => getServerBase())
-/** Single login button: the label depends on the network state, the behavior is in onSubmit */
-const submitLabel = computed(() =>
-  auth.loading ? 'Подождите…' : offline.value ? 'Войти офлайн' : 'Войти →',
-)
+/** The submit button always performs an ONLINE login (explicit user intent);
+ *  offline entry has its own separate secondary button below. */
+const submitLabel = computed(() => (auth.loading ? 'Подождите…' : 'Войти →'))
 
 // === Server ping: symbol button + connection indicator ===
 const pinging = ref(false)
@@ -84,11 +83,6 @@ function enterOffline() {
 
 async function onSubmit() {
   localError.value = null
-  if (offline.value) {
-    enterOffline()
-    return
-  }
-
   if (!username.value || !password.value) {
     localError.value = 'Заполните все поля'
     return
@@ -97,6 +91,20 @@ async function onSubmit() {
   if (ok) {
     goToRedirect()
   }
+}
+
+/** Offline entry: explicit secondary action (only shown while the server is
+ *  unreachable). Creates a local session without a token — never a substitute
+ *  for the online submit, so an online login can never land in a token-less
+ *  session by accident. */
+function onOfflineClick() {
+  localError.value = null
+  // Re-probe first: if the server became reachable, prefer the online path.
+  if (!isOffline.value) {
+    onSubmit()
+    return
+  }
+  enterOffline()
 }
 
 function goToRedirect() {
@@ -121,11 +129,21 @@ function goToRedirect() {
 
         <PasswordField v-model="password" label="Пароль" autocomplete="current-password" placeholder="••••••••" />
 
-        <p v-if="offline" class="lp-offline-hint">Сервер недоступен: вход офлайн не требует сети</p>
         <p v-if="getError()" class="lp-error">{{ getError() }}</p>
+        <p v-if="offline" class="lp-offline-hint">Сервер недоступен для проверки пароля — войдите офлайн ниже</p>
 
         <button type="submit" class="lp-btn" :disabled="auth.loading">
           {{ submitLabel }}
+        </button>
+
+        <button
+          v-if="offline"
+          type="button"
+          class="lp-offline-btn"
+          :disabled="auth.loading"
+          @click="onOfflineClick"
+        >
+          Войти офлайн (без проверки пароля)
         </button>
       </form>
 
@@ -156,6 +174,28 @@ function goToRedirect() {
 
 <style scoped>
 @import '../styles/tokens.css';
+
+.lp-offline-btn {
+  margin-top: 8px;
+  padding: 11px 13px;
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius-md);
+  background: var(--ui-surface-2);
+  color: var(--ui-text-2);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--ui-duration), border-color var(--ui-duration);
+}
+.lp-offline-btn:hover:not(:disabled) {
+  background: var(--ui-border);
+  border-color: var(--ui-accent);
+  color: var(--ui-text);
+}
+.lp-offline-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
 </style>
 
 <style src="./LoginPage.css" scoped></style>

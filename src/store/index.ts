@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref, computed, onScopeDispose } from 'vue'
+import { ref, computed, watch, onScopeDispose } from 'vue'
 import axios, { type AxiosError, type Method } from 'axios'
 import { AuthApi, ProjectsApi, ProcessesApi, TasksApi, TimesheetResourcesApi, TimesheetCalendarApi, TimesheetStatesApi, PlanningApi, MilestonesApi, UsersApi, AssignmentsApi, AutoCreateApi, RBACApi, PermissionsApi, AuditApi, Configuration } from '@/api'
 import type { DtoUserInfo, DtoProject, DtoResourceResponse, DtoResourceCalendar, DtoResourceMemberResponse, DtoResourceAbsenceResponse, DtoUserResponse, DtoUserStateResponse, DtoStateResponse, DtoCreateResourceRequest, DtoUpdateResourceRequest, DtoCreateUserRequest, DtoUpdateUserRequest, DtoSetDaysRequest, DtoAdminUserResponse, DtoCreateUserResult, DtoResetPasswordResponse, DtoAutoCreateConfig, DtoAutoCreatedCounts, DtoCommentResponse, DomainPreset, DtoPresetRuleInput, DtoPresetRuleView, DtoMatrixCell, DtoRoutePolicyView, PoliciesKindInfo, DtoPermission, DtoUserPermissionsView, DtoUserPermissionsInput, DtoAuditEventView } from '@/api'
@@ -103,6 +103,25 @@ function apiConfig(): Configuration {
       // so that the queue flush (flushOutbox, raw axios) goes to the network as
       // usual: otherwise, once the network is back, writes would fail with Network Error.
       ...(isOffline.value ? { adapter: offlineFailFastAdapter } : {}),
+    },
+    apiKey: () => `Bearer ${getAccessToken()}`,
+  })
+}
+
+/**
+ * Configuration for AUTH requests only (/auth/login, /auth/refresh,
+ * /auth/logout). These must ALWAYS reach the network — even while isOffline is
+ * true: they are precisely how the app verifies the server came back (manual
+ * online login, silent session restore). The fail-fast adapter would otherwise
+ * swallow the login attempt while the monitor still thinks the server is dead,
+ * leaving the user stuck on /login with no way to reconnect.
+ */
+function authApiConfig(): Configuration {
+  return new Configuration({
+    basePath: getApiUrl(),
+    baseOptions: {
+      headers: { 'Content-Type': 'application/json' },
+      timeout: 10000,
     },
     apiKey: () => `Bearer ${getAccessToken()}`,
   })
@@ -222,11 +241,34 @@ export const useAuthStore = defineStore('auth', () => {
     return true
   }
 
+  // Once the network returns after an offline login, silently try to restore a
+  // real online session (the refresh token is in IndexedDB or the cookie). The
+  // router guard alone cannot do it: it skips the refresh while isOffline is
+  // true and then admits the stored profile without an access token — which
+  // made every request go out with an empty Bearer and the server answered
+  // INVALID_TOKEN («Сессия истекла»). When no refresh token is available at
+  // all (a pure offline session), do nothing: the user stays offline (their
+  // data and queue are intact) and can log in online explicitly.
+  watch(
+    isOffline,
+    (offline) => {
+      if (offline) return
+      if (sessionMode.value !== 'offline') return
+      if (isLoggedOut()) return
+      void (async () => {
+        const stored = await loadRefreshToken()
+        if (stored == null) return // no session to restore — stay offline
+        await doRefresh()
+      })()
+    },
+    { flush: 'sync' },
+  )
+
   async function login(username: string, password: string) {
     loading.value = true
     error.value = null
     try {
-      const api = new AuthApi(apiConfig())
+      const api = new AuthApi(authApiConfig())
       const resp = await api.authLoginPost({ username: username.trim(), password })
       const body = resp.data
       const errBody = body?.error as { code?: unknown; message?: string } | undefined
@@ -343,7 +385,7 @@ export const useAuthStore = defineStore('auth', () => {
     loading.value = true
     error.value = null
     try {
-      const api = new AuthApi(apiConfig())
+      const api = new AuthApi(authApiConfig())
       const stored = await loadRefreshToken()
       const resp = await api.authRefreshPost(stored ? { refresh_token: stored } : undefined)
       const body = resp.data
@@ -387,7 +429,7 @@ export const useAuthStore = defineStore('auth', () => {
     void (async () => {
       try {
         const stored = await loadRefreshToken()
-        await new AuthApi(apiConfig()).authLogoutPost(
+        await new AuthApi(authApiConfig()).authLogoutPost(
           stored ? { refresh_token: stored } : undefined,
         )
       } catch {

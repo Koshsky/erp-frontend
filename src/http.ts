@@ -36,6 +36,22 @@ function redirectToLogin() {
  * generated API clients (src/api/base.ts: globalAxios).
  */
 export function setupHttp() {
+  // Never attach an EMPTY Authorization header ("Bearer ") — the backend
+  // answers such requests with INVALID_TOKEN (invalid authorization format),
+  // which the UI misreads as «Сессия истекла». Without a token the header is
+  // simply omitted; protected endpoints then return a plain 401 that flows
+  // through the normal refresh/retry path below.
+  axios.interceptors.request.use((config) => {
+    const token = getAccessToken()
+    config.headers = config.headers ?? {}
+    const auth = String(config.headers['authorization'] || config.headers['Authorization'] || '')
+    if (auth.startsWith('Bearer ') && !token) {
+      delete config.headers['authorization']
+      delete config.headers['Authorization']
+    }
+    return config
+  })
+
   // Successful GETs are written to the offline cache (network is up — data is fresh).
   // The cache and write-through overlay work in every environment (web and desktop).
   axios.interceptors.response.use(
@@ -166,8 +182,17 @@ export function setupHttp() {
         return Promise.reject(error)
       }
 
-      ;(config as RetryableConfig)._retried = true
+      // Never retry with an EMPTY bearer: the server answers «invalid
+      // authorization format» (INVALID_TOKEN) and the UI shows a misleading
+      // «Сессия истекла». If no token could be restored, send the user to the
+      // login page instead of firing a request that is guaranteed to fail.
       const token = getAccessToken()
+      if (!token) {
+        redirectToLogin()
+        return Promise.reject(error)
+      }
+
+      ;(config as RetryableConfig)._retried = true
       config.headers = config.headers ?? {}
       delete config.headers['authorization']
       config.headers['Authorization'] = `Bearer ${token}`
