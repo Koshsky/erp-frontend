@@ -130,7 +130,12 @@ function ensureLoaded(id: number) {
   // The live baseline (both modes) is built from the effective matrix.
   if (!rbac.matrix.length && !rbac.loading) void rbac.loadRbac()
   if (isDraft.value) return
-  if (id <= 0 || rbac.userPermissions) return
+  if (id <= 0) return
+  // Load per user: the store keeps the snapshot of the LAST opened user; a
+  // non-null snapshot of another user must not block this one (otherwise the
+  // editor shows the previous user's permissions — e.g. the admin stub for a
+  // non-admin).
+  if (rbac.userPermissions?.user_id === id) return
   void rbac.loadUserPermissions(id)
 }
 onMounted(() => ensureLoaded(props.userId))

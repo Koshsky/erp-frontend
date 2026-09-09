@@ -2862,6 +2862,10 @@ export const useRbacStore = defineStore('rbac', () => {
   async function loadUserPermissions(id: number): Promise<boolean> {
     userPermissionsLoading.value = true
     userPermissionsError.value = null
+    // Reset the snapshot while loading: the editor must never render the
+    // permissions of the previously opened user (e.g. the admin stub shown
+    // for a non-admin right after opening the admin).
+    userPermissions.value = null
     try {
       const resp = await new RBACApi(apiConfig()).rbacUsersIdPermissionsGet(id)
       userPermissions.value = resp.data?.data ?? null
