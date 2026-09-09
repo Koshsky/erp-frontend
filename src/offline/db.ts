@@ -28,7 +28,24 @@ const OUTBOX_STORE = 'outbox'
 const IDMAP_STORE = 'idmap'
 const SESSION_STORE = 'session'
 
+/** Every object store the app relies on (must all exist after openDb). */
+const ALL_STORES = [CACHE_STORE, OUTBOX_STORE, IDMAP_STORE, SESSION_STORE] as const
+
 let dbPromise: Promise<IDBDatabase> | null = null
+
+/** Creates any missing object store (runs inside onupgradeneeded). */
+function ensureStores(db: IDBDatabase): void {
+  for (const name of ALL_STORES) {
+    if (!db.objectStoreNames.contains(name)) {
+      db.createObjectStore(name)
+    }
+  }
+}
+
+/** Whether the connection has every required object store. */
+function hasAllStores(db: IDBDatabase): boolean {
+  return ALL_STORES.every((name) => db.objectStoreNames.contains(name))
+}
 
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -36,25 +53,54 @@ function openDb(): Promise<IDBDatabase> {
       reject(new Error('IndexedDB недоступен'))
       return
     }
-    const req = indexedDB.open(DB_NAME, DB_VERSION)
-    req.onupgradeneeded = () => {
-      const db = req.result
-      if (!db.objectStoreNames.contains(CACHE_STORE)) {
-        db.createObjectStore(CACHE_STORE)
+
+    const open = indexedDB.open(DB_NAME, DB_VERSION)
+    open.onupgradeneeded = () => ensureStores(open.result)
+    open.onblocked = () => {
+      console.warn('[db] open blocked by an older connection in another tab — retrying')
+    }
+    open.onerror = () => reject(open.error ?? new Error('Не удалось открыть IndexedDB'))
+    open.onsuccess = () => {
+      const db = open.result
+      // Close this connection when the database is upgraded by another tab —
+      // an open connection of the old version would block their version bump.
+      // Drop the cached handle so the next access reopens the new version.
+      db.onversionchange = () => {
+        resetDb()
+        db.close()
       }
-      if (!db.objectStoreNames.contains(OUTBOX_STORE)) {
-        db.createObjectStore(OUTBOX_STORE)
+      if (hasAllStores(db)) {
+        resolve(db)
+        return
       }
-      if (!db.objectStoreNames.contains(IDMAP_STORE)) {
-        db.createObjectStore(IDMAP_STORE)
+
+      // Self-healing: the existing database already has a version >= DB_VERSION
+      // (onupgradeneeded does not fire when the version matches) but is missing
+      // one of the required stores — e.g. a database created by an older bundle
+      // before the session store was added. Bump the version one step above the
+      // current one so the upgrade handler runs and creates the missing stores.
+      const repairedVersion = db.version + 1
+      console.warn(
+        `[db] missing object store(s), repairing (version ${db.version} → ${repairedVersion})`,
+      )
+      db.close()
+
+      const repair = indexedDB.open(DB_NAME, repairedVersion)
+      repair.onupgradeneeded = () => ensureStores(repair.result)
+      repair.onblocked = () => {
+        console.warn('[db] repair blocked by an older connection in another tab — retrying')
       }
-      // DB v4 — refresh-token store for the unified refresh flow (all environments).
-      if (!db.objectStoreNames.contains(SESSION_STORE)) {
-        db.createObjectStore(SESSION_STORE)
+      repair.onerror = () => reject(repair.error ?? new Error('Не удалось восстановить IndexedDB'))
+      repair.onsuccess = () => {
+        const repaired = repair.result
+        // Same cross-tab rule: close on an external version bump.
+        repaired.onversionchange = () => {
+          resetDb()
+          repaired.close()
+        }
+        resolve(repaired)
       }
     }
-    req.onsuccess = () => resolve(req.result)
-    req.onerror = () => reject(req.error ?? new Error('Не удалось открыть IndexedDB'))
   })
 }
 
@@ -66,6 +112,12 @@ function getDb(): Promise<IDBDatabase> {
     })
   }
   return dbPromise
+}
+
+/** Drop the cached connection (used after a close/version change) so the next
+ *  call reopens the database. */
+function resetDb(): void {
+  dbPromise = null
 }
 
 function txAll(

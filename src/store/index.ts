@@ -435,7 +435,10 @@ export const useAuthStore = defineStore('auth', () => {
       } catch {
         // the session is revoked/expired on the client regardless
       } finally {
-        await clearRefreshToken()
+        // Local cleanup must never throw out of logout (an IndexedDB failure —
+        // e.g. a missing object store — would otherwise surface as an
+        // unhandled promise rejection after the user logged out).
+        await clearRefreshToken().catch(() => {})
       }
     })()
     setAccessToken(null)
