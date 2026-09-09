@@ -12,10 +12,14 @@ interface LocalResource {
   resource_id: number
   quantity: number
 }
+interface LocalOperation {
+  title: string
+}
 interface LocalTask {
   title: string
   color: string
   resources: LocalResource[]
+  operations: LocalOperation[]
 }
 interface LocalProcess {
   title: string
@@ -29,6 +33,7 @@ interface LocalProcess {
 const LIMITS = {
   maxProcesses: 20,
   maxTasksPerProcess: 50,
+  maxOperationsPerTask: 50,
   maxResourcesPerTask: 10,
   maxAssignmentsTotal: 500,
   maxQuantity: 99,
@@ -92,12 +97,16 @@ function resourceLabel(id?: number): string {
 /** Live summary of what a new project would get from the current template */
 const preview = computed(() => {
   let tasks = 0
+  let operations = 0
   let assignments = 0
   for (const p of form.processes) {
     tasks += p.tasks.length
-    for (const t of p.tasks) assignments += t.resources.length
+    for (const t of p.tasks) {
+      operations += t.operations.length
+      for (const r of t.resources) assignments += 1
+    }
   }
-  return { processes: form.processes.length, tasks, assignments }
+  return { processes: form.processes.length, tasks, operations, assignments }
 })
 
 function resetForm() {
@@ -111,6 +120,7 @@ function resetForm() {
       title: t.title ?? '',
       color: t.color ?? '',
       resources: (t.resources ?? []).map((r) => ({ resource_id: r.resource_id ?? 0, quantity: r.quantity ?? 1 })),
+      operations: (t.operations ?? []).map((o) => ({ title: o.title ?? '' })),
     })),
   }))
   dirty.value = false
@@ -198,16 +208,17 @@ function moveProcess(i: number, dir: -1 | 1) {
 }
 
 function addTask(p: LocalProcess) {
-  p.tasks.push({ title: '', color: NEUTRAL_TASK_COLOR, resources: [] })
+  p.tasks.push({ title: '', color: NEUTRAL_TASK_COLOR, resources: [], operations: [] })
   dirty.value = true
 }
 
-/** Removes a task; a task with resources asks for confirmation first */
+/** Removes a task; a task with resources or operations asks for confirmation first */
 function removeTask(p: LocalProcess, ti: number) {
   const t = p.tasks[ti]
   if (!t) return
-  if (t.resources.length) {
-    ask(`Удалить задачу «${t.title || `#${ti + 1}`}» вместе с ${t.resources.length} ресурсами?`, () => {
+  const children = t.resources.length + t.operations.length
+  if (children) {
+    ask(`Удалить задачу «${t.title || `#${ti + 1}`}» вместе с ${children} связанными элементами?`, () => {
       p.tasks.splice(ti, 1)
       dirty.value = true
     }, 'Удалить')
@@ -237,6 +248,15 @@ function removeResource(t: LocalTask, ri: number) {
   dirty.value = true
 }
 
+function addOperation(t: LocalTask) {
+  t.operations.push({ title: '' })
+  dirty.value = true
+}
+function removeOperation(t: LocalTask, oi: number) {
+  t.operations.splice(oi, 1)
+  dirty.value = true
+}
+
 function validate(): string | null {
   if (form.processes.length > LIMITS.maxProcesses) {
     return `Слишком много процессов: максимум ${LIMITS.maxProcesses}`
@@ -253,6 +273,14 @@ function validate(): string | null {
       if (!t.title.trim()) return `Процесс «${p.title}», задача ${ti + 1}: укажите название`
       if (t.resources.length > LIMITS.maxResourcesPerTask) {
         return `Задача «${t.title}»: слишком много ресурсов: максимум ${LIMITS.maxResourcesPerTask}`
+      }
+      if (t.operations.length > LIMITS.maxOperationsPerTask) {
+        return `Задача «${t.title}»: слишком много операций: максимум ${LIMITS.maxOperationsPerTask}`
+      }
+      for (let oi = 0; oi < t.operations.length; oi++) {
+        if (!t.operations[oi].title.trim()) {
+          return `Задача «${t.title}», операция ${oi + 1}: укажите название`
+        }
       }
       totalAssignments += t.resources.length
       const seen = new Set<number>()
@@ -295,6 +323,9 @@ async function onSave() {
         // vivid color, neutral always stores the shared background tone.
         color: isAccentTask(t.color) ? (t.color || undefined) : NEUTRAL_TASK_COLOR,
         resources: t.resources.map((r) => ({ resource_id: r.resource_id, quantity: r.quantity })),
+        operations: t.operations
+          .filter((o) => o.title.trim() !== '')
+          .map((o) => ({ title: o.title.trim() })),
       })),
     })),
   })
@@ -327,7 +358,7 @@ async function onSave() {
       <!-- Live preview of what a new project will get from the template -->
       <div class="ac-preview">
         <button type="button" class="ac-preview-toggle" @click="previewOpen = !previewOpen" :aria-expanded="previewOpen">
-          Превью: {{ preview.processes }} процесс(а/ов) · {{ preview.tasks }} задач(и) · {{ preview.assignments }} назначения(й)
+          Превью: {{ preview.processes }} процесс(а/ов) · {{ preview.tasks }} задач(и) · {{ preview.operations }} операции(й) · {{ preview.assignments }} назначения(й)
           <span class="ac-preview-caret">{{ previewOpen ? '▾' : '▸' }}</span>
         </button>
         <div v-if="!form.enabled" class="ac-preview-off">Триггер выключен — шаблон не применяется</div>
@@ -416,6 +447,13 @@ async function onSave() {
               </div>
             </div>
             <button type="button" class="ac-add-sm" @click="addResource(t)">+ ресурс</button>
+            <div v-if="t.operations.length" class="ac-operations">
+              <div v-for="(o, oi) in t.operations" :key="oi" class="ac-operation">
+                <input v-model="o.title" type="text" class="ac-input" placeholder="Название операции" aria-label="Название операции" @input="dirty = true" />
+                <button type="button" class="ac-del" @click="removeOperation(t, oi)" :aria-label="`Удалить операцию ${oi + 1}`">×</button>
+              </div>
+            </div>
+            <button type="button" class="ac-add-sm" @click="addOperation(t)">+ операция</button>
           </div>
           <button type="button" class="ac-add-sm" @click="addTask(p)">+ задача</button>
         </div>
@@ -650,6 +688,22 @@ async function onSave() {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+/* Operations (subtasks) of a template task */
+.ac-operations {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+  padding-left: 8px;
+}
+.ac-operation {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ac-operation .ac-input {
+  flex: 1;
 }
 .ac-resource select {
   flex: 1;

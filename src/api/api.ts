@@ -329,6 +329,9 @@ export interface DtoMilestoneResponse {
     'process_id'?: number;
     'title'?: string;
 }
+export interface DtoOperationTemplate {
+    'title'?: string;
+}
 export interface DtoPermission {
     'action'?: string;
     'resource'?: string;
@@ -528,6 +531,10 @@ export interface DtoTaskResponse {
 }
 export interface DtoTaskTemplate {
     'color'?: string;
+    /**
+     * Operations (subtasks) of the task — created as subtasks (parent_id) with the task\'s dates. Status is always not_started; resources are not bound to subtasks.
+     */
+    'operations'?: Array<DtoOperationTemplate>;
     'resources'?: Array<DtoResourceBinding>;
     'title'?: string;
 }
