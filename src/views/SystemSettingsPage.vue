@@ -19,6 +19,7 @@ const warmupSteps: Array<{ name: string; label: string }> = [
   { name: 'profile', label: 'Профиль' },
   { name: 'projects', label: 'Проекты' },
   { name: 'resources', label: 'Ресурсы' },
+  { name: 'members', label: 'Члены ресурсов' },
   { name: 'users', label: 'Пользователи' },
   { name: 'myStaff', label: 'Ответственные (кандидаты)' },
   { name: 'project-plan', label: 'План проектов' },

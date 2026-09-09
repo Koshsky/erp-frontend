@@ -109,6 +109,23 @@ export function buildPullSteps(): PullStep[] {
       : []),
     { name: 'projects', path: apiPath('/projects'), refresh: () => app.refreshProjects() },
     { name: 'resources', path: apiPath('/resources'), refresh: () => app.refreshResources() },
+    // Resource members (/resources/{id}/members): consumed by the "Employees"
+    // resource badges and the "Resources" expandable rows. They are read
+    // local-first (cache hydrate); without a PULL step the cache stays empty
+    // and every badge disappears. Fetched only on full warmup — one request
+    // per resource (heavy when many).
+    {
+      name: 'members',
+      path: apiPath('/resources'),
+      keyPredicate: (key) => /\/resources\/\d+\/members/.test(key),
+      refresh: async () => {
+        if (!app.resources.length) await app.refreshResources()
+        for (const r of app.resources) {
+          if (r.id != null) await app.refreshResourceMembers(r.id)
+        }
+      },
+      cycle: false,
+    },
     { name: 'users', path: apiPath('/user/all'), refresh: () => app.refreshUsers() },
     // Task "assignee" candidate pool (own employees): the SPA editor reads it
     // from the cache under /user?limit=500 — without this pull the select is
