@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { ModalForm, ColorField, PendingMark } from '../../common'
+import { ModalForm, ColorField, PendingMark, TooltipCell } from '../../common'
 import type {
   TaskEditorProps,
   NewSubtaskPayload,
@@ -110,6 +110,7 @@ function onDeleteSubtask(id: number) {
   <ModalForm
     :open="open"
     :title="task ? `Задача: ${task.title}` : 'Задача'"
+    :max-width="'960px'"
     @close="emit('close')"
   >
     <div class="te-body">
@@ -169,38 +170,40 @@ function onDeleteSubtask(id: number) {
       </div>
 
       <div class="te-right">
-        <h4 class="te-subtitle">Подзадачи (операции)</h4>
+        <h4 class="te-subtitle">Операции</h4>
         <p v-if="error" class="te-error">{{ error }}</p>
 
         <div v-if="subtasks.length" class="te-list">
           <div v-for="s in subtasks" :key="s.id" class="te-item">
-            <button
-              type="button"
-              class="te-status"
-              :class="`is-${s.status || 'not_started'}`"
-              :title="`Статус: ${subtaskStatusLabel(s)} (нажмите, чтобы изменить)`"
-              :disabled="!canManage || busy"
-              @click="cycleStatus(s)"
-            />
+            <TooltipCell :text="`Статус: ${subtaskStatusLabel(s)} (нажмите, чтобы изменить)`" multiline>
+              <button
+                type="button"
+                class="te-status"
+                :class="`is-${s.status || 'not_started'}`"
+                :title="`Статус: ${subtaskStatusLabel(s)} (нажмите, чтобы изменить)`"
+                :disabled="!canManage || busy"
+                @click="cycleStatus(s)"
+              />
+            </TooltipCell>
             <span class="te-item-title" :title="s.title">{{ s.title }}</span>
             <PendingMark entity="task" :id="s.id" />
             <button
               type="button"
               class="te-remove"
               :disabled="!canManage || busy"
-              :aria-label="`Удалить подзадачу ${s.title}`"
+              :aria-label="`Удалить операцию ${s.title}`"
               @click="onDeleteSubtask(s.id)"
             >✕</button>
           </div>
         </div>
-        <div v-else class="te-empty">Подзадач нет</div>
+        <div v-else class="te-empty">Операций нет</div>
 
         <div class="te-add">
           <input
             v-model="newTitle"
             class="te-input"
             type="text"
-            placeholder="Новая подзадача…"
+            placeholder="Новая операция…"
             :disabled="!canCreateSubtask || busy"
             @keyup.enter="onAddSubtask"
           />
@@ -223,8 +226,8 @@ function onDeleteSubtask(id: number) {
 @import '../../../styles/tokens.css';
 .te-body {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
-  gap: 16px;
+  grid-template-columns: minmax(0, 320px) minmax(0, 1fr);
+  gap: 24px;
   padding: 16px;
 }
 .te-left,

@@ -48,9 +48,9 @@ const emit = defineEmits<{
   'open-comments': [payload: number]
 }>()
 
-/** Tooltip rows: owner (if assigned) + execution status + date range */
+/** Tooltip rows: owner (if assigned) + execution status + progress + date range */
 const tooltipRows = (dateRange: string): string[] =>
-  [taskOwnerLabel.value, statusLabel.value, dateRange].filter(Boolean)
+  [taskOwnerLabel.value, statusLabel.value, progressLabel.value, dateRange].filter(Boolean)
 
 const taskOwnerLabel = computed<string>(() =>
   props.task.owner_name ? `Ответственный: ${props.task.owner_name}` : '',
@@ -69,6 +69,22 @@ const statusInfo = computed<{ label: string; color: string }>(() => {
 })
 const statusLabel = computed<string>(() =>
   props.task.status ? `Статус: ${statusInfo.value.label}` : '',
+)
+
+/**
+ * Completion of the task's operations: done / total * 100 (equal weight).
+ * null — the task has no operations (no badge).
+ */
+const taskProgress = computed<number | null>(() => {
+  const subs = props.task.subtasks ?? []
+  if (!subs.length) return null
+  const done = subs.filter((s) => s.status === 'done').length
+  return Math.round((done / subs.length) * 100)
+})
+const progressLabel = computed<string>(() =>
+  taskProgress.value == null
+    ? ''
+    : `Выполнение: ${taskProgress.value}% (${props.task.subtasks?.filter((s) => s.status === 'done').length} из ${props.task.subtasks?.length} операций)`,
 )
 
 /** The task has comments — show a badge and the log in the tooltip */
@@ -139,9 +155,11 @@ const contentRef = ref<HTMLElement | null>(null)
 const titleRef = ref<HTMLElement | null>(null)
 const projRef = ref<HTMLElement | null>(null)
 const ownerRef = ref<HTMLElement | null>(null)
+const progressRef = ref<HTMLElement | null>(null)
 const badgesRef = ref<HTMLElement | null>(null)
 const projWidth = ref(0)
 const ownerWidth = ref(0)
+const progressWidth = ref(0)
 const showProj = ref(true)
 const showOwner = ref(true)
 const stacked = ref(false)
@@ -158,14 +176,19 @@ function updateStacked() {
   if (proj && showProj.value) projWidth.value = proj.scrollWidth
   const owner = ownerRef.value
   if (owner && showOwner.value) ownerWidth.value = owner.scrollWidth
+  const progress = progressRef.value
+  if (progress) progressWidth.value = progress.scrollWidth
   const available = content.clientWidth - title.scrollWidth
   const pw = props.projectCode ? projWidth.value : 0
   showProj.value = pw > 0 && available >= pw
   const ow = props.task.owner_short ? ownerWidth.value : 0
   showOwner.value = ow > 0 && available - (showProj.value ? pw : 0) >= ow
+  // The progress badge always has room while the task has operations
+  const gw = taskProgress.value == null ? 0 : progressWidth.value
   // The comments badge reserves space (like the project code/owner)
   const cw = hasComments.value ? 22 : 0
-  const availForRes = available - (showProj.value ? pw : 0) - (showOwner.value ? ow : 0) - cw
+  const availForRes =
+    available - (showProj.value ? pw : 0) - (showOwner.value ? ow : 0) - gw - cw
   stacked.value = badges.scrollWidth > availForRes
 }
 
@@ -182,6 +205,14 @@ onBeforeUnmount(() => {
 // After the resource set or the project code changes, recompute the layout
 watch(
   () => props.task.resources,
+  () => requestAnimationFrame(updateStacked),
+)
+watch(
+  () => props.task.subtasks,
+  () => requestAnimationFrame(updateStacked),
+)
+watch(
+  () => props.task.status,
   () => requestAnimationFrame(updateStacked),
 )
 watch(
@@ -223,6 +254,13 @@ watch(
       <span ref="titleRef" class="tb-title">{{ task.title }}</span>
       <span v-show="showProj" ref="projRef" class="tb-proj">{{ projectCode }}</span>
       <span v-show="showOwner" ref="ownerRef" class="tb-owner" :title="task.owner_name">{{ task.owner_short }}</span>
+      <span
+        v-if="taskProgress != null"
+        ref="progressRef"
+        class="tb-progress"
+        :class="{ 'is-done': taskProgress === 100, 'is-empty': taskProgress === 0 }"
+        :title="progressLabel"
+      >{{ taskProgress }}%</span>
       <span ref="badgesRef" class="tb-badges" :class="{ 'is-stacked': stacked }">
         <span
           v-for="r in task.resources"
@@ -314,6 +352,26 @@ watch(
   margin-left: 6px;
   white-space: nowrap;
   pointer-events: none;
+}
+/* Completion percentage of the task's operations (badge on the bar) */
+.tb-progress {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.6;
+  color: #fff;
+  background: var(--ui-accent);
+  border-radius: 10px;
+  padding: 0 7px;
+  margin-left: 6px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.tb-progress.is-done {
+  background: #22c55e;
+}
+.tb-progress.is-empty {
+  background: #94a3b8;
 }
 .tb-badges {
   display: flex;

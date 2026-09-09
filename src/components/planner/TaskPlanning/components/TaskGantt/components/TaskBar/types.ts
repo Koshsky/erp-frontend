@@ -29,6 +29,8 @@ export interface Task {
   comments_count?: number
   /** Execution status: not_started | in_progress | done (fixed catalog) */
   status?: string
+  /** Subtasks (operations) of the task — completion percentage badge */
+  subtasks?: Array<{ id: number; title?: string; status?: string }>
 }
 
 export interface TaskBarProps {

@@ -8,6 +8,7 @@ const props = withDefaults(defineProps<ModalFormProps>(), {
   busy: false,
   error: null,
   fields: () => [],
+  maxWidth: undefined,
 })
 
 const emit = defineEmits<{
@@ -60,7 +61,7 @@ function onKeydown(e: KeyboardEvent) {
       @mousedown.self="onOverlayClick"
       @keydown="onKeydown"
     >
-      <div ref="formEl" class="mf" role="dialog" aria-modal="true" :aria-label="title">
+      <div ref="formEl" class="mf" :style="maxWidth ? { maxWidth } : undefined" role="dialog" aria-modal="true" :aria-label="title">
         <div class="mf-head">
           <h3 class="mf-title">{{ title }}</h3>
           <button type="button" class="mf-close" aria-label="Закрыть" @click="emit('close')">×</button>

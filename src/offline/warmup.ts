@@ -110,6 +110,15 @@ export function buildPullSteps(): PullStep[] {
     { name: 'projects', path: apiPath('/projects'), refresh: () => app.refreshProjects() },
     { name: 'resources', path: apiPath('/resources'), refresh: () => app.refreshResources() },
     { name: 'users', path: apiPath('/user/all'), refresh: () => app.refreshUsers() },
+    // Task "assignee" candidate pool (own employees): the SPA editor reads it
+    // from the cache under /user?limit=500 — without this pull the select is
+    // always empty (local-first rendering never issues its own GETs).
+    {
+      name: 'myStaff',
+      path: apiPath('/user'),
+      keyPredicate: (key) => /\blimit=500\b/.test(key),
+      refresh: () => app.refreshMyStaff(),
+    },
     {
       name: 'project-plan',
       path: apiPath('/planning/projects'),
