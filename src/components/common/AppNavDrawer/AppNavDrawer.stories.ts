@@ -28,7 +28,7 @@ const testCategories: NavCategory[] = [
     items: [
       { label: 'Пользователи', to: '/users', name: 'users' },
       { label: 'Структура компании', to: '/structure', name: 'structure' },
-      { label: 'Автосоздание проектов', to: '/auto-create', name: 'auto-create', badge: 'new' },
+      { label: 'Триггер создания проекта', to: '/auto-create', name: 'auto-create', badge: 'new' },
       { label: 'Статусы', to: '/statuses', name: 'statuses' },
       { label: 'Права', to: '/permissions', name: 'permissions' },
       { label: 'Журнал действий', to: '/audit', name: 'audit' },

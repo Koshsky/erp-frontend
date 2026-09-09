@@ -53,8 +53,13 @@ export async function probeBackend(): Promise<boolean> {
 }
 
 /**
- * Seconds remaining until the next automatic reconnect probe while offline.
- * `null` means not offline (no probe is being awaited) or the monitor is not
- * running the reconnect countdown yet.
+ * Epoch ms of the next automatic reconnect probe while offline. `null` means
+ * not offline (no probe is being awaited) or the monitor is not running the
+ * reconnect countdown yet.
+ *
+ * A wall-clock deadline (instead of a decrementing counter) keeps the
+ * countdown honest: background tabs throttle window timers, so a counter that
+ * only decreases on ticks freezes while the tab is hidden, and the UI showed a
+ * stuck "reconnect in 60 s". Reconnect happens at the deadline regardless.
  */
-export const reconnectCountdown = ref<number | null>(null)
+export const reconnectDeadline = ref<number | null>(null)

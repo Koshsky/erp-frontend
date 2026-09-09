@@ -307,7 +307,7 @@ async function onSave() {
 <template>
   <section class="ac">
     <div class="ac-head">
-      <h2 class="ac-title">Автосоздание проектов</h2>
+      <h2 class="ac-title">Триггер создания проекта</h2>
       <p class="ac-hint">При создании проекта автоматически создаются процессы (с владельцем) и их задачи с назначенными ресурсами.</p>
     </div>
 
@@ -321,7 +321,7 @@ async function onSave() {
     <div v-if="autoCreateConfig" class="ac-form">
       <label class="ac-enable">
         <input type="checkbox" v-model="form.enabled" @change="dirty = true" />
-        Автосоздание включено
+        Триггер включён
       </label>
 
       <!-- Live preview of what a new project will get from the template -->
@@ -330,7 +330,7 @@ async function onSave() {
           Превью: {{ preview.processes }} процесс(а/ов) · {{ preview.tasks }} задач(и) · {{ preview.assignments }} назначения(й)
           <span class="ac-preview-caret">{{ previewOpen ? '▾' : '▸' }}</span>
         </button>
-        <div v-if="!form.enabled" class="ac-preview-off">Автосоздание выключено — шаблон не применяется</div>
+        <div v-if="!form.enabled" class="ac-preview-off">Триггер выключен — шаблон не применяется</div>
         <div v-if="previewOpen" class="ac-preview-tree">
           <div v-if="!form.processes.length" class="ac-preview-empty">
             Шаблон пуст — при создании проекта ничего не добавляется

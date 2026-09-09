@@ -69,7 +69,7 @@ export const NAV_CATEGORIES: NavCategory[] = [
     items: [
       { label: 'Пользователи', to: '/users', name: 'users', perm: ['user_admin', 'view'] },
       { label: 'Структура компании', to: '/structure', name: 'structure', perm: ['org_structure', 'view'] },
-      { label: 'Автосоздание проектов', to: '/auto-create', name: 'auto-create', perm: ['rbac_config', 'view'] },
+      { label: 'Триггер создания проекта', to: '/auto-create', name: 'auto-create', perm: ['rbac_config', 'view'] },
       { label: 'Статусы', to: '/statuses', name: 'statuses', perm: ['state_admin', 'view'] },
       { label: 'Права', to: '/permissions', name: 'permissions', perm: ['rbac_config', 'view'] },
       { label: 'Журнал действий', to: '/audit', name: 'audit', perm: ['audit', 'view'] },

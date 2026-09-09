@@ -1,19 +1,34 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { isOffline, reconnectCountdown } from './state'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { isOffline, reconnectDeadline } from './state'
 import { retryConnectionNow } from './connection'
 
 const busy = ref(false)
 
-/** Whether the reconnect countdown is active (a next attempt is scheduled). */
-const counting = computed(() => reconnectCountdown.value != null)
+/** Whether the reconnect deadline is set (a next attempt is scheduled). */
+const counting = computed(() => reconnectDeadline.value != null)
 
-/** Seconds until the next automatic reconnect attempt (null → probing now). */
-function secondsLeft(): number | null {
-  const left = reconnectCountdown.value
-  if (left == null) return null
-  return Math.max(0, Math.ceil(left))
+/** Seconds until the next automatic reconnect attempt (null while probing). */
+const secondsLeft = ref<number | null>(null)
+
+/** Refresh the remaining seconds from the wall-clock deadline. */
+function updateSecondsLeft(): void {
+  const deadline = reconnectDeadline.value
+  secondsLeft.value = deadline == null ? null : Math.max(0, Math.ceil((deadline - Date.now()) / 1000))
 }
+
+// The deadline is wall-clock time, so the countdown stays live even when the
+// background countdown tick is throttled on a hidden tab — this component
+// recomputes the remainder on its own lightweight timer.
+let ticker: number | null = null
+onMounted(() => {
+  updateSecondsLeft()
+  ticker = window.setInterval(updateSecondsLeft, 500)
+})
+onBeforeUnmount(() => {
+  if (ticker != null) window.clearInterval(ticker)
+  ticker = null
+})
 
 async function onRetry() {
   if (busy.value) return
@@ -22,6 +37,7 @@ async function onRetry() {
     await retryConnectionNow()
   } finally {
     busy.value = false
+    updateSecondsLeft()
   }
 }
 </script>
@@ -29,10 +45,14 @@ async function onRetry() {
 <template>
   <transition name="reconnect-fade">
     <div v-if="isOffline" class="reconnect-toast" role="status">
-      <div class="reconnect-toast__title">Нет соединения с сервером</div>
+      <div class="reconnect-toast__title">
+        <span class="reconnect-toast__dot" aria-hidden="true" />
+        Нет соединения с сервером
+      </div>
       <div class="reconnect-toast__body">
-        <span v-if="counting" class="reconnect-toast__countdown">
-          Попытка реконнекта через {{ secondsLeft() }} с
+        <span v-if="busy" class="reconnect-toast__countdown">Проверка соединения…</span>
+        <span v-else-if="counting" class="reconnect-toast__countdown">
+          Попытка реконнекта через {{ secondsLeft }} с
         </span>
         <button
           type="button"
@@ -48,6 +68,8 @@ async function onRetry() {
 </template>
 
 <style scoped>
+@import '../styles/tokens.css';
+
 .reconnect-toast {
   position: fixed;
   bottom: 20px;
@@ -56,10 +78,11 @@ async function onRetry() {
   min-width: 280px;
   max-width: min(360px, calc(100vw - 40px));
   padding: 12px 14px;
-  border-radius: 12px;
-  background: #2C313A; /* Telegram-like dark surface, same in both themes */
-  color: #E5E7EB;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  border-radius: var(--ui-radius-md);
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  border: 1px solid var(--ui-border-strong);
+  box-shadow: var(--ui-shadow-md);
   font-size: 13px;
   line-height: 1.35;
   display: flex;
@@ -68,8 +91,26 @@ async function onRetry() {
 }
 
 .reconnect-toast__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-weight: 600;
-  color: #FFFFFF;
+  color: var(--ui-text);
+}
+
+/* Offline indicator dot — a pulsing warning circle */
+.reconnect-toast__dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ui-warning);
+  animation: reconnect-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes reconnect-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
 }
 
 .reconnect-toast__body {
@@ -81,25 +122,25 @@ async function onRetry() {
 }
 
 .reconnect-toast__countdown {
-  color: rgba(229, 231, 235, 0.85);
+  color: var(--ui-text-2);
   font-size: 12px;
 }
 
 .reconnect-toast__retry {
   border: none;
-  border-radius: 8px;
+  border-radius: var(--ui-radius-sm);
   padding: 6px 14px;
   font-size: 13px;
   font-weight: 600;
-  background: #4C80F0; /* Telegram blue action */
-  color: #FFFFFF;
+  background: var(--ui-accent);
+  color: var(--ui-accent-on);
   cursor: pointer;
   white-space: nowrap;
-  transition: background 0.15s ease;
+  transition: background var(--ui-duration);
 }
 
 .reconnect-toast__retry:hover:not(:disabled) {
-  background: #3B6FE0;
+  background: color-mix(in srgb, var(--ui-accent) 88%, black);
 }
 
 .reconnect-toast__retry:disabled {

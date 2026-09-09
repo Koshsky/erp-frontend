@@ -1,5 +1,5 @@
 import { ref, watch } from 'vue'
-import { isOffline, probeBackend, reconnectCountdown } from './state'
+import { isOffline, probeBackend, reconnectDeadline } from './state'
 import { syncNow } from './sync'
 import { pullStaleCycle, scheduleWarmup } from './warmup'
 import { pendingCount, refreshPendingCount } from './outbox'
@@ -16,7 +16,8 @@ import { isLoggedOut } from '@/loggedOut'
  *     only when there are pending entries) and refreshes stale cache domains on
  *     a slower PULL timer.
  *   - OFFLINE (a probe fails): flips isOffline and starts a reconnect countdown
- *     (reconnectCountdown, 60 → 0, one tick per second). On 0 it probes again;
+ *     (reconnectDeadline, set to now + 60 s on going offline); on the deadline
+ *     it probes again;
  *     success returns online and immediately flushes the queue + warms up.
  *   - The window `online`/`offline` events switch state immediately, without
  *     waiting for the next timed probe.
@@ -108,12 +109,17 @@ function startCountdown(): void {
   countdownTimer = window.setInterval(() => countdownTick(), COUNTDOWN_TICK_MS)
 }
 
+/** Schedules the next automatic reconnect attempt 60 s from now. */
+function scheduleReconnect(): void {
+  reconnectDeadline.value = Date.now() + OFFLINE_RETRY_MS * 1000
+}
+
 /** The connection dropped: flip offline and begin the reconnect countdown. */
 function gotoOffline(): void {
   if (isOffline.value) return // already offline & counting down
   stopOnlineLoop()
   isOffline.value = true
-  reconnectCountdown.value = OFFLINE_RETRY_MS
+  scheduleReconnect()
   startCountdown()
 }
 
@@ -125,7 +131,7 @@ async function handleBackendUp(): Promise<void> {
   try {
     stopCountdown()
     isOffline.value = false
-    reconnectCountdown.value = null
+    reconnectDeadline.value = null
     startOnlineLoop()
     if (canWork() && pendingCount.value > 0) await syncNow()
     // Cover data not reached by the slow PULL loop right after re-connects.
@@ -167,13 +173,12 @@ async function stalePull(): Promise<void> {
   if (refreshed > 0) notePull()
 }
 
-/** One reconnect-countdown step; on zero, probe again. */
+/** One reconnect-countdown tick: probe once the deadline has passed. The
+ *  deadline is wall-clock time, so the attempt happens after 60 s regardless
+ *  of browser timer throttling on hidden tabs. */
 function countdownTick(): void {
-  if (document.hidden) return
-  if (reconnectCountdown.value == null) return
-  if (reconnectCountdown.value > 0) {
-    reconnectCountdown.value -= 1
-  } else {
+  if (reconnectDeadline.value == null) return
+  if (Date.now() >= reconnectDeadline.value) {
     void retryConnectionNow()
   }
 }
@@ -189,7 +194,7 @@ async function pingBackend(): Promise<void> {
       // Lost connection between probes — enter offline + countdown.
       gotoOffline()
     } else {
-      reconnectCountdown.value = OFFLINE_RETRY_MS
+      scheduleReconnect()
     }
   } finally {
     probing = false
@@ -203,8 +208,8 @@ async function pingBackend(): Promise<void> {
  */
 export async function retryConnectionNow(): Promise<void> {
   if (recovering || probing) return
-  // Reset the countdown so it reads as "currently probing" while we wait.
-  if (reconnectCountdown.value != null) reconnectCountdown.value = 0
+  // Set the deadline to now so the UI reads "probing…" while we wait.
+  if (reconnectDeadline.value != null) reconnectDeadline.value = Date.now()
   await pingBackend()
 }
 
@@ -216,7 +221,7 @@ function onWindowOffline(): void {
 function onWindowOnline(): void {
   // The network interface is back but the backend may still be down: only the
   // probe decides. Probe immediately instead of on the next scheduled tick.
-  if (reconnectCountdown.value != null) {
+  if (reconnectDeadline.value != null) {
     void retryConnectionNow()
   } else {
     void onlineHeartbeat()
@@ -234,7 +239,7 @@ export function startConnectionMonitor(): void {
   // navigator.onLine reported offline at init → start the reconnect countdown
   // (gotoOffline early-returns when already offline, so start it directly).
   if (isOffline.value) {
-    reconnectCountdown.value = OFFLINE_RETRY_MS
+    scheduleReconnect()
     startCountdown()
   } else {
     startOnlineLoop()
