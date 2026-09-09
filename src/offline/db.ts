@@ -22,6 +22,11 @@
  */
 
 const DB_NAME = 'erp-offline'
+// The schema version this build knows. It is NOT passed to indexedDB.open
+// directly: an existing database (created by an older bundle or bumped by our
+// own store repair) may already be above it, and requesting a lower version
+// fails with a VersionError. openDb() opens at the current version and only
+// bumps when an object store is missing.
 const DB_VERSION = 4
 const CACHE_STORE = 'cache'
 const OUTBOX_STORE = 'outbox'
@@ -54,7 +59,13 @@ function openDb(): Promise<IDBDatabase> {
       return
     }
 
-    const open = indexedDB.open(DB_NAME, DB_VERSION)
+    // Open WITHOUT requesting a fixed version: a database created by an older
+    // bundle (or by our own repair bump) may already sit above DB_VERSION, and
+    // indexedDB.open(name, version) then fails with VersionError ("the stored
+    // database is a higher version than the version requested"). Opening at
+    // the current version never errors; missing stores are added below via a
+    // version bump only when actually needed.
+    const open = indexedDB.open(DB_NAME)
     open.onupgradeneeded = () => ensureStores(open.result)
     open.onblocked = () => {
       console.warn('[db] open blocked by an older connection in another tab — retrying')
@@ -74,11 +85,10 @@ function openDb(): Promise<IDBDatabase> {
         return
       }
 
-      // Self-healing: the existing database already has a version >= DB_VERSION
-      // (onupgradeneeded does not fire when the version matches) but is missing
-      // one of the required stores — e.g. a database created by an older bundle
-      // before the session store was added. Bump the version one step above the
-      // current one so the upgrade handler runs and creates the missing stores.
+      // Self-healing: the existing database is missing one of the required
+      // object stores (e.g. a database created by an older bundle before the
+      // session store was added). Bump the version one step above the current
+      // one so the upgrade handler runs and creates the missing stores.
       const repairedVersion = db.version + 1
       console.warn(
         `[db] missing object store(s), repairing (version ${db.version} → ${repairedVersion})`,
