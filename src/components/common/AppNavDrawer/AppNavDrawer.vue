@@ -1,13 +1,29 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { RouterLink } from 'vue-router'
+import { useRouter } from 'vue-router'
 import type { NavCategory, NavItem } from '../../../composables/useNavigation'
 import { NAV_WIDTH } from '../../../composables/useNavDrawer'
 import { AppIcon, type AppIconName } from '../AppIcon'
+import { useWindowPointerTrack } from '../../../utils/windowPointer'
 import type { AppNavDrawerEmits, AppNavDrawerProps } from './types'
 
 const props = withDefaults(defineProps<AppNavDrawerProps>(), { brand: 'MVS ERP' })
 const emit = defineEmits<AppNavDrawerEmits>()
+const router = useRouter()
+
+/** Navigate to a subsection on a genuine click (not after a drag). */
+function onItemNavigate(e: Event, item: NavItem) {
+  if (isSuppressedClick()) return
+  e.preventDefault()
+  emit('close')
+  void router.push(item.to)
+}
+
+/** Toggle the group on a genuine click (not after dragging the header). */
+function onHeadClick(cat: NavCategory) {
+  if (isSuppressedClick()) return
+  toggleGroup(cat)
+}
 
 // ---------------------------------------------------------------------------
 // Collapsed groups — persisted per group label so the layout survives reloads.
@@ -106,6 +122,175 @@ function onAfterClear(el: Element): void {
 }
 
 // ---------------------------------------------------------------------------
+// Drag-and-drop reordering.
+// Sections (categories) can be dragged anywhere among sections; subsection rows
+// can only be dragged WITHIN their own section (never across). A drag starts on
+// ANY point of the row: we track from pointerdown and only commit a drag once
+// the pointer has moved past a threshold — so a plain click still navigates
+// (subsection) or collapses/expands (section header) untouched.
+// ---------------------------------------------------------------------------
+const DRAG_THRESHOLD_PX = 6
+
+interface DragState {
+  kind: 'category' | 'item'
+  /** Section this drag belongs to (item drags only within this section) */
+  catLabel: string
+  /** Array index of the row being dragged, within its visible list */
+  from: number
+  /** Target insertion gap [0..count] while dragging */
+  to: number
+  /** Rows the dragged row is locked to while dragging (query scope) */
+  rows: HTMLElement[]
+}
+
+/** Pointer coordinates where the potential drag began */
+const pendingStart = ref<{ clientX: number; clientY: number } | null>(null)
+
+const drag = ref<DragState | null>(null)
+/** Set while a drag was committed just before the release click arrives */
+let suppressClick = false
+
+const dragTrack = useWindowPointerTrack({
+  onMove: onDragMove,
+  onUp: onDragUp,
+  onCancel: onDragCancel,
+})
+
+function categoryRows(): HTMLElement[] {
+  return Array.from(
+    (propsRoot?.value?.querySelectorAll('.nd-scroll > .nd-group[data-nav-row]') ?? []) as unknown as HTMLElement[],
+  )
+}
+
+/** Current insertion index [0..n] from the pointer Y over `rows` */
+function targetBoundary(rows: HTMLElement[], clientY: number): number {
+  let b = 0
+  for (const el of rows) {
+    const r = el.getBoundingClientRect()
+    if (clientY > r.top + r.height / 2) b += 1
+  }
+  return b
+}
+
+function onDragMove(e: PointerEvent) {
+  // No drag confirmed yet — test the movement threshold against the origin.
+  if (!drag.value) {
+    const p = pendingStart.value
+    if (!p) return
+    if (Math.abs(e.clientY - p.clientY) < DRAG_THRESHOLD_PX && Math.abs(e.clientX - p.clientX) < DRAG_THRESHOLD_PX) {
+      return
+    }
+    // Threshold crossed — this is a genuine drag. Commit the pending state.
+    if (pendingCat.value) startCategoryDrag(pendingCat.value)
+    else if (pendingItem.value) startItemDrag(pendingItem.value)
+    return
+  }
+  const d = drag.value
+  const b = d.kind === 'category' ? targetBoundary(categoryRows(), e.clientY) : targetBoundary(d.rows, e.clientY)
+  d.to = Math.max(0, Math.min(b, d.rows.length))
+}
+
+/**
+ * Begins tracking a possible drag. Does nothing destructive on its own: until
+ * the pointer moves beyond DRAG_THRESHOLD_PX the pending row does not start a
+ * drag and the ordinary click proceeds normally.
+ */
+function beginPotential(row: HTMLElement, e: PointerEvent) {
+  if (e.button !== 0 || e.ctrlKey || e.metaKey || pendingStart.value) return
+  // A fresh press is by definition not a lingering drag-release click.
+  suppressClick = false
+  pendingStart.value = { clientX: e.clientX, clientY: e.clientY }
+  dragTrack.start()
+}
+
+// Pending row identities waiting for the threshold check.
+const pendingCat = ref<HTMLElement | null>(null)
+const pendingItem = ref<{ row: HTMLElement; catLabel: string } | null>(null)
+
+function startCategoryDrag(row: HTMLElement) {
+  const rows = categoryRows()
+  if (rows.length < 2) return
+  const from = rows.indexOf(row)
+  if (from < 0) return
+  drag.value = { kind: 'category', catLabel: row.dataset.navLabel ?? '', from, to: from, rows }
+  clearPending()
+}
+
+function startItemDrag(p: { row: HTMLElement; catLabel: string }) {
+  const groupEl = p.row.closest<HTMLElement>('.nd-group[data-nav-label]')
+  const rows = groupEl ? Array.from(groupEl.querySelectorAll<HTMLElement>('.nd-item[data-nav-row]')) : []
+  if (rows.length < 2) return
+  const from = rows.indexOf(p.row)
+  if (from < 0) return
+  drag.value = { kind: 'item', catLabel: p.catLabel, from, to: from, rows }
+  clearPending()
+}
+
+function onDragUp(e: PointerEvent) {
+  const d = drag.value
+  const from = d?.from
+  const b = d?.to
+  const n = d?.rows.length ?? 0
+  endDrag()
+  if (d && b != null && from != null) {
+    const to = b > from ? b - 1 : b
+    if (to >= 0 && to < n && to !== from) {
+      if (d.kind === 'category') emit('reorder-category', { from, to })
+      else emit('reorder-item', { catLabel: d.catLabel, from, to })
+    }
+    // A real drag just happened — swallow the release click so the under-
+    // pointer row/subsection does not navigate or toggle right after.
+    suppressClick = true
+  }
+}
+
+function onDragCancel() {
+  endDrag()
+  suppressClick = false
+}
+
+function clearPending() {
+  pendingStart.value = null
+  pendingCat.value = null
+  pendingItem.value = null
+}
+
+function endDrag() {
+  dragTrack.stop()
+  clearPending()
+  drag.value = null
+}
+
+/** Swallow a click that directly follows a real drag. */
+function isSuppressedClick(): boolean {
+  if (suppressClick) {
+    suppressClick = false
+    return true
+  }
+  return false
+}
+
+/** Section-header pressed — begin a potential drag of that section. */
+function onHeadPointerDown(e: PointerEvent) {
+  const head = (e.currentTarget as HTMLElement | null)?.closest<HTMLElement>('.nd-group') as HTMLElement | null
+  if (head) {
+    pendingCat.value = head
+    beginPotential(head, e)
+  }
+}
+
+/** Subsection row pressed — begin a potential drag of that section item. */
+function onItemPointerDown(e: PointerEvent) {
+  const row = (e.currentTarget as HTMLElement | null)?.closest<HTMLElement>('.nd-item') as HTMLElement | null
+  if (!row) return
+  const groupEl = row.closest<HTMLElement>('.nd-group[data-nav-label]')
+  pendingItem.value = { row, catLabel: groupEl?.dataset.navLabel ?? '' }
+  beginPotential(row, e)
+}
+
+const propsRoot = ref<HTMLElement | null>(null)
+
+// ---------------------------------------------------------------------------
 // Icons: route name -> icon (default: generic list icon for unknown items)
 // ---------------------------------------------------------------------------
 const ITEM_ICONS: Record<string, AppIconName> = {
@@ -143,8 +328,12 @@ function iconFor(item: NavItem): AppIconName {
   ></div>
 
   <aside
+    ref="propsRoot"
     class="nd"
-    :class="{ 'nd--open': props.open }"
+    :class="{
+      'nd--open': props.open,
+      'nd--dragging': drag != null,
+    }"
     role="navigation"
     aria-label="Разделы"
   >
@@ -161,13 +350,19 @@ function iconFor(item: NavItem): AppIconName {
           v-for="cat in props.categories"
           :key="cat.label"
           class="nd-group"
-          :class="{ 'nd-group--open': isOpen(cat) }"
+          data-nav-row
+          :class="{
+            'nd-group--open': isOpen(cat),
+          }"
+          :data-nav-label="cat.label"
         >
           <button
             type="button"
             class="nd-group-head"
             :aria-expanded="isOpen(cat)"
-            @click="toggleGroup(cat)"
+            title="Перетащите заголовок, чтобы поменять порядок разделов"
+            @pointerdown="onHeadPointerDown"
+            @click="onHeadClick(cat)"
           >
             <span class="nd-group-title">{{ cat.label }}</span>
             <AppIcon name="chevron-down" :size="16" class="nd-caret" />
@@ -183,18 +378,25 @@ function iconFor(item: NavItem): AppIconName {
           >
             <div v-show="isOpen(cat)" :key="cat.label" class="nd-items-clip">
               <div class="nd-items">
-                <RouterLink
+                <a
                   v-for="item in cat.items"
                   :key="item.to"
-                  :to="item.to"
+                  :href="item.to"
+                  draggable="false"
                   class="nd-item"
-                  :class="{ active: item.name === props.activeName }"
-                  @click="emit('close')"
+                  data-nav-row
+                  :class="{
+                    active: item.name === props.activeName,
+                    'nd-item--dragsource': drag != null && drag.catLabel === cat.label && drag.kind === 'item',
+                  }"
+                  :aria-label="item.label"
+                  @pointerdown="onItemPointerDown"
+                  @click="(e) => onItemNavigate(e, item)"
                 >
                   <AppIcon :name="iconFor(item)" :size="22" />
                   <span class="nd-item-label">{{ item.label }}</span>
                   <span v-if="item.badge" class="nd-badge">{{ item.badge }}</span>
-                </RouterLink>
+                </a>
               </div>
             </div>
           </Transition>
@@ -300,6 +502,7 @@ function iconFor(item: NavItem): AppIconName {
   letter-spacing: 0.6px;
   text-transform: uppercase;
   color: var(--ui-text-faint);
+  white-space: nowrap;
 }
 
 .nd-caret {
@@ -342,7 +545,9 @@ function iconFor(item: NavItem): AppIconName {
   font-family: inherit;
   transition: background var(--ui-duration), color var(--ui-duration);
 }
-
+.nd-item--dragsource {
+  opacity: 0.55;
+}
 .nd-item :deep(svg) {
   color: var(--ui-text-faint);
   transition: color var(--ui-duration);

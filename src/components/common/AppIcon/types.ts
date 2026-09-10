@@ -9,8 +9,7 @@
 export const APP_ICONS = {
   menu: ['M4 6h16', 'M4 12h16', 'M4 18h16'],
   close: ['M18 6 6 18', 'M6 6l12 12'],
-  'chevron-down': ['m6 9 6 6 6-6'],
-  sun: [
+  'chevron-down': ['m6 9 6 6 6-6'],  sun: [
     'M12 2v2',
     'M12 20v2',
     'M4.93 4.93l1.41 1.41',
