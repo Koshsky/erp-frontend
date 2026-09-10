@@ -1,4 +1,5 @@
-import { reactive, ref } from 'vue'
+import { reactive, ref, watch } from 'vue'
+import type { PlanningUnit } from './components/planner/calendar'
 
 /**
  * Sync settings (the "Sync" screen). Stored in localStorage
@@ -95,3 +96,84 @@ export function saveWarmupSettings(): void {
     // settings are not critical
   }
 }
+// ---------------------------------------------------------------------------
+// View settings (the right pane of the "Settings" screen).
+// Client-side, per-device (no persistence across devices), applied the next
+// time a planning page is opened. No TTL — cleared only by explicit browser
+// storage purge / local-storage reset of the user's choosing.
+// ---------------------------------------------------------------------------
+
+
+export const VIEW_SETTINGS_KEY = 'mvs_erp_view_settings'
+
+export interface ViewSettings {
+  /** Gantt badges: resource (specialization) on the task bars */
+  badgeResource: boolean
+  /** Gantt badge: the project code on bars */
+  badgeProjectCode: boolean
+  /** Gantt badge: "% of completed operations" on task bars */
+  badgeProgress: boolean
+  /** Gantt badges/labels: assignee on tasks, owner on process/project bars */
+  badgeOwner: boolean
+  /** Timeline unit the diagrams open in: day cells or decade cells */
+  defaultUnit: PlanningUnit
+  /** Initial table zoom (%) applied when a diagram is first opened in a session */
+  defaultScale: number
+  /** Initial cell width at open (% of the responsive base column width for the
+   *  current window). 50–200%; 100 keeps the adaptive default (no fixed cell). */
+  defaultCellZoom: number
+  /** Whether the visible "Save to PDF / Print" toolbar buttons are shown */
+  showPdfButtons: boolean
+}
+
+const DEFAULT_VIEW_SETTINGS: ViewSettings = {
+  badgeResource: true,
+  badgeProjectCode: true,
+  badgeProgress: true,
+  badgeOwner: true,
+  defaultUnit: 'day',
+  defaultScale: 100,
+  defaultCellZoom: 100,
+  showPdfButtons: true,
+}
+
+function readViewSettings(): ViewSettings {
+  try {
+    const raw = localStorage.getItem(VIEW_SETTINGS_KEY)
+    if (raw == null) return { ...DEFAULT_VIEW_SETTINGS }
+    return { ...DEFAULT_VIEW_SETTINGS, ...(JSON.parse(raw) as Partial<ViewSettings>) }
+  } catch {
+    return { ...DEFAULT_VIEW_SETTINGS }
+  }
+}
+
+/** Live view-settings state (mutation = applied on next page open). */
+export const viewSettings = reactive<ViewSettings>(readViewSettings())
+
+watch(
+  viewSettings,
+  () => saveViewSettings(),
+  { deep: true },
+)
+
+/** Persists the current view settings. */
+export function saveViewSettings(): void {
+  try {
+    localStorage.setItem(VIEW_SETTINGS_KEY, JSON.stringify(viewSettings))
+  } catch {
+    // not critical
+  }
+}
+
+/** Default-scale range offered by the UI (%), matching useTimelineZoom bounds (0.5–2). */
+export const SCALE_MIN = 50
+export const SCALE_MAX = 200
+export const SCALE_STEP = 5
+
+/** Default cell-width zoom offered by the UI (%), centered on the responsive base. */
+export const CELL_ZOOM_MIN = 50
+export const CELL_ZOOM_MAX = 200
+export const CELL_ZOOM_STEP = 5
+
+/** Hard upper bound of the physical cell width in px (mirrors ZOOM_MAX in useTimelineZoom). */
+export const MAX_CELL_PX = 100

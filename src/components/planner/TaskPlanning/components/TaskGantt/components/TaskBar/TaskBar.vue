@@ -3,6 +3,7 @@ import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import LabeledBar from '../../../../../Bar/Bar.vue'
 import { BarTooltip } from '@/components/common'
 import { useDragPreview } from '@/composables/useDragPreview'
+import { viewSettings } from '@/settings'
 import type { Task } from './types'
 import type { TimelineCtx } from '@/composables/timeline-context'
 import type { DtoCommentResponse, DtoUserInfo } from '@/api'
@@ -252,16 +253,30 @@ watch(
         :title="statusInfo.label"
       ></span>
       <span ref="titleRef" class="tb-title">{{ task.title }}</span>
-      <span v-show="showProj" ref="projRef" class="tb-proj">{{ projectCode }}</span>
-      <span v-show="showOwner" ref="ownerRef" class="tb-owner" :title="task.owner_name">{{ task.owner_short }}</span>
       <span
-        v-if="taskProgress != null"
+        v-if="showProj && viewSettings.badgeProjectCode"
+        ref="projRef"
+        class="tb-proj"
+      >{{ projectCode }}</span>
+      <span
+        v-if="showOwner && viewSettings.badgeOwner"
+        ref="ownerRef"
+        class="tb-owner"
+        :title="task.owner_name"
+      >{{ task.owner_short }}</span>
+      <span
+        v-if="taskProgress != null && viewSettings.badgeProgress"
         ref="progressRef"
         class="tb-progress"
         :class="{ 'is-done': taskProgress === 100, 'is-empty': taskProgress === 0 }"
         :title="progressLabel"
       >{{ taskProgress }}%</span>
-      <span ref="badgesRef" class="tb-badges" :class="{ 'is-stacked': stacked }">
+      <span
+        v-if="viewSettings.badgeResource"
+        ref="badgesRef"
+        class="tb-badges"
+        :class="{ 'is-stacked': stacked }"
+      >
         <span
           v-for="r in task.resources"
           :key="r.resource_id"

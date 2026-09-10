@@ -1,5 +1,6 @@
 import { computed, ref } from 'vue'
 import type { PlanningUnit } from '../components/planner/calendar'
+import { viewSettings } from '../settings'
 
 export const UNIT_OPTIONS: { value: PlanningUnit; label: string }[] = [
   { value: 'day', label: 'День' },
@@ -8,7 +9,11 @@ export const UNIT_OPTIONS: { value: PlanningUnit; label: string }[] = [
 
 /** Timeline scale and anchor for planning diagrams (shared across three pages) */
 export function usePlanningOrigin() {
-  const unit = ref<PlanningUnit>('day')
+  // The opening unit comes from the user's view settings ("Единица календаря по
+  // умолчанию"); in-session the unit is still freely switchable via the header.
+  const unit = ref<PlanningUnit>(
+    viewSettings.defaultUnit === 'decade' ? 'decade' : 'day',
+  )
 
   /** Timeline anchor: two days before today — so on open the first columns are the day before yesterday, yesterday */
   const origin = computed(() => {

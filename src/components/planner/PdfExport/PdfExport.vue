@@ -4,6 +4,7 @@ import { preloadPdfPreview, renderPdfPreview } from './previewPdf'
 import type { PdfPreviewHandle } from './previewPdf'
 import type { PdfExportProps } from './types'
 import { fmtDate, toDate } from '../calendar'
+import { viewSettings } from '@/settings'
 
 const props = withDefaults(defineProps<PdfExportProps>(), {
   groups: () => [],
@@ -491,6 +492,17 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="pe">
+    <!-- Visible toolbar trigger above the diagram (gated by the view settings
+         "Экспорт диаграмм"). Ctrl/Cmd+P/S always works regardless of this flag. -->
+    <button
+      v-if="viewSettings.showPdfButtons"
+      type="button"
+      class="pe-open"
+      @click="openDialog"
+    >
+      <span class="pe-open-icon" aria-hidden="true">⤓</span>
+      Сохранить в PDF / Печать
+    </button>
     <Teleport to="body">
       <div v-if="open" class="pe-overlay" @mousedown.self="closeDialog">
         <div class="pe-modal" role="dialog" aria-modal="true" aria-label="Печать диаграммы в PDF">
@@ -651,6 +663,34 @@ onBeforeUnmount(() => {
   opacity: 0.6;
   cursor: not-allowed;
 }
+
+/* Visible toolbar trigger placed above the diagram (the pages put <PdfExport>
+   at the top of their area; this button is the on-screen affordance). */
+.pe-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius-sm);
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  padding: 9px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.pe-open:hover {
+  background: var(--ui-surface-2);
+  border-color: var(--ui-border-stronger);
+}
+.pe-open-icon {
+  font-size: 14px;
+  line-height: 1;
+  color: var(--ui-accent);
+}
+
 
 /* === Modal === */
 .pe-overlay {
