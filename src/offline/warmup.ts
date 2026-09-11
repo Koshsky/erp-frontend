@@ -107,7 +107,7 @@ export function buildPullSteps(): PullStep[] {
           },
         ]
       : []),
-    { name: 'projects', path: apiPath('/projects'), refresh: () => app.refreshProjects() },
+    { name: 'projects', path: apiPath('/project'), refresh: () => app.refreshProjects() },
     { name: 'resources', path: apiPath('/resources'), refresh: () => app.refreshResources() },
     // Resource members (/resources/{id}/members): consumed by the "Employees"
     // resource badges and the "Resources" expandable rows. They are read

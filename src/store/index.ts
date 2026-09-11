@@ -542,7 +542,11 @@ export const useAppStore = defineStore('app', () => {
     if (projects.value.length) return
     await hydrateFromCache([
       {
-        path: apiPath('/projects'),
+        // Keep this path identical to the generated client endpoint (projectGet
+        // → `/project`, singular). The GET cache key is the full axios URL, and
+        // cacheGetFresh/cacheGetByPath match by pathname — a plural here makes
+        // offline hydration always miss and kills the warmup PULL TTL for projects.
+        path: apiPath('/project'),
         filled: () => projects.value.length > 0,
         apply: (body) => {
           const d = (body as { data?: { items?: DtoProject[] } } | undefined)?.data

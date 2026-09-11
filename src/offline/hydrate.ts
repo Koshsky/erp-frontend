@@ -16,7 +16,7 @@ import { API_PREFIX } from '@/config'
  */
 
 export interface HydrateTarget {
-  /** Endpoint pathname, e.g. `/api/v1/projects` */
+  /** Endpoint pathname, e.g. `/api/v1/project` */
   path: string
   /** Whether the local state is already filled (skip) */
   filled: () => boolean
