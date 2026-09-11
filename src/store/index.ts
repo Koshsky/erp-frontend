@@ -8,7 +8,7 @@ import { getApiUrl } from '@/config'
 import { isOffline } from '@/offline/state'
 import { offlineFailFastAdapter } from '@/offline/failFast'
 import { scheduleWarmup } from '@/offline/warmup'
-import { enqueueMutation, isNetworkError, clearOutbox, type MutationEntity } from '@/offline/outbox'
+import { enqueueMutation, isNetworkError, pruneForeignOutbox, type MutationEntity } from '@/offline/outbox'
 import { applyRangeSplit } from '@/offline/periodSplit'
 import { getAccessToken, setAccessToken } from '@/token'
 import {
@@ -283,6 +283,11 @@ export const useAuthStore = defineStore('auth', () => {
       // Manual login clears the "logged out" flag — auto-sync is allowed again
       clearLoggedOut()
       sessionMode.value = 'online'
+      // A verified login orphans the queue entries of the previous account
+      // (their session is revoked; the flush-time creator guard would park
+      // them forever). Same-account entries — e.g. pending work of a sibling
+      // tab — are kept. Non-fatal.
+      void pruneForeignOutbox(user.value?.username ?? username.trim()).catch(() => {})
       return true
     } catch (e: any) {
       error.value = e.message || String(e)
@@ -422,8 +427,13 @@ export const useAuthStore = defineStore('auth', () => {
 
   function logout() {
     stopProactiveRefresh()
-    // Do not let the queue flush under a new user/token
-    void clearOutbox()
+    // The mutation queue is NOT wiped here: it is shared by every tab/window of
+    // this profile, and a sibling tab of the same user may still have pending
+    // edits (H-OFF-3). A foreign account can never flush someone else's queue —
+    // the flush-time creator guard parks mismatched entries, and after a logout
+    // auto-sync is disabled (isLoggedOut) until a manual login. Orphaned
+    // entries of the logged-out account are pruned on the next verified login
+    // (pruneForeignOutbox). The explicit full wipe is clearLocalData()/clearOutbox().
     // Revoke the refresh session on the server: read the stored token and send it
     // in the body of /auth/logout (falling back to the cookie when none is stored),
     // then clear our local copy. Best-effort — the cookie is also cleared by the backend.

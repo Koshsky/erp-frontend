@@ -16,10 +16,14 @@ import { getAccessToken } from '../token'
  * entities created offline depend on previous ones.
  *
  * STORAGE: the queue is stored indefinitely — it has no TTL and is never
- * swept by age/timers. Entries are removed only after a successful send, on
- * logout (clearOutbox), or by explicit user actions (discardFailed /
- * discardEntry / clearLocalData). Backoff and quarantined flags only gate
- * auto-retries; they never delete an entry. See docs/no-ttl-local-storage.md.
+ * swept by age/timers. Entries are removed only after a successful send, on a
+ * verified login of a different account (pruneForeignOutbox — the previous
+ * account is logged out, so the flush-time creator guard would park its entries
+ * forever), or by explicit user actions (discardFailed / discardEntry /
+ * clearLocalData). Logout itself does NOT wipe the queue: a sibling tab of the
+ * same user may still have pending edits (H-OFF-3). Backoff and quarantined
+ * flags only gate auto-retries; they never delete an entry.
+ * See docs/no-ttl-local-storage.md.
  */
 
 const OUTBOX_STORE = 'outbox'
@@ -671,7 +675,7 @@ export async function flushOutbox(): Promise<FlushResult> {
   return result
 }
 
-/** Clears the queue (called on logout, so someone else's queue is not sent under a new token) */
+/** Clears the queue (the explicit "clear all" action in the sync UI / reset) */
 export async function clearOutbox(): Promise<void> {
   const entries = await idbAll<OutboxEntry>(OUTBOX_STORE)
   await Promise.all(entries.map((e) => idbDel(OUTBOX_STORE, e.id)))
@@ -679,6 +683,35 @@ export async function clearOutbox(): Promise<void> {
   // not accidentally be replaced with old correspondences.
   const maps = await idbAll<IdMapEntry>(IDMAP_STORE_NAME).catch(() => [] as IdMapEntry[])
   await Promise.all(maps.map((m) => idbDel(IDMAP_STORE_NAME, String(m.temp))))
+  await refreshPendingCount()
+}
+
+/**
+ * Deletes queue entries created under another account — called after a verified
+ * online login: the previous account is logged out (its session revoked), so
+ * the flush-time creator guard would otherwise park those entries forever with
+ * a "created under account X" error. Same-account entries (e.g. pending work of
+ * a sibling tab of the same user) are kept — the wipe-on-logout that used to
+ * delete them is gone (H-OFF-3). idmap rows are removed only when their temp id
+ * is no longer referenced by any remaining entry.
+ */
+export async function pruneForeignOutbox(keepCreator: string): Promise<void> {
+  const entries = await idbAll<OutboxEntry>(OUTBOX_STORE).catch(() => [] as OutboxEntry[])
+  const kept: OutboxEntry[] = []
+  const removed: OutboxEntry[] = []
+  for (const e of entries) {
+    if (e.creator && e.creator !== keepCreator) removed.push(e)
+    else kept.push(e)
+  }
+  if (removed.length) {
+    await Promise.all(removed.map((e) => idbDel(OUTBOX_STORE, e.id)))
+    // Drop mappings whose temp id is not referenced by the kept queue.
+    const keptText = kept.map((e) => `${e.url} ${typeof e.body === 'string' ? e.body : JSON.stringify(e.body ?? '')}`).join(' ')
+    const maps = await idbAll<IdMapEntry>(IDMAP_STORE_NAME).catch(() => [] as IdMapEntry[])
+    await Promise.all(
+      maps.filter((m) => !keptText.includes(String(m.temp))).map((m) => idbDel(IDMAP_STORE_NAME, String(m.temp))),
+    )
+  }
   await refreshPendingCount()
 }
 

@@ -30,8 +30,11 @@ cleaned up by time**. Data is only every removed by:
 2. app-version change — `ensureCacheVersion()` clears **only** the cache
    (payload schema may differ between releases). This is version invalidation,
    **not** a TTL;
-3. logout — the mutation queue (`clearOutbox()` on logout), so a foreign token
-   never flushes someone else's queue;
+3. a verified online login — `pruneForeignOutbox()` deletes the queue entries
+   created under the previous (now logged-out) account, whose session is revoked
+   and which the flush-time creator guard would park forever. Logout itself does
+   **not** wipe the queue: it is shared by every tab of the profile and a sibling
+   tab of the same user may still have pending edits (H-OFF-3);
 4. successful delivery / idempotent terminal states — a sent queue entry is
    deleted after its request succeeds (and its temp→real idmap entry afterwards).
 
