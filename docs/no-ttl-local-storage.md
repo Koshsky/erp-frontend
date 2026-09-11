@@ -4,8 +4,17 @@
 TTL**: nothing is deleted locally by age, timers or elapsed-time sweeps. Cache
 of GET-responses and the mutation queue live in IndexedDB indefinitely; the
 access token stays in process memory (AD-05, XSS protection) and the refresh
-token lives in an HttpOnly cookie/safeStorage. TTLs are validated **only by the
-backend**.
+token lives in IndexedDB (`offline/session.ts`, all environments: web and
+desktop share one profile) and is sent in the body of `/auth/refresh`; the
+HttpOnly cookie is only a legacy fallback when no stored token exists. TTLs
+are validated **only by the backend**.
+
+> **Accepted tradeoff (documented 2026-09-10):** IndexedDB is readable by any
+> script on the same origin, so an XSS reads the refresh token exactly like
+> localStorage — this is a deliberate, documented compromise (see
+> `services/frontend/.frontend-audit.md`, S-01). The real protection is
+> server-side rotation plus reuse detection; the client-side model only keeps
+> the short-lived access token out of persistent storage.
 
 This document is the audit trail and the invariant to preserve. It is intended
 for any agent working on `src/offline/*` so that changed cycle/connection logic
