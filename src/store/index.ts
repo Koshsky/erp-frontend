@@ -1025,12 +1025,22 @@ export const useAppStore = defineStore('app', () => {
   const adminUsersError = ref<string | null>(null)
 
   /** Full user list for the admin page (without password hashes) */
-  async function loadAdminUsers() {
+  async function loadAdminUsers(): Promise<void> {
+    await refreshAdminUsers('')
+  }
+
+  /**
+   * Reloads the admin user list applying a server-side search ('' = all users).
+   * The search is a case-insensitive substring of the full name/login
+   * (max 128 chars; LIKE escaping is done by the backend) and always starts
+   * from the first page (offset 0).
+   */
+  async function refreshAdminUsers(search: string): Promise<void> {
     adminUsersLoading.value = true
     adminUsersError.value = null
     try {
       const api = new UsersApi(apiConfig())
-      const resp = await api.userGet(500, undefined, undefined, false, undefined, 0)
+      const resp = await api.userGet(500, undefined, undefined, false, search || undefined, 0)
       adminUsers.value = resp.data?.data?.items ?? []
     } catch (e: any) {
       adminUsersError.value = apiErrorMessage(e)
@@ -1171,6 +1181,7 @@ export const useAppStore = defineStore('app', () => {
     adminUsersLoading,
     adminUsersError,
     loadAdminUsers,
+    refreshAdminUsers,
     createUser,
     resetPassword,
     updateUser,
