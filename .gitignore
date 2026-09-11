@@ -58,3 +58,6 @@ CODE_REVIEW.md
 
 # Local code review (not stored in the repo)
 CODE_REVIEW.md
+
+# Local frontend audit (not stored in the repo)
+.frontend-audit.md
