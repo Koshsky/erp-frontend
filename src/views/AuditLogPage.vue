@@ -27,7 +27,7 @@ const ENTITY_LABELS: Record<string, string> = {
   resource_member: 'Участники ресурса',
   state: 'Статусы',
   user: 'Пользователи',
-  auto_create: 'Автосоздание проектов',
+  auto_create: 'Триггер создания проекта',
   rbac: 'Права (RBAC)',
 }
 

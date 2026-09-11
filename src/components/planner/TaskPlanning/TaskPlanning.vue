@@ -103,6 +103,12 @@ const displayProcesses = computed<Process[]>(() =>
           owner_name: owner?.name,
           owner_short: owner ? shortName(owner) : undefined,
           comments_count: t.comments_count ?? 0,
+          status: t.status ?? 'not_started',
+          subtasks: (t.subtasks || []).map((s: any) => ({
+            id: s.id ?? 0,
+            title: s.title ?? '',
+            status: s.status ?? 'not_started',
+          })),
           resources: (t.resources || []).map((r) => ({
             resource_id: r.id ?? 0,
             assignment_id: r.assignment_id ?? 0,

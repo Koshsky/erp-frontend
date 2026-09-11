@@ -10,12 +10,12 @@
  * The local http server keeps them working without changing the frontend.
  *
  * The API is external: the user sets the backend URL on the sync screen
- * (the frontend's runtime configuration). Only the autosync password is
- * stored here — via safeStorage (OS-level encryption), and access to it
- * is granted to the renderer through a limited IPC bridge in preload.js.
+ * (the frontend's runtime configuration). Sessions are restored from the
+ * refresh token stored by the renderer (IndexedDB) — no credentials are
+ * kept in the main process.
  */
 
-const { app, BrowserWindow, ipcMain, safeStorage, dialog } = require('electron')
+const { app, BrowserWindow, ipcMain, dialog } = require('electron')
 const path = require('node:path')
 const fs = require('node:fs')
 const http = require('node:http')
@@ -29,8 +29,8 @@ const { URL } = require('node:url')
 //   Linux   ~/.config/mvs-erp-desktop            (XDG_CONFIG_HOME-aware)
 //   Windows %APPDATA%\mvs-erp-desktop
 //   macOS   ~/Library/Application Support/mvs-erp-desktop
-// The Linux path matches the existing profile (session, cache, offline queue,
-// autosync password, singleton lock are NOT lost). Must be set before any
+// The Linux path matches the existing profile (session, cache, offline queue
+// and the singleton lock are NOT lost). Must be set before any
 // app.getPath('userData') call (singleton lock below) and before app ready.
 //
 // A CLI --user-data-dir override is honored (not overwritten): testing /
@@ -199,49 +199,6 @@ function listenOnce(port) {
 }
 
 // ---------------------------------------------------------------------------
-// safeStorage: autosync password storage (accessible only through IPC)
-// ---------------------------------------------------------------------------
-
-const PASSWORD_KEY = 'mvs_erp_sync_password'
-
-function encryptString(value) {
-  if (!value) return null
-  const buf = Buffer.from(value, 'utf8')
-  return safeStorage.encryptString(value).toString('base64')
-}
-
-function decryptString(b64) {
-  if (!b64) return ''
-  try {
-    return safeStorage.decryptString(Buffer.from(b64, 'base64'))
-  } catch {
-    return ''
-  }
-}
-
-function loadPassword() {
-  try {
-    const raw = fs.readFileSync(path.join(app.getPath('userData'), PASSWORD_KEY), 'utf8')
-    return decryptString(raw.trim())
-  } catch {
-    return ''
-  }
-}
-
-function savePassword(password) {
-  const file = path.join(app.getPath('userData'), PASSWORD_KEY)
-  if (!password) {
-    try {
-      fs.unlinkSync(file)
-    } catch {
-      // file missing — ok
-    }
-    return
-  }
-  fs.writeFileSync(file, encryptString(password), { mode: 0o600 })
-}
-
-// ---------------------------------------------------------------------------
 // Window
 // ---------------------------------------------------------------------------
 
@@ -336,19 +293,6 @@ app.whenReady().then(async () => {
   const { port } = server.address()
   const baseUrl = `http://127.0.0.1:${port}`
 
-  ipcMain.handle('erp:password:get', () => {
-    if (!safeStorage.isEncryptionAvailable()) return null
-    return loadPassword()
-  })
-  ipcMain.handle('erp:password:set', (_e, value) => {
-    if (!safeStorage.isEncryptionAvailable()) return false
-    savePassword(typeof value === 'string' && value.length > 0 ? value : '')
-    return true
-  })
-  ipcMain.handle('erp:password:clear', () => {
-    savePassword('')
-    return true
-  })
   ipcMain.handle('erp:app-version', () => ({
     version: app.getVersion(),
     electron: process.versions.electron,
@@ -371,7 +315,4 @@ app.on('window-all-closed', () => {
 
 app.on('will-quit', () => {
   if (server) server.close()
-  if (safeStorage.isEncryptionAvailable()) {
-    // keep the encrypted file as is — nothing extra is needed
-  }
 })

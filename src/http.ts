@@ -1,14 +1,11 @@
 import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios'
-import { useAuthStore } from './store'
 import router from './router'
 import { apiErrorMessage } from './utils'
 import { cacheGet, cacheGetByPath, cachePut } from './offline/cache'
 import { replayOutboxToCache } from './offline/outbox'
 import { isOffline } from './offline/state'
-import { isElectron } from './electron'
 import { getAccessToken } from './token'
-import { ensureDesktopAutoSyncSession } from './offline/sync'
-import { shouldAutoSync } from './settings'
+import { ensureAutoSession } from './offline/sync'
 import { isLoggedOut } from './loggedOut'
 
 /** Paths where 401 does not mean "token expired" — we leave them alone (loop protection) */
@@ -39,13 +36,28 @@ function redirectToLogin() {
  * generated API clients (src/api/base.ts: globalAxios).
  */
 export function setupHttp() {
+  // Never attach an EMPTY Authorization header ("Bearer ") — the backend
+  // answers such requests with INVALID_TOKEN (invalid authorization format),
+  // which the UI misreads as «Сессия истекла». Without a token the header is
+  // simply omitted; protected endpoints then return a plain 401 that flows
+  // through the normal refresh/retry path below.
+  axios.interceptors.request.use((config) => {
+    const token = getAccessToken()
+    config.headers = config.headers ?? {}
+    const auth = String(config.headers['authorization'] || config.headers['Authorization'] || '')
+    if (auth.startsWith('Bearer ') && !token) {
+      delete config.headers['authorization']
+      delete config.headers['Authorization']
+    }
+    return config
+  })
+
   // Successful GETs are written to the offline cache (network is up — data is fresh).
-  // The cache and write-through overlay are only needed for offline mode (Electron).
+  // The cache and write-through overlay work in every environment (web and desktop).
   axios.interceptors.response.use(
     async (response) => {
       const { config, status } = response
       if (
-        isElectron &&
         status >= 200 &&
         status < 300 &&
         config.method === 'get' &&
@@ -67,12 +79,11 @@ export function setupHttp() {
       }
 
       // Server unreachable (network, timeout, abort — any request without an HTTP response):
-      // in offline mode (Electron) we serve the last saved response from the cache
-      // (same { data, error } format). Read-time overlay: before reading we apply
-      // unsynchronized mutations on top of the warmed cache.
-      // The web build has no offline — just propagate the error.
+      // serve the last saved response from the cache (same { data, error } format). Read-time
+      // overlay: before reading we apply unsynchronized mutations on top of the warmed cache.
+      // This runs in every environment — web and desktop share the same offline read path.
       if (!error.response) {
-        if (isElectron && (config.method ?? 'get').toLowerCase() === 'get') {
+        if ((config.method ?? 'get').toLowerCase() === 'get') {
           await replayOutboxToCache()
           const key = cacheKey(config)
           let cached = await cacheGet<unknown>(key)
@@ -152,20 +163,15 @@ export function setupHttp() {
         return Promise.reject(error)
       }
 
-      const auth = useAuthStore()
-
       if ((config as RetryableConfig)._retried) {
         return Promise.reject(error)
       }
 
-      // Fresh session before retry: web — refresh via the HttpOnly cookie; desktop —
-      // silent re-login with auto-sync credentials (the cookie does not work cross-site).
+      // Renew the session before retry: desktop silently re-logs-in with the stored
+      // auto-sync credentials; web refreshes via the HttpOnly cookie. The unified
+      // ensureAutoSession picks the right path for the current environment.
       refreshing ??= (async () => {
-        if (isElectron && shouldAutoSync() && !isLoggedOut()) {
-          await ensureDesktopAutoSyncSession()
-          return auth.isAuthenticated && !auth.accessExpired
-        }
-        return auth.refreshSession()
+        return ensureAutoSession()
       })().finally(() => {
         refreshing = null
       })
@@ -176,8 +182,17 @@ export function setupHttp() {
         return Promise.reject(error)
       }
 
-      ;(config as RetryableConfig)._retried = true
+      // Never retry with an EMPTY bearer: the server answers «invalid
+      // authorization format» (INVALID_TOKEN) and the UI shows a misleading
+      // «Сессия истекла». If no token could be restored, send the user to the
+      // login page instead of firing a request that is guaranteed to fail.
       const token = getAccessToken()
+      if (!token) {
+        redirectToLogin()
+        return Promise.reject(error)
+      }
+
+      ;(config as RetryableConfig)._retried = true
       config.headers = config.headers ?? {}
       delete config.headers['authorization']
       config.headers['Authorization'] = `Bearer ${token}`

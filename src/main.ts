@@ -6,9 +6,8 @@ import { setupHttp } from './http'
 import { initTheme } from './theme'
 import { useAuthStore } from './store'
 import { initOfflineSync, startSessionMaintenance } from './offline/sync'
-import { startOfflineCycle } from './offline/cycle'
+import { startConnectionMonitor } from './offline/connection'
 import { ensureCacheVersion } from './offline/cache'
-import { isElectron } from './electron'
 
 setupHttp()
 initTheme()
@@ -18,8 +17,8 @@ initTheme()
 const pinia = createPinia()
 setActivePinia(pinia)
 
-// In Electron the offline machinery (queue, cache, network monitor) and the
-// background session support start here. The silent auto re-login itself is
+// The offline machinery (queue, cache, network monitor) and the background
+// session support start here for every environment. The silent auto re-login itself is
 // deliberately NOT awaited before mount: it is a real HTTP request to the
 // configured backend, and with a saved session + a stale/unreachable server
 // address (an old profile can keep one) it used to leave the window blank for
@@ -29,34 +28,34 @@ setActivePinia(pinia)
 // below. The boot itself is still capped (BOOT_BOUND_MS) as a safety net.
 const BOOT_BOUND_MS = 4000
 
-async function bootstrapDesktop(): Promise<void> {
+async function bootstrapApp(): Promise<void> {
   try {
     // Drop the GET cache when the app version changed (payload shape may differ
     // between releases); the mutation queue is never touched.
     await ensureCacheVersion()
     await initOfflineSync()
-    // The single 10-second maintenance cycle: probe + PUSH + PULL (see cycle.ts)
-    startOfflineCycle()
+    // The connection monitor runs in EVERY environment (web + desktop): it keeps
+    // isOffline/reconnectCountdown up to date via the /health probe and drives the
+    // auto-PUSH/PULL loops while the connection is healthy. Idempotent.
+    startConnectionMonitor()
     startSessionMaintenance()
   } catch (err) {
     // Never block the UI because of a broken offline/autosync init — surface it
     // in the log and render the login page anyway.
-    console.error('[boot] desktop init failed, continuing to render:', err)
+    console.error('[boot] offline init failed, continuing to render:', err)
   }
 }
 
-if (isElectron) {
-  await Promise.race([
-    bootstrapDesktop(),
-    new Promise((resolve) => setTimeout(resolve, BOOT_BOUND_MS)),
-  ])
-}
+await Promise.race([
+  bootstrapApp(),
+  new Promise((resolve) => setTimeout(resolve, BOOT_BOUND_MS)),
+])
 
-// Desktop: when a silent re-login (autosync) finishes AFTER the router guard
+// When a silent re-login (autosync / cookie refresh) finishes AFTER the router guard
 // already gave up waiting and redirected to /login, move the user into the app
 // automatically (to the requested redirect target, like the login submit does).
 // Offline logins are excluded via sessionMode — they manage their own navigation.
-if (isElectron) {
+{
   const auth = useAuthStore()
   watch(
     () => [auth.isAuthenticated, auth.sessionMode] as const,

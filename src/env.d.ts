@@ -28,16 +28,9 @@ declare module 'pdfjs-dist/build/pdf.worker.min.mjs' {
  * Electron bridge injected by preload (services/desktop/preload.js).
  * Absent in the browser — the app keeps working as a regular PWA.
  */
-interface ErpDesktopPassword {
-  get: () => Promise<string | null>
-  set: (value: string) => Promise<boolean>
-  clear: () => Promise<boolean>
-}
-
 interface ErpDesktop {
   isElectron: true
   appVersion: () => Promise<{ version: string; electron: string }>
-  password: ErpDesktopPassword
 }
 
 interface Window {

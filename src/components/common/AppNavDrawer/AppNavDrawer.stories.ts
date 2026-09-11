@@ -28,10 +28,20 @@ const testCategories: NavCategory[] = [
     items: [
       { label: 'Пользователи', to: '/users', name: 'users' },
       { label: 'Структура компании', to: '/structure', name: 'structure' },
-      { label: 'Автосоздание проектов', to: '/auto-create', name: 'auto-create', badge: 'new' },
+      { label: 'Триггер создания проекта', to: '/auto-create', name: 'auto-create', badge: 'new' },
       { label: 'Статусы', to: '/statuses', name: 'statuses' },
       { label: 'Права', to: '/permissions', name: 'permissions' },
       { label: 'Журнал действий', to: '/audit', name: 'audit' },
+    ],
+  },
+  {
+    label: 'Система',
+    roles: null,
+    items: [
+      { label: 'Пульт', to: '/system/console', name: 'system-console' },
+      { label: 'Очередь изменений', to: '/system/queue', name: 'system-queue' },
+      { label: 'Статус', to: '/system/status', name: 'system-status' },
+      { label: 'Настройки', to: '/system/settings', name: 'system-settings' },
     ],
   },
 ]
@@ -53,23 +63,9 @@ type Story = StoryObj<typeof meta>
 
 export const Open: Story = {}
 
-/** Desktop build: the sync status footer is present */
-export const WithSyncFooter: Story = {
+/** The "Система" group collapsed; other sections render as usual */
+export const SystemGroupCollapsed: Story = {
   args: {
-    sync: { enabled: true, offline: false, pending: 3, lastPullLabel: '12 мин' },
-  },
-}
-
-/** Desktop offline: amber dot and "from cache" copy */
-export const OfflineSync: Story = {
-  args: {
-    sync: { enabled: true, offline: true, pending: 5, lastPullLabel: '40 мин' },
-  },
-}
-
-/** Web build: no sync footer at all */
-export const WebWithoutSync: Story = {
-  args: {
-    sync: undefined,
+    activeName: 'system-console',
   },
 }

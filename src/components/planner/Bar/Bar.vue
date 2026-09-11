@@ -4,6 +4,7 @@ import { cellRangeForSpan, clampSpanDates, spanToDates, formatDateRange } from '
 import { useTimelineItem } from '../../../composables/useTimelineItem'
 import { useWindowPointerTrack } from '../../../utils'
 import { TooltipCell } from '../../common'
+import { viewSettings } from '@/settings'
 import type { BarProps } from './types'
 
 const slots = useSlots()
@@ -209,7 +210,7 @@ function onContextMenu(e: MouseEvent) {
     <TooltipCell v-if="hasTooltip" :text="tooltip ?? ''" :multiline="true" @open="emit('tooltip-open')">
       <slot>
         <span class="lb-title">{{ title }}</span>
-        <span v-if="projectCode" class="lb-code">{{ projectCode }}</span>
+        <span v-if="projectCode && viewSettings.badgeProjectCode" class="lb-code">{{ projectCode }}</span>
       </slot>
       <template #popup>
         <slot name="tooltip" :dateRange="dateRange">
@@ -222,7 +223,7 @@ function onContextMenu(e: MouseEvent) {
     </TooltipCell>
     <slot v-else>
       <span class="lb-title">{{ title }}</span>
-      <span v-if="projectCode" class="lb-code">{{ projectCode }}</span>
+      <span v-if="projectCode && viewSettings.badgeProjectCode" class="lb-code">{{ projectCode }}</span>
     </slot>
     <template v-if="draggable">
       <span

@@ -14,6 +14,12 @@ import { getAccessToken } from '../token'
  *
  * FIFO: entries are executed strictly in order — later edits/deletes of
  * entities created offline depend on previous ones.
+ *
+ * STORAGE: the queue is stored indefinitely — it has no TTL and is never
+ * swept by age/timers. Entries are removed only after a successful send, on
+ * logout (clearOutbox), or by explicit user actions (discardFailed /
+ * discardEntry / clearLocalData). Backoff and quarantined flags only gate
+ * auto-retries; they never delete an entry. See docs/no-ttl-local-storage.md.
  */
 
 const OUTBOX_STORE = 'outbox'
@@ -69,6 +75,15 @@ export const OUTBOX_STORE_NAME = OUTBOX_STORE
 
 /** Number of changes awaiting sync (reactive for UI). Quarantined ones are not counted. */
 export const pendingCount = ref(0)
+
+/**
+ * Reactive set of objects that have at least one unsent mutation in the queue —
+ * keys are `${entity}:${id}` (id from the URL or the temporary id for creates).
+ * Used by lists (composables/usePendingMark) to show the "awaiting sync" clock
+ * mark next to the affected rows. Includes quarantined entries — their change
+ * has not reached the server either.
+ */
+export const pendingRefs = ref<Set<string>>(new Set())
 
 /** Live queue push progress (for UI): { done, total } or null when not running */
 export const pushProgress = ref<{ done: number; total: number } | null>(null)
@@ -275,6 +290,15 @@ export async function refreshQueue(): Promise<void> {
 export async function refreshPendingCount(): Promise<void> {
   const entries = await idbAll<OutboxEntry>(OUTBOX_STORE).catch(() => [] as OutboxEntry[])
   pendingCount.value = entries.filter((e) => !e.quarantined).length
+  // Rebuild the "awaiting sync" mark set from all queued entries (quarantined
+  // included — they still wait for a manual retry). Entries without a resolvable
+  // target id (e.g. a bare POST with no temporary id) produce no mark.
+  const refs = new Set<string>()
+  for (const e of entries) {
+    const id = entryIdOf(e)
+    if (id != null) refs.add(`${e.entity}:${id}`)
+  }
+  pendingRefs.value = refs
   await refreshQueue()
 }
 

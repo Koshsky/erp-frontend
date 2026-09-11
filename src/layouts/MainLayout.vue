@@ -5,17 +5,25 @@ import AppHeader from '../components/common/AppHeader/AppHeader.vue'
 import AppNavDrawer from '../components/common/AppNavDrawer/AppNavDrawer.vue'
 import { useRbacStore } from '../store'
 import { useNavigation } from '../composables/useNavigation'
+import { saveCategoryOrder, saveItemOrder } from '../composables/useNavigationOrder'
 import { installDrawerEdgeDetection, isNavOpen } from '../composables/useNavDrawer'
-import { useSyncStatus } from '../composables/useSyncStatus'
-import { isOffline } from '../offline/state'
 
 const route = useRoute()
 const rbac = useRbacStore()
 const { visibleCategories } = useNavigation()
-const { syncStats } = useSyncStatus()
 
-// Local computed wrapping the imported ref — guaranteed reactivity in the template
-const offline = computed(() => isOffline.value)
+/** Applies a section drag onto the navigation order. */
+function onReorderCategory(p: { from: number; to: number }) {
+  const labels = visibleCategories.value.map((c) => c.label)
+  saveCategoryOrder(labels, p.from, p.to)
+}
+
+/** Applies a subsection drag (only within its parent section). */
+function onReorderItem(p: { catLabel: string; from: number; to: number }) {
+  const cat = visibleCategories.value.find((c) => c.label === p.catLabel)
+  const names = cat ? cat.items.map((i) => i.name) : []
+  if (names.length) saveItemOrder(p.catLabel, names, p.from, p.to)
+}
 
 // Route name as a plain string (route.name can also be a symbol in edge cases)
 const routeName = computed(() => (typeof route.name === 'string' ? route.name : undefined))
@@ -63,14 +71,11 @@ onBeforeUnmount(() => {
       :open="isNavOpen"
       :categories="visibleCategories"
       :active-name="routeName"
-      :sync="syncStats"
+      @reorder-category="onReorderCategory"
+      @reorder-item="onReorderItem"
     />
     <div class="ml-col">
       <AppHeader />
-      <!-- Global offline indicator (Desktop): data from cache, changes accumulate in the queue -->
-      <div v-if="offline" class="ml-offline" role="status">
-        Офлайн-режим: данные из кэша, изменения копятся в очереди
-      </div>
       <div class="ml-body">
         <main class="ml-main">
           <RouterView />
@@ -92,22 +97,12 @@ onBeforeUnmount(() => {
   background: var(--ui-bg);
 }
 
-/* Content column: header + offline banner + scrollable main area */
+/* Content column: header + scrollable main area */
 .ml-col {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
-}
-
-.ml-offline {
-  padding: 8px 24px;
-  background: var(--ui-danger-soft);
-  color: var(--ui-danger);
-  font-size: 13px;
-  font-weight: 600;
-  text-align: center;
-  border-bottom: 1px solid var(--ui-border);
 }
 
 .ml-body {

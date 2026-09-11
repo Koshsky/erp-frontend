@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { storeToRefs } from 'pinia'
-import { ContextMenu, ModalForm } from '../components/common'
+import { ContextMenu, ModalForm, PendingMark } from '../components/common'
 import type { ContextMenuItem } from '../components/common/ContextMenu'
 import type { ModalField } from '../components/common/ModalForm'
 import { useContextMenu } from '../composables/useContextMenu'
@@ -216,7 +216,10 @@ onMounted(async () => {
           :class="{ 'tr--no-manager': !isAdmin }"
           @contextmenu.prevent.stop="onRowContextMenu($event, emp)"
         >
-          <div class="name">{{ emp.name }}</div>
+          <div class="name">
+            {{ emp.name }}
+            <PendingMark entity="user" :id="emp.id" />
+          </div>
           <div class="pos-cell">
             <span
               v-if="resourceOf(emp.id)"

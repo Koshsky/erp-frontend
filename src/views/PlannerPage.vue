@@ -4,9 +4,15 @@ import { useRoute } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import TaskPlanning from '../components/planner/TaskPlanning/TaskPlanning.vue'
 import { PdfExport } from '../components/planner'
-import { ResourceManagerModal, TaskComments } from '../components/planner'
+import { ResourceManagerModal, TaskComments, TaskEditor } from '../components/planner'
 import type { AssignedResource, AddResourcePayload } from '../components/planner/ResourceManagerModal'
 import type { SendCommentPayload, DeleteCommentPayload } from '../components/planner/TaskComments'
+import type {
+  NewSubtaskPayload,
+  UpdateSubtaskPayload,
+  TaskEditorTask,
+  TaskEditorPatch,
+} from '../components/planner/TaskEditor'
 import { ContextMenu, ModalForm, ConfirmDialog } from '../components/common'
 import type { ContextMenuItem } from '../components/common/ContextMenu'
 import type { ModalField } from '../components/common/ModalForm'
@@ -148,9 +154,8 @@ const menuItems = computed<ContextMenuItem[]>(() => {
   return items
 })
 
-// Edit modal for a task (title, assignee, color) or a milestone (title + content, color)
+// Edit modal for a milestone (title + content, color); tasks use TaskEditor.
 type EditState =
-  | { type: 'task'; id: number; title: string; ownerId?: number; color?: string }
   | { type: 'milestone'; id: number; title: string; content: string; color?: string }
 
 /** Candidates for task "assignee" — own employees only (direct subordinates) */
@@ -170,45 +175,98 @@ const { open: openEdit, close: closeEdit, submit: submitEdit, bind: editBind } =
       required: true,
     }
     const colorField: ModalField = { key: 'color', label: 'Цвет', type: 'color', value: state.color ?? '' }
-    if (state.type === 'milestone') {
-      return [
-        base,
-        colorField,
-        { key: 'content', label: 'Контент', type: 'textarea', value: state.content },
-      ]
-    }
     return [
       base,
       colorField,
-      // The assignee is chosen from own employees. The owner cannot be removed
-      // (set null); if none is selected from the list — the owner_id field is not sent.
-      {
-        key: 'owner_id',
-        label: 'Ответственный',
-        type: 'select',
-        value: state.ownerId ?? '',
-        options: ownerOptions.value,
-      },
+      { key: 'content', label: 'Контент', type: 'textarea', value: state.content },
     ]
   },
   async (state, values) => {
-    const title = String(values.title ?? '')
-    const color = String(values.color ?? '')
-    if (state.type === 'task') {
-      // Empty value (no employee selected) — the owner is not changed: the field is not sent.
-      const ownerId = values.owner_id === '' ? undefined : Number(values.owner_id)
-      const ok = await planning.updateTaskMeta(state.id, { title, color, owner_id: ownerId })
-      return { ok, error: ok ? null : planning.error }
-    }
     const ok = await planning.updateMilestoneMeta(state.id, {
-      title,
-      color,
+      title: String(values.title ?? ''),
+      color: String(values.color ?? ''),
       content: String(values.content ?? ''),
     })
     return { ok, error: ok ? null : planning.error }
   },
-  (state) => (state.type === 'task' ? 'Редактировать задачу' : 'Редактировать веху'),
+  () => 'Редактировать веху',
 )
+
+// === Task editor modal (left: task fields; right: subtasks todo list) ===
+const taskEditorId = ref<number | null>(null)
+const taskEditorBusy = ref(false)
+const taskEditorError = ref<string | null>(null)
+
+/** The task being edited (with process_id for the permission check) */
+const taskEditorTask = computed<TaskEditorTask | null>(() => {
+  if (taskEditorId.value == null) return null
+  const t = findTask(taskEditorId.value)
+  if (!t) return null
+  return {
+    id: t.id,
+    title: t.title ?? '',
+    color: t.color ?? '',
+    status: t.status ?? 'not_started',
+    owner_id: t.owner_id ?? null,
+    process_id: t.process_id,
+  }
+})
+
+/** Subtask rows for the right panel (from the planning cache) */
+const taskEditorSubtasks = computed(() => {
+  if (taskEditorId.value == null) return []
+  return (findTask(taskEditorId.value)?.subtasks ?? []).map((s: any) => ({
+    id: s.id,
+    title: s.title ?? '',
+    color: s.color ?? '',
+    status: s.status ?? 'not_started',
+  }))
+})
+
+function openTaskEdit(id: number) {
+  const task = findTask(id)
+  if (!task) return
+  taskEditorId.value = id
+  taskEditorError.value = null
+  taskEditorBusy.value = false
+}
+
+function closeTaskEdit() {
+  taskEditorId.value = null
+  taskEditorError.value = null
+}
+
+async function onSaveTaskEditor(patch: TaskEditorPatch) {
+  if (taskEditorId.value == null) return
+  taskEditorBusy.value = true
+  taskEditorError.value = null
+  const ok = await planning.updateTaskMeta(taskEditorId.value, patch)
+  taskEditorBusy.value = false
+  if (!ok) taskEditorError.value = planning.error
+}
+
+async function onAddSubtask(payload: NewSubtaskPayload) {
+  if (taskEditorId.value == null) return
+  taskEditorBusy.value = true
+  taskEditorError.value = null
+  const ok = await planning.createSubtask(taskEditorId.value, payload)
+  taskEditorBusy.value = false
+  if (!ok) taskEditorError.value = planning.error
+}
+
+async function onUpdateSubtask(payload: UpdateSubtaskPayload) {
+  taskEditorBusy.value = true
+  taskEditorError.value = null
+  const ok = await planning.updateSubtask(payload.id, payload.patch)
+  taskEditorBusy.value = false
+  if (!ok) taskEditorError.value = planning.error
+}
+
+async function onDeleteSubtask(id: number) {
+  if (taskEditorId.value == null) return
+  const ok = await planning.deleteSubtask(id)
+  if (!ok) taskEditorError.value = planning.error
+}
 
 function onContextMenu(p: { clientX: number; clientY: number; date: string | null; rowIndex: number; processId?: number; taskId?: number; milestoneId?: number }) {
   if (!canViewTasks.value) return
@@ -237,19 +295,6 @@ function onTaskBarEdit(id: number) {
   const task = findTask(id)
   if (!task || !canManageTask(task.process_id)) return
   openTaskEdit(id)
-}
-
-function openTaskEdit(id: number) {
-  const task = findTask(id)
-  if (task) {
-    openEdit({
-      type: 'task',
-      id,
-      title: task.title ?? '',
-      ownerId: task.owner_id ?? undefined,
-      color: task.color ?? '',
-    })
-  }
 }
 
 function openMilestoneEdit(id: number) {
@@ -537,6 +582,23 @@ const taskGroups = computed<PdfGanttGroup[]>(() =>
     />
 
     <ModalForm v-bind="editBind" @save="submitEdit" @close="closeEdit" />
+
+    <TaskEditor
+      :open="taskEditorId != null"
+      :task="taskEditorTask"
+      :subtasks="taskEditorSubtasks"
+      :owner-options="ownerOptions"
+      :can-manage="taskEditorTask ? canManageTask(taskEditorTask.process_id) : false"
+      :can-create-subtask="taskEditorTask ? canManageTask(taskEditorTask.process_id) : false"
+      :busy="taskEditorBusy"
+      :error="taskEditorError"
+      :disabled-reason="isOffline ? 'Недоступно в офлайне' : null"
+      @save="onSaveTaskEditor"
+      @add-subtask="onAddSubtask"
+      @update-subtask="onUpdateSubtask"
+      @delete-subtask="onDeleteSubtask"
+      @close="closeTaskEdit"
+    />
 
     <ResourceManagerModal
       :open="resourcesModalTaskId != null"

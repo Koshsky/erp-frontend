@@ -1,21 +1,25 @@
 import { defineStore } from 'pinia'
-import { ref, computed, onScopeDispose } from 'vue'
+import { ref, computed, watch, onScopeDispose } from 'vue'
 import axios, { type AxiosError, type Method } from 'axios'
 import { AuthApi, ProjectsApi, ProcessesApi, TasksApi, TimesheetResourcesApi, TimesheetCalendarApi, TimesheetStatesApi, PlanningApi, MilestonesApi, UsersApi, AssignmentsApi, AutoCreateApi, RBACApi, PermissionsApi, AuditApi, Configuration } from '@/api'
 import type { DtoUserInfo, DtoProject, DtoResourceResponse, DtoResourceCalendar, DtoResourceMemberResponse, DtoResourceAbsenceResponse, DtoUserResponse, DtoUserStateResponse, DtoStateResponse, DtoCreateResourceRequest, DtoUpdateResourceRequest, DtoCreateUserRequest, DtoUpdateUserRequest, DtoSetDaysRequest, DtoAdminUserResponse, DtoCreateUserResult, DtoResetPasswordResponse, DtoAutoCreateConfig, DtoAutoCreatedCounts, DtoCommentResponse, DomainPreset, DtoPresetRuleInput, DtoPresetRuleView, DtoMatrixCell, DtoRoutePolicyView, PoliciesKindInfo, DtoPermission, DtoUserPermissionsView, DtoUserPermissionsInput, DtoAuditEventView } from '@/api'
 import { apiErrorMessage } from '@/utils'
 import { getApiUrl } from '@/config'
 import { isOffline } from '@/offline/state'
-import { isElectron, setDesktopPassword } from '@/electron'
 import { offlineFailFastAdapter } from '@/offline/failFast'
 import { scheduleWarmup } from '@/offline/warmup'
 import { enqueueMutation, isNetworkError, clearOutbox, type MutationEntity } from '@/offline/outbox'
 import { applyRangeSplit } from '@/offline/periodSplit'
 import { getAccessToken, setAccessToken } from '@/token'
-import { tryAcquireRefreshLock, releaseRefreshLock, publishToken, subscribeToken } from '@/sessionSync'
+import {
+  tryAcquireRefreshLock,
+  releaseRefreshLock,
+  publishSession,
+  subscribeSession,
+  subscribeToken,
+} from '@/sessionSync'
 import { isLoggedOut, clearLoggedOut, setLoggedOut } from '@/loggedOut'
-import { getSavedLogin } from '@/syncCredentials'
-import { shouldAutoSync } from '@/settings'
+import { saveRefreshToken, loadRefreshToken, clearRefreshToken } from '@/offline/session'
 import { hydrateFromCache, apiPath } from '@/offline/hydrate'
 
 const USER_KEY = 'mvs_erp_user'
@@ -60,9 +64,10 @@ async function runMutation(opts: MutationOptions): Promise<boolean> {
     return true
   } catch (e: any) {
     const err = e as AxiosError
-    if (err?.config && isElectron && isNetworkError(e)) {
-      // Offline queue (outbox) — only in the desktop (Electron) build.
-      // On the web, a network failure in a mutation is a regular error (no optimistic path).
+    if (err?.config && isNetworkError(e)) {
+      // Mutation queue (outbox): on a network failure the request is stored in
+      // IndexedDB and the optimistic change is applied — in every environment
+      // (web and desktop share the same offline-first logic).
       try {
         await enqueueMutation({
           entity: opts.entity,
@@ -97,7 +102,26 @@ function apiConfig(): Configuration {
       // queue, GETs are served from cache. The adapter is only placed here (store clients)
       // so that the queue flush (flushOutbox, raw axios) goes to the network as
       // usual: otherwise, once the network is back, writes would fail with Network Error.
-      ...(isElectron && isOffline.value ? { adapter: offlineFailFastAdapter } : {}),
+      ...(isOffline.value ? { adapter: offlineFailFastAdapter } : {}),
+    },
+    apiKey: () => `Bearer ${getAccessToken()}`,
+  })
+}
+
+/**
+ * Configuration for AUTH requests only (/auth/login, /auth/refresh,
+ * /auth/logout). These must ALWAYS reach the network — even while isOffline is
+ * true: they are precisely how the app verifies the server came back (manual
+ * online login, silent session restore). The fail-fast adapter would otherwise
+ * swallow the login attempt while the monitor still thinks the server is dead,
+ * leaving the user stuck on /login with no way to reconnect.
+ */
+function authApiConfig(): Configuration {
+  return new Configuration({
+    basePath: getApiUrl(),
+    baseOptions: {
+      headers: { 'Content-Type': 'application/json' },
+      timeout: 10000,
     },
     apiKey: () => `Bearer ${getAccessToken()}`,
   })
@@ -217,16 +241,44 @@ export const useAuthStore = defineStore('auth', () => {
     return true
   }
 
+  // Once the network returns after an offline login, silently try to restore a
+  // real online session (the refresh token is in IndexedDB or the cookie). The
+  // router guard alone cannot do it: it skips the refresh while isOffline is
+  // true and then admits the stored profile without an access token — which
+  // made every request go out with an empty Bearer and the server answered
+  // INVALID_TOKEN («Сессия истекла»). When no refresh token is available at
+  // all (a pure offline session), do nothing: the user stays offline (their
+  // data and queue are intact) and can log in online explicitly.
+  watch(
+    isOffline,
+    (offline) => {
+      if (offline) return
+      if (sessionMode.value !== 'offline') return
+      if (isLoggedOut()) return
+      void (async () => {
+        const stored = await loadRefreshToken()
+        if (stored == null) return // no session to restore — stay offline
+        await doRefresh()
+      })()
+    },
+    { flush: 'sync' },
+  )
+
   async function login(username: string, password: string) {
     loading.value = true
     error.value = null
     try {
-      const api = new AuthApi(apiConfig())
+      const api = new AuthApi(authApiConfig())
       const resp = await api.authLoginPost({ username: username.trim(), password })
       const body = resp.data
       const errBody = body?.error as { code?: unknown; message?: string } | undefined
       if (errBody && errBody.code != null) throw new Error(apiErrorMessage(errBody))
       applySession(body?.data)
+      // Persist the rotation-eligible refresh token (the backend returns it in
+      // the login body) so the session survives reloads without the cookie.
+      if (body?.data?.refresh_token) {
+        await saveRefreshToken(body.data.refresh_token)
+      }
       // Manual login clears the "logged out" flag — auto-sync is allowed again
       clearLoggedOut()
       sessionMode.value = 'online'
@@ -251,18 +303,6 @@ export const useAuthStore = defineStore('auth', () => {
       const body = resp.data
       const errBody = body?.error as { code?: unknown; message?: string } | undefined
       if (errBody && errBody.code != null) throw new Error(apiErrorMessage(errBody))
-      // Update the password saved for auto-sync so auto-sync does not break after a
-      // password change: credentials are tied to the last manual login (Desktop).
-      if (isElectron) {
-        const saved = getSavedLogin()
-        if (saved && user.value?.username && saved === user.value.username) {
-          try {
-            await setDesktopPassword(newPassword)
-          } catch {
-            // not critical: auto-sync will simply ask for credentials at login
-          }
-        }
-      }
       return true
     } catch (e: any) {
       error.value = apiErrorMessage(e?.response?.data?.error, e?.message ?? String(e))
@@ -279,17 +319,17 @@ export const useAuthStore = defineStore('auth', () => {
   /** Proactive refresh: timer + tab visibility return, so the access token never expires prematurely */
   function scheduleProactiveRefresh() {
     if (proactiveTimer != null) return
-    // Desktop + auto-sync: session renewal is done by session-maintenance
-    // (silent re-login with auto-sync credentials) — the refresh cookie does not work
-    // cross-site, so we skip it here to avoid a logout on 401.
+    // Refresh is unified across environments: the refresh token lives in the
+    // IndexedDB 'session' store (body of /auth/refresh), so the timer works the
+    // same on web and desktop.
     const renew = () => {
-      if (accessTokenExpiring() && !(isElectron && shouldAutoSync())) {
+      if (accessTokenExpiring()) {
         void refreshSession()
       }
     }
     proactiveTimer = window.setInterval(renew, REFRESH_INTERVAL_MS)
     onVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && accessTokenExpiring() && !(isElectron && shouldAutoSync())) {
+      if (document.visibilityState === 'visible' && accessTokenExpiring()) {
         void refreshSession()
       }
     }
@@ -320,7 +360,10 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function doRefresh(): Promise<boolean> {
-    // The refresh token lives in an HttpOnly cookie (AD-05): we do not send a body; the cookie is attached itself.
+    // The refresh token lives in the non-volatile IndexedDB 'session' store (offline/session).
+    // We send it in the body of /auth/refresh; if the store is empty we send no body and the
+    // backend falls back to the HttpOnly refresh cookie (legacy web path). The backend returns
+    // the rotated refresh token in the response body and we persist it for the next refresh.
     // Offline refresh is impossible: we do not log out; the session lives until the network returns.
     if (isOffline.value) return true
     // After an explicit logout (logout) we do not call /auth/refresh: the cookie is already revoked,
@@ -328,36 +371,43 @@ export const useAuthStore = defineStore('auth', () => {
     // the revoked token would trigger reuse detection (revoking all of the
     // user's sessions). We return false without the network — the caller is logged out.
     if (isLoggedOut()) return false
-    // Web only: coordinate the refresh across tabs. The refresh cookie is shared, and two tabs
-    // refreshing the same (rotating) session pair at once make the second tab hit the backend
-    // reuse detection — which revokes ALL of the user's sessions and logs every tab out.
-    // Only one tab refreshes at a time; the rest adopt the token it broadcasts.
-    const coordinated = !isElectron
+    // Cross-tab coordination for ALL environments: the refresh token is shared (the body/IndexedDB
+    // value or the cookie), so two tabs refreshing the same (rotating) session pair at once make the
+    // second tab hit the backend reuse detection — revoking ALL of the user's sessions and logging
+    // every tab out. Only one tab refreshes at a time; the rest adopt the token it broadcasts.
+    const coordinated = true
     if (coordinated && !tryAcquireRefreshLock()) {
       // Another tab is refreshing — wait briefly for its token, otherwise defer:
-      // the next 401 retry will use the already-rotated cookie (safe — the new
+      // the next 401 retry will use the already-rotated refresh (safe — the new
       // token is not revoked).
       return await waitForExternalToken()
     }
     loading.value = true
     error.value = null
     try {
-      const api = new AuthApi(apiConfig())
-      const resp = await api.authRefreshPost()
+      const api = new AuthApi(authApiConfig())
+      const stored = await loadRefreshToken()
+      const resp = await api.authRefreshPost(stored ? { refresh_token: stored } : undefined)
       const body = resp.data
       const errBody = body?.error as { code?: unknown; message?: string } | undefined
       if (errBody && errBody.code != null) throw new Error(apiErrorMessage(errBody))
       applySession(body?.data)
+      // Rotate: persist the refresh token returned by the backend for the next refresh.
+      if (body?.data?.refresh_token) {
+        await saveRefreshToken(body.data.refresh_token)
+      }
       const token = getAccessToken()
-      if (coordinated && token) publishToken(token)
+      if (coordinated && token) {
+        publishSession({ access: token, refresh: body?.data?.refresh_token })
+      }
       return true
     } catch (e: any) {
-      // Network error (no HTTP response): the server is unreachable. We do not log out.
-      // In the desktop build we switch to offline mode (the session and the change queue in
-      // IndexedDB live until the network returns); on the web there is no offline mode — we simply
-      // do not kick the user out. Logout happens only on a real server failure.
+      // Network error (no HTTP response): the server is unreachable. We do not log out —
+      // we switch to offline mode (the session and the change queue in IndexedDB live
+      // until the network returns), in every environment. Logout happens only on a
+      // real server failure.
       if (isNetworkError(e)) {
-        if (isElectron) isOffline.value = true
+        isOffline.value = true
         return true
       }
       error.value = e.message || String(e)
@@ -373,18 +423,30 @@ export const useAuthStore = defineStore('auth', () => {
     stopProactiveRefresh()
     // Do not let the queue flush under a new user/token
     void clearOutbox()
-    // Revoke the refresh session on the server and clear the cookie (best-effort)
-    try {
-      void new AuthApi(apiConfig()).authLogoutPost()
-    } catch {
-      // the cookie will also be cleared on the client below
-    }
+    // Revoke the refresh session on the server: read the stored token and send it
+    // in the body of /auth/logout (falling back to the cookie when none is stored),
+    // then clear our local copy. Best-effort — the cookie is also cleared by the backend.
+    void (async () => {
+      try {
+        const stored = await loadRefreshToken()
+        await new AuthApi(authApiConfig()).authLogoutPost(
+          stored ? { refresh_token: stored } : undefined,
+        )
+      } catch {
+        // the session is revoked/expired on the client regardless
+      } finally {
+        // Local cleanup must never throw out of logout (an IndexedDB failure —
+        // e.g. a missing object store — would otherwise surface as an
+        // unhandled promise rejection after the user logged out).
+        await clearRefreshToken().catch(() => {})
+      }
+    })()
     setAccessToken(null)
     localStorage.removeItem(USER_KEY)
     user.value = null
     isAuthenticated.value = false
     sessionMode.value = 'online'
-    // After an explicit logout, auto-sync does not log in until a manual login (Desktop)
+    // After an explicit logout, auto-sync does not log in until a manual login
     setLoggedOut()
   }
 
@@ -409,9 +471,8 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  /** Local-first profile (desktop): hydrate from the cache; web fetches live */
+  /** Local-first profile: hydrate from the cache; network refresh via fetchProfile */
   async function loadProfile(userId: number): Promise<boolean> {
-    if (!isElectron) return fetchProfile(userId)
     if (user.value) return true
     await hydrateFromCache([
       {
@@ -435,17 +496,20 @@ export const useAuthStore = defineStore('auth', () => {
     scheduleWarmup()
   }
 
-  // Web: adopt fresher access tokens published by sibling tabs (cross-tab refresh
-  // coordination — the refresh cookie is shared and rotated once per family).
+  // Adopt fresher sessions (access token + rotated refresh token) published by
+  // sibling tabs (cross-tab refresh coordination in ALL environments — the
+  // refresh token is shared and rotated once per family).
   let unsubscribeSessionToken: (() => void) | null = null
-  if (!isElectron) {
-    unsubscribeSessionToken = subscribeToken((token) => {
+  unsubscribeSessionToken = subscribeSession(({ access, refresh }) => {
+    if (access) {
       const cur = decodeTokenExp(getAccessToken())
-      const next = decodeTokenExp(token)
-      if (next != null && (cur == null || next > cur)) setAccessToken(token)
-    })
-    onScopeDispose(() => unsubscribeSessionToken?.())
-  }
+      const next = decodeTokenExp(access)
+      if (next != null && (cur == null || next > cur)) setAccessToken(access)
+    }
+    // Every tab keeps its IndexedDB refresh store in sync with the rotation.
+    if (refresh) void saveRefreshToken(refresh)
+  })
+  onScopeDispose(() => unsubscribeSessionToken?.())
 
   return {
     user,
@@ -471,15 +535,10 @@ export const useAppStore = defineStore('app', () => {
   const projectsError = ref<string | null>(null)
 
   /**
-   * Local-first (desktop only): fill the projects list from the cache if empty.
-   * The web build has no offline cache — it reads straight from the server
-   * (refreshProjects), as before the offline-first refactor.
+   * Local-first: fill the projects list from the cache if empty. Network refresh
+   * happens only through the background PULL cycle (refreshProjects).
    */
   async function loadProjects(): Promise<void> {
-    if (!isElectron) {
-      await refreshProjects()
-      return
-    }
     if (projects.value.length) return
     await hydrateFromCache([
       {
@@ -520,10 +579,6 @@ export const useAppStore = defineStore('app', () => {
   const resourcesError = ref<string | null>(null)
 
   async function loadResources(): Promise<void> {
-    if (!isElectron) {
-      await refreshResources()
-      return
-    }
     if (resources.value.length) return
     await hydrateFromCache([
       {
@@ -623,10 +678,6 @@ export const useAppStore = defineStore('app', () => {
 
   /** Loads the member (user) list of a resource — local-first (cache) */
   async function loadResourceMembers(resourceId: number): Promise<void> {
-    if (!isElectron) {
-      await refreshResourceMembers(resourceId)
-      return
-    }
     if (resourceMembers.value[resourceId] != null) return
     await hydrateFromCache([
       {
@@ -777,10 +828,6 @@ export const useAppStore = defineStore('app', () => {
 
   /** Loads resource availability for the "180 days back / 360 days forward" window (within the backend limit) */
   async function loadCalendar(): Promise<void> {
-    if (!isElectron) {
-      await refreshCalendar()
-      return
-    }
     if (calendar.value.length) return
     await hydrateFromCache([
       {
@@ -837,10 +884,6 @@ export const useAppStore = defineStore('app', () => {
   const myStaffLoading = ref(false)
 
   async function loadUsers(): Promise<void> {
-    if (!isElectron) {
-      await refreshUsers()
-      return
-    }
     if (users.value.length) return
     await hydrateFromCache([
       {
@@ -870,10 +913,6 @@ export const useAppStore = defineStore('app', () => {
 
   /** Loads "own staff" (scoped /users without a role filter). */
   async function loadMyStaff(): Promise<void> {
-    if (!isElectron) {
-      await refreshMyStaff()
-      return
-    }
     if (myStaff.value.length) return
     await hydrateFromCache([
       {
@@ -1232,23 +1271,14 @@ export const useTimesheetStore = defineStore('timesheet', () => {
   }
 
   /** Loads employees and initializes the states window (for the timesheet).
-   *  Desktop — local-first; web reads from the server as before. */
+   *  Local-first — the cache is filled by the background PULL cycle. */
   async function loadEmployees(): Promise<void> {
-    if (!isElectron) {
-      await refreshEmployees()
-      await loadInitialWindow()
-      return
-    }
     if (!employees.value.length) await loadEmployeesList()
     await loadInitialWindow()
   }
 
-  /** Loads the states reference — desktop local-first, web reads from the server */
+  /** Loads the states reference — local-first (cache) */
   async function loadStates(): Promise<void> {
-    if (!isElectron) {
-      await refreshStates()
-      return
-    }
     if (states.value.length) return
     await hydrateFromCache([
       {
@@ -1352,15 +1382,10 @@ export const useTimesheetStore = defineStore('timesheet', () => {
     }
   }
 
-  /** Initializes the "180 back / 360 forward" window: desktop — local hydrate,
-   *  web — network period load (as before the offline-first refactor). */
+  /** Initializes the "180 back / 360 forward" window: local hydrate from the cache */
   async function loadInitialWindow(): Promise<void> {
     windowStart.value = shiftDate(todayISO(), -WINDOW_BACK_DAYS)
     windowEnd.value = shiftDate(todayISO(), WINDOW_FORWARD_DAYS)
-    if (!isElectron) {
-      await refreshPeriods(windowStart.value, windowEnd.value)
-      return
-    }
     await fetchPeriodsLocal()
   }
 
@@ -1542,10 +1567,6 @@ export const usePlanningStore = defineStore('planning', () => {
   }
 
   async function loadProjectPlanning(): Promise<void> {
-    if (!isElectron) {
-      await refreshProjectPlanning()
-      return
-    }
     await hydratePlanning(
       () => projectPlanning.value,
       (v) => {
@@ -1556,10 +1577,6 @@ export const usePlanningStore = defineStore('planning', () => {
   }
 
   async function loadProcessPlanning(): Promise<void> {
-    if (!isElectron) {
-      await refreshProcessPlanning()
-      return
-    }
     await hydratePlanning(
       () => processPlanning.value,
       (v) => {
@@ -1570,10 +1587,6 @@ export const usePlanningStore = defineStore('planning', () => {
   }
 
   async function loadTaskPlanning(): Promise<void> {
-    if (!isElectron) {
-      await refreshTaskPlanning()
-      return
-    }
     await hydratePlanning(
       () => taskPlanning.value,
       (v) => {
@@ -1618,9 +1631,25 @@ export const usePlanningStore = defineStore('planning', () => {
     return undefined
   }
 
+  /** Finds a task (top-level or subtask) anywhere in the planning data. */
   function findTaskRow(id: number): any {
     for (const p of taskPlanning.value?.processes ?? []) {
       const t = (p.tasks ?? []).find((x: any) => x.id === id)
+      if (t) return t
+      const s = (p.tasks ?? [])
+        .flatMap((x: any) => x.subtasks ?? [])
+        .find((x: any) => x.id === id)
+      if (s) return s
+    }
+    return undefined
+  }
+
+  /** Locates the object holding a subtask list (a top-level task with subtasks). */
+  function findSubtaskOwner(id: number): any {
+    for (const p of taskPlanning.value?.processes ?? []) {
+      const t = (p.tasks ?? []).find((x: any) =>
+        (x.subtasks ?? []).some((s: any) => s.id === id),
+      )
       if (t) return t
     }
     return undefined
@@ -1746,7 +1775,10 @@ export const usePlanningStore = defineStore('planning', () => {
     })
   }
 
-  async function updateTaskMeta(id: number, patch: { title?: string; owner_id?: number; color?: string }): Promise<boolean> {
+  async function updateTaskMeta(
+    id: number,
+    patch: { title?: string; owner_id?: number; color?: string; status?: string },
+  ): Promise<boolean> {
     return runMutation({
       entity: 'task',
       call: () => new TasksApi(apiConfig()).taskIdPut(id, patch),
@@ -1918,6 +1950,7 @@ export const usePlanningStore = defineStore('planning', () => {
       start_date: string
       end_date: string
       color?: string
+      status?: string
     },
     index?: number,
   ): Promise<boolean> {
@@ -1933,7 +1966,7 @@ export const usePlanningStore = defineStore('planning', () => {
       },
       apply: (dto) => {
         if (!dto) return
-        const d = dto as { id?: number; title?: string; start_date?: string; end_date?: string; color?: string }
+        const d = dto as { id?: number; title?: string; start_date?: string; end_date?: string; color?: string; status?: string }
         const proc = taskPlanning.value?.processes?.find((p: any) => p.id === payload.process_id)
         insertAt(proc?.tasks, index, {
           id: d.id ?? 0,
@@ -1942,6 +1975,7 @@ export const usePlanningStore = defineStore('planning', () => {
           end_date: d.end_date ?? payload.end_date,
           resources: [],
           color: d.color ?? payload.color,
+          status: d.status ?? payload.status ?? 'not_started',
         })
       },
       optimistic: () => {
@@ -1953,8 +1987,105 @@ export const usePlanningStore = defineStore('planning', () => {
           end_date: payload.end_date,
           resources: [],
           color: payload.color,
+          status: payload.status ?? 'not_started',
         })
       },
+      onError: (m) => {
+        error.value = m
+      },
+    })
+  }
+
+  /** Creates a subtask (operation) attached to a top-level task. The backend
+   *  inherits the parent's process and dates, so only title/color/status are
+   *  sent. Optimistically appended to the parent's subtasks list. */
+  async function createSubtask(
+    parentId: number,
+    payload: { title: string; color?: string; status?: string },
+  ): Promise<boolean> {
+    const tempId = nextTempId()
+    const parent = findTaskRow(parentId)
+    return runMutation({
+      entity: 'task',
+      tempId,
+      call: async () => {
+        const resp = await new TasksApi(apiConfig()).taskPost({
+          parent_id: parentId,
+          // The RBAC middleware authorizes task.create by the process from the
+          // body; a subtask always lives in its parent's process.
+          process_id: parent?.process_id,
+          title: payload.title,
+          color: payload.color,
+          status: payload.status,
+        })
+        const errBody = resp.data?.error as { code?: unknown; message?: string } | undefined
+        if (errBody && errBody.code != null) throw new Error(apiErrorMessage(errBody))
+        return resp
+      },
+      apply: (dto) => {
+        if (!dto) return
+        const d = dto as { id?: number; title?: string; color?: string; status?: string }
+        const p = findTaskRow(parentId)
+        if (!p) return
+        ;(p.subtasks ??= []).push({
+          id: d.id ?? 0,
+          title: d.title ?? payload.title,
+          color: d.color ?? payload.color,
+          status: d.status ?? payload.status ?? 'not_started',
+          resources: [],
+          subtasks: [],
+        })
+      },
+      optimistic: () => {
+        if (!parent) return
+        ;(parent.subtasks ??= []).push({
+          id: tempId,
+          title: payload.title,
+          color: payload.color,
+          status: payload.status ?? 'not_started',
+          resources: [],
+          subtasks: [],
+        })
+      },
+      onError: (m) => {
+        error.value = m
+      },
+    })
+  }
+
+  /** Updates a subtask: title/color/status via PUT /task/{id}. */
+  async function updateSubtask(
+    id: number,
+    patch: { title?: string; color?: string; status?: string },
+  ): Promise<boolean> {
+    return runMutation({
+      entity: 'task',
+      call: () => new TasksApi(apiConfig()).taskIdPut(id, patch),
+      apply: async () => {
+        await refreshTaskPlanning(true)
+      },
+      optimistic: () => {
+        const s = findTaskRow(id)
+        if (s) Object.assign(s, patch)
+      },
+      onError: (m) => {
+        error.value = m
+      },
+    })
+  }
+
+  /** Deletes a subtask (or a top-level task — both share PUT/Delete routes). */
+  async function deleteSubtask(id: number): Promise<boolean> {
+    const remove = () => {
+      const owner = findSubtaskOwner(id)
+      if (owner) removeById(owner.subtasks, id)
+      else for (const p of taskPlanning.value?.processes ?? []) removeById(p.tasks, id)
+    }
+    return runMutation({
+      entity: 'task',
+      call: () => new TasksApi(apiConfig()).taskIdDelete(id),
+      apply: remove,
+      optimistic: remove,
       onError: (m) => {
         error.value = m
       },
@@ -2046,7 +2177,9 @@ export const usePlanningStore = defineStore('planning', () => {
 
   async function deleteTask(id: number): Promise<boolean> {
     const remove = () => {
-      for (const p of taskPlanning.value?.processes ?? []) removeById(p.tasks, id)
+      const owner = findSubtaskOwner(id)
+      if (owner) removeById(owner.subtasks, id)
+      else for (const p of taskPlanning.value?.processes ?? []) removeById(p.tasks, id)
     }
     return runMutation({
       entity: 'task',
@@ -2076,14 +2209,11 @@ export const usePlanningStore = defineStore('planning', () => {
 
   /** Finds a task's resource (from /planning/tasks) by resource_id together with assignment_id */
   function findAssigned(taskId: number, resourceId: number) {
-    for (const p of taskPlanning.value?.processes ?? []) {
-      const t = (p.tasks ?? []).find((x: any) => x.id === taskId)
-      if (!t) continue
-      return (t.resources ?? []).find((r: any) => r.id === resourceId) as
-        | { id?: number; assignment_id?: number }
-        | undefined
-    }
-    return undefined
+    const t = findTaskRow(taskId)
+    if (!t) return undefined
+    return (t.resources ?? []).find((r: any) => r.id === resourceId) as
+      | { id?: number; assignment_id?: number }
+      | undefined
   }
 
   /**
@@ -2093,8 +2223,10 @@ export const usePlanningStore = defineStore('planning', () => {
    */
   function taskOwnerIds(taskId: number): number[] {
     const owners: number[] = []
-    const process = (taskPlanning.value?.processes ?? []).find((p: any) =>
-      (p.tasks ?? []).some((t: any) => t.id === taskId),
+    // Subtasks share their parent's process (enforced by the backend).
+    const process = (taskPlanning.value?.processes ?? []).find(
+      (p: any) =>
+        (p.tasks ?? []).some((t: any) => t.id === taskId || (t.subtasks ?? []).some((s: any) => s.id === taskId)),
     )
     if (!process) return owners
     if (process.owner_id != null) owners.push(process.owner_id)
@@ -2223,9 +2355,8 @@ export const usePlanningStore = defineStore('planning', () => {
       )
     } catch (e: any) {
       const err = e as AxiosError
-      if (err?.config && isElectron && isNetworkError(e)) {
+      if (err?.config && isNetworkError(e)) {
         // Offline: the local reorder is already applied; the PUTs go to the queue.
-        // (the queue — only in the desktop build)
         const base = axios.getUri(err.config).replace(/\d+$/, '')
         for (const c of changes) {
           try {
@@ -2280,7 +2411,7 @@ export const usePlanningStore = defineStore('planning', () => {
       await new ProcessesApi(apiConfig()).processOrderPut({ project_id: projectId, ids })
     } catch (e: any) {
       const err = e as AxiosError
-      if (err?.config && isElectron && isNetworkError(e)) {
+      if (err?.config && isNetworkError(e)) {
         try {
           await enqueueMutation({
             entity: 'reorder',
@@ -2322,7 +2453,7 @@ export const usePlanningStore = defineStore('planning', () => {
       await new TasksApi(apiConfig()).taskOrderPut({ process_id: processId, ids })
     } catch (e: any) {
       const err = e as AxiosError
-      if (err?.config && isElectron && isNetworkError(e)) {
+      if (err?.config && isNetworkError(e)) {
         try {
           await enqueueMutation({
             entity: 'reorder',
@@ -2437,6 +2568,9 @@ export const usePlanningStore = defineStore('planning', () => {
     createProject,
     createProcess,
     createTask,
+    createSubtask,
+    updateSubtask,
+    deleteSubtask,
     createMilestone,
     deleteProject,
     deleteProcess,
@@ -2578,12 +2712,11 @@ export const useRbacStore = defineStore('rbac', () => {
   }
 
   /**
-   * Loads my permissions — desktop LOCAL-FIRST (read the cached copy, never
-   * issue a GET from the render/guard path). The web build reads straight from
-   * the server (refreshPermissions) as before the offline-first refactor.
+   * Loads my permissions — LOCAL-FIRST (read the cached copy, never issue a GET
+   * from the render/guard path). The background PULL cycle owns the network
+   * refresh (refreshPermissions).
    */
   async function loadMyPermissions(): Promise<boolean> {
-    if (!isElectron) return refreshPermissions()
     if (permsLoaded.value) return true
     try {
       const cached = localStorage.getItem(PERMS_KEY)
@@ -2732,6 +2865,10 @@ export const useRbacStore = defineStore('rbac', () => {
   async function loadUserPermissions(id: number): Promise<boolean> {
     userPermissionsLoading.value = true
     userPermissionsError.value = null
+    // Reset the snapshot while loading: the editor must never render the
+    // permissions of the previously opened user (e.g. the admin stub shown
+    // for a non-admin right after opening the admin).
+    userPermissions.value = null
     try {
       const resp = await new RBACApi(apiConfig()).rbacUsersIdPermissionsGet(id)
       userPermissions.value = resp.data?.data ?? null

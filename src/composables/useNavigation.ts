@@ -1,6 +1,7 @@
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAuthStore, useRbacStore } from '../store'
+import { applyCategoryOrder, applyItemOrder } from './useNavigationOrder'
 
 export interface NavItem {
   label: string
@@ -69,10 +70,20 @@ export const NAV_CATEGORIES: NavCategory[] = [
     items: [
       { label: 'Пользователи', to: '/users', name: 'users', perm: ['user_admin', 'view'] },
       { label: 'Структура компании', to: '/structure', name: 'structure', perm: ['org_structure', 'view'] },
-      { label: 'Автосоздание проектов', to: '/auto-create', name: 'auto-create', perm: ['rbac_config', 'view'] },
+      { label: 'Триггер создания проекта', to: '/auto-create', name: 'auto-create', perm: ['rbac_config', 'view'] },
       { label: 'Статусы', to: '/statuses', name: 'statuses', perm: ['state_admin', 'view'] },
       { label: 'Права', to: '/permissions', name: 'permissions', perm: ['rbac_config', 'view'] },
       { label: 'Журнал действий', to: '/audit', name: 'audit', perm: ['audit', 'view'] },
+    ],
+  },
+  {
+    label: 'Система',
+    roles: null,
+    items: [
+      { label: 'Пульт', to: '/system/console', name: 'system-console' },
+      { label: 'Очередь изменений', to: '/system/queue', name: 'system-queue' },
+      { label: 'Статус', to: '/system/status', name: 'system-status' },
+      { label: 'Настройки', to: '/system/settings', name: 'system-settings' },
     ],
   },
 ]
@@ -88,19 +99,25 @@ export function useNavigation() {
   /** Permissions arrived (or were cached) — the permission filter is authoritative */
   const permsReady = computed(() => rbac.permsLoaded || rbac.myPermissions.length > 0)
 
-  /** Permission-filtered categories: items hidden without the right, emptied categories dropped */
+  /** Permission-filtered categories: items hidden without the right, emptied categories dropped.
+   *  After RBAC filtering the categories/items are reordered to the user's saved arrangement. */
   const visibleCategories = computed(() =>
-    NAV_CATEGORIES.filter((c) => !c.roles || permsReady.value || c.roles.includes(role.value))
-      .map((c) => ({
-        ...c,
-        items: c.items.filter((i) => {
-          if (permsReady.value) {
-            return i.perm ? rbac.can(i.perm[0], i.perm[1]) : true
-          }
-          return !i.roles || i.roles.includes(role.value)
-        }),
-      }))
-      .filter((c) => c.items.length > 0),
+    applyCategoryOrder(
+      NAV_CATEGORIES.filter((c) => !c.roles || permsReady.value || c.roles.includes(role.value))
+        .map((c) => ({
+          ...c,
+          items: applyItemOrder(
+            c.label,
+            c.items.filter((i) => {
+              if (permsReady.value) {
+                return i.perm ? rbac.can(i.perm[0], i.perm[1]) : true
+              }
+              return !i.roles || i.roles.includes(role.value)
+            }),
+          ),
+        }))
+        .filter((c) => c.items.length > 0),
+    ),
   )
 
   /** Category that owns the current route (for highlighting) */

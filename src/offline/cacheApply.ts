@@ -146,6 +146,8 @@ const makeTask = (b: any, tempId?: number) => ({
   id: tempId ?? -1,
   title: b?.title,
   process_id: b?.process_id,
+  parent_id: b?.parent_id,
+  status: b?.status ?? 'not_started',
   start_date: b?.start_date,
   end_date: b?.end_date,
   resources: [],
@@ -240,6 +242,19 @@ async function applyPlanningProcesses(entry: OutboxEntry): Promise<void> {
   })
 }
 
+/** Finds a task (top-level or subtask) among the cached processes. */
+function findTaskInProcesses(processes: any[], taskId: number): any {
+  for (const pr of processes) {
+    const t = (pr.tasks ?? []).find((x: any) => x.id === taskId)
+    if (t) return t
+    const s = (pr.tasks ?? [])
+      .flatMap((x: any) => x.subtasks ?? [])
+      .find((x: any) => x.id === taskId)
+    if (s) return s
+  }
+  return undefined
+}
+
 /** Aggregate /planning/tasks: tasks/milestones/assignments inside processes */
 async function applyPlanningTasks(
   entry: OutboxEntry,
@@ -260,17 +275,31 @@ async function applyPlanningTasks(
 
     if (kind === 'task') {
       if (method === 'POST') {
+        // Subtask (operation): created inside the parent's subtask list.
+        const parentId = body?.parent_id
         const pid = body?.process_id
-        const pr = processes.find((p) => p.id === pid)
-        if (!pr) return
-        pr.tasks = pr.tasks ?? []
         const item = {
           id: entry.tempId ?? -1,
           title: body?.title,
+          color: body?.color,
+          status: body?.status ?? 'not_started',
+          parent_id: parentId,
+          process_id: pid,
           start_date: body?.start_date,
           end_date: body?.end_date,
           resources: [],
+          subtasks: [],
         }
+        if (parentId != null) {
+          const parent = findTaskInProcesses(processes, parentId)
+          if (!parent) return
+          parent.subtasks = parent.subtasks ?? []
+          if (!parent.subtasks.some((x: any) => x.id === item.id)) parent.subtasks.push(item)
+          return
+        }
+        const pr = processes.find((p) => p.id === pid)
+        if (!pr) return
+        pr.tasks = pr.tasks ?? []
         if (!pr.tasks.some((x: any) => x.id === item.id)) pr.tasks.push(item)
       } else if (method === 'PUT') {
         if (id == null) return
@@ -280,6 +309,14 @@ async function applyPlanningTasks(
             pr.tasks[i] = { ...pr.tasks[i], ...(body ?? {}) }
             return
           }
+          const t = (pr.tasks ?? []).find((x: any) => (x.subtasks ?? []).some((s: any) => s.id === id))
+          if (t) {
+            const si = (t.subtasks ?? []).findIndex((s: any) => s.id === id)
+            if (si >= 0) {
+              t.subtasks[si] = { ...t.subtasks[si], ...(body ?? {}) }
+              return
+            }
+          }
         }
       } else if (method === 'DELETE') {
         if (id == null) return
@@ -287,6 +324,12 @@ async function applyPlanningTasks(
           const i = (pr.tasks ?? []).findIndex((x: any) => x.id === id)
           if (i >= 0) {
             pr.tasks.splice(i, 1)
+            return
+          }
+          const t = (pr.tasks ?? []).find((x: any) => (x.subtasks ?? []).some((s: any) => s.id === id))
+          if (t) {
+            const si = (t.subtasks ?? []).findIndex((s: any) => s.id === id)
+            if (si >= 0) t.subtasks.splice(si, 1)
             return
           }
         }

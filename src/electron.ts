@@ -2,12 +2,10 @@
  * Electron integration for the frontend.
  *
  * In the desktop wrapper (services/desktop) the renderer gets the
- * `window.erpDesktop` bridge via preload. This is the single place that
- * detects the environment and safely stores the password:
- *  - Electron: the main process stores the password via safeStorage (OS-level
- *    encryption, file in userData); the renderer has no access to the raw value.
- *  - Browser: safeStorage is unavailable, so the password is not stored at all
- *    (as before) — the methods return null/false.
+ * `window.erpDesktop` bridge via preload. This module detects the environment
+ * and exposes the desktop app version. The safeStorage password API (autosync)
+ * was removed: session renewal now uses the unified refresh token stored in
+ * IndexedDB (see offline/session.ts) in every environment.
  */
 
 export const isElectron = Boolean(
@@ -21,50 +19,5 @@ export async function desktopAppVersion(): Promise<{ version: string; electron: 
     return await window.erpDesktop.appVersion()
   } catch {
     return null
-  }
-}
-
-/**
- * Get the stored autosync password.
- * Electron only (safeStorage); always null in the browser.
- */
-export async function getDesktopPassword(): Promise<string | null> {
-  if (!isElectron || !window.erpDesktop) return null
-  try {
-    return await window.erpDesktop.password.get()
-  } catch {
-    return null
-  }
-}
-
-/**
- * Whether the autosync password is stored (for the "credentials saved" UI status).
- * Always false in the browser.
- */
-export async function hasDesktopPassword(): Promise<boolean> {
-  const p = await getDesktopPassword()
-  return Boolean(p && p.length > 0)
-}
-
-/**
- * Save/delete the autosync password.
- * In Electron — via safeStorage; in the browser always false (not supported).
- */
-export async function setDesktopPassword(value: string): Promise<boolean> {
-  if (!isElectron || !window.erpDesktop) return false
-  try {
-    return await window.erpDesktop.password.set(value)
-  } catch {
-    return false
-  }
-}
-
-/** Delete the stored autosync password. */
-export async function clearDesktopPassword(): Promise<boolean> {
-  if (!isElectron || !window.erpDesktop) return false
-  try {
-    return await window.erpDesktop.password.clear()
-  } catch {
-    return false
   }
 }

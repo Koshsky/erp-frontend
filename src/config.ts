@@ -12,7 +12,8 @@
  * version the SPA and the API live on the same origin (nginx proxy /api/v1),
  * the CSP «connect-src 'self'» blocks cross-origin, and the refresh cookie
  * (HttpOnly, SameSite=Strict) does not survive an origin change, so the web
- * override is ignored and not persisted (see also ServerSettingsPage/SyncPage).
+ * override is ignored and not persisted (see also the server settings screen
+ * and SystemSettingsPage).
  */
 
 import { isElectron } from './electron'

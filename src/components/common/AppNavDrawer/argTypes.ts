@@ -33,11 +33,6 @@ export const appNavDrawerArgTypes: ArgTypes<AppNavDrawerProps> = {
       category: 'Content',
     },
   },
-  sync: {
-    name: 'Синхронизация',
-    description: 'Статус синхронизации (desktop); без него секция «Система» скрыта',
-    table: { type: { summary: 'DrawerSyncStats | undefined' }, category: 'Content' },
-  },
 }
 
 export default appNavDrawerArgTypes

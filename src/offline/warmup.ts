@@ -2,9 +2,9 @@ import { ref } from 'vue'
 import { AssignmentsApi } from '@/api'
 import { apiConfig, useAppStore, useAuthStore, usePlanningStore, useRbacStore, useTimesheetStore } from '@/store'
 import { isOffline } from './state'
-import { isElectron } from '@/electron'
 import { cacheGetFresh } from './cache'
 import { apiPath } from './hydrate'
+import { warmupEnabled } from '@/settings'
 
 /**
  * Background PULL: refreshes the offline data cache from the backend.
@@ -109,7 +109,33 @@ export function buildPullSteps(): PullStep[] {
       : []),
     { name: 'projects', path: apiPath('/projects'), refresh: () => app.refreshProjects() },
     { name: 'resources', path: apiPath('/resources'), refresh: () => app.refreshResources() },
+    // Resource members (/resources/{id}/members): consumed by the "Employees"
+    // resource badges and the "Resources" expandable rows. They are read
+    // local-first (cache hydrate); without a PULL step the cache stays empty
+    // and every badge disappears. Fetched only on full warmup — one request
+    // per resource (heavy when many).
+    {
+      name: 'members',
+      path: apiPath('/resources'),
+      keyPredicate: (key) => /\/resources\/\d+\/members/.test(key),
+      refresh: async () => {
+        if (!app.resources.length) await app.refreshResources()
+        for (const r of app.resources) {
+          if (r.id != null) await app.refreshResourceMembers(r.id)
+        }
+      },
+      cycle: false,
+    },
     { name: 'users', path: apiPath('/user/all'), refresh: () => app.refreshUsers() },
+    // Task "assignee" candidate pool (own employees): the SPA editor reads it
+    // from the cache under /user?limit=500 — without this pull the select is
+    // always empty (local-first rendering never issues its own GETs).
+    {
+      name: 'myStaff',
+      path: apiPath('/user'),
+      keyPredicate: (key) => /\blimit=500\b/.test(key),
+      refresh: () => app.refreshMyStaff(),
+    },
     {
       name: 'project-plan',
       path: apiPath('/planning/projects'),
@@ -158,7 +184,8 @@ export function buildPullSteps(): PullStep[] {
   }
   // Availability calendar (540 days) — the heaviest, warmed last
   steps.push({ name: 'calendar', path: apiPath('/timesheet/calendar'), refresh: () => app.refreshCalendar() })
-  return steps
+  // Skip domains the user turned off on the "Какие данные прогревать" screen.
+  return steps.filter((s) => warmupEnabled[s.name] !== false)
 }
 
 /** Whether the cached copy of `step` is still fresh (younger than its TTL). */
@@ -205,10 +232,9 @@ async function runPull(settings: { cycle: boolean }): Promise<number> {
 
 /**
  * Full (TTL-aware) warmup — the "Warm data"/"Обновить" path. Returns true if
- * actually started.
+ * actually started. Runs in every environment.
  */
 export function warmNow(): Promise<boolean> {
-  if (!isElectron) return Promise.resolve(false)
   if (running || isOffline.value) return Promise.resolve(false)
   running = true
   return runPull({ cycle: false })
@@ -253,10 +279,8 @@ export function pullStaleCycle(): Promise<number> {
     })
 }
 
-/** Schedules full warmup when idle. Idempotent (one run at a time).
- *  Offline cache warmup — only in the desktop (Electron) build. */
+/** Schedules full warmup when idle. Idempotent (one run at a time). */
 export function scheduleWarmup(): void {
-  if (!isElectron) return
   if (running || scheduled) return
   if (isOffline.value) return
   if (!useAuthStore().isAuthenticated) return
