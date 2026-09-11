@@ -16,12 +16,18 @@ const rbac = useRbacStore()
 const { adminUsers, adminUsersError, users } = storeToRefs(app)
 
 /**
- * Назначение пресета и индивидуальные права — admin-only бизнес-правила
- * (сервис + гейт rbac.manage): не-админ с правом user_admin не видит ни
- * селекта пресета, ни карточки прав, и никогда не отправляет их в Payload —
- * иначе бэкенд отклонит сохранение.
+ * Assigning a preset and per-user permissions is an admin-only business rule
+ * (service + the rbac.manage gate): a non-admin holder of user_admin must
+ * neither see the preset selector / permissions card nor send them in the
+ * payload — the backend would reject the save. The gate mirrors rbac.manage
+ * (the rbac_config virtual resource), which only admin holds via the bypass.
+ * The preset is only a cold-start fallback before /permissions/me arrives — on
+ * a page reload the empty matrix must not hide the editor from admin.
  */
-const isAdmin = computed(() => auth.user?.preset === 'admin')
+const permsReady = computed(() => rbac.permsLoaded || rbac.myPermissions.length > 0)
+const canManageUserRights = computed(() =>
+  permsReady.value ? rbac.can('rbac_config', 'view') : auth.user?.preset === 'admin',
+)
 
 /**
  * Одна страница для создания (users/new) и редактирования (users/:id/edit):
@@ -239,7 +245,7 @@ async function onSubmit() {
         position: form.position.trim(),
       }
       // Смена пресета — admin-only (сервис); не-админ не отправляет пресет вовсе
-      if (isAdmin.value) patch.preset = form.preset
+      if (canManageUserRights.value) patch.preset = form.preset
       if (form.hireDate) patch.hire_date = form.hireDate
       if (form.terminationDate) patch.termination_date = form.terminationDate
       const ok = await app.updateUser(id, patch)
@@ -247,7 +253,7 @@ async function onSubmit() {
       if (ok && nextManager !== savedManagerId.value) await app.updateManager(id, nextManager)
       // Индивидуальные права сохраняются отдельно (admin-only редактор)
       let permsOk = true
-      if (ok && isAdmin.value && permissionDirty.value) permsOk = await savePermissions()
+      if (ok && canManageUserRights.value && permissionDirty.value) permsOk = await savePermissions()
       if (ok && permsOk) {
         void router.push('/users')
       } else {
@@ -259,12 +265,12 @@ async function onSubmit() {
       ...common,
       middle_name: form.middleName.trim() || undefined,
       // Не-админ с user_admin.create может создавать только workers.
-      preset: isAdmin.value ? form.preset : 'worker',
+      preset: canManageUserRights.value ? form.preset : 'worker',
       position: form.position.trim(),
     }
     // Переопределения черновика создаются вместе с пользователем (admin-only,
     // бэкенд валидирует как /rbac/users/{id}/permissions).
-    if (isAdmin.value && permissionOverrides.value.length) {
+    if (canManageUserRights.value && permissionOverrides.value.length) {
       payload.permissions = permissionOverrides.value.map((o) => ({
         resource: o.resource,
         action: o.action,
@@ -380,7 +386,7 @@ async function onSubmit() {
            бэкенде). Общая страница для создания и редактирования: draft-режим
            строится из выбранного пресета и отдаёт переопределения в payload. -->
       <main class="ufp-main">
-        <div v-if="isAdmin" class="ufp-perms">
+        <div v-if="canManageUserRights" class="ufp-perms">
           <!-- Переключатель пресета живёт в шапке карточки прав (см.
                UserPermissionsEditor): смена пресета сразу перестраивает
                базис правил ниже и отправляется вместе с профилем. -->

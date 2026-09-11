@@ -8,7 +8,7 @@ import { useConfirm } from '../composables/useConfirm'
 import { useContextMenu } from '../composables/useContextMenu'
 import { useEditModal } from '../composables/useEditModal'
 import { useRoleAccess } from '../composables/useRoleAccess'
-import { useAppStore, useTimesheetStore, useAuthStore } from '../store'
+import { useAppStore, useTimesheetStore, useAuthStore, useRbacStore } from '../store'
 import { compareByName } from '../utils'
 import type { DtoResourceMemberResponse, DtoResourceResponse } from '@/api'
 
@@ -21,7 +21,19 @@ const auth = useAuthStore()
 // dp (project director) — read-only: can change only project priorities,
 // so creating/editing/deleting resources is not available to them.
 const { canCreateResource, canManageResource, canDeleteResource, role, userId } = useRoleAccess()
-const isAdmin = computed(() => role.value === 'admin')
+
+const rbac = useRbacStore()
+/** Permissions arrived (or were cached) — the matrix is authoritative; the preset is the cold-start fallback. */
+const permsReady = computed(() => rbac.permsLoaded || rbac.myPermissions.length > 0)
+/** The "Все владельцы" filter — for an unrestricted resource list (resource.view scope all). */
+const seesAllResources = computed(() =>
+  permsReady.value ? rbac.perm('resource', 'view') === 'all' : role.value === 'admin',
+)
+/** Picking the resource owner — the create/update right with scope all. */
+function canSetOwner(mode: 'create' | 'edit'): boolean {
+  if (permsReady.value) return rbac.perm('resource', mode === 'create' ? 'create' : 'update') === 'all'
+  return role.value === 'admin'
+}
 
 /** Resource owner label: admin — name, vp — "Me" */
 function ownerLabel(ownerId?: number | null): string {
@@ -83,8 +95,8 @@ const { open: openModal, close: closeModal, submit: submitModal, bind: modalBind
         value: state.type === 'create' ? '' : (state.color ?? ''),
       },
     ]
-    // The owner is chosen by admin only (owner_id is required); vp creates resources in their own ownership
-    if (isAdmin.value) {
+    // The owner is chosen with the all scope only (owner_id); vp creates resources in their own ownership
+    if (canSetOwner(state.type)) {
       fields.push({
         key: 'ownerId',
         label: 'Владелец',
@@ -102,7 +114,7 @@ const { open: openModal, close: closeModal, submit: submitModal, bind: modalBind
     }
     // '' means "no custom color" → the backend stores NULL (standard color)
     payload.color = String(values.color ?? '')
-    if (isAdmin.value && values.ownerId != null) {
+    if (canSetOwner(state.type) && values.ownerId != null) {
       payload.owner_id = Number(values.ownerId)
     }
     const ok =
@@ -191,7 +203,10 @@ async function onRemoveMember(resourceId: number, userId: number) {
 
 onMounted(() => {
   if (!resources.value.length) store.loadResources()
-  if (isAdmin.value && !users.value.length) store.loadUsers()
+  // The user catalog feeds the owner select/filter options — load it only when
+  // those controls can appear (a scope-all resource right or the owner filter).
+  const needsCatalog = seesAllResources.value || canSetOwner('create') || canSetOwner('edit')
+  if (!users.value.length && needsCatalog) store.loadUsers()
   if (!employees.value.length) void ts.loadEmployees()
 })
 
@@ -206,7 +221,7 @@ function onLoadMore() {
     <div class="rp-head">
       <h2 class="rp-title">Ресурсы</h2>
       <div class="rp-actions">
-        <select v-if="isAdmin" v-model="ownerFilter" class="rp-filter">
+        <select v-if="seesAllResources" v-model="ownerFilter" class="rp-filter">
           <option value="">Все владельцы</option>
           <option v-for="u in users.filter((u) => u.preset !== 'worker').sort(compareByName)" :key="u.id" :value="u.id">{{ u.name ?? `#${u.id}` }}</option>
         </select>

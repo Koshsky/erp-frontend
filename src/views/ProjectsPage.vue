@@ -16,7 +16,7 @@ import { usePlanningOrigin } from '../composables/usePlanningOrigin'
 import { useUnitMenu } from '../composables/useUnitMenu'
 import { useRoleAccess } from '../composables/useRoleAccess'
 import { useFindPlanningItem } from '../composables/useFindPlanningItem'
-import { usePlanningStore, useAppStore } from '../store'
+import { usePlanningStore, useAppStore, useRbacStore } from '../store'
 import { addMonthsISO, fmtDate } from '../components/planner/calendar'
 import { CELL_WIDTH } from '../components/planner/layout'
 
@@ -58,6 +58,14 @@ const { open: openUnitMenu, close: closeUnitMenu, select: selectUnit, bind: unit
 // dp (project director): views and edits all projects, cannot delete
 // rp (project manager): creates projects (becomes the owner), edits and deletes their own
 const { role, userId, canCreateProject, canReorderProjects, canManageProject, canDeleteProject } = useRoleAccess()
+
+const rbac = useRbacStore()
+/** The owner field needs the matrix loaded; the preset is only a cold-start fallback. */
+const permsReady = computed(() => rbac.permsLoaded || rbac.myPermissions.length > 0)
+/** Changing the project owner — project.update with an unrestricted (all) scope. */
+const canChangeProjectOwner = computed(() =>
+  permsReady.value ? rbac.perm('project', 'update') === 'all' : role.value === 'admin',
+)
 
 const { findProject } = useFindPlanningItem()
 
@@ -127,8 +135,9 @@ const { open: openEdit, close: closeEdit, submit: submitEdit, bind: editBind } =
       { key: 'code', label: 'Код проекта', type: 'text', value: state.code, required: true },
       { key: 'color', label: 'Цвет', type: 'color', value: state.color ?? '' },
     ]
-    // The project owner cannot be changed: the field is hidden for rp, admin sees it
-    if (role.value === 'admin') {
+    // The project owner cannot be changed: the field is hidden unless the
+    // matrix grants project.update with scope all
+    if (canChangeProjectOwner.value) {
       fields.push({
         key: 'owner_id',
         label: 'Владелец',
@@ -143,8 +152,8 @@ const { open: openEdit, close: closeEdit, submit: submitEdit, bind: editBind } =
     const patch: { code: string; owner_id?: number; color?: string } = { code: String(values.code ?? '') }
     // '' means "no custom color" → the backend stores NULL (standard color)
     patch.color = String(values.color ?? '')
-    // The project owner cannot be changed: owner_id is sent only for admin
-    if (role.value === 'admin' && values.owner_id !== '' && values.owner_id != null) {
+    // The project owner cannot be changed: owner_id is sent only with the all scope
+    if (canChangeProjectOwner.value && values.owner_id !== '' && values.owner_id != null) {
       patch.owner_id = Number(values.owner_id)
     }
     const ok = await store.updateProjectMeta(state.id, patch)

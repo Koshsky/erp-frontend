@@ -24,7 +24,7 @@ import { usePlanningOrigin } from '../composables/usePlanningOrigin'
 import { useUnitMenu } from '../composables/useUnitMenu'
 import { useRoleAccess } from '../composables/useRoleAccess'
 import { useFindPlanningItem } from '../composables/useFindPlanningItem'
-import { usePlanningStore, useAppStore } from '../store'
+import { usePlanningStore, useAppStore, useRbacStore } from '../store'
 import { compareByName } from '../utils'
 import { addDaysISO, shiftSpanDates, clampDateToBounds } from '../components/planner/calendar'
 import { CELL_WIDTH } from '../components/planner/layout'
@@ -100,6 +100,14 @@ const {
   role,
   userId,
 } = useRoleAccess()
+
+const rbac = useRbacStore()
+/** Permissions arrived (or were cached) — the matrix is authoritative; presets are only the cold-start fallback. */
+const permsReady = computed(() => rbac.permsLoaded || rbac.myPermissions.length > 0)
+/** Unrestricted resource visibility (resource.view scope all) — e.g. admin sees every resource. */
+const seesAllResources = computed(() =>
+  permsReady.value ? rbac.perm('resource', 'view') === 'all' : role.value === 'admin',
+)
 
 /** Drag/resize/reorder/assign are enabled when the user can manage at least one visible process */
 const anyManageableTask = computed(() =>
@@ -387,7 +395,7 @@ const assignedResources = computed<AssignedResource[]>(() => {
 const resourceOptions = computed(() => {
   const opts = resources.value.filter((r) => r.id != null)
   const owners = planning.taskOwnerIds(resourcesModalTaskId.value ?? 0)
-  const allowed = role.value === 'admin' || owners.length === 0 ? null : new Set(owners)
+  const allowed = seesAllResources.value || owners.length === 0 ? null : new Set(owners)
   return opts
     .filter((r) => allowed == null || (r.owner_id != null && allowed.has(r.owner_id)))
     .map((r) => ({ id: r.id as number, title: r.title, code: r.code }))
@@ -491,8 +499,11 @@ const processesByPriority = computed(() => {
     if (p.id != null) prio.set(p.id, p.priority ?? Number.MAX_SAFE_INTEGER)
   }
   let list = taskPlanning.value?.processes ?? []
-  // vp: show only processes in projects where vp owns at least one process
-  if (role.value === 'vp' && userId.value != null) {
+  // vp-like scope (task.view = parent): show only processes in projects where
+  // the user owns at least one process. The matrix is authoritative once loaded;
+  // the preset is only a cold-start fallback (rp keeps the ancestor view — the
+  // backend already scopes that list).
+  if ((permsReady.value ? rbac.perm('task', 'view') === 'parent' : role.value === 'vp') && userId.value != null) {
     const myProjects = new Set(
       list.filter((p: any) => p.owner_id === userId.value).map((p: any) => p.project_id),
     )

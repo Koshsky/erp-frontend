@@ -20,14 +20,17 @@ const unit = ref<PlanningUnit>('day')
 const origin = ref(toDate(new Date()))
 
 const rbac = useRbacStore()
+/** Permissions arrived (or were cached) — the matrix is authoritative; the preset is the cold-start fallback. */
+const permsReady = computed(() => rbac.permsLoaded || rbac.myPermissions.length > 0)
 /** "All employees" — when worker visibility is not restricted (scope all). */
-const seesAllEmployees = computed(() => rbac.perm('worker', 'view') === 'all')
+const seesAllEmployees = computed(() =>
+  permsReady.value ? rbac.perm('worker', 'view') === 'all' : role.value === 'admin',
+)
 
 const app = useAppStore()
 const { users, resources } = storeToRefs(app)
 
 const { role, canAssignEmployeeDays, canClearEmployeeDays } = useRoleAccess()
-const isAdmin = computed(() => role.value === 'admin')
 
 /** Resolve an employee row by id (for per-row permission predicates) */
 function employeeById(id: number) {
@@ -54,7 +57,7 @@ onMounted(async () => {
   await ts.loadStates()
   await ts.loadEmployees()
   // The filter options need the user/resource catalogs (cached in the app store)
-  if (isAdmin.value && !users.value.length) await app.loadUsers()
+  if (seesAllEmployees.value && !users.value.length) await app.loadUsers()
   await app.ensureResourceMembers(false)
 })
 
@@ -105,7 +108,7 @@ async function onLoadMoreEmployees() {
 
     <div class="tp-filters">
       <input v-model="search" type="search" class="tp-search" placeholder="Поиск по ФИО или должности" />
-      <select v-if="isAdmin" v-model="managerFilter" class="tp-filter">
+      <select v-if="seesAllEmployees" v-model="managerFilter" class="tp-filter">
         <option value="">Все руководители</option>
         <option value="none">Без руководителя</option>
         <option v-for="u in managerFilterOptions" :key="u.id" :value="u.id">{{ u.name ?? `#${u.id}` }}</option>
