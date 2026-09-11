@@ -558,10 +558,17 @@ export const useAppStore = defineStore('app', () => {
   }
 
   async function refreshProjects(): Promise<void> {
-    // Only admin/dp/rp can see projects (per the RBAC matrix). For other presets the
-    // listing is forbidden by the backend (403) — we do not send the request at all.
-    const preset = useAuthStore().user?.preset
-    if (preset && preset !== 'admin' && preset !== 'dp' && preset !== 'rp') {
+    // Only users with project.view (backend-enforced) may list projects; for
+    // the others the listing is forbidden (403) — we do not send the request
+    // at all. The RBAC matrix is authoritative once loaded; the preset is only
+    // a cold-start fallback (mirrors useNavigation / warmup).
+    const auth = useAuthStore()
+    const rbac = useRbacStore()
+    const permsReady = rbac.permsLoaded || rbac.myPermissions.length > 0
+    const allowed = permsReady
+      ? rbac.can('project', 'view')
+      : !auth.user?.preset || ['admin', 'dp', 'rp'].includes(auth.user.preset)
+    if (!allowed) {
       projects.value = []
       return
     }

@@ -77,7 +77,12 @@ function pause(): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, PAUSE_MS))
 }
 
-/** PULL steps per user preset (heavy requests at the end of the queue) */
+/**
+ * PULL steps per the user's RBAC matrix (heavy requests at the end of the
+ * queue). Preset strings are only a cold-start fallback before /permissions/me
+ * arrives — a custom preset or a server-side matrix grant must not silently
+ * starve the user of data (mirrors useNavigation's permsReady logic).
+ */
 export function buildPullSteps(): PullStep[] {
   const auth = useAuthStore()
   const app = useAppStore()
@@ -86,11 +91,21 @@ export function buildPullSteps(): PullStep[] {
   const rbac = useRbacStore()
 
   const preset = auth.user?.preset ?? ''
-  const isStaff = preset === 'vp' || preset === 'admin'
   const userId = auth.user?.id
 
-  // worker does not read data (profile only) — nothing to warm
-  if (preset === 'worker') return []
+  // The matrix is authoritative once loaded; the preset is only a fallback.
+  const permsReady = rbac.permsLoaded || rbac.myPermissions.length > 0
+  const canView = (resource: string, roles: string[]): boolean =>
+    permsReady ? rbac.can(resource, 'view') : roles.includes(preset)
+
+  // Which data domains the user actually reads, per the matrix:
+  const timesheet = canView('worker', ['vp', 'admin']) // states / employees / periods
+  const resourceList = canView('resource', ['vp', 'admin']) || canView('task', ['dp', 'rp', 'admin', 'vp'])
+  const planningData =
+    canView('task', ['dp', 'rp', 'admin', 'vp']) ||
+    canView('process', ['dp', 'rp', 'admin']) ||
+    canView('project', ['dp', 'rp', 'admin'])
+  const projects = canView('project', ['dp', 'rp', 'admin'])
 
   const steps: PullStep[] = [
     {
@@ -107,14 +122,22 @@ export function buildPullSteps(): PullStep[] {
           },
         ]
       : []),
-    { name: 'projects', path: apiPath('/project'), refresh: () => app.refreshProjects() },
-    { name: 'resources', path: apiPath('/resources'), refresh: () => app.refreshResources() },
+  ]
+  if (projects) {
+    // Keep this path identical to the generated client endpoint (projectGet →
+    // `/project`, singular); the cache key must match store hydration
+    // (loadProjects) so offline reads and the PULL freshness gate find the
+    // same keys. Re-check both after regenerating src/api.
+    steps.push({ name: 'projects', path: apiPath('/project'), refresh: () => app.refreshProjects() })
+  }
+  if (resourceList) {
+    steps.push({ name: 'resources', path: apiPath('/resources'), refresh: () => app.refreshResources() })
     // Resource members (/resources/{id}/members): consumed by the "Employees"
     // resource badges and the "Resources" expandable rows. They are read
     // local-first (cache hydrate); without a PULL step the cache stays empty
     // and every badge disappears. Fetched only on full warmup — one request
     // per resource (heavy when many).
-    {
+    steps.push({
       name: 'members',
       path: apiPath('/resources'),
       keyPredicate: (key) => /\/resources\/\d+\/members/.test(key),
@@ -125,40 +148,42 @@ export function buildPullSteps(): PullStep[] {
         }
       },
       cycle: false,
-    },
-    { name: 'users', path: apiPath('/user/all'), refresh: () => app.refreshUsers() },
+    })
+    steps.push({ name: 'users', path: apiPath('/user/all'), refresh: () => app.refreshUsers() })
+    // Assignments reference (fallback in removeResource)
+    steps.push({
+      name: 'assignments',
+      path: apiPath('/assignment'),
+      refresh: () => new AssignmentsApi(apiConfig()).assignmentGet(500, undefined, 0),
+    })
+  }
+  if (planningData) {
     // Task "assignee" candidate pool (own employees): the SPA editor reads it
     // from the cache under /user?limit=500 — without this pull the select is
     // always empty (local-first rendering never issues its own GETs).
-    {
+    steps.push({
       name: 'myStaff',
       path: apiPath('/user'),
       keyPredicate: (key) => /\blimit=500\b/.test(key),
       refresh: () => app.refreshMyStaff(),
-    },
-    {
+    })
+    steps.push({
       name: 'project-plan',
       path: apiPath('/planning/projects'),
       refresh: () => planning.refreshProjectPlanning(true),
-    },
-    {
+    })
+    steps.push({
       name: 'process-plan',
       path: apiPath('/planning/processes'),
       refresh: () => planning.refreshProcessPlanning(true),
-    },
-    {
+    })
+    steps.push({
       name: 'task-plan',
       path: apiPath('/planning/tasks'),
       refresh: () => planning.refreshTaskPlanning(true),
-    },
-    // Assignments reference (fallback in removeResource)
-    {
-      name: 'assignments',
-      path: apiPath('/assignment'),
-      refresh: () => new AssignmentsApi(apiConfig()).assignmentGet(500, undefined, 0),
-    },
-  ]
-  if (isStaff) {
+    })
+  }
+  if (timesheet) {
     steps.push({
       name: 'states',
       path: apiPath('/timesheet/states'),
@@ -182,8 +207,10 @@ export function buildPullSteps(): PullStep[] {
       cycle: false,
     })
   }
-  // Availability calendar (540 days) — the heaviest, warmed last
-  steps.push({ name: 'calendar', path: apiPath('/timesheet/calendar'), refresh: () => app.refreshCalendar() })
+  if (planningData || timesheet) {
+    // Availability calendar (540 days) — the heaviest, warmed last
+    steps.push({ name: 'calendar', path: apiPath('/timesheet/calendar'), refresh: () => app.refreshCalendar() })
+  }
   // Skip domains the user turned off on the "Какие данные прогревать" screen.
   return steps.filter((s) => warmupEnabled[s.name] !== false)
 }

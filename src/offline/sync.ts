@@ -1,5 +1,5 @@
 import { ref, watch } from 'vue'
-import { useAppStore, useAuthStore, usePlanningStore, useTimesheetStore } from '@/store'
+import { useAppStore, useAuthStore, usePlanningStore, useTimesheetStore, useRbacStore } from '@/store'
 import { shouldAutoSync } from '@/settings'
 import { isLoggedOut } from '@/loggedOut'
 import { warmNow } from './warmup'
@@ -79,19 +79,26 @@ function reloadersFor(entity: MutationEntity): Reloader[] {
   const planning = usePlanningStore()
   const ts = useTimesheetStore()
   const auth = useAuthStore()
-  const isStaff = auth.user?.preset === 'vp' || auth.user?.preset === 'admin'
+  const rbac = useRbacStore()
+  // Roster-family reloads (employees/states/periods) apply when the user can
+  // see the roster. The RBAC matrix is authoritative; the preset is only a
+  // cold-start fallback (mirrors useNavigation and warmup).
+  const permsReady = rbac.permsLoaded || rbac.myPermissions.length > 0
+  const seesRoster = permsReady
+    ? rbac.can('worker', 'view')
+    : auth.user?.preset === 'vp' || auth.user?.preset === 'admin'
 
   switch (entity) {
     case 'resource':
       return [reload('resources', () => app.refreshResources()), reload('calendar', () => app.refreshCalendar())]
     case 'user':
-      return isStaff ? [reload('employees', () => ts.refreshEmployees())] : []
+      return seesRoster ? [reload('employees', () => ts.refreshEmployees())] : []
     case 'member':
-      return isStaff ? [reload('resources', () => app.refreshResources())] : []
+      return seesRoster ? [reload('resources', () => app.refreshResources())] : []
     case 'state':
-      return isStaff ? [reload('states', () => ts.refreshStates())] : []
+      return seesRoster ? [reload('states', () => ts.refreshStates())] : []
     case 'period':
-      return isStaff
+      return seesRoster
         ? [
             reload('employees', () => ts.refreshEmployees()),
             ...(ts.windowStart
