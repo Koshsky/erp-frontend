@@ -1010,7 +1010,7 @@ export const useAppStore = defineStore('app', () => {
     myStaffLoading.value = true
     try {
       const api = new UsersApi(apiConfig())
-      const resp = await api.userGet(500, undefined, undefined, undefined, 0)
+      const resp = await api.userGet(500, undefined, undefined, undefined, undefined, 0)
       myStaff.value = resp.data?.data?.items ?? []
     } catch {
       // Not critical: the candidate pool stays as is.
@@ -1030,7 +1030,7 @@ export const useAppStore = defineStore('app', () => {
     adminUsersError.value = null
     try {
       const api = new UsersApi(apiConfig())
-      const resp = await api.userGet(500, undefined, undefined, false, 0)
+      const resp = await api.userGet(500, undefined, undefined, false, undefined, 0)
       adminUsers.value = resp.data?.data?.items ?? []
     } catch (e: any) {
       adminUsersError.value = apiErrorMessage(e)
@@ -1356,7 +1356,7 @@ export const useTimesheetStore = defineStore('timesheet', () => {
     error.value = null
     try {
       const api = new UsersApi(apiConfig())
-      const resp = await api.userGet(PAGE_SIZE, undefined, managerId ?? undefined, undefined, 0)
+      const resp = await api.userGet(PAGE_SIZE, undefined, managerId ?? undefined, undefined, undefined, 0)
       const data = resp.data?.data
       // Sorting is added by the computed employeesWithTitles.
       employees.value = data?.items ?? []
@@ -1401,7 +1401,7 @@ export const useTimesheetStore = defineStore('timesheet', () => {
         return merged
       }
       const api = new UsersApi(apiConfig())
-      const resp = await api.userGet(PAGE_SIZE, undefined, undefined, undefined, employees.value.length)
+      const resp = await api.userGet(PAGE_SIZE, undefined, undefined, undefined, undefined, employees.value.length)
       const data = resp.data?.data
       mergeEmployees(data?.items ?? [])
       employeesTotal.value = data?.total ?? employeesTotal.value
