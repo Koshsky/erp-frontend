@@ -1,6 +1,6 @@
 import { ref } from 'vue'
 import axios, { type AxiosError, type Method } from 'axios'
-import { idbAll, idbDel, idbPut, IDMAP_STORE_NAME, type IdMapEntry } from './db'
+import { idbAll, idbCount, idbDel, idbPut, IDMAP_STORE_NAME, type IdMapEntry } from './db'
 import { applyToCache } from './cacheApply'
 import { probeBackend } from './state'
 import { getApiUrl } from '@/config'
@@ -761,10 +761,54 @@ export async function discardFailed(): Promise<void> {
  *    unsynced changes;
  *  - after each fresh successful GET write (http.ts) — so warmup/reconcile
  *    do not erase deltas with server truth.
+ *
+ * Hot-path optimizations (http.ts calls this after EVERY successful GET):
+ *  - Fast exit when the queue is empty — the common case online — so a GET
+ *    costs only one cheap IndexedDB count() instead of a full queue + cache
+ *    scan (idbAll + applyToCache per entry).
+ *  - Concurrent callers (parallel GET responses, or a GET racing startup
+ *    initOfflineSync) share a single in-flight replay instead of each
+ *    re-scanning; awaiters join the same promise, so "replay before cache
+ *    read" (hydrateFromCache) still holds even when a replay is already
+ *    running — they wait for the same completion.
  */
+let replayInFlight: Promise<void> | null = null
+
 export async function replayOutboxToCache(): Promise<void> {
-  const entries = await idbAll<OutboxEntry>(OUTBOX_STORE).catch(() => [] as OutboxEntry[])
-  for (const entry of entries) {
-    await applyToCache(entry)
-  }
+  if ((await idbCount(OUTBOX_STORE)) === 0) return
+  if (replayInFlight) return replayInFlight
+  replayInFlight = (async () => {
+    try {
+      const entries = await idbAll<OutboxEntry>(OUTBOX_STORE).catch(() => [] as OutboxEntry[])
+      for (const entry of entries) {
+        await applyToCache(entry)
+      }
+    } finally {
+      replayInFlight = null
+    }
+  })()
+  return replayInFlight
+}
+
+/**
+ * Coalesced variant for the http.ts GET hot path: a burst of parallel
+ * successful GETs schedules AT MOST ONE replay per microtask tick/event-loop
+ * turn instead of one per response. The replay itself still applies the whole
+ * queue (the last write wins on the shared cache entries), so firing it once
+ * after the burst is equivalent to firing it after each response.
+ *
+ * Callers that must observe the overlay before reading the cache
+ * (hydrateFromCache, initOfflineSync) keep using the awaited
+ * replayOutboxToCache() — this variant is only for "fire and forget after a
+ * fresh write".
+ */
+let replayScheduled = false
+
+export function scheduleReplayOutboxToCache(): void {
+  if (replayScheduled) return
+  replayScheduled = true
+  void Promise.resolve().then(async () => {
+    replayScheduled = false
+    await replayOutboxToCache()
+  })
 }
