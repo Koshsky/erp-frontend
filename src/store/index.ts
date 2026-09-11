@@ -34,6 +34,9 @@ const REFRESH_INTERVAL_MS = 30 * 1000
 /** Page size for listings (matches the backend default). */
 const PAGE_SIZE = 50
 
+/** Max employee ids per batch days request (backend contract — see GET /user/days). */
+const BATCH_IDS_MAX = 200
+
 /** Temporary (negative) id for entities created offline (unique over time) */
 function nextTempId(): number {
   return -Date.now()
@@ -1278,37 +1281,63 @@ export const useTimesheetStore = defineStore('timesheet', () => {
     await hydrateFromCache(targets)
   }
 
-  /** Network refresh (PULL): loads states (including the user's own) for [start, end] and merges them into the cache by id */
-  async function refreshPeriods(start: string, end: string): Promise<void> {
-    const api = new UsersApi(apiConfig())
-    const results = await Promise.all(
-      timesheetRows.value.map((emp) =>
-        api
-          .userIdDaysGet(emp.id ?? 0, start, end)
-          .then((r) => ({ id: emp.id, list: r.data?.data ?? [] }))
-          .catch((e: any) => {
-            setError(e)
-            return { id: emp.id, list: [] }
-          }),
-      ),
+  /** Merges a fresh [start, end] window response for one employee into the cache */
+  function mergeWindowPeriods(id: number, list: DtoUserStateResponse[], start: string, end: string): void {
+    const existing = periodsByEmployee.value[id] ?? []
+    // A fresh response for the [start, end] window is authoritative for periods overlapping it:
+    // old overlapping periods (e.g. cleared via DELETE) are removed,
+    // then new ones are merged. Periods outside the window are kept for incremental loading.
+    const kept = existing.filter(
+      (p) =>
+        !(p.start_date != null && p.end_date != null && !(p.end_date < start || p.start_date > end)),
     )
-    for (const { id, list } of results) {
-      if (id == null) continue
-      const existing = periodsByEmployee.value[id] ?? []
-      // A fresh response for the [start, end] window is authoritative for periods overlapping it:
-      // old overlapping periods (e.g. cleared via DELETE) are removed,
-      // then new ones are merged. Periods outside the window are kept for incremental loading.
-      const kept = existing.filter(
-        (p) =>
-          !(p.start_date != null && p.end_date != null && !(p.end_date < start || p.start_date > end)),
+    const byId = new Map<number, DtoUserStateResponse>()
+    for (const p of kept) if (p.id != null) byId.set(p.id, p)
+    for (const p of list) if (p.id != null) byId.set(p.id, p)
+    periodsByEmployee.value[id] = [...byId.values()].sort((a, b) =>
+      (a.start_date ?? '').localeCompare(b.start_date ?? ''),
+    )
+  }
+
+  /**
+   * Network refresh (PULL) for the whole timesheet in a single batch request.
+   * Replaces the previous per-employee N+1 fan-out: GET /user/days returns one
+   * entry per requested id (empty `days` when the worker has none).
+   * The [start, end] window stays authoritative for every employee in the batch.
+   * Ids are sent in chunks of BATCH_IDS_MAX (the backend limit ≤200); each
+   * chunk is still one request — no per-employee fan-out — and failures are
+   * reported once for the whole page.
+   */
+  async function refreshPeriodsBatch(start: string, end: string): Promise<void> {
+    const ids = timesheetRows.value
+      .map((e) => e.id)
+      .filter((id): id is number => id != null)
+    if (ids.length === 0) return
+    const api = new UsersApi(apiConfig())
+    try {
+      const chunks: number[][] = []
+      for (let i = 0; i < ids.length; i += BATCH_IDS_MAX) chunks.push(ids.slice(i, i + BATCH_IDS_MAX))
+      const responses = await Promise.all(
+        chunks.map((chunk) => api.userDaysGet(chunk.join(','), start, end)),
       )
-      const byId = new Map<number, DtoUserStateResponse>()
-      for (const p of kept) if (p.id != null) byId.set(p.id, p)
-      for (const p of list) if (p.id != null) byId.set(p.id, p)
-      periodsByEmployee.value[id] = [...byId.values()].sort((a, b) =>
-        (a.start_date ?? '').localeCompare(b.start_date ?? ''),
-      )
+      for (const resp of responses) {
+        const entries = resp.data?.data ?? []
+        for (const entry of entries) {
+          if (entry.user_id == null) continue
+          mergeWindowPeriods(entry.user_id, entry.days ?? [], start, end)
+        }
+      }
+      // Unsync guard: if the backend omitted some requested ids, their current
+      // cached data is intentionally kept untouched instead of being wiped.
+    } catch (e: any) {
+      // A chunk failure fails the whole page refresh: report it once.
+      setError(e)
     }
+  }
+
+  /** Network refresh (PULL) entry point: keeps the (start, end) signature used by warmup/sync/ensureRange */
+  async function refreshPeriods(start: string, end: string): Promise<void> {
+    await refreshPeriodsBatch(start, end)
   }
 
   /** An employee's period covering a day (binary search over the sorted periods) */
