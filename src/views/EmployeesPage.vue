@@ -170,6 +170,11 @@ onMounted(async () => {
   // Local-first: hydrate from the cache (no network from the render path).
   await app.ensureResourceMembers(false)
 })
+
+/** "Load more": appends the next page of the server-scoped roster */
+function onLoadMore() {
+  void ts.loadMoreEmployees()
+}
 </script>
 
 <template>
@@ -237,6 +242,14 @@ onMounted(async () => {
         </div>
       </template>
       <p v-else class="ep-st">{{ employees.length ? 'Ничего не найдено' : 'Нет данных о сотрудниках' }}</p>
+    </div>
+
+    <!-- Roster pagination: the backend returns PAGE_SIZE (50) rows plus a total;
+         the rest is appended on demand (dedup by id). -->
+    <div v-if="ts.employeesHasMore" class="ep-more">
+      <button type="button" class="ep-more-btn" :disabled="ts.employeesLoadingMore" @click="onLoadMore">
+        {{ ts.employeesLoadingMore ? 'Загрузка…' : `Показать ещё (${employees.length} из ${ts.employeesTotal})` }}
+      </button>
     </div>
 
     <ContextMenu v-bind="menuBind" @select="select" @close="closeMenu" />
@@ -319,6 +332,34 @@ onMounted(async () => {
   text-align: center;
 }
 .er { color: var(--ui-danger); }
+
+/* "Load more" footer: the roster is paged server-side (PAGE_SIZE per request) */
+.ep-more {
+  display: flex;
+  justify-content: center;
+  padding: 16px 0 4px;
+}
+.ep-more-btn {
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius-sm);
+  padding: 9px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  background: var(--ui-surface);
+  color: var(--ui-text-2);
+  transition: background var(--ui-duration), border-color var(--ui-duration), color var(--ui-duration);
+}
+.ep-more-btn:hover:not(:disabled) {
+  background: var(--ui-surface-2);
+  border-color: var(--ui-accent);
+  color: var(--ui-text);
+}
+.ep-more-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
 
 .table {
   background: var(--ui-surface);

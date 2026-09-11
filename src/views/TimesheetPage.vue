@@ -75,6 +75,16 @@ async function onAssign(p: AssignPayload) {
 async function onClear(p: ClearPayload) {
   await ts.clearRange(p.employeeId, p.startDate, p.endDate)
 }
+
+/**
+ * "Load more" rows: appends the next roster page and pulls the states of the
+ * new employees for the current window (the same per-employee request path the
+ * window extension uses).
+ */
+async function onLoadMoreEmployees() {
+  const ok = await ts.loadMoreEmployees()
+  if (ok) await ts.refreshPeriods(ts.windowStart, ts.windowEnd)
+}
 </script>
 
 <template>
@@ -150,6 +160,14 @@ async function onClear(p: ClearPayload) {
         </template>
       </TimelineGrid>
     </PlannerStates>
+
+    <!-- Roster pagination: the backend returns PAGE_SIZE (50) employees plus a
+         total; the rest is appended on demand, then their states are pulled. -->
+    <div v-if="ts.employeesHasMore" class="tp-more">
+      <button type="button" class="tp-more-btn" :disabled="ts.employeesLoadingMore" @click="onLoadMoreEmployees">
+        {{ ts.employeesLoadingMore ? 'Загрузка…' : `Показать ещё (${timesheetRows.length} из ${ts.employeesTotal})` }}
+      </button>
+    </div>
 
     <p v-if="error" class="tp-error">{{ error }}</p>
   </section>
@@ -238,6 +256,33 @@ async function onClear(p: ClearPayload) {
   margin: 12px 0 0;
   font-size: 13px;
   color: var(--ui-danger);
+}
+/* "Load more" rows: the roster is paged server-side (PAGE_SIZE per request) */
+.tp-more {
+  display: flex;
+  justify-content: center;
+  padding: 16px 0 4px;
+}
+.tp-more-btn {
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius-sm);
+  padding: 9px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  background: var(--ui-surface);
+  color: var(--ui-text-2);
+  transition: background var(--ui-duration), border-color var(--ui-duration), color var(--ui-duration);
+}
+.tp-more-btn:hover:not(:disabled) {
+  background: var(--ui-surface-2);
+  border-color: var(--ui-accent);
+  color: var(--ui-text);
+}
+.tp-more-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 .tp-empty {
   color: var(--ui-text-2);

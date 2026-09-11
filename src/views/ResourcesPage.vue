@@ -194,6 +194,11 @@ onMounted(() => {
   if (isAdmin.value && !users.value.length) store.loadUsers()
   if (!employees.value.length) void ts.loadEmployees()
 })
+
+/** "Load more": appends the next resources page (dedup by id) */
+function onLoadMore() {
+  void store.loadMoreResources()
+}
 </script>
 
 <template>
@@ -281,6 +286,13 @@ onMounted(() => {
       <p v-else class="rp-st">{{ resources.length ? 'Ничего не найдено' : 'Нет данных о ресурсах' }}</p>
     </div>
 
+    <!-- Resources pagination: the backend returns PAGE_SIZE (50) rows plus a total -->
+    <div v-if="store.resourcesHasMore" class="rp-more">
+      <button type="button" class="rp-more-btn" :disabled="store.resourcesLoadingMore" @click="onLoadMore">
+        {{ store.resourcesLoadingMore ? 'Загрузка…' : `Показать ещё (${resources.length} из ${store.resourcesTotal})` }}
+      </button>
+    </div>
+
     <ContextMenu v-bind="menuBind" @select="select" @close="closeMenu" />
 
     <ConfirmDialog
@@ -320,6 +332,33 @@ onMounted(() => {
   background: var(--ui-accent);
   color: var(--ui-accent-on);
   transition: background var(--ui-duration);
+}
+/* "Load more" footer: resources are paged server-side (PAGE_SIZE per request) */
+.rp-more {
+  display: flex;
+  justify-content: center;
+  padding: 16px 0 4px;
+}
+.rp-more-btn {
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius-sm);
+  padding: 9px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  background: var(--ui-surface);
+  color: var(--ui-text-2);
+  transition: background var(--ui-duration), border-color var(--ui-duration), color var(--ui-duration);
+}
+.rp-more-btn:hover:not(:disabled) {
+  background: var(--ui-surface-2);
+  border-color: var(--ui-accent);
+  color: var(--ui-text);
+}
+.rp-more-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 .rp-add:hover {
   background: color-mix(in srgb, var(--ui-accent) 88%, black);

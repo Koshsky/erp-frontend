@@ -98,6 +98,32 @@ export interface FreshEntry<T> {
 }
 
 /**
+ * All cached responses for a pathname (keys, write times and bodies), oldest
+ * first. Used to merge paginated list pages offline (each visited page is
+ * cached write-through by http.ts under its own key with its offset param).
+ * Falls back to [] on any IDB error — the caller treats it as "no cache".
+ */
+export async function cacheGetAllByPath<T>(
+  pathname: string,
+  keyPredicate?: (key: string) => boolean,
+): Promise<Array<{ key: string; ts: number; data: T }>> {
+  try {
+    const keys = await idbKeys(CACHE_STORE)
+    const out: Array<{ key: string; ts: number; data: T }> = []
+    for (const key of keys) {
+      if (pathnameOf(key) !== pathname) continue
+      if (keyPredicate && !keyPredicate(key)) continue
+      const entry = await idbGet<CachedEntry<T>>(CACHE_STORE, key)
+      if (!entry) continue
+      out.push({ key, ts: entry.ts, data: entry.data })
+    }
+    return out.sort((a, b) => a.ts - b.ts)
+  } catch {
+    return []
+  }
+}
+
+/**
  * The freshest cached response for a pathname together with its write time.
  * `ts` is exposed purely for UI/cycle freshness (e.g. "cached X ago", PULL
  * staleness gating); reading it never deletes or evicts an entry — the cache

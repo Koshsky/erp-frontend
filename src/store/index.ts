@@ -21,6 +21,7 @@ import {
 import { isLoggedOut, clearLoggedOut, setLoggedOut } from '@/loggedOut'
 import { saveRefreshToken, loadRefreshToken, clearRefreshToken } from '@/offline/session'
 import { hydrateFromCache, apiPath } from '@/offline/hydrate'
+import { cacheGetAllByPath } from '@/offline/cache'
 
 const USER_KEY = 'mvs_erp_user'
 /** Cache of my RBAC permissions for offline mode. */
@@ -580,7 +581,22 @@ export const useAppStore = defineStore('app', () => {
 
   const resources = ref<DtoResourceResponse[]>([])
   const resourcesLoading = ref(false)
+  /** Separate flag for "load more": the table must not flash its loading state */
+  const resourcesLoadingMore = ref(false)
+  /** Server-side total (from the list envelope) — drives the "load more" button */
+  const resourcesTotal = ref(0)
   const resourcesError = ref<string | null>(null)
+
+  /** Whether another resources page can be requested */
+  const resourcesHasMore = computed(() => resourcesTotal.value > resources.value.length)
+
+  /** Merges a resources page into the current list (dedup by id, fresh wins) */
+  function mergeResources(items: DtoResourceResponse[]): void {
+    const byId = new Map<number, DtoResourceResponse>()
+    for (const r of resources.value) if (r.id != null) byId.set(r.id, r)
+    for (const r of items) if (r.id != null) byId.set(r.id, r)
+    resources.value = [...byId.values()]
+  }
 
   async function loadResources(): Promise<void> {
     if (resources.value.length) return
@@ -589,8 +605,9 @@ export const useAppStore = defineStore('app', () => {
         path: apiPath('/resources'),
         filled: () => resources.value.length > 0,
         apply: (body) => {
-          const d = (body as { data?: { items?: DtoResourceResponse[] } } | undefined)?.data
+          const d = (body as { data?: { items?: DtoResourceResponse[]; total?: number } } | undefined)?.data
           resources.value = d?.items ?? []
+          resourcesTotal.value = d?.total ?? 0
         },
       },
     ])
@@ -604,10 +621,51 @@ export const useAppStore = defineStore('app', () => {
       const resp = await api.resourcesGet(PAGE_SIZE, undefined, 0)
       const data = resp.data?.data
       resources.value = data?.items ?? []
+      resourcesTotal.value = data?.total ?? 0
     } catch (e: any) {
       resourcesError.value = e.message || String(e)
     } finally {
       resourcesLoading.value = false
+    }
+  }
+
+  /**
+   * Appends the next resources page ("load more"). Offline the pages cached by
+   * earlier online visits are merged instead of a network request: the offline
+   * cache fallback in http.ts serves the freshest response of a pathname, which
+   * would hand back page 0 for any offset.
+   */
+  async function loadMoreResources(): Promise<boolean> {
+    if (resourcesLoadingMore.value || !resourcesHasMore.value) return true
+    resourcesLoadingMore.value = true
+    resourcesError.value = null
+    try {
+      if (isOffline.value) {
+        const pages = await cacheGetAllByPath<{ data?: { items?: DtoResourceResponse[]; offset?: number; total?: number } }>(
+          apiPath('/resources'),
+        )
+        let merged = false
+        for (const page of pages) {
+          const d = page.data?.data
+          if (!d?.items?.length) continue
+          mergeResources(d.items)
+          if (typeof d.total === 'number' && (d.offset ?? 0) > 0) resourcesTotal.value = d.total
+          merged = true
+        }
+        if (!merged) resourcesError.value = 'Нет сохранённых данных: откройте эту страницу онлайн хотя бы раз'
+        return merged
+      }
+      const api = new TimesheetResourcesApi(apiConfig())
+      const resp = await api.resourcesGet(PAGE_SIZE, undefined, resources.value.length)
+      const data = resp.data?.data
+      mergeResources(data?.items ?? [])
+      resourcesTotal.value = data?.total ?? resourcesTotal.value
+      return true
+    } catch (e: any) {
+      resourcesError.value = e.message || String(e)
+      return false
+    } finally {
+      resourcesLoadingMore.value = false
     }
   }
 
@@ -1067,6 +1125,9 @@ export const useAppStore = defineStore('app', () => {
     projectsError,
     resources,
     resourcesLoading,
+    resourcesLoadingMore,
+    resourcesTotal,
+    resourcesHasMore,
     resourcesError,
     users,
     usersLoading,
@@ -1077,6 +1138,7 @@ export const useAppStore = defineStore('app', () => {
     loadProjects,
     refreshProjects,
     loadResources,
+    loadMoreResources,
     refreshResources,
     loadCalendar,
     refreshCalendar,
@@ -1127,6 +1189,8 @@ export const useTimesheetStore = defineStore('timesheet', () => {
 
   const employees = ref<DtoUserResponse[]>([])
   const employeesTotal = ref(0)
+  /** Separate flag for "load more": the roster must not flash its loading state */
+  const employeesLoadingMore = ref(false)
   const states = ref<DtoStateResponse[]>([])
   const periodsByEmployee = ref<Record<number, DtoUserStateResponse[]>>({})
   const windowStart = ref('')
@@ -1238,6 +1302,19 @@ export const useTimesheetStore = defineStore('timesheet', () => {
     return p && p.end_date != null && p.end_date >= iso ? p : undefined
   }
 
+  /** Response shape of the paginated employees list (`/user` with limit/offset) */
+  interface EmployeePage {
+    data?: { items?: DtoUserResponse[]; limit?: number; offset?: number; total?: number }
+  }
+
+  /** Merges an employees page into the current list (dedup by id, fresh wins) */
+  function mergeEmployees(items: DtoUserResponse[]): void {
+    const byId = new Map<number, DtoUserResponse>()
+    for (const e of employees.value) if (e.id != null) byId.set(e.id, e)
+    for (const e of items) if (e.id != null) byId.set(e.id, e)
+    employees.value = [...byId.values()]
+  }
+
   /** Local-first: hydrate the employee list (scoped by the backend) from the cache */
   async function loadEmployeesList(): Promise<void> {
     if (employees.value.length) return
@@ -1271,6 +1348,52 @@ export const useTimesheetStore = defineStore('timesheet', () => {
       setError(e)
     } finally {
       loading.value = false
+    }
+  }
+
+  /** Whether another employees page can be requested */
+  const employeesHasMore = computed(() => employeesTotal.value > employees.value.length)
+
+  /**
+   * Appends the next employees page ("load more"). The list is scoped
+   * server-side (admin: everyone, vp: own subordinates), so paging is a plain
+   * offset request. Offline the pages cached by earlier online visits are
+   * merged instead of a network call — the offline cache fallback in http.ts
+   * answers by pathname with the freshest page and would ignore the offset.
+   * Rows without an id cannot be deduplicated and are dropped.
+   */
+  async function loadMoreEmployees(): Promise<boolean> {
+    if (employeesLoadingMore.value || !employeesHasMore.value) return true
+    employeesLoadingMore.value = true
+    error.value = null
+    try {
+      if (isOffline.value) {
+        const pages = await cacheGetAllByPath<EmployeePage>(
+          apiPath('/user'),
+          (key) => /\blimit=50\b/.test(key),
+        )
+        let merged = false
+        for (const page of pages) {
+          const d = page.data?.data
+          if (!d?.items?.length) continue
+          mergeEmployees(d.items)
+          if (typeof d.total === 'number' && (d.offset ?? 0) > 0) employeesTotal.value = d.total
+          merged = true
+        }
+        if (!merged) error.value = 'Нет сохранённых данных: откройте эту страницу онлайн хотя бы раз'
+        return merged
+      }
+      const api = new UsersApi(apiConfig())
+      const resp = await api.userGet(PAGE_SIZE, undefined, undefined, undefined, employees.value.length)
+      const data = resp.data?.data
+      mergeEmployees(data?.items ?? [])
+      employeesTotal.value = data?.total ?? employeesTotal.value
+      return true
+    } catch (e: any) {
+      setError(e)
+      return false
+    } finally {
+      employeesLoadingMore.value = false
     }
   }
 
@@ -1501,6 +1624,8 @@ export const useTimesheetStore = defineStore('timesheet', () => {
     employeesWithTitles,
     timesheetRows,
     employeesTotal,
+    employeesLoadingMore,
+    employeesHasMore,
     states,
     periodsByEmployee,
     windowStart,
@@ -1510,6 +1635,7 @@ export const useTimesheetStore = defineStore('timesheet', () => {
     error,
     loadEmployees,
     refreshEmployees,
+    loadMoreEmployees,
     loadStates,
     refreshStates,
     refreshPeriods,
