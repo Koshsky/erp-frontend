@@ -2426,8 +2426,10 @@ export const usePlanningStore = defineStore('planning', () => {
 
   /**
    * Assigns a resource to a task: POST /assignment + silent reload of tasks.
-   * For non-admin, owners are checked beforehand (the data is already in the planning cache):
-   * a definitely-403 assignment goes neither to an online request nor to the offline queue.
+   * Owners are checked beforehand (the data is already in the planning cache) for a
+   * scope narrower than "all": a definitely-403 assignment goes neither to an online
+   * request nor to the offline queue. A global assignment.create scope (or the admin
+   * preset on a cold start) skips the pre-check — the backend still enforces.
    */
   async function assignResource(
     taskId: number,
@@ -2435,7 +2437,10 @@ export const usePlanningStore = defineStore('planning', () => {
     quantity: number,
   ): Promise<boolean> {
     const auth = useAuthStore()
-    const owners = auth.user?.preset === 'admin' ? [] : taskOwnerIds(taskId)
+    const rbac = useRbacStore()
+    const permsReady = rbac.permsLoaded || rbac.myPermissions.length > 0
+    const assignAll = permsReady ? rbac.perm('assignment', 'create') === 'all' : auth.user?.preset === 'admin'
+    const owners = assignAll ? [] : taskOwnerIds(taskId)
     if (owners.length > 0) {
       const res = useAppStore().resources.find((r: any) => r.id === resourceId)
       if (res?.owner_id == null || !owners.includes(res.owner_id)) {
