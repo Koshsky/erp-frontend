@@ -11,7 +11,8 @@ import { isLoggedOut } from '@/loggedOut'
  * environment (web and desktop) and idempotent — starting it twice is a no-op.
  *
  * It watches backend reachability and drives autosync:
- *   - ONLINE: probes /health every ONLINE_PROBE_MS (2 s); while the connection
+ *   - ONLINE: probes /health every ONLINE_PROBE_MS (10 s, see below); while the
+ *     connection
  *     is healthy it auto-pushes the mutation queue every AUTO_PUSH_MS (5 s,
  *     only when there are pending entries) and refreshes stale cache domains on
  *     a slower PULL timer.
@@ -27,7 +28,12 @@ import { isLoggedOut } from '@/loggedOut'
  * old cycle.ts it replaces).
  */
 
-const ONLINE_PROBE_MS = 2000 // heartbeat probe while the connection is up
+// Heartbeat probe while the connection is up. 2 s was excessive constant noise
+// (30 requests/minute just to learn "still online"), so it is raised to 10 s:
+// the hidden-tab guard (canWork) and the event-based online/offline handlers
+// below still react to a real network change immediately, and the heartbeat
+// only has to notice a silently dropped connection.
+const ONLINE_PROBE_MS = 10000
 const AUTO_PUSH_MS = 5000 // auto-push of the pending queue while online
 const PULL_STALE_MS = 60 * 1000 // slow PULL refresher (stale cache domains only)
 const OFFLINE_RETRY_MS = 60 // reconnect attempt interval (seconds)
