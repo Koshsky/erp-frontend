@@ -462,6 +462,9 @@ onMounted(async () => {
   // and when the timeline mounts the group order is already final (otherwise the navigation anchor drifts).
   // Projects are fetched by admin/dp/rp only; vp/worker do not have them (403) — sorting by id.
   if (canViewProjects.value && !app.projects.length) await app.loadProjects()
+  // Full project snapshot (with priorities) — local-first from the cache; the background PULL
+  // refreshes it. Used by processesByPriority instead of the truncated CRUD list (PAGE_SIZE).
+  await planning.loadProjectPlanning()
   if (!resources.value.length) await app.loadResources()
   // User catalog — for task assignee names (owner_id → name)
   if (!app.users.length) await app.loadUsers()
@@ -475,11 +478,16 @@ onMounted(async () => {
 
 /**
  * Processes on the Tasks page are sorted by the priority of their project
- * (priority first, then by id). Priorities come from app.projects.
+ * (priority first, then by id). Priorities come from the full planning snapshot
+ * (planning.projectPlanning.projects — loaded local-first, refreshed by PULL);
+ * the truncated CRUD list (app.projects, PAGE_SIZE) is only a fallback so the
+ * sort does not drift once there are more projects than one page.
  */
 const processesByPriority = computed(() => {
   const prio = new Map<number, number>()
-  for (const p of app.projects) {
+  const snapshot = planning.projectPlanning?.projects
+  const source = snapshot && snapshot.length ? snapshot : app.projects
+  for (const p of source) {
     if (p.id != null) prio.set(p.id, p.priority ?? Number.MAX_SAFE_INTEGER)
   }
   let list = taskPlanning.value?.processes ?? []
