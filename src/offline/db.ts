@@ -14,9 +14,10 @@
  *  - explicit user actions (clearLocalData / clearOutbox, discardFailed /
  *    discardEntry for rejected queue entries);
  *  - an app-version change (ensureCacheVersion — clears ONLY the cache);
- *  - logout (on logout the mutation queue is cleared so a foreign token never
- *    flushes someone else's queue, and the refresh token is cleared so a
- *    foreign token never fires a refresh).
+ *  - a verified online login pruning the queue entries of the logged-out
+ *    previous account (their session is revoked and the flush-time creator
+ *    guard would park them forever); logout itself no longer wipes the queue
+ *    (a sibling tab of the same user loses its pending work — see H-OFF-3).
  * Server-side TTLs (refresh session 168h, access token 15m) are validated only
  * by the backend. See docs/no-ttl-local-storage.md.
  */
@@ -128,6 +129,18 @@ function getDb(): Promise<IDBDatabase> {
  *  call reopens the database. */
 function resetDb(): void {
   dbPromise = null
+}
+
+/**
+ * Closes the cached IndexedDB connection so that indexedDB.deleteDatabase can
+ * proceed — any open connection (including this tab's own) blocks the deletion
+ * (H-OFF-2). Safe when nothing is open: resolves immediately. The cached
+ * handle is dropped; the next idb* call reopens the database.
+ */
+export async function closeDb(): Promise<void> {
+  const db = dbPromise ? await dbPromise.catch(() => undefined) : undefined
+  if (db) db.close()
+  resetDb()
 }
 
 function txAll(

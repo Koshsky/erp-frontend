@@ -65,15 +65,20 @@ function onToggleWarmup(name: string) {
   toggleWarmupStep(name)
 }
 
-/** Clears all local (offline) data and reloads */
-function onClearLocalData() {
+/** Clears all local (offline) data and reloads; reports a blocked deletion
+ *  (another window/tab holds the local database) instead of pretending success */
+async function onClearLocalData() {
   if (clearing.value) return
   clearing.value = true
   statusMsg.value = null
   try {
-    clearLocalData()
+    const ok = await clearLocalData()
+    // On success the page reloads; reaching here means the database was NOT
+    // deleted (e.g. another window still holds a connection).
+    if (!ok) {
+      failMsg('Не удалось сбросить локальные данные: их удерживает другое окно приложения — закройте его и повторите')
+    }
   } finally {
-    // clearLocalData() reloads the page — this line is only a safety net
     clearing.value = false
   }
 }
