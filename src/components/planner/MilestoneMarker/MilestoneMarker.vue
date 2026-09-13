@@ -39,7 +39,7 @@ const idx = computed(() =>
   cellIndexForDate(props.timeline.origin, props.timeline.unit, props.date),
 )
 
-const { visible, isDragging, cursor, previewStyle, startDrag } = useTimelineItem({
+const { visible, isDragging, cursor, previewStyle, startDrag, bounds } = useTimelineItem({
   timeline: () => props.timeline,
   groupStartDate: props.groupStartDate,
   groupEndDate: props.groupEndDate,
@@ -88,6 +88,46 @@ function onPointerDown(e: PointerEvent) {
 function onDblClick() {
   emit('edit')
 }
+
+// === Keyboard move (accessibility) ===
+// A draggable milestone is focusable and exposes the same date shift as the
+// pointer drag: ←/→ move by one unit (a day, or a decade cell), Shift+←/→ by
+// five such units, Alt+←/→ always by one day. The shift is applied to the cell
+// index and committed through the same `change` emit the drag uses.
+
+/** Cells in one keyboard step: the timeline unit itself */
+const moveStepCells = computed(() => (props.timeline.unit === 'decade' ? 3 : 1))
+
+/** Accessible name of the milestone (role="slider") */
+const ariaLabel = computed(() =>
+  props.title ? `Веха «${props.title}»: ${formattedDate.value}` : `Веха: ${formattedDate.value}`,
+)
+
+/** aria-value* bounds: the parent (process/project) span when it is known */
+const ariaMin = computed(() =>
+  bounds.value ? Math.min(bounds.value.startCell, bounds.value.endCell - 1) : undefined,
+)
+const ariaMax = computed(() => bounds.value?.endCell)
+const ariaNow = computed(() => idx.value)
+
+/** Keyboard move: Δ cells (negative — earlier), committed like a drag release */
+function moveBy(deltaCells: number) {
+  const date = clampDateToBounds(
+    fmtDate(cellStartDate(props.timeline.origin, props.timeline.unit, idx.value + deltaCells)),
+    props.groupStartDate,
+    props.groupEndDate,
+  )
+  emit('change', { date })
+}
+
+function onKeydown(e: KeyboardEvent) {
+  if (!props.draggable || e.ctrlKey || e.metaKey) return
+  if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return
+  e.preventDefault()
+  const base = moveStepCells.value
+  const step = e.shiftKey ? base * 5 : e.altKey ? 1 : base
+  moveBy(e.key === 'ArrowLeft' ? -step : step)
+}
 </script>
 
 <template>
@@ -101,8 +141,16 @@ function onDblClick() {
     <div
       class="ms-marker"
       :style="markerStyle"
+      :tabindex="draggable ? 0 : undefined"
+      :role="draggable ? 'slider' : undefined"
+      :aria-label="draggable ? ariaLabel : undefined"
+      :aria-valuemin="draggable ? ariaMin : undefined"
+      :aria-valuemax="draggable ? ariaMax : undefined"
+      :aria-valuenow="draggable ? ariaNow : undefined"
+      :aria-valuetext="draggable ? formattedDate : undefined"
       @pointerdown="onPointerDown"
       @dblclick="onDblClick"
+      @keydown="onKeydown"
       @contextmenu.prevent.stop="onContextMenu"
     >
       <TooltipCell :text="title" :multiline="true">
@@ -143,6 +191,11 @@ function onDblClick() {
 }
 .ms-drag .ms-marker {
   box-shadow: var(--ui-shadow-md);
+}
+/* Keyboard focus: the marker is a focusable slider, keep the outline visible */
+.ms-marker:focus-visible {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: 1px;
 }
 .ms-marker :deep(.tt-trigger) {
   display: flex;

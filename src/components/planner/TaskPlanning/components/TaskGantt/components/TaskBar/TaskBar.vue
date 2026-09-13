@@ -47,6 +47,8 @@ const emit = defineEmits<{
   'request-comments': [payload: number]
   /** Click on the comments badge (bubble + counter) - open the comments panel */
   'open-comments': [payload: number]
+  /** Arrow-key move on the focused bar: proposed dates (live loading preview) */
+  'keyboardmove': [payload: { start_date: string; end_date: string }]
 }>()
 
 /** Tooltip rows: owner (if assigned) + execution status + progress + date range */
@@ -237,10 +239,12 @@ watch(
     :color="color || task.color || 'var(--ui-gantt-task)'"
     :draggable="draggable"
     :start-row-reorder="startRowReorder"
+    :aria-label="`Задача «${task.title}»`"
     @change="(d) => emit('change', d)"
     @contextmenu="(p) => emit('contextmenu', p)"
     @dragstart="(d) => setDragPreview(d)"
     @dragmove="(d) => setDragPreview(d)"
+    @keyboardmove="(d) => setDragPreview(d)"
     @dragend="() => setDragPreview(null)"
     @click="emit('edit', task.id)"
     @tooltip-open="onTooltipOpen"
