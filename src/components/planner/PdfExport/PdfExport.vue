@@ -183,6 +183,8 @@ const previewEmpty = computed(
 const open = ref(false)
 const busy = ref(false)
 const previewError = ref<string | null>(null)
+/** The last render cut the period (P-07): the range was wider than the page */
+const truncatedWarning = ref(false)
 const previewLoading = ref(false)
 const pageCount = ref(0)
 const currentBytes = ref<Uint8Array | null>(null)
@@ -266,6 +268,7 @@ async function generateOnce(force: boolean) {
   // All data filtered out — preview is empty, printing unavailable
   if (visibleGroups.value.length === 0) {
     previewError.value = null
+    truncatedWarning.value = false
     pageCount.value = 0
     currentBytes.value = null
     return
@@ -279,7 +282,7 @@ async function generateOnce(force: boolean) {
     await warmup()
     const { renderGanttPdf } = await import('./pdfRenderer')
     const period = resolvePeriod()
-    const bytes = await renderGanttPdf(visibleGroups.value, {
+    const result = await renderGanttPdf(visibleGroups.value, {
       from: period.from,
       to: period.to,
       origin: props.origin,
@@ -313,14 +316,15 @@ async function generateOnce(force: boolean) {
         : [],
     })
     if (token !== genToken) return
-    currentBytes.value = bytes
+    currentBytes.value = result
+    truncatedWarning.value = result.truncated === true
     renderedParams = params
 
     const el = previewEl.value
     if (el) {
       previewHandle?.destroy()
       previewHandle = null
-      const handle = await renderPdfPreview(bytes, el)
+      const handle = await renderPdfPreview(result, el)
       if (token !== genToken) {
         handle.destroy()
         return
@@ -331,6 +335,7 @@ async function generateOnce(force: boolean) {
   } catch (e: any) {
     if (token === genToken) {
       previewError.value = e?.message || String(e)
+      truncatedWarning.value = false
       pageCount.value = 0
       currentBytes.value = null
     }
@@ -365,6 +370,7 @@ function openDialog() {
   // Process filters persist in the session; the period and width come from the page.
   renderedParams = ''
   previewError.value = null
+  truncatedWarning.value = false
   pageCount.value = 0
   currentBytes.value = null
   open.value = true
@@ -384,6 +390,7 @@ function closeDialog() {
   previewHandle = null
   previewLoading.value = false
   previewError.value = null
+  truncatedWarning.value = false
 }
 
 function download(bytes: Uint8Array, name: string) {
@@ -610,6 +617,9 @@ onBeforeUnmount(() => {
             <div class="pe-preview-area">
               <div v-if="periodFallbackHint" class="pe-period-hint">
                 Период со страницы не определён — используется диапазон данных. Измените вид страницы и откройте заново.
+              </div>
+              <div v-else-if="!previewLoading && truncatedWarning" class="pe-period-hint pe-truncate-hint" role="status">
+                Период шире, чем помещается на страницу: напечатана только его начальная часть. Сузьте период на странице.
               </div>
               <div class="pe-preview-head">
                 <span class="pe-pages-count">Страниц: {{ pageCount }}</span>
@@ -933,6 +943,12 @@ onBeforeUnmount(() => {
   color: #b45309;
   background: #fef3c7;
   border-bottom: 1px solid #fde68a;
+}
+/* Wide period truncated to the page width (P-07) */
+.pe-truncate-hint {
+  color: #b3261e;
+  background: #fdecea;
+  border-bottom-color: #f7c8c4;
 }
 
 /* === Preview === */

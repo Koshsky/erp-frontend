@@ -28,6 +28,10 @@ import robotoRegularUrl from '@/assets/fonts/Roboto-Regular.ttf?url'
 /** Screen px → pt (print at 1:1 scale with the screen layout) */
 const PT = 0.75
 
+/** Min cell width in pt: below it columns are indistinguishable, so a wider
+ *  print range is truncated to the column capacity of one page width instead */
+const MIN_CELL_W = 0.5
+
 /** A4 landscape (pt) */
 const PAGE_W = 841.89
 const PAGE_H = 595.28
@@ -281,6 +285,18 @@ export interface PdfGanttOptions {
   resources?: PdfGanttResourceInfo[]
 }
 
+/**
+ * PDF render result: the document bytes plus a flag that the print range was
+ * wider than the column capacity of one page width and its tail was cut
+ * (only the initial part of the range is printed).
+ */
+export interface PdfGanttRenderResult extends Uint8Array {
+  truncated: boolean
+}
+
+/** Shared empty per-resource usage map (read-only outside the precompute) */
+const NO_RESOURCE_USAGE: ReadonlyMap<number, number> = new Map<number, number>()
+
 const dowMap = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб']
 
 /** Module-level font cache: loaded once, embedded into each document */
@@ -307,8 +323,9 @@ interface DrawCtx {
   contentW: number
   /** Milestone strip height in a group (0 if milestones are hidden) */
   stripH: number
-  /** Groups for computing resource usage */
-  groups: PdfGanttGroup[]
+  /** Precomputed resource usage (P-08): resource id → day index → total quantity.
+   *  Built once per render — page loops only read visible-cell values. */
+  usage: Map<number, Map<number, number>>
   /** Content top on the page: calendar header + resource block (pt) */
   groupsStart: number
   /** Print scale (page zoom): multiplier of content sizes */
@@ -422,20 +439,55 @@ interface GroupLayout {
   stripH: number
 }
 
-/** Resource usage per day: sum of quantity over the tasks covering the day */
-function usageForDay(groups: PdfGanttGroup[], resourceId: number, day: Date): number {
-  const t = day.getTime()
-  let used = 0
+/**
+ * One-pass precompute of the daily resource load over the print range (P-08):
+ * resource id → absolute day index → total quantity assigned that day.
+ * Rows are clipped to the cells of the (possibly truncated) range; days iterate
+ * as calendar dates (DST-safe), matching the per-day loop in drawResourceHeader.
+ * Equivalent to the previous per-day usageForDay scan, so the peak per cell
+ * is unchanged — page loops only read ready values now.
+ */
+function computeResourceUsage(
+  groups: PdfGanttGroup[],
+  origin: Date | string,
+  unit: PlanningUnit,
+  fromCell: number,
+  toCell: number,
+): Map<number, Map<number, number>> {
+  const usage = new Map<number, Map<number, number>>()
+  const firstT = cellStartDate(origin, unit, fromCell).getTime()
+  const lastT = cellEndDate(origin, unit, toCell).getTime()
   for (const g of groups) {
     for (const row of g.rows ?? []) {
       const s = toDate(row.start_date).getTime()
       const e = toDate(row.end_date).getTime()
-      if (Number.isNaN(s) || Number.isNaN(e) || t < s || t > e) continue
-      const a = (row.resources ?? []).find((r) => r.id === resourceId)
-      if (a) used += a.quantity ?? 0
+      if (Number.isNaN(s) || Number.isNaN(e)) continue
+      const d0 = new Date(Math.max(s, firstT))
+      const d1 = Math.min(e, lastT)
+      if (d1 < d0.getTime()) continue
+      const assignments: { id: number; q: number }[] = []
+      for (const r of row.resources ?? []) {
+        const id = r.id
+        const q = r.quantity ?? 0
+        if (id != null && q !== 0) assignments.push({ id, q })
+      }
+      if (!assignments.length) continue
+      const cur = new Date(d0)
+      while (cur.getTime() <= d1) {
+        const di = cellIndexForDate(origin, 'day', cur)
+        for (const a of assignments) {
+          let m = usage.get(a.id)
+          if (!m) {
+            m = new Map()
+            usage.set(a.id, m)
+          }
+          m.set(di, (m.get(di) ?? 0) + a.q)
+        }
+        cur.setDate(cur.getDate() + 1)
+      }
     }
   }
-  return used
+  return usage
 }
 
 /** Resource availability for the day from /timesheet/calendar periods (null — no coverage) */
@@ -462,7 +514,7 @@ function drawResourceHeader(
   colFrom: number,
   colTo: number,
 ) {
-  const { page, font, bold, unit, cellW, headerH, groups, layout, z, palette } = ctx
+  const { page, font, bold, unit, origin, cellW, headerH, usage, layout, z, palette } = ctx
   const yTop = headerH
   const height = resources.length * layout.rsRowH
 
@@ -489,11 +541,12 @@ function drawResourceHeader(
   // Usage cells across the visible indices
   for (let ri = 0; ri < resources.length; ri++) {
     const r = resources[ri]
+    const dayUsage = usage.get(r.id) ?? NO_RESOURCE_USAGE
     const top = yTop + ri * layout.rsRowH
     for (let k = colFrom; k <= colTo; k++) {
       const x = MARGIN + labelW + (k - colFrom) * cellW
-      const start = cellStartDate(ctx.origin, unit, k)
-      const end = cellEndDate(ctx.origin, unit, k)
+      const start = cellStartDate(origin, unit, k)
+      const end = cellEndDate(origin, unit, k)
       let peak = 0
       let weekend = true
       let minAvail: number | null = null
@@ -502,7 +555,8 @@ function drawResourceHeader(
       while (cur <= end) {
         const wd = cur.getDay() === 0 || cur.getDay() === 6
         if (!wd) weekend = false
-        peak = Math.max(peak, usageForDay(groups, r.id, cur))
+        // Ready value from the one-pass precompute — no group/row scans per day
+        peak = Math.max(peak, dayUsage.get(cellIndexForDate(origin, 'day', cur)) ?? 0)
         const availDay = availableForDay(r, cur)
         if (availDay == null) hasUnknown = true
         else minAvail = minAvail == null ? availDay : Math.min(minAvail, availDay)
@@ -883,9 +937,10 @@ function drawFooter(page: PDFPage, font: PDFFont, bold: PDFFont, pageNo: number,
 
 /**
  * Renders the Gantt diagram to PDF.
- * Returns the PDF file bytes (Uint8Array), ready for download.
+ * Returns the PDF file bytes with a `truncated` flag (P-07): when the date range
+ * exceeds the column capacity of one page width, only its initial part is printed.
  */
-export async function renderGanttPdf(groups: PdfGanttGroup[], opts: PdfGanttOptions): Promise<Uint8Array> {
+export async function renderGanttPdf(groups: PdfGanttGroup[], opts: PdfGanttOptions): Promise<PdfGanttRenderResult> {
   const doc = await PDFDocument.create()
   doc.registerFontkit(fontkit)
   const bytes = await loadFontBytes()
@@ -915,6 +970,22 @@ export async function renderGanttPdf(groups: PdfGanttGroup[], opts: PdfGanttOpti
   const toCell = Math.max(fromCell, cellIndexForDate(opts.origin, unit, opts.to))
   const totalCells = toCell - fromCell + 1
 
+  const contentW = PAGE_W - 2 * MARGIN
+  /** Column capacity of one page width at the minimum cell width (P-07) */
+  const maxCells = Math.max(1, Math.floor((contentW - labelW) / MIN_CELL_W))
+  /** The range is wider than the page — cut the tail; the initial part is printed */
+  const truncated = totalCells > maxCells
+  /** Effective end of the printed range (exclusive of cells beyond the page width) */
+  const effToCell = truncated ? fromCell + maxCells - 1 : toCell
+  const effTotal = Math.min(totalCells, maxCells)
+  /** Cell width to fit the (possibly truncated) range on one page: >= MIN_CELL_W */
+  const cellW = (contentW - labelW) / effTotal
+  /** Effective "screen" cell width for header thresholds */
+  const cellWidthPx = cellW / PT
+  const headerH = headerHeight(unit, cellWidthPx) * PT * z
+  /** The whole range on one page across the width (no horizontal pagination) */
+  const pagesAcross = 1
+
   // Processes lying entirely outside the print range are excluded from rendering
   // altogether: start_date >= right boundary or end_date <= left boundary.
   // Without dates (or with broken ones) the process stays — rendering relies on tasks.
@@ -932,15 +1003,11 @@ export async function renderGanttPdf(groups: PdfGanttGroup[], opts: PdfGanttOpti
   const stripH = opts.showMilestones === false ? 0 : layout.msStripH
   /** Resources for the usage block (empty — the block is not drawn) */
   const resources = opts.resources ?? []
-
-  const contentW = PAGE_W - 2 * MARGIN
-  /** Cell width to fit the ENTIRE date range on one page */
-  const cellW = Math.max((contentW - labelW) / totalCells, 0.5)
-  /** Effective "screen" cell width for header thresholds */
-  const cellWidthPx = cellW / PT
-  const headerH = headerHeight(unit, cellWidthPx) * PT * z
-  /** The whole range on one page across the width (no horizontal pagination) */
-  const pagesAcross = 1
+  /** One-pass per-resource daily load over the effective range (P-08):
+   *  page loops only read ready values for visible cells */
+  const usage = resources.length
+    ? computeResourceUsage(groupsInRange, opts.origin, unit, fromCell, effToCell)
+    : new Map<number, Map<number, number>>()
 
   // Groups in "own" coordinates (0 = right below the header/resources)
   const layouts: GroupLayout[] = []
@@ -1005,15 +1072,15 @@ export async function renderGanttPdf(groups: PdfGanttGroup[], opts: PdfGanttOpti
         headerH,
         contentW,
         stripH,
-        groups: groupsInRange,
+        usage,
         groupsStart,
         z,
         layout,
         palette,
       }
-      // Absolute cell indices: the whole range on one page across the width.
+      // Absolute cell indices: the (possibly truncated) range — one page across the width.
       const colFrom = fromCell
-      const colTo = toCell
+      const colTo = effToCell
       // Vertical pagination at row boundaries: winTop is shifted by groupsStart
       // so the first visible group slice starts BELOW the header and the resource block;
       // winBottom — the slice boundary (end of the last full row).
@@ -1047,5 +1114,9 @@ export async function renderGanttPdf(groups: PdfGanttGroup[], opts: PdfGanttOpti
     }
   }
 
-  return doc.save()
+  const pdfBytes = await doc.save()
+  // The truncated flag rides on the bytes so existing Uint8Array consumers
+  // (preview, download) work unchanged; PdfExport.vue reads it for the warning.
+  const result = Object.assign(pdfBytes, { truncated })
+  return result as PdfGanttRenderResult
 }
