@@ -1300,13 +1300,43 @@ export const useTimesheetStore = defineStore('timesheet', () => {
   }
 
   /**
+   * Fallback: the pre-batch per-employee fetch (one GET /user/{id}/days per
+   * visible row), used when the batch endpoint is unavailable (e.g. an older
+   * backend without GET /user/days). The timesheet must keep working in that
+   * case — the batch is only an optimization. Lenient: a failed row keeps its
+   * previous cached data; returns false only when at least one row failed.
+   */
+  async function refreshPeriodsOneByOne(start: string, end: string): Promise<boolean> {
+    const api = new UsersApi(apiConfig())
+    let failed: unknown = null
+    const results = await Promise.all(
+      timesheetRows.value.map((emp) =>
+        api
+          .userIdDaysGet(emp.id ?? 0, start, end)
+          .then((r) => ({ id: emp.id, list: r.data?.data ?? [] }))
+          .catch((e: any) => {
+            failed = failed ?? e
+            return { id: emp.id, list: [] }
+          }),
+      ),
+    )
+    for (const { id, list } of results) {
+      if (id == null) continue
+      mergeWindowPeriods(id, list, start, end)
+    }
+    return failed == null
+  }
+
+  /**
    * Network refresh (PULL) for the whole timesheet in a single batch request.
    * Replaces the previous per-employee N+1 fan-out: GET /user/days returns one
    * entry per requested id (empty `days` when the worker has none).
    * The [start, end] window stays authoritative for every employee in the batch.
    * Ids are sent in chunks of BATCH_IDS_MAX (the backend limit ≤200); each
    * chunk is still one request — no per-employee fan-out — and failures are
-   * reported once for the whole page.
+   * reported once for the whole page. If the batch endpoint is not available
+   * (unexpected payload shape or a request error), falls back to the
+   * per-employee path so the timesheet renders even against an older backend.
    */
   async function refreshPeriodsBatch(start: string, end: string): Promise<void> {
     const ids = timesheetRows.value
@@ -1321,7 +1351,10 @@ export const useTimesheetStore = defineStore('timesheet', () => {
         chunks.map((chunk) => api.userDaysGet(chunk.join(','), start, end)),
       )
       for (const resp of responses) {
-        const entries = resp.data?.data ?? []
+        const entries = resp.data?.data
+        // Shape guard: an older backend (or a proxy) answering the URL with a
+        // non-batch payload must not be merged as if it were one.
+        if (!Array.isArray(entries)) throw new Error('batch days response: unexpected payload shape')
         for (const entry of entries) {
           if (entry.user_id == null) continue
           mergeWindowPeriods(entry.user_id, entry.days ?? [], start, end)
@@ -1330,8 +1363,11 @@ export const useTimesheetStore = defineStore('timesheet', () => {
       // Unsync guard: if the backend omitted some requested ids, their current
       // cached data is intentionally kept untouched instead of being wiped.
     } catch (e: any) {
-      // A chunk failure fails the whole page refresh: report it once.
-      setError(e)
+      // The batch endpoint may be missing on an older backend — fall back to
+      // the per-employee path; surface an error only when the fallback fails too.
+      const ok = await refreshPeriodsOneByOne(start, end)
+      if (!ok) setError(e)
+      else console.warn('[timesheet] batch days unavailable, fell back to per-employee:', e?.message ?? e)
     }
   }
 
