@@ -298,10 +298,12 @@ function onHeaderCtx(p: { clientX: number; clientY: number }) {
 
 const { open: openMenu, close: closeMenu, select, bind: menuBind } = useContextMenu(menu, menuItems, handleSelect)
 
-/** Click on a task bar — open the task editor (task.update on the task's process) */
+/** Click on a task bar — open the task editor. Editable for users with
+ *  task.update on the task's process; everyone else with task.view gets the
+ *  same modal in read-only mode (fields and operations disabled). */
 function onTaskBarEdit(id: number) {
   const task = findTask(id)
-  if (!task || !canManageTask(task.process_id)) return
+  if (!task || !canViewTasks.value) return
   openTaskEdit(id)
 }
 
