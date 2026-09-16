@@ -193,13 +193,15 @@ export function buildPullSteps(): PullStep[] {
       name: 'employees',
       path: apiPath('/user'),
       keyPredicate: (key) => /\blimit=50\b/.test(key),
-      refresh: () => ts.refreshEmployees(),
+      refresh: () => ts.refreshEmployees(undefined, true),
     })
-    // Timesheet periods are per-employee, date-windowed: staleness cannot be
-    // cheaply checked per domain — pull them only on full warmup / reconcile.
+    // Timesheet periods are per-employee, date-windowed: the batch endpoint
+    // (/user/days) is expensive, so it is pulled only on full warmup / reconcile
+    // (cycle:false). Its cache copy (written by http.ts on the same pathname) is
+    // used for the TTL gate — repeat warmups skip it while it is still fresh.
     steps.push({
       name: 'periods',
-      path: '',
+      path: apiPath('/user/days'),
       refresh: () =>
         ts.windowStart
           ? ts.refreshPeriods(ts.windowStart, ts.windowEnd)
@@ -227,8 +229,15 @@ async function isStepFresh(step: PullStep): Promise<boolean> {
  * Runs the pull steps sequentially with a rate pause. `cycle` mode skips heavy
  * steps flagged cycle:false and refreshes only stale domains. Stops on offline
  * or logout (otherwise every 401 would trigger session refresh attempts).
+ *
+ * The TTL staleness gate applies in BOTH modes. It used to be cycle-only, so a
+ * repeat full warmup (e.g. scheduled by a silent session rotation) re-fetched
+ * every domain even though the cached copies were seconds old — on the "Табель"
+ * page that reloaded the roster and all employee periods on every trigger and
+ * made the grid re-render/flicker. `refreshAll` (the explicit "Обновить" /
+ * manual warm) is the only caller allowed to bypass the gate.
  */
-async function runPull(settings: { cycle: boolean }): Promise<number> {
+async function runPull(settings: { cycle: boolean; refreshAll?: boolean }): Promise<number> {
   const steps = buildPullSteps()
   const targets = settings.cycle ? steps.filter((s) => s.cycle !== false) : steps
   const total = targets.length
@@ -237,8 +246,9 @@ async function runPull(settings: { cycle: boolean }): Promise<number> {
   warmupProgress.value = total > 0 ? 0 : null
   for (const step of targets) {
     if (isOffline.value || !useAuthStore().isAuthenticated) break
-    // The cycle only refreshes data that actually went stale.
-    if (settings.cycle && (await isStepFresh(step))) {
+    // Fresh cached copies are left alone in every mode, unless an explicit
+    // full refresh was requested.
+    if (!settings.refreshAll && (await isStepFresh(step))) {
       done++
       continue
     }
@@ -260,11 +270,14 @@ async function runPull(settings: { cycle: boolean }): Promise<number> {
 /**
  * Full (TTL-aware) warmup — the "Warm data"/"Обновить" path. Returns true if
  * actually started. Runs in every environment.
+ *
+ * `force` bypasses the per-domain TTL (explicit user action); the automatic
+ * callers (login, reconnect) leave it false so repeat triggers are cheap.
  */
-export function warmNow(): Promise<boolean> {
+export function warmNow(force = false): Promise<boolean> {
   if (running || isOffline.value) return Promise.resolve(false)
   running = true
-  return runPull({ cycle: false })
+  return runPull({ cycle: false, refreshAll: force })
     .then(() => {
       lastWarmedAt.value = Date.now()
       try {

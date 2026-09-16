@@ -92,7 +92,7 @@ function reloadersFor(entity: MutationEntity): Reloader[] {
     case 'resource':
       return [reload('resources', () => app.refreshResources()), reload('calendar', () => app.refreshCalendar())]
     case 'user':
-      return seesRoster ? [reload('employees', () => ts.refreshEmployees())] : []
+      return seesRoster ? [reload('employees', () => ts.refreshEmployees(undefined, true))] : []
     case 'member':
       return seesRoster ? [reload('resources', () => app.refreshResources())] : []
     case 'state':
@@ -100,7 +100,7 @@ function reloadersFor(entity: MutationEntity): Reloader[] {
     case 'period':
       return seesRoster
         ? [
-            reload('employees', () => ts.refreshEmployees()),
+            reload('employees', () => ts.refreshEmployees(undefined, true)),
             ...(ts.windowStart
               ? [reload('periods', () => ts.refreshPeriods(ts.windowStart, ts.windowEnd))]
               : []),
@@ -175,6 +175,10 @@ export function syncNow(): Promise<void> {
  * The "Sync all" button: PUSH (queue flush) then, if the network
  * is alive, PULL (offline cache warmup). Parts are independent: a failed one
  * does not break the other. Returns what actually ran (for the UI message).
+ *
+ * This is an explicit user action, so the PULL bypasses the per-domain TTL
+ * (`warmNow(true)`) — "Обновить" must really refetch, unlike the automatic
+ * warmups which skip domains that are still fresh.
  */
 export async function syncAll(): Promise<{ pushed: boolean; pulled: boolean }> {
   try {
@@ -183,7 +187,7 @@ export async function syncAll(): Promise<{ pushed: boolean; pulled: boolean }> {
     const pushed = n != null && (n.ok > 0 || n.failed > 0 || n.interrupted)
     let pulled = false
     if (!isOffline.value) {
-      pulled = await warmNow()
+      pulled = await warmNow(true)
     }
     return { pushed, pulled }
   } finally {

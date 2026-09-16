@@ -211,7 +211,22 @@ export const useAuthStore = defineStore('auth', () => {
   const loading = ref(false)
   const error = ref<string | null>(null)
 
-  function applySession(data: { access_token?: string; user?: DtoUserInfo } | undefined) {
+  /**
+   * Applies a session (login or silent rotation).
+   *
+   * `warm` must be true ONLY for a manual login: the periodic token rotation
+   * (startSessionMaintenance / the proactive timer / the 401 interceptor) used
+   * to schedule a FULL warmup on every refresh. On the "Табель" page that
+   * re-fetched the roster and all employee periods every 30 s, replacing the
+   * employees array with a fresh one each time — the grid re-rendered and the
+   * page looked like it was constantly reloading and flickering. A rotation
+   * changes nothing about the data, so it must not touch it: freshness is the
+   * background PULL cycle's job (offline/connection.ts).
+   */
+  function applySession(
+    data: { access_token?: string; user?: DtoUserInfo } | undefined,
+    warm = false,
+  ) {
     const token = data?.access_token
     setAccessToken(token ?? null)
     if (data?.user) {
@@ -222,7 +237,7 @@ export const useAuthStore = defineStore('auth', () => {
     sessionMode.value = 'online'
     scheduleProactiveRefresh()
     // Background warm-up of the offline cache with data for the user's role
-    scheduleWarmup()
+    if (warm) scheduleWarmup()
   }
 
   /**
@@ -277,7 +292,8 @@ export const useAuthStore = defineStore('auth', () => {
       const body = resp.data
       const errBody = body?.error as { code?: unknown; message?: string } | undefined
       if (errBody && errBody.code != null) throw new Error(apiErrorMessage(errBody))
-      applySession(body?.data)
+      // Manual login: the offline cache is warmed for the user's role.
+      applySession(body?.data, true)
       // Persist the rotation-eligible refresh token (the backend returns it in
       // the login body) so the session survives reloads without the cookie.
       if (body?.data?.refresh_token) {
@@ -1408,6 +1424,24 @@ export const useTimesheetStore = defineStore('timesheet', () => {
     employees.value = [...byId.values()]
   }
 
+  /**
+   * Whether two roster snapshots are equal field-by-field (same order, same ids,
+   * same visible fields). Used to keep the `employees` array reference stable on
+   * a background refresh so dependent computeds and the grid do not re-render.
+   */
+  function sameEmployees(a: DtoUserResponse[], b: DtoUserResponse[]): boolean {
+    if (a.length !== b.length) return false
+    for (let i = 0; i < a.length; i++) {
+      if (a[i]?.id !== b[i]?.id) return false
+      // Shallow compare: the roster DTO is flat (name/position/manager/…), so a
+      // field-by-field check is enough to notice a real change.
+      for (const key of Object.keys(a[i] ?? {}) as Array<keyof DtoUserResponse>) {
+        if (a[i][key] !== b[i]?.[key]) return false
+      }
+    }
+    return true
+  }
+
   /** Local-first: hydrate the employee list (scoped by the backend) from the cache */
   async function loadEmployeesList(): Promise<void> {
     if (employees.value.length) return
@@ -1427,20 +1461,28 @@ export const useTimesheetStore = defineStore('timesheet', () => {
     ])
   }
 
-  async function refreshEmployees(managerId?: number): Promise<void> {
-    loading.value = true
-    error.value = null
+  async function refreshEmployees(managerId?: number, silent = false): Promise<void> {
+    if (!silent) {
+      loading.value = true
+      error.value = null
+    }
     try {
       const api = new UsersApi(apiConfig())
       const resp = await api.userGet(PAGE_SIZE, undefined, managerId ?? undefined, undefined, undefined, 0)
       const data = resp.data?.data
       // Sorting is added by the computed employeesWithTitles.
-      employees.value = data?.items ?? []
+      //
+      // The array identity is preserved when the roster did not change: it feeds
+      // timesheetRows → the whole grid. Replacing it with an equal-but-new array
+      // re-renders every row and flickers the "Табель" page on each background
+      // refresh (the same roster is now pulled on a timer).
+      const items = data?.items ?? []
+      if (!sameEmployees(items, employees.value)) employees.value = items
       employeesTotal.value = data?.total ?? 0
     } catch (e: any) {
-      setError(e)
+      if (!silent) setError(e)
     } finally {
-      loading.value = false
+      if (!silent) loading.value = false
     }
   }
 
