@@ -8,7 +8,7 @@ import { getApiUrl } from '@/config'
 import { isOffline } from '@/offline/state'
 import { offlineFailFastAdapter } from '@/offline/failFast'
 import { scheduleWarmup } from '@/offline/warmup'
-import { enqueueMutation, isNetworkError, clearOutbox, type MutationEntity } from '@/offline/outbox'
+import { enqueueMutation, isNetworkError, pruneForeignOutbox, type MutationEntity } from '@/offline/outbox'
 import { applyRangeSplit } from '@/offline/periodSplit'
 import { getAccessToken, setAccessToken } from '@/token'
 import {
@@ -21,6 +21,7 @@ import {
 import { isLoggedOut, clearLoggedOut, setLoggedOut } from '@/loggedOut'
 import { saveRefreshToken, loadRefreshToken, clearRefreshToken } from '@/offline/session'
 import { hydrateFromCache, apiPath } from '@/offline/hydrate'
+import { cacheGetAllByPath } from '@/offline/cache'
 
 const USER_KEY = 'mvs_erp_user'
 /** Cache of my RBAC permissions for offline mode. */
@@ -32,6 +33,9 @@ const REFRESH_INTERVAL_MS = 30 * 1000
 
 /** Page size for listings (matches the backend default). */
 const PAGE_SIZE = 50
+
+/** Max employee ids per batch days request (backend contract — see GET /user/days). */
+const BATCH_IDS_MAX = 200
 
 /** Temporary (negative) id for entities created offline (unique over time) */
 function nextTempId(): number {
@@ -207,7 +211,22 @@ export const useAuthStore = defineStore('auth', () => {
   const loading = ref(false)
   const error = ref<string | null>(null)
 
-  function applySession(data: { access_token?: string; user?: DtoUserInfo } | undefined) {
+  /**
+   * Applies a session (login or silent rotation).
+   *
+   * `warm` must be true ONLY for a manual login: the periodic token rotation
+   * (startSessionMaintenance / the proactive timer / the 401 interceptor) used
+   * to schedule a FULL warmup on every refresh. On the "Табель" page that
+   * re-fetched the roster and all employee periods every 30 s, replacing the
+   * employees array with a fresh one each time — the grid re-rendered and the
+   * page looked like it was constantly reloading and flickering. A rotation
+   * changes nothing about the data, so it must not touch it: freshness is the
+   * background PULL cycle's job (offline/connection.ts).
+   */
+  function applySession(
+    data: { access_token?: string; user?: DtoUserInfo } | undefined,
+    warm = false,
+  ) {
     const token = data?.access_token
     setAccessToken(token ?? null)
     if (data?.user) {
@@ -218,7 +237,7 @@ export const useAuthStore = defineStore('auth', () => {
     sessionMode.value = 'online'
     scheduleProactiveRefresh()
     // Background warm-up of the offline cache with data for the user's role
-    scheduleWarmup()
+    if (warm) scheduleWarmup()
   }
 
   /**
@@ -273,7 +292,8 @@ export const useAuthStore = defineStore('auth', () => {
       const body = resp.data
       const errBody = body?.error as { code?: unknown; message?: string } | undefined
       if (errBody && errBody.code != null) throw new Error(apiErrorMessage(errBody))
-      applySession(body?.data)
+      // Manual login: the offline cache is warmed for the user's role.
+      applySession(body?.data, true)
       // Persist the rotation-eligible refresh token (the backend returns it in
       // the login body) so the session survives reloads without the cookie.
       if (body?.data?.refresh_token) {
@@ -282,6 +302,11 @@ export const useAuthStore = defineStore('auth', () => {
       // Manual login clears the "logged out" flag — auto-sync is allowed again
       clearLoggedOut()
       sessionMode.value = 'online'
+      // A verified login orphans the queue entries of the previous account
+      // (their session is revoked; the flush-time creator guard would park
+      // them forever). Same-account entries — e.g. pending work of a sibling
+      // tab — are kept. Non-fatal.
+      void pruneForeignOutbox(user.value?.username ?? username.trim()).catch(() => {})
       return true
     } catch (e: any) {
       error.value = e.message || String(e)
@@ -421,8 +446,13 @@ export const useAuthStore = defineStore('auth', () => {
 
   function logout() {
     stopProactiveRefresh()
-    // Do not let the queue flush under a new user/token
-    void clearOutbox()
+    // The mutation queue is NOT wiped here: it is shared by every tab/window of
+    // this profile, and a sibling tab of the same user may still have pending
+    // edits (H-OFF-3). A foreign account can never flush someone else's queue —
+    // the flush-time creator guard parks mismatched entries, and after a logout
+    // auto-sync is disabled (isLoggedOut) until a manual login. Orphaned
+    // entries of the logged-out account are pruned on the next verified login
+    // (pruneForeignOutbox). The explicit full wipe is clearLocalData()/clearOutbox().
     // Revoke the refresh session on the server: read the stored token and send it
     // in the body of /auth/logout (falling back to the cookie when none is stored),
     // then clear our local copy. Best-effort — the cookie is also cleared by the backend.
@@ -542,7 +572,11 @@ export const useAppStore = defineStore('app', () => {
     if (projects.value.length) return
     await hydrateFromCache([
       {
-        path: apiPath('/projects'),
+        // Keep this path identical to the generated client endpoint (projectGet
+        // → `/project`, singular). The GET cache key is the full axios URL, and
+        // cacheGetFresh/cacheGetByPath match by pathname — a plural here makes
+        // offline hydration always miss and kills the warmup PULL TTL for projects.
+        path: apiPath('/project'),
         filled: () => projects.value.length > 0,
         apply: (body) => {
           const d = (body as { data?: { items?: DtoProject[] } } | undefined)?.data
@@ -553,10 +587,17 @@ export const useAppStore = defineStore('app', () => {
   }
 
   async function refreshProjects(): Promise<void> {
-    // Only admin/dp/rp can see projects (per the RBAC matrix). For other presets the
-    // listing is forbidden by the backend (403) — we do not send the request at all.
-    const preset = useAuthStore().user?.preset
-    if (preset && preset !== 'admin' && preset !== 'dp' && preset !== 'rp') {
+    // Only users with project.view (backend-enforced) may list projects; for
+    // the others the listing is forbidden (403) — we do not send the request
+    // at all. The RBAC matrix is authoritative once loaded; the preset is only
+    // a cold-start fallback (mirrors useNavigation / warmup).
+    const auth = useAuthStore()
+    const rbac = useRbacStore()
+    const permsReady = rbac.permsLoaded || rbac.myPermissions.length > 0
+    const allowed = permsReady
+      ? rbac.can('project', 'view')
+      : !auth.user?.preset || ['admin', 'dp', 'rp'].includes(auth.user.preset)
+    if (!allowed) {
       projects.value = []
       return
     }
@@ -576,7 +617,22 @@ export const useAppStore = defineStore('app', () => {
 
   const resources = ref<DtoResourceResponse[]>([])
   const resourcesLoading = ref(false)
+  /** Separate flag for "load more": the table must not flash its loading state */
+  const resourcesLoadingMore = ref(false)
+  /** Server-side total (from the list envelope) — drives the "load more" button */
+  const resourcesTotal = ref(0)
   const resourcesError = ref<string | null>(null)
+
+  /** Whether another resources page can be requested */
+  const resourcesHasMore = computed(() => resourcesTotal.value > resources.value.length)
+
+  /** Merges a resources page into the current list (dedup by id, fresh wins) */
+  function mergeResources(items: DtoResourceResponse[]): void {
+    const byId = new Map<number, DtoResourceResponse>()
+    for (const r of resources.value) if (r.id != null) byId.set(r.id, r)
+    for (const r of items) if (r.id != null) byId.set(r.id, r)
+    resources.value = [...byId.values()]
+  }
 
   async function loadResources(): Promise<void> {
     if (resources.value.length) return
@@ -585,8 +641,9 @@ export const useAppStore = defineStore('app', () => {
         path: apiPath('/resources'),
         filled: () => resources.value.length > 0,
         apply: (body) => {
-          const d = (body as { data?: { items?: DtoResourceResponse[] } } | undefined)?.data
+          const d = (body as { data?: { items?: DtoResourceResponse[]; total?: number } } | undefined)?.data
           resources.value = d?.items ?? []
+          resourcesTotal.value = d?.total ?? 0
         },
       },
     ])
@@ -600,10 +657,51 @@ export const useAppStore = defineStore('app', () => {
       const resp = await api.resourcesGet(PAGE_SIZE, undefined, 0)
       const data = resp.data?.data
       resources.value = data?.items ?? []
+      resourcesTotal.value = data?.total ?? 0
     } catch (e: any) {
       resourcesError.value = e.message || String(e)
     } finally {
       resourcesLoading.value = false
+    }
+  }
+
+  /**
+   * Appends the next resources page ("load more"). Offline the pages cached by
+   * earlier online visits are merged instead of a network request: the offline
+   * cache fallback in http.ts serves the freshest response of a pathname, which
+   * would hand back page 0 for any offset.
+   */
+  async function loadMoreResources(): Promise<boolean> {
+    if (resourcesLoadingMore.value || !resourcesHasMore.value) return true
+    resourcesLoadingMore.value = true
+    resourcesError.value = null
+    try {
+      if (isOffline.value) {
+        const pages = await cacheGetAllByPath<{ data?: { items?: DtoResourceResponse[]; offset?: number; total?: number } }>(
+          apiPath('/resources'),
+        )
+        let merged = false
+        for (const page of pages) {
+          const d = page.data?.data
+          if (!d?.items?.length) continue
+          mergeResources(d.items)
+          if (typeof d.total === 'number' && (d.offset ?? 0) > 0) resourcesTotal.value = d.total
+          merged = true
+        }
+        if (!merged) resourcesError.value = 'Нет сохранённых данных: откройте эту страницу онлайн хотя бы раз'
+        return merged
+      }
+      const api = new TimesheetResourcesApi(apiConfig())
+      const resp = await api.resourcesGet(PAGE_SIZE, undefined, resources.value.length)
+      const data = resp.data?.data
+      mergeResources(data?.items ?? [])
+      resourcesTotal.value = data?.total ?? resourcesTotal.value
+      return true
+    } catch (e: any) {
+      resourcesError.value = e.message || String(e)
+      return false
+    } finally {
+      resourcesLoadingMore.value = false
     }
   }
 
@@ -931,7 +1029,7 @@ export const useAppStore = defineStore('app', () => {
     myStaffLoading.value = true
     try {
       const api = new UsersApi(apiConfig())
-      const resp = await api.userGet(500, undefined, undefined, undefined, 0)
+      const resp = await api.userGet(500, undefined, undefined, undefined, undefined, 0)
       myStaff.value = resp.data?.data?.items ?? []
     } catch {
       // Not critical: the candidate pool stays as is.
@@ -946,12 +1044,22 @@ export const useAppStore = defineStore('app', () => {
   const adminUsersError = ref<string | null>(null)
 
   /** Full user list for the admin page (without password hashes) */
-  async function loadAdminUsers() {
+  async function loadAdminUsers(): Promise<void> {
+    await refreshAdminUsers('')
+  }
+
+  /**
+   * Reloads the admin user list applying a server-side search ('' = all users).
+   * The search is a case-insensitive substring of the full name/login
+   * (max 128 chars; LIKE escaping is done by the backend) and always starts
+   * from the first page (offset 0).
+   */
+  async function refreshAdminUsers(search: string): Promise<void> {
     adminUsersLoading.value = true
     adminUsersError.value = null
     try {
       const api = new UsersApi(apiConfig())
-      const resp = await api.userGet(500, undefined, undefined, false, 0)
+      const resp = await api.userGet(500, undefined, undefined, false, search || undefined, 0)
       adminUsers.value = resp.data?.data?.items ?? []
     } catch (e: any) {
       adminUsersError.value = apiErrorMessage(e)
@@ -1063,6 +1171,9 @@ export const useAppStore = defineStore('app', () => {
     projectsError,
     resources,
     resourcesLoading,
+    resourcesLoadingMore,
+    resourcesTotal,
+    resourcesHasMore,
     resourcesError,
     users,
     usersLoading,
@@ -1073,6 +1184,7 @@ export const useAppStore = defineStore('app', () => {
     loadProjects,
     refreshProjects,
     loadResources,
+    loadMoreResources,
     refreshResources,
     loadCalendar,
     refreshCalendar,
@@ -1088,6 +1200,7 @@ export const useAppStore = defineStore('app', () => {
     adminUsersLoading,
     adminUsersError,
     loadAdminUsers,
+    refreshAdminUsers,
     createUser,
     resetPassword,
     updateUser,
@@ -1123,6 +1236,8 @@ export const useTimesheetStore = defineStore('timesheet', () => {
 
   const employees = ref<DtoUserResponse[]>([])
   const employeesTotal = ref(0)
+  /** Separate flag for "load more": the roster must not flash its loading state */
+  const employeesLoadingMore = ref(false)
   const states = ref<DtoStateResponse[]>([])
   const periodsByEmployee = ref<Record<number, DtoUserStateResponse[]>>({})
   const windowStart = ref('')
@@ -1182,37 +1297,115 @@ export const useTimesheetStore = defineStore('timesheet', () => {
     await hydrateFromCache(targets)
   }
 
-  /** Network refresh (PULL): loads states (including the user's own) for [start, end] and merges them into the cache by id */
-  async function refreshPeriods(start: string, end: string): Promise<void> {
+  /** Merges a fresh [start, end] window response for one employee into the cache */
+  function mergeWindowPeriods(id: number, list: DtoUserStateResponse[], start: string, end: string): void {
+    const existing = periodsByEmployee.value[id] ?? []
+    // A fresh response for the [start, end] window is authoritative for periods overlapping it:
+    // old overlapping periods (e.g. cleared via DELETE) are removed,
+    // then new ones are merged. Periods outside the window are kept for incremental loading.
+    const kept = existing.filter(
+      (p) =>
+        !(p.start_date != null && p.end_date != null && !(p.end_date < start || p.start_date > end)),
+    )
+    const byId = new Map<number, DtoUserStateResponse>()
+    for (const p of kept) if (p.id != null) byId.set(p.id, p)
+    for (const p of list) if (p.id != null) byId.set(p.id, p)
+    const merged = [...byId.values()].sort((a, b) =>
+      (a.start_date ?? '').localeCompare(b.start_date ?? ''),
+    )
+    // Keep the previous array reference when nothing changed: the grid reads
+    // periodsByEmployee, and replacing it with an equal-but-new array re-renders
+    // every cell on each background refresh (flicker on "Табель").
+    if (!samePeriods(existing, merged)) periodsByEmployee.value[id] = merged
+  }
+
+  /** Field-by-field equality of two sorted periods lists (same ids + fields) */
+  function samePeriods(a: DtoUserStateResponse[], b: DtoUserStateResponse[]): boolean {
+    if (a.length !== b.length) return false
+    for (let i = 0; i < a.length; i++) {
+      if (a[i]?.id !== b[i]?.id) return false
+      for (const key of Object.keys(a[i] ?? {}) as Array<keyof DtoUserStateResponse>) {
+        if (a[i][key] !== b[i]?.[key]) return false
+      }
+    }
+    return true
+  }
+
+  /**
+   * Fallback: the pre-batch per-employee fetch (one GET /user/{id}/days per
+   * visible row), used when the batch endpoint is unavailable (e.g. an older
+   * backend without GET /user/days). The timesheet must keep working in that
+   * case — the batch is only an optimization. Lenient: a failed row keeps its
+   * previous cached data; returns false only when at least one row failed.
+   */
+  async function refreshPeriodsOneByOne(start: string, end: string): Promise<boolean> {
     const api = new UsersApi(apiConfig())
+    let failed: unknown = null
     const results = await Promise.all(
       timesheetRows.value.map((emp) =>
         api
           .userIdDaysGet(emp.id ?? 0, start, end)
           .then((r) => ({ id: emp.id, list: r.data?.data ?? [] }))
           .catch((e: any) => {
-            setError(e)
+            failed = failed ?? e
             return { id: emp.id, list: [] }
           }),
       ),
     )
     for (const { id, list } of results) {
       if (id == null) continue
-      const existing = periodsByEmployee.value[id] ?? []
-      // A fresh response for the [start, end] window is authoritative for periods overlapping it:
-      // old overlapping periods (e.g. cleared via DELETE) are removed,
-      // then new ones are merged. Periods outside the window are kept for incremental loading.
-      const kept = existing.filter(
-        (p) =>
-          !(p.start_date != null && p.end_date != null && !(p.end_date < start || p.start_date > end)),
-      )
-      const byId = new Map<number, DtoUserStateResponse>()
-      for (const p of kept) if (p.id != null) byId.set(p.id, p)
-      for (const p of list) if (p.id != null) byId.set(p.id, p)
-      periodsByEmployee.value[id] = [...byId.values()].sort((a, b) =>
-        (a.start_date ?? '').localeCompare(b.start_date ?? ''),
-      )
+      mergeWindowPeriods(id, list, start, end)
     }
+    return failed == null
+  }
+
+  /**
+   * Network refresh (PULL) for the whole timesheet in a single batch request.
+   * Replaces the previous per-employee N+1 fan-out: GET /user/days returns one
+   * entry per requested id (empty `days` when the worker has none).
+   * The [start, end] window stays authoritative for every employee in the batch.
+   * Ids are sent in chunks of BATCH_IDS_MAX (the backend limit ≤200); each
+   * chunk is still one request — no per-employee fan-out — and failures are
+   * reported once for the whole page. If the batch endpoint is not available
+   * (unexpected payload shape or a request error), falls back to the
+   * per-employee path so the timesheet renders even against an older backend.
+   */
+  async function refreshPeriodsBatch(start: string, end: string): Promise<void> {
+    const ids = timesheetRows.value
+      .map((e) => e.id)
+      .filter((id): id is number => id != null)
+    if (ids.length === 0) return
+    const api = new UsersApi(apiConfig())
+    try {
+      const chunks: number[][] = []
+      for (let i = 0; i < ids.length; i += BATCH_IDS_MAX) chunks.push(ids.slice(i, i + BATCH_IDS_MAX))
+      const responses = await Promise.all(
+        chunks.map((chunk) => api.userDaysGet(chunk.join(','), start, end)),
+      )
+      for (const resp of responses) {
+        const entries = resp.data?.data
+        // Shape guard: an older backend (or a proxy) answering the URL with a
+        // non-batch payload must not be merged as if it were one.
+        if (!Array.isArray(entries)) throw new Error('batch days response: unexpected payload shape')
+        for (const entry of entries) {
+          if (entry.user_id == null) continue
+          mergeWindowPeriods(entry.user_id, entry.days ?? [], start, end)
+        }
+      }
+      // Unsync guard: if the backend omitted some requested ids, their current
+      // cached data is intentionally kept untouched instead of being wiped.
+    } catch (e: any) {
+      // The batch endpoint may be missing on an older backend — fall back to
+      // the per-employee path; surface an error only when the fallback fails too.
+      const ok = await refreshPeriodsOneByOne(start, end)
+      if (!ok) setError(e)
+      else console.warn('[timesheet] batch days unavailable, fell back to per-employee:', e?.message ?? e)
+    }
+  }
+
+  /** Network refresh (PULL) entry point: keeps the (start, end) signature used by warmup/sync/ensureRange */
+  async function refreshPeriods(start: string, end: string): Promise<void> {
+    await refreshPeriodsBatch(start, end)
   }
 
   /** An employee's period covering a day (binary search over the sorted periods) */
@@ -1234,6 +1427,37 @@ export const useTimesheetStore = defineStore('timesheet', () => {
     return p && p.end_date != null && p.end_date >= iso ? p : undefined
   }
 
+  /** Response shape of the paginated employees list (`/user` with limit/offset) */
+  interface EmployeePage {
+    data?: { items?: DtoUserResponse[]; limit?: number; offset?: number; total?: number }
+  }
+
+  /** Merges an employees page into the current list (dedup by id, fresh wins) */
+  function mergeEmployees(items: DtoUserResponse[]): void {
+    const byId = new Map<number, DtoUserResponse>()
+    for (const e of employees.value) if (e.id != null) byId.set(e.id, e)
+    for (const e of items) if (e.id != null) byId.set(e.id, e)
+    employees.value = [...byId.values()]
+  }
+
+  /**
+   * Whether two roster snapshots are equal field-by-field (same order, same ids,
+   * same visible fields). Used to keep the `employees` array reference stable on
+   * a background refresh so dependent computeds and the grid do not re-render.
+   */
+  function sameEmployees(a: DtoUserResponse[], b: DtoUserResponse[]): boolean {
+    if (a.length !== b.length) return false
+    for (let i = 0; i < a.length; i++) {
+      if (a[i]?.id !== b[i]?.id) return false
+      // Shallow compare: the roster DTO is flat (name/position/manager/…), so a
+      // field-by-field check is enough to notice a real change.
+      for (const key of Object.keys(a[i] ?? {}) as Array<keyof DtoUserResponse>) {
+        if (a[i][key] !== b[i]?.[key]) return false
+      }
+    }
+    return true
+  }
+
   /** Local-first: hydrate the employee list (scoped by the backend) from the cache */
   async function loadEmployeesList(): Promise<void> {
     if (employees.value.length) return
@@ -1253,20 +1477,74 @@ export const useTimesheetStore = defineStore('timesheet', () => {
     ])
   }
 
-  async function refreshEmployees(managerId?: number): Promise<void> {
-    loading.value = true
-    error.value = null
+  async function refreshEmployees(managerId?: number, silent = false): Promise<void> {
+    if (!silent) {
+      loading.value = true
+      error.value = null
+    }
     try {
       const api = new UsersApi(apiConfig())
-      const resp = await api.userGet(PAGE_SIZE, undefined, managerId ?? undefined, undefined, 0)
+      const resp = await api.userGet(PAGE_SIZE, undefined, managerId ?? undefined, undefined, undefined, 0)
       const data = resp.data?.data
       // Sorting is added by the computed employeesWithTitles.
-      employees.value = data?.items ?? []
+      //
+      // The array identity is preserved when the roster did not change: it feeds
+      // timesheetRows → the whole grid. Replacing it with an equal-but-new array
+      // re-renders every row and flickers the "Табель" page on each background
+      // refresh (the same roster is now pulled on a timer).
+      const items = data?.items ?? []
+      if (!sameEmployees(items, employees.value)) employees.value = items
       employeesTotal.value = data?.total ?? 0
     } catch (e: any) {
-      setError(e)
+      if (!silent) setError(e)
     } finally {
-      loading.value = false
+      if (!silent) loading.value = false
+    }
+  }
+
+  /** Whether another employees page can be requested */
+  const employeesHasMore = computed(() => employeesTotal.value > employees.value.length)
+
+  /**
+   * Appends the next employees page ("load more"). The list is scoped
+   * server-side (admin: everyone, vp: own subordinates), so paging is a plain
+   * offset request. Offline the pages cached by earlier online visits are
+   * merged instead of a network call — the offline cache fallback in http.ts
+   * answers by pathname with the freshest page and would ignore the offset.
+   * Rows without an id cannot be deduplicated and are dropped.
+   */
+  async function loadMoreEmployees(): Promise<boolean> {
+    if (employeesLoadingMore.value || !employeesHasMore.value) return true
+    employeesLoadingMore.value = true
+    error.value = null
+    try {
+      if (isOffline.value) {
+        const pages = await cacheGetAllByPath<EmployeePage>(
+          apiPath('/user'),
+          (key) => /\blimit=50\b/.test(key),
+        )
+        let merged = false
+        for (const page of pages) {
+          const d = page.data?.data
+          if (!d?.items?.length) continue
+          mergeEmployees(d.items)
+          if (typeof d.total === 'number' && (d.offset ?? 0) > 0) employeesTotal.value = d.total
+          merged = true
+        }
+        if (!merged) error.value = 'Нет сохранённых данных: откройте эту страницу онлайн хотя бы раз'
+        return merged
+      }
+      const api = new UsersApi(apiConfig())
+      const resp = await api.userGet(PAGE_SIZE, undefined, undefined, undefined, undefined, employees.value.length)
+      const data = resp.data?.data
+      mergeEmployees(data?.items ?? [])
+      employeesTotal.value = data?.total ?? employeesTotal.value
+      return true
+    } catch (e: any) {
+      setError(e)
+      return false
+    } finally {
+      employeesLoadingMore.value = false
     }
   }
 
@@ -1497,6 +1775,8 @@ export const useTimesheetStore = defineStore('timesheet', () => {
     employeesWithTitles,
     timesheetRows,
     employeesTotal,
+    employeesLoadingMore,
+    employeesHasMore,
     states,
     periodsByEmployee,
     windowStart,
@@ -1506,6 +1786,7 @@ export const useTimesheetStore = defineStore('timesheet', () => {
     error,
     loadEmployees,
     refreshEmployees,
+    loadMoreEmployees,
     loadStates,
     refreshStates,
     refreshPeriods,
@@ -2239,8 +2520,10 @@ export const usePlanningStore = defineStore('planning', () => {
 
   /**
    * Assigns a resource to a task: POST /assignment + silent reload of tasks.
-   * For non-admin, owners are checked beforehand (the data is already in the planning cache):
-   * a definitely-403 assignment goes neither to an online request nor to the offline queue.
+   * Owners are checked beforehand (the data is already in the planning cache) for a
+   * scope narrower than "all": a definitely-403 assignment goes neither to an online
+   * request nor to the offline queue. A global assignment.create scope (or the admin
+   * preset on a cold start) skips the pre-check — the backend still enforces.
    */
   async function assignResource(
     taskId: number,
@@ -2248,7 +2531,10 @@ export const usePlanningStore = defineStore('planning', () => {
     quantity: number,
   ): Promise<boolean> {
     const auth = useAuthStore()
-    const owners = auth.user?.preset === 'admin' ? [] : taskOwnerIds(taskId)
+    const rbac = useRbacStore()
+    const permsReady = rbac.permsLoaded || rbac.myPermissions.length > 0
+    const assignAll = permsReady ? rbac.perm('assignment', 'create') === 'all' : auth.user?.preset === 'admin'
+    const owners = assignAll ? [] : taskOwnerIds(taskId)
     if (owners.length > 0) {
       const res = useAppStore().resources.find((r: any) => r.id === resourceId)
       if (res?.owner_id == null || !owners.includes(res.owner_id)) {

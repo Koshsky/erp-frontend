@@ -4,8 +4,9 @@ import type { PlanningUnit } from './components/planner/calendar'
 /**
  * Sync settings (the "Sync" screen). Stored in localStorage
  * under the mvs_erp_sync_* keys. Login/password are not stored here: the session
- * lives in the access token (in memory, AD-05) and the HttpOnly refresh cookie; after
- * a reload, restoration happens via /auth/refresh.
+ * lives in the access token (in memory, AD-05) and the refresh token (IndexedDB,
+ * offline/session.ts — sent in the body of /auth/refresh; the HttpOnly cookie is
+ * only a legacy fallback). After a reload, restoration happens via /auth/refresh.
  */
 
 const AUTO_SYNC_KEY = 'mvs_erp_auto_sync'

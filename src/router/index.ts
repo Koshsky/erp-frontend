@@ -310,15 +310,21 @@ router.beforeEach(async (to) => {
     to.name !== 'system-queue' &&
     to.name !== 'system-status' &&
     to.name !== 'system-settings' &&
-    !pagePerm[to.name as string] &&
-    !rbac.can('project', 'view') &&
-    !rbac.can('process', 'view') &&
-    !rbac.can('task', 'view') &&
-    !rbac.can('resource', 'view') &&
-    !rbac.can('worker', 'view') &&
-    auth.user?.preset !== 'admin'
+    !pagePerm[to.name as string]
   ) {
-    return { name: 'profile' }
+    const permsReady = rbac.permsLoaded || rbac.myPermissions.length > 0
+    const hasAnyViewPerm =
+      rbac.can('project', 'view') ||
+      rbac.can('process', 'view') ||
+      rbac.can('task', 'view') ||
+      rbac.can('resource', 'view') ||
+      rbac.can('worker', 'view')
+    // The matrix is authoritative once loaded (admin's bypass populates every
+    // view permission); on a cold start the preset is the fallback — admin must
+    // never land on the profile while /permissions/me is still loading.
+    if (permsReady ? !hasAnyViewPerm : auth.user?.preset !== 'admin') {
+      return { name: 'profile' }
+    }
   }
 
   // Server address settings — desktop (Electron) build only. In the online

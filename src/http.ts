@@ -2,7 +2,7 @@ import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios'
 import router from './router'
 import { apiErrorMessage } from './utils'
 import { cacheGet, cacheGetByPath, cachePut } from './offline/cache'
-import { replayOutboxToCache } from './offline/outbox'
+import { replayOutboxToCache, scheduleReplayOutboxToCache } from './offline/outbox'
 import { isOffline } from './offline/state'
 import { getAccessToken } from './token'
 import { ensureAutoSession } from './offline/sync'
@@ -68,7 +68,9 @@ export function setupHttp() {
         // Invariant "cache = server + queue": after a fresh write we re-apply
         // unsynchronized mutations — warmup/reconcile must not erase them with
         // server truth (otherwise offline edits are lost after a reload).
-        await replayOutboxToCache()
+        // Coalesced: a burst of parallel GETs schedules a single replay for the
+        // whole tick instead of one full outbox+cache scan per response.
+        scheduleReplayOutboxToCache()
       }
       return response
     },

@@ -11,6 +11,10 @@
  * The token is kept indefinitely — no TTL (see the no-TTL invariant in
  * db.ts): the refresh session itself expires server-side (168 h). The store is
  * written on every login/refresh rotation and cleared on logout.
+ *
+ * XSS-readable by design (same-origin JS can read IndexedDB): accepted
+ * tradeoff — server-side rotation and reuse detection are the real protection.
+ * The HttpOnly cookie exists only as a legacy fallback (see token.ts).
  */
 
 import { idbPut, idbGet, idbDel } from './db'

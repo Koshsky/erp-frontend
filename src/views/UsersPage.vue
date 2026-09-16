@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useRouter } from 'vue-router'
 import { ContextMenu, ConfirmDialog, PasswordDialog } from '../components/common'
@@ -114,6 +114,7 @@ function askDelete(u: DtoAdminUserResponse) {
     if (!Number.isFinite(id) || id <= 0) return
     deleteTarget.value = null
     await app.deleteUser(id)
+    await refreshAfterMutation()
   })
 }
 
@@ -149,6 +150,31 @@ async function onResetPassword(user: DtoAdminUserResponse) {
 onMounted(() => {
   void app.loadAdminUsers()
 })
+
+/**
+ * Server-side search over the whole user base (not only over the loaded page):
+ * the list is capped at 500 rows, so users beyond the cap would otherwise be
+ * unreachable. Debounced (~300 ms) and always restarts from the first page.
+ */
+const search = ref('')
+let searchTimer: ReturnType<typeof setTimeout> | null = null
+
+watch(search, () => {
+  if (searchTimer) clearTimeout(searchTimer)
+  searchTimer = setTimeout(() => {
+    searchTimer = null
+    void app.refreshAdminUsers(search.value.trim())
+  }, 300)
+})
+
+onBeforeUnmount(() => {
+  if (searchTimer) clearTimeout(searchTimer)
+})
+
+/** Refreshes the list keeping the active search after a mutation (delete) */
+async function refreshAfterMutation() {
+  await app.refreshAdminUsers(search.value.trim())
+}
 </script>
 
 <template>
@@ -156,6 +182,7 @@ onMounted(() => {
     <div class="up-head">
       <h2 class="up-title">Пользователи</h2>
       <div class="up-actions">
+        <input v-model="search" type="search" class="up-search" placeholder="Поиск по ФИО или логину" />
         <button v-if="rbac.can('user_admin', 'create')" type="button" class="up-add" @click="router.push('/users/new')">
           Создать пользователя
         </button>
@@ -267,6 +294,23 @@ onMounted(() => {
 .up-add:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+}
+.up-search {
+  width: 240px;
+  box-sizing: border-box;
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius-sm);
+  padding: 9px 12px;
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--ui-text);
+  background: var(--ui-surface);
+  outline: none;
+  transition: border-color var(--ui-duration), box-shadow var(--ui-duration);
+}
+.up-search:focus {
+  border-color: var(--ui-accent);
+  box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.12);
 }
 .up-st {
   color: var(--ui-text-2);

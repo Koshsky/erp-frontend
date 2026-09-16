@@ -158,15 +158,28 @@ function onDeleteSubtask(id: number) {
           <ColorField v-model="color" label="Цвет задачи" />
         </div>
 
-        <button
-          type="button"
-          class="te-save"
-          :disabled="!canSave"
-          @click="onSave"
-        >
-          <span v-if="busy" class="te-spinner" />
-          Сохранить
-        </button>
+        <p v-if="!canManage && !disabledReason" class="te-note">
+          Нет права на изменение задачи — режим просмотра
+        </p>
+
+        <div class="te-actions">
+          <button
+            type="button"
+            class="te-cancel"
+            @click="emit('close')"
+          >
+            Отмена
+          </button>
+          <button
+            type="button"
+            class="te-save"
+            :disabled="!canSave"
+            @click="onSave"
+          >
+            <span v-if="busy" class="te-spinner" />
+            Сохранить
+          </button>
+        </div>
       </div>
 
       <div class="te-right">
@@ -270,6 +283,25 @@ function onDeleteSubtask(id: number) {
 }
 .te-select {
   height: 40px;
+}
+.te-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.te-cancel {
+  border: none;
+  border-radius: var(--ui-radius-sm);
+  padding: 9px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  background: var(--ui-surface-2);
+  color: var(--ui-text-2);
+}
+.te-cancel:hover {
+  background: var(--ui-border);
+  color: var(--ui-text);
 }
 .te-save {
   border: none;

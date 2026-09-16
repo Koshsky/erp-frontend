@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted } from 'vue'
+import { useModalFocus } from '../../../composables/useModalFocus'
 import type { ConfirmDialogProps } from './types'
 
-withDefaults(defineProps<ConfirmDialogProps>(), {
+const props = withDefaults(defineProps<ConfirmDialogProps>(), {
   title: 'Подтверждение',
   confirmLabel: 'Удалить',
   danger: true,
@@ -13,18 +13,22 @@ const emit = defineEmits<{
   close: []
 }>()
 
-function onKeydown(e: KeyboardEvent) {
-  if (e.key === 'Escape') emit('close')
-}
-
-onMounted(() => document.addEventListener('keydown', onKeydown))
-onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
+/**
+ * Focus management: initial focus, Tab trap, Escape from anywhere and focus
+ * restore. The previous document listener had no `open` guard, so Escape was
+ * handled even while the dialog was closed — a hidden dialog could swallow or
+ * double-close a parent modal.
+ */
+const { dialogEl, onKeydown } = useModalFocus({
+  open: () => props.open,
+  onClose: () => emit('close'),
+})
 </script>
 
 <template>
   <Teleport to="body">
     <div v-if="open" class="cd-overlay" @mousedown.self="emit('close')">
-      <div class="cd" role="dialog" aria-modal="true" :aria-label="title">
+      <div ref="dialogEl" class="cd" role="dialog" aria-modal="true" :aria-label="title" tabindex="-1" @keydown="onKeydown">
         <div class="cd-head">
           <h3 class="cd-title">{{ title }}</h3>
           <button type="button" class="cd-close" aria-label="Закрыть" @click="emit('close')">×</button>

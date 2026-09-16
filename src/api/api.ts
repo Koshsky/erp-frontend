@@ -652,6 +652,14 @@ export interface DtoUserStateResponse {
     'state_code'?: string;
     'state_id'?: number;
     'state_name'?: string;
+    /**
+     * UserID is set only in batch responses (GET /user/days), where one worker\'s ranges are nested among several — hence omitempty.
+     */
+    'user_id'?: number;
+}
+export interface DtoUserStatesResponse {
+    'days'?: Array<DtoUserStateResponse>;
+    'user_id'?: number;
 }
 export interface ErrorsDomainError {
     'code'?: string;
@@ -849,6 +857,10 @@ export interface UserAllGet200Response {
 }
 export interface UserChangePasswordPost200Response {
     'data'?: DtoChangePasswordResponse;
+    'error'?: object;
+}
+export interface UserDaysGet200Response {
+    'data'?: Array<DtoUserStatesResponse>;
     'error'?: object;
 }
 export interface UserGet200Response {
@@ -6754,17 +6766,72 @@ export const UsersApiAxiosParamCreator = function (configuration?: Configuration
             };
         },
         /**
+         * Batch replacement of GET /user/{id}/days: returns the state ranges of several workers over one date range, with one entry per requested id (empty days when the worker has none) and no N+1 requests per employee.
+         * @summary Batch list worker days
+         * @param {string} ids Comma-separated user IDs (max 200)
+         * @param {string} startDate Start date (YYYY-MM-DD)
+         * @param {string} endDate End date (YYYY-MM-DD)
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        userDaysGet: async (ids: string, startDate: string, endDate: string, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'ids' is not null or undefined
+            assertParamExists('userDaysGet', 'ids', ids)
+            // verify required parameter 'startDate' is not null or undefined
+            assertParamExists('userDaysGet', 'startDate', startDate)
+            // verify required parameter 'endDate' is not null or undefined
+            assertParamExists('userDaysGet', 'endDate', endDate)
+            const localVarPath = `/user/days`;
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'GET', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication ApiKeyAuth required
+            await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
+
+            if (ids !== undefined) {
+                localVarQueryParameter['ids'] = ids;
+            }
+
+            if (startDate !== undefined) {
+                localVarQueryParameter['start_date'] = startDate;
+            }
+
+            if (endDate !== undefined) {
+                localVarQueryParameter['end_date'] = endDate;
+            }
+
+            localVarHeaderParameter['Accept'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
          * Returns a paged list of users; admin sees all, vp sees own subordinates + self.
          * @summary List users
          * @param {number} [limit] Page size (default 50, max 500)
          * @param {string} [preset] Filter by preset (e.g. worker)
          * @param {number} [managerId] Filter by manager (admin)
          * @param {boolean} [includeHash] Include password_hash (admin only)
+         * @param {string} [search] Case-insensitive substring of the full name or login (max 128 chars)
          * @param {number} [offset] Page offset
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        userGet: async (limit?: number, preset?: string, managerId?: number, includeHash?: boolean, offset?: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+        userGet: async (limit?: number, preset?: string, managerId?: number, includeHash?: boolean, search?: string, offset?: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
             const localVarPath = `/user`;
             // use dummy base URL string because the URL constructor only accepts absolute URLs.
             const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
@@ -6794,6 +6861,10 @@ export const UsersApiAxiosParamCreator = function (configuration?: Configuration
 
             if (includeHash !== undefined) {
                 localVarQueryParameter['include_hash'] = includeHash;
+            }
+
+            if (search !== undefined) {
+                localVarQueryParameter['search'] = search;
             }
 
             if (offset !== undefined) {
@@ -7228,18 +7299,34 @@ export const UsersApiFp = function(configuration?: Configuration) {
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
+         * Batch replacement of GET /user/{id}/days: returns the state ranges of several workers over one date range, with one entry per requested id (empty days when the worker has none) and no N+1 requests per employee.
+         * @summary Batch list worker days
+         * @param {string} ids Comma-separated user IDs (max 200)
+         * @param {string} startDate Start date (YYYY-MM-DD)
+         * @param {string} endDate End date (YYYY-MM-DD)
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async userDaysGet(ids: string, startDate: string, endDate: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<UserDaysGet200Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.userDaysGet(ids, startDate, endDate, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['UsersApi.userDaysGet']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
          * Returns a paged list of users; admin sees all, vp sees own subordinates + self.
          * @summary List users
          * @param {number} [limit] Page size (default 50, max 500)
          * @param {string} [preset] Filter by preset (e.g. worker)
          * @param {number} [managerId] Filter by manager (admin)
          * @param {boolean} [includeHash] Include password_hash (admin only)
+         * @param {string} [search] Case-insensitive substring of the full name or login (max 128 chars)
          * @param {number} [offset] Page offset
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async userGet(limit?: number, preset?: string, managerId?: number, includeHash?: boolean, offset?: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<UserGet200Response>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.userGet(limit, preset, managerId, includeHash, offset, options);
+        async userGet(limit?: number, preset?: string, managerId?: number, includeHash?: boolean, search?: string, offset?: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<UserGet200Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.userGet(limit, preset, managerId, includeHash, search, offset, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
             const localVarOperationServerBasePath = operationServerMap['UsersApi.userGet']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
@@ -7398,18 +7485,31 @@ export const UsersApiFactory = function (configuration?: Configuration, basePath
             return localVarFp.userChangePasswordPost(request, options).then((request) => request(axios, basePath));
         },
         /**
+         * Batch replacement of GET /user/{id}/days: returns the state ranges of several workers over one date range, with one entry per requested id (empty days when the worker has none) and no N+1 requests per employee.
+         * @summary Batch list worker days
+         * @param {string} ids Comma-separated user IDs (max 200)
+         * @param {string} startDate Start date (YYYY-MM-DD)
+         * @param {string} endDate End date (YYYY-MM-DD)
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        userDaysGet(ids: string, startDate: string, endDate: string, options?: RawAxiosRequestConfig): AxiosPromise<UserDaysGet200Response> {
+            return localVarFp.userDaysGet(ids, startDate, endDate, options).then((request) => request(axios, basePath));
+        },
+        /**
          * Returns a paged list of users; admin sees all, vp sees own subordinates + self.
          * @summary List users
          * @param {number} [limit] Page size (default 50, max 500)
          * @param {string} [preset] Filter by preset (e.g. worker)
          * @param {number} [managerId] Filter by manager (admin)
          * @param {boolean} [includeHash] Include password_hash (admin only)
+         * @param {string} [search] Case-insensitive substring of the full name or login (max 128 chars)
          * @param {number} [offset] Page offset
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        userGet(limit?: number, preset?: string, managerId?: number, includeHash?: boolean, offset?: number, options?: RawAxiosRequestConfig): AxiosPromise<UserGet200Response> {
-            return localVarFp.userGet(limit, preset, managerId, includeHash, offset, options).then((request) => request(axios, basePath));
+        userGet(limit?: number, preset?: string, managerId?: number, includeHash?: boolean, search?: string, offset?: number, options?: RawAxiosRequestConfig): AxiosPromise<UserGet200Response> {
+            return localVarFp.userGet(limit, preset, managerId, includeHash, search, offset, options).then((request) => request(axios, basePath));
         },
         /**
          * Clear state ranges of a worker overlapping a date range (splits overlaps, optional state filter)
@@ -7538,18 +7638,32 @@ export class UsersApi extends BaseAPI {
     }
 
     /**
+     * Batch replacement of GET /user/{id}/days: returns the state ranges of several workers over one date range, with one entry per requested id (empty days when the worker has none) and no N+1 requests per employee.
+     * @summary Batch list worker days
+     * @param {string} ids Comma-separated user IDs (max 200)
+     * @param {string} startDate Start date (YYYY-MM-DD)
+     * @param {string} endDate End date (YYYY-MM-DD)
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    public userDaysGet(ids: string, startDate: string, endDate: string, options?: RawAxiosRequestConfig) {
+        return UsersApiFp(this.configuration).userDaysGet(ids, startDate, endDate, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
      * Returns a paged list of users; admin sees all, vp sees own subordinates + self.
      * @summary List users
      * @param {number} [limit] Page size (default 50, max 500)
      * @param {string} [preset] Filter by preset (e.g. worker)
      * @param {number} [managerId] Filter by manager (admin)
      * @param {boolean} [includeHash] Include password_hash (admin only)
+     * @param {string} [search] Case-insensitive substring of the full name or login (max 128 chars)
      * @param {number} [offset] Page offset
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      */
-    public userGet(limit?: number, preset?: string, managerId?: number, includeHash?: boolean, offset?: number, options?: RawAxiosRequestConfig) {
-        return UsersApiFp(this.configuration).userGet(limit, preset, managerId, includeHash, offset, options).then((request) => request(this.axios, this.basePath));
+    public userGet(limit?: number, preset?: string, managerId?: number, includeHash?: boolean, search?: string, offset?: number, options?: RawAxiosRequestConfig) {
+        return UsersApiFp(this.configuration).userGet(limit, preset, managerId, includeHash, search, offset, options).then((request) => request(this.axios, this.basePath));
     }
 
     /**

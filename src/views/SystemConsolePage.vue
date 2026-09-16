@@ -72,7 +72,7 @@ async function onPull() {
       failMsg('Нет соединения с сервером — PULL недоступен')
       return
     }
-    const ran = await warmNow()
+    const ran = await warmNow(true)
     if (ran) {
       okMsg('Данные прогреты')
     } else if (isOffline.value) {

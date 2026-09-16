@@ -260,17 +260,31 @@ app.whenReady().then(async () => {
 
   // setCertificateVerifyProc intercepts ALL TLS session verifications, including
   // fetch/axios from the renderer (for them certificate-error does not always fire).
+  // It runs on the presented (unvalidated) certificate chain, so the same policy
+  // as the 'certificate-error' handler above must be re-applied here: a failed
+  // verification is accepted ONLY when the server presented a genuine self-signed
+  // certificate (issuer == subject, subject carries a CN). A certificate forged
+  // by a MITM CA has issuer != subject and is rejected — as are expiry and
+  // hostname-mismatch errors, which self-signing cannot cure.
   // Codes — Chromium net::Error:
-  //   0    — certificate is valid;
+  //   0    — certificate is valid (always accepted);
   //  -202  — ERR_CERT_AUTHORITY_INVALID (self-signed / untrusted CA);
   //  -207  — ERR_CERT_INVALID (invalid, but often self-signed).
-  // Others (expired -201, wrong domain -200) are rejected as usual.
+  // Expired (-201) and wrong-domain (-200) are rejected regardless of the
+  // issuer/subject match, exactly as before.
   const { session } = require('electron')
   session.defaultSession.setCertificateVerifyProc((request, callback) => {
-    if (request.errorCode !== 0 && request.errorCode !== -202 && request.errorCode !== -207) {
+    const isSelfSigned =
+      request.certificate.issuerName === request.certificate.subjectName &&
+      /CN=/.test(request.certificate.subjectName)
+    const isTrustedSelfSigned =
+      request.errorCode !== 0 &&
+      (request.errorCode === -202 || request.errorCode === -207) &&
+      isSelfSigned
+    if (request.errorCode !== 0 && !isTrustedSelfSigned) {
       console.log('[desktop] сертификат отклонён:', request.hostname, 'code=', request.errorCode)
     }
-    if (request.errorCode === 0 || request.errorCode === -202 || request.errorCode === -207) {
+    if (request.errorCode === 0 || isTrustedSelfSigned) {
       callback(0)
     } else {
       callback(-3)

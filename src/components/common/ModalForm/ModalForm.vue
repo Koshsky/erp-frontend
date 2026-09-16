@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { reactive, ref, watch, computed } from 'vue'
+import { reactive, watch, computed } from 'vue'
 import type { ModalFormProps, ModalField } from './types'
 import ColorField from '../ColorField/ColorField.vue'
+import { useModalFocus } from '../../../composables/useModalFocus'
 
 const props = withDefaults(defineProps<ModalFormProps>(), {
   submitLabel: 'Сохранить',
@@ -18,7 +19,17 @@ const emit = defineEmits<{
 
 /** Local form state; initialized from fields on open */
 const values = reactive<Record<string, any>>({})
-const formEl = ref<HTMLElement | null>(null)
+
+/**
+ * Focus management: initial focus, Tab trap, Escape from anywhere and focus
+ * restore to the trigger. Escape previously lived on the overlay's @keydown,
+ * which never fired because Teleport moves the markup to <body> while focus
+ * stayed behind on the trigger.
+ */
+const { dialogEl, onKeydown } = useModalFocus({
+  open: () => props.open,
+  onClose: () => emit('close'),
+})
 
 function resetValues() {
   for (const key of Object.keys(values)) delete values[key]
@@ -47,10 +58,6 @@ function onSubmit() {
 function onOverlayClick(e: MouseEvent) {
   if (e.target === e.currentTarget) emit('close')
 }
-
-function onKeydown(e: KeyboardEvent) {
-  if (e.key === 'Escape') emit('close')
-}
 </script>
 
 <template>
@@ -59,9 +66,8 @@ function onKeydown(e: KeyboardEvent) {
       v-if="open"
       class="mf-overlay"
       @mousedown.self="onOverlayClick"
-      @keydown="onKeydown"
     >
-      <div ref="formEl" class="mf" :style="maxWidth ? { maxWidth } : undefined" role="dialog" aria-modal="true" :aria-label="title">
+      <div ref="dialogEl" class="mf" :style="maxWidth ? { maxWidth } : undefined" role="dialog" aria-modal="true" :aria-label="title" tabindex="-1" @keydown="onKeydown">
         <div class="mf-head">
           <h3 class="mf-title">{{ title }}</h3>
           <button type="button" class="mf-close" aria-label="Закрыть" @click="emit('close')">×</button>
