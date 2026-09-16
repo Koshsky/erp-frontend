@@ -195,10 +195,12 @@ export function buildPullSteps(): PullStep[] {
       keyPredicate: (key) => /\blimit=50\b/.test(key),
       refresh: () => ts.refreshEmployees(undefined, true),
     })
-    // Timesheet periods are per-employee, date-windowed: the batch endpoint
-    // (/user/days) is expensive, so it is pulled only on full warmup / reconcile
-    // (cycle:false). Its cache copy (written by http.ts on the same pathname) is
-    // used for the TTL gate — repeat warmups skip it while it is still fresh.
+    // Timesheet periods: the batch endpoint (/user/days) is a single request
+    // (chunked at BATCH_IDS_MAX), so the step participates in the 60-second
+    // cycle like the planning diagrams — the staleness gate uses its cache copy
+    // (written by http.ts on the same pathname): repeat pulls skip it while the
+    // copy is still fresh, so the user sees current ranges without needing a
+    // mutation first (previously cycle:false left periods stale until an edit).
     steps.push({
       name: 'periods',
       path: apiPath('/user/days'),
@@ -206,7 +208,6 @@ export function buildPullSteps(): PullStep[] {
         ts.windowStart
           ? ts.refreshPeriods(ts.windowStart, ts.windowEnd)
           : Promise.resolve(),
-      cycle: false,
     })
   }
   if (planningData || timesheet) {

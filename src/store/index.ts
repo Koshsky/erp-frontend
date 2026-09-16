@@ -1310,9 +1310,25 @@ export const useTimesheetStore = defineStore('timesheet', () => {
     const byId = new Map<number, DtoUserStateResponse>()
     for (const p of kept) if (p.id != null) byId.set(p.id, p)
     for (const p of list) if (p.id != null) byId.set(p.id, p)
-    periodsByEmployee.value[id] = [...byId.values()].sort((a, b) =>
+    const merged = [...byId.values()].sort((a, b) =>
       (a.start_date ?? '').localeCompare(b.start_date ?? ''),
     )
+    // Keep the previous array reference when nothing changed: the grid reads
+    // periodsByEmployee, and replacing it with an equal-but-new array re-renders
+    // every cell on each background refresh (flicker on "Табель").
+    if (!samePeriods(existing, merged)) periodsByEmployee.value[id] = merged
+  }
+
+  /** Field-by-field equality of two sorted periods lists (same ids + fields) */
+  function samePeriods(a: DtoUserStateResponse[], b: DtoUserStateResponse[]): boolean {
+    if (a.length !== b.length) return false
+    for (let i = 0; i < a.length; i++) {
+      if (a[i]?.id !== b[i]?.id) return false
+      for (const key of Object.keys(a[i] ?? {}) as Array<keyof DtoUserStateResponse>) {
+        if (a[i][key] !== b[i]?.[key]) return false
+      }
+    }
+    return true
   }
 
   /**

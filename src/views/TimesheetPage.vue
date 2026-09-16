@@ -59,6 +59,12 @@ onMounted(async () => {
   // The filter options need the user/resource catalogs (cached in the app store)
   if (seesAllEmployees.value && !users.value.length) await app.loadUsers()
   await app.ensureResourceMembers(false)
+  // Render is local-first (the cache hydrates instantly and the grid shows the
+  // last known ranges), but the CURRENT ranges must come from the backend: pull
+  // the visible window silently on open. Without this the timesheet kept stale
+  // ranges until the user made an edit (periods were excluded from the
+  // background cycle). refreshPeriods never toggles loading/warmup UI.
+  if (ts.windowStart) void ts.refreshPeriods(ts.windowStart, ts.windowEnd)
 })
 
 /** Lazy-load states on scroll/zoom (debounced) */
