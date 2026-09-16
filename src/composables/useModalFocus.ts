@@ -1,4 +1,4 @@
-import { nextTick, onBeforeUnmount, watch } from 'vue'
+import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import type { Ref } from 'vue'
 
 /**
@@ -90,7 +90,11 @@ export interface UseModalFocusReturn {
 }
 
 export function useModalFocus(options: UseModalFocusOptions): UseModalFocusReturn {
-  const dialogEl: Ref<HTMLElement | null> = { value: null } as Ref<HTMLElement | null>
+  // A REAL Vue ref (not a plain { value: null } object): the production runtime
+  // normalizes template refs through setRef and crashes on a raw plain object
+  // (dev tolerated it, prod threw "reading 'refs' of undefined"). The template
+  // in the calling component binds ref="dialogEl" to this ref.
+  const dialogEl = ref<HTMLElement | null>(null)
   return useModalFocusImpl(options, dialogEl)
 }
 
