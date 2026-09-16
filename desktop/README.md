@@ -18,11 +18,14 @@ local http) and connects to an external backend via API_URL (set on the
 
 ## Building
 
-Build the frontend first:
+`build-portable.sh` is the recommended way: it **always rebuilds** the
+frontend from sources, so the release never embeds a stale `dist/` (see
+"Always fresh" below). A manual frontend build is needed only for the plain
+`npm run dist*` paths:
 
 ```bash
 cd ../            # services/frontend
-npm run build     # → dist/
+npm run build     # → dist/  (only needed for plain `npm run dist*`)
 ```
 
 Then build the installers (from `desktop/`):
@@ -38,6 +41,30 @@ npm run dist:linux # Linux (AppImage + deb)
 Ready artifacts go to `release/` (plain `npm run dist` writes to the `release/`
 root); `build-portable.sh` additionally lays out each release into a
 **per-version directory** `release/<version>/`.
+
+### Always fresh — no cache in build-portable.sh
+
+`build-portable.sh` never reuses a previously built `services/frontend/dist/`;
+the Electron wrapper embeds `dist/` into every release (`resources/web` via
+`extraResources`), so a reused `dist/` silently shipped an old frontend inside
+a new release — the UI kept removed pages and missed recent features while the
+artifacts carried the new version. The script therefore:
+
+1. deletes `dist/` and purges the frontend build caches
+   (`node_modules/.vite`, `node_modules/.cache`) before every build;
+2. builds the web frontend unconditionally with the release version;
+3. fails if `dist/precache-manifest.json` was not written with exactly the
+   release version (`APP_VERSION` did not reach vite);
+4. after packaging, fails if the embedded `resources/web` differs from the
+   fresh `dist/`.
+
+The Electron/electron-builder **binary** caches (`desktop/.cache`) are kept on
+purpose: they hold tool binaries, not application code.
+
+Useful check when a release "shows old UI": look at
+`release/<version>/<app>-unpacked/resources/web/precache-manifest.json` — the
+`version` field must equal the release version. A git-hash value (e.g.
+`1808c37-mtx0hk8x`) means a stale bundle was embedded.
 
 ### Portable + single-file — Windows and Linux
 
@@ -77,8 +104,8 @@ is **incremented** on each build (patch):
 ./build-portable.sh --version 2.1.0 # build exactly 2.1.0
 ./build-portable.sh --bump minor    # increment minor
 ./build-portable.sh --no-bump       # current version unchanged
-./build-portable.sh --build-web     # force rebuild of dist/
 ./build-portable.sh --clean         # clean release/ before building
+./build-portable.sh --build-web     # deprecated no-op: web is always rebuilt
 ```
 
 The version is passed into the web build (`APP_VERSION` → `__APP_VERSION__` and

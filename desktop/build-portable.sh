@@ -4,12 +4,34 @@
 #
 #  What it does:
 #    1. Determines the app version (see "Version" below).
-#    2. Builds the web frontend (services/frontend/dist/) with the same version
-#       (unless already built or --build-web is passed).
+#    2. ALWAYS rebuilds the web frontend (services/frontend/dist/) from the
+#       current sources with that version. There is NO reuse of a previously
+#       built dist/ and NO build cache: dist/ is deleted, the vite caches are
+#       purged, and the fresh output is verified before packaging. See
+#       "No cache" below — this is the whole point of this script.
 #    3. Checks/installs the Electron wrapper dependencies (desktop/).
 #    4. Runs electron-builder for the enabled release parts (flags below).
 #       All artifacts of one release go into ONE directory named after the
 #       specific version: release/<version>/.
+#
+#  No cache (why dist/ is never reused):
+#    The Electron wrapper embeds services/frontend/dist/ as resources/web
+#    (see extraResources in desktop/package.json). Reusing an existing dist/
+#    silently shipped an OLD frontend inside a NEW release: the release was
+#    stamped with the new version while the bundled UI stayed at the previous
+#    build (removed pages still visible, new features missing). Therefore:
+#      - dist/ is removed before every build and rebuilt from sources;
+#      - frontend build caches (node_modules/.vite, node_modules/.cache) are
+#        purged, so nothing can be served from a stale cache;
+#      - the fresh dist/precache-manifest.json version must equal the release
+#        version (the build-time APP_VERSION actually reached vite);
+#      - after packaging, the embedded resources/web must be byte-identical to
+#        the fresh dist/.
+#    The Electron/electron-builder BINARY caches (desktop/.cache: the Electron
+#    runtime download and builder tooling) are deliberately KEPT: they contain
+#    no application code, only tool binaries — deleting them would force a
+#    large re-download without changing the packaged app. Only frontend build
+#    caches are purged.
 #
 #  Release parts and flags — ALL parts are OFF by default; enable what you need:
 #    --linux            Linux: portable folder linux-unpacked/ + single *.AppImage
@@ -37,7 +59,7 @@
 #    ./build-portable.sh --version 2.1.0     # build exactly 2.1.0
 #    ./build-portable.sh --no-bump           # current version as is
 #    ./build-portable.sh --bump minor        # increment minor
-#    ./build-portable.sh --build-web         # force rebuild of dist/
+#    ./build-portable.sh --build-web         # deprecated no-op (web is always rebuilt)
 #    ./build-portable.sh --clean             # clean release/ before building
 #
 #  Artifacts (release/<version>/ — all files of one release in one directory):
@@ -62,6 +84,11 @@ OUT_DIR="$DESKTOP_DIR/release"
 # which is read-only in many environments (sandbox/CI). Redirect into the
 # working tree (this directory is gitignored). @electron/get on Linux reads
 # XDG_CACHE_HOME (envPaths) — that is what we set, plus fallback variables.
+#
+# KEEP this cache: it holds the Electron runtime and builder tool binaries,
+# NOT application code. The packaged web payload comes from dist/ (rebuilt
+# below), so purging these directories cannot make the app fresher — it would
+# only force a multi-hundred-MB re-download. Do not "optimize" this away.
 export XDG_CACHE_HOME="$DESKTOP_DIR/.cache"
 export ELECTRON_CACHE="$XDG_CACHE_HOME/electron"
 export electron_config_cache="$XDG_CACHE_HOME/electron"
@@ -112,6 +139,12 @@ case "$BUMP_TYPE" in
   *) echo "Некорректный --bump: $BUMP_TYPE (ожидается patch|minor|major)" >&2; exit 1 ;;
 esac
 
+# --build-web is kept only so existing docs/scripts do not break: the web build
+# is now unconditional, so the flag changes nothing.
+if [ "$BUILD_WEB" -eq 1 ]; then
+  echo "== --build-web больше не нужен: web-сборка выполняется всегда, dist/ и кэш не переиспользуются =="
+fi
+
 # Nothing selected (all release parts off) — would silently build nothing.
 if [ "$LINUX_PORTABLE" -eq 0 ] && [ "$LINUX_APPIMAGE" -eq 0 ] && [ "$WIN_PORTABLE" -eq 0 ] && [ "$WIN_EXE" -eq 0 ]; then
   echo "Не включена ни одна часть сборки." >&2
@@ -156,14 +189,62 @@ if [ "$CLEAN" -eq 1 ] && [ -d "$OUT_DIR" ]; then
   rm -rf "$OUT_DIR"
 fi
 
-# 1. Web frontend
-if [ "$BUILD_WEB" -eq 1 ] || [ ! -f "$FRONTEND_DIR/dist/index.html" ]; then
-  echo "== собираем web-фронтенд (dist/, версия $APP_VERSION) =="
-  (cd "$FRONTEND_DIR" && test -d node_modules || npm install)
-  (cd "$FRONTEND_DIR" && npm run build)
-else
-  echo "== dist/ уже собран (пропуск; --build-web для пересборки) =="
+# 1. Web frontend — ALWAYS rebuilt from sources, never reused, never from cache.
+#
+#    dist/ is embedded into the release as resources/web (see extraResources in
+#    desktop/package.json). Reusing an existing dist/ here is what previously
+#    shipped an outdated frontend inside a new release (the UI showed removed
+#    pages and missed recent features while the artifacts carried the new
+#    version). So: drop dist/ entirely, purge the frontend build caches, build,
+#    and verify the result before anything is packaged.
+echo "== web-фронтенд: пересборка с нуля (кэш не используется), версия $APP_VERSION =="
+
+# Dependencies only when actually out of date (npm ci on a cold or changed
+# lockfile). Reinstalling on every build would only slow the cycle down.
+NEED_INSTALL=0
+if [ ! -d "$FRONTEND_DIR/node_modules" ]; then
+  NEED_INSTALL=1
+elif [ "$FRONTEND_DIR/package-lock.json" -nt "$FRONTEND_DIR/node_modules/.package-lock.json" ]; then
+  NEED_INSTALL=1
 fi
+if [ "$NEED_INSTALL" -eq 1 ]; then
+  echo "   зависимости фронтенда устарели — установка"
+  (cd "$FRONTEND_DIR" && npm ci) || (cd "$FRONTEND_DIR" && npm install)
+fi
+
+# Purge everything that could serve a stale bundle. dist/ goes first: if the
+# build fails, no half-written or old bundle is left behind for electron-builder
+# to pick up (set -e aborts the script).
+rm -rf "$FRONTEND_DIR/dist" \
+       "$FRONTEND_DIR/node_modules/.vite" \
+       "$FRONTEND_DIR/node_modules/.cache"
+
+# Build. APP_VERSION is already exported: vite inlines it into __APP_VERSION__
+# (UI "App/build version") and writes it into precache-manifest.json. The
+# explicit `|| exit 1` keeps a failure loud even if `set -e` is ever weakened.
+(cd "$FRONTEND_DIR" && npm run build) || { echo "ОШИБКА: сборка web-фронтенда не удалась." >&2; exit 1; }
+
+# The freshly built output must exist — otherwise there is nothing to package.
+if [ ! -f "$FRONTEND_DIR/dist/index.html" ]; then
+  echo "ОШИБКА: после сборки нет $FRONTEND_DIR/dist/index.html." >&2
+  exit 1
+fi
+if [ ! -f "$FRONTEND_DIR/dist/precache-manifest.json" ]; then
+  echo "ОШИБКА: после сборки нет $FRONTEND_DIR/dist/precache-manifest.json." >&2
+  exit 1
+fi
+
+# Freshness gate: the manifest version is written by vite at build time and must
+# equal the release version. A different value (e.g. the git-hash fallback)
+# means the build did not receive APP_VERSION — i.e. the artifact would carry a
+# version different from the UI, which is exactly the stale-ship symptom.
+BUILT_VERSION="$(node -p "require('$FRONTEND_DIR/dist/precache-manifest.json').version" 2>/dev/null || echo '')"
+if [ "$BUILT_VERSION" != "$VERSION" ]; then
+  echo "ОШИБКА: собранный фронтенд имеет версию '$BUILT_VERSION', а релиз — '$VERSION'." >&2
+  echo "APP_VERSION не дошёл до vite build — артефакт собран не из текущих исходников." >&2
+  exit 1
+fi
+echo "   web-сборка готова: версия в precache-manifest.json = $BUILT_VERSION"
 
 # 2. Electron wrapper dependencies
 if [ ! -d "$DESKTOP_DIR/node_modules/electron-builder" ]; then
@@ -213,6 +294,39 @@ fi
 # Remove electron-builder service files from the release directory:
 # only distributable artifacts remain in release/<version>/.
 rm -rf "$REL_DIR/.icon-ico" "$REL_DIR/builder-debug.yml" "$REL_DIR/builder-effective-config.yaml"
+
+# Embedded-payload gate: what electron-builder actually copied into the release
+# must be exactly the fresh dist/. This is the check that would have caught the
+# stale-frontend release: it compares the packaged resources/web with dist/ and
+# fails on any difference (extra, missing or changed file).
+check_embedded_web() {
+  local unpacked="$1"
+  local web="$unpacked/resources/web"
+  [ -d "$web" ] || return 0
+  echo "   сверяем встроенный web с собранным dist/ ($(basename "$unpacked"))"
+  if ! diff -r "$FRONTEND_DIR/dist" "$web" >/dev/null 2>&1; then
+    echo "ОШИБКА: встроенный в артефакт web отличается от свежего dist/." >&2
+    echo "Различия (первые строки):" >&2
+    diff -rq "$FRONTEND_DIR/dist" "$web" 2>&1 | head -20 >&2
+    exit 1
+  fi
+  # The embedded manifest version must match the release version as well — a
+  # copy of an old dist/ would pass a file compare only if it were identical,
+  # but this catches a manifest that drifted from the artifact version.
+  local packaged_version
+  packaged_version="$(node -p "require('$web/precache-manifest.json').version" 2>/dev/null || echo '')"
+  if [ "$packaged_version" != "$VERSION" ]; then
+    echo "ОШИБКА: во встроенном web версия '$packaged_version', ожидалась '$VERSION'." >&2
+    exit 1
+  fi
+}
+
+if [ "$LINUX_PORTABLE" -eq 1 ] || [ "$LINUX_APPIMAGE" -eq 1 ]; then
+  check_embedded_web "$REL_DIR/linux-unpacked"
+fi
+if [ "$WIN_PORTABLE" -eq 1 ] || [ "$WIN_EXE" -eq 1 ]; then
+  check_embedded_web "$REL_DIR/win-unpacked"
+fi
 
 # Version-consistency check: every artifact file must carry the exact version
 # in its name (folder release/<version>/ == artifact names). Directories
