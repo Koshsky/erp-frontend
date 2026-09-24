@@ -1434,11 +1434,11 @@ export const useTimesheetStore = defineStore('timesheet', () => {
    * (unexpected payload shape or a request error), falls back to the
    * per-employee path so the timesheet renders even against an older backend.
    */
-  async function refreshPeriodsBatch(start: string, end: string): Promise<void> {
+  async function refreshPeriodsBatch(start: string, end: string): Promise<boolean> {
     const ids = timesheetRows.value
       .map((e) => e.id)
       .filter((id): id is number => id != null)
-    if (ids.length === 0) return
+    if (ids.length === 0) return true
     const api = new UsersApi(apiConfig())
     try {
       const chunks: number[][] = []
@@ -1458,18 +1458,20 @@ export const useTimesheetStore = defineStore('timesheet', () => {
       }
       // Unsync guard: if the backend omitted some requested ids, their current
       // cached data is intentionally kept untouched instead of being wiped.
+      return true
     } catch (e: any) {
       // The batch endpoint may be missing on an older backend — fall back to
       // the per-employee path; surface an error only when the fallback fails too.
       const ok = await refreshPeriodsOneByOne(start, end)
       if (!ok) setError(e)
       else console.warn('[timesheet] batch days unavailable, fell back to per-employee:', e?.message ?? e)
+      return ok
     }
   }
 
   /** Network refresh (PULL) entry point: keeps the (start, end) signature used by warmup/sync/ensureRange */
-  async function refreshPeriods(start: string, end: string): Promise<void> {
-    await refreshPeriodsBatch(start, end)
+  async function refreshPeriods(start: string, end: string): Promise<boolean> {
+    return refreshPeriodsBatch(start, end)
   }
 
   /** An employee's period covering a day (binary search over the sorted periods) */
@@ -1746,14 +1748,18 @@ export const useTimesheetStore = defineStore('timesheet', () => {
     if (startISO < windowStart.value) {
       const from = startISO
       const to = shiftDate(windowStart.value, -1)
-      windowStart.value = startISO
-      await refreshPeriods(from, to)
+      // Fetch first, commit the widened window only on success: advancing the
+      // window before the network round-trip would claim coverage for a range
+      // whose periods never loaded (a failed fetch leaves a silently data-less
+      // band until the next load).
+      const ok = await refreshPeriods(from, to)
+      if (ok) windowStart.value = startISO
     }
     if (endISO > windowEnd.value) {
       const from = shiftDate(windowEnd.value, 1)
       const to = endISO
-      windowEnd.value = endISO
-      await refreshPeriods(from, to)
+      const ok = await refreshPeriods(from, to)
+      if (ok) windowEnd.value = endISO
     }
   }
 
