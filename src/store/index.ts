@@ -72,7 +72,13 @@ interface MutationOptions {
 async function runMutation(opts: MutationOptions): Promise<boolean> {
   try {
     const resp = await opts.call()
-    await opts.apply((resp as { data?: { data?: unknown } })?.data?.data ?? null)
+    // Unwrap the unified envelope exactly TWO levels: `resp.data` is the body
+    // ({ data: <payload>, error }), `resp.data.data` is the payload DTO the
+    // apply callback expects (the created/updated entity). Going one level
+    // deeper (resp.data.data.data = payload.data) yields undefined for every
+    // create/update DTO and would silently drop online mutations from the UI
+    // (the offline/optimistic path is unaffected — it never reads the payload).
+    await opts.apply((resp as { data?: { data?: unknown } } | undefined)?.data?.data ?? null)
     return true
   } catch (e: any) {
     const err = e as AxiosError
