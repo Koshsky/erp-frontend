@@ -20,13 +20,18 @@ type Story = StoryObj<typeof meta>
 export const Default: Story = {
   render: () => ({
     components: { MilestoneMarker },
-    data: () => ({ timeline: makeDemoTimeline(iso(day(1, 1)), 'day') }),
+    data: () => ({
+      timeline: makeDemoTimeline(iso(day(1, 1)), 'day'),
+      d1: iso(day(2, 12)),
+      d2: iso(day(2, 20)),
+      d3: iso(day(3, 18)),
+    }),
     template: `
       <div style="max-width:760px;margin:0 auto;font-family:sans-serif;">
         <div style="position:relative;width:3000px;height:36px;background:#f0f0f0;border-radius:6px;overflow:hidden;">
-          <MilestoneMarker :timeline="timeline" :date="iso(day(2,12))" title="Сдача ППР" content="Утверждение ППР заказчиком" />
-          <MilestoneMarker :timeline="timeline" :date="iso(day(2,20))" title="Начало монтажа" color="#1a73e8" />
-          <MilestoneMarker :timeline="timeline" :date="iso(day(3,18))" title="Окончание работ" content="Финал монтажа" color="#188038" />
+          <MilestoneMarker :timeline="timeline" :date="d1" title="Сдача ППР" content="Утверждение ППР заказчиком" />
+          <MilestoneMarker :timeline="timeline" :date="d2" title="Начало монтажа" color="#1a73e8" />
+          <MilestoneMarker :timeline="timeline" :date="d3" title="Окончание работ" content="Финал монтажа" color="#188038" />
         </div>
         <div style="font-size:12px;color:#666;margin-top:6px;">Флажки по центру своих ячеек (16 февраля, 20 февраля, 18 марта).</div>
       </div>
@@ -60,11 +65,14 @@ export const WithRay: Story = {
 export const DecadeUnit: Story = {
   render: () => ({
     components: { MilestoneMarker },
-    data: () => ({ timeline: makeDemoTimeline(iso(day(1, 1)), 'decade') }),
+    data: () => ({
+      timeline: makeDemoTimeline(iso(day(1, 1)), 'decade'),
+      md: iso(day(3, 20)),
+    }),
     template: `
       <div style="max-width:760px;margin:0 auto;font-family:sans-serif;">
         <div style="position:relative;width:3000px;height:36px;background:#f0f0f0;border-radius:6px;overflow:hidden;">
-          <MilestoneMarker :timeline="timeline" :date="iso(day(3,20))" title="Завершение этапа" content="Окончание закупочной кампании" color="#1a73e8" :draggable="false" />
+          <MilestoneMarker :timeline="timeline" :date="md" title="Завершение этапа" content="Окончание закупочной кампании" color="#1a73e8" :draggable="false" />
         </div>
         <div style="font-size:12px;color:#666;margin-top:6px;">Декада: маркер по центру ячейки-декады (март, 21–31).</div>
       </div>
