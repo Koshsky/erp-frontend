@@ -660,12 +660,34 @@ export const useAppStore = defineStore('app', () => {
   /** Whether another resources page can be requested */
   const resourcesHasMore = computed(() => resourcesTotal.value > resources.value.length)
 
+  /** Merges a resources page into the current list (dedup by id, fresh wins) — pure */
+  function mergeResourceLists(
+    current: DtoResourceResponse[],
+    items: DtoResourceResponse[],
+  ): DtoResourceResponse[] {
+    const byId = new Map<number, DtoResourceResponse>()
+    for (const r of current) if (r.id != null) byId.set(r.id, r)
+    for (const r of items) if (r.id != null) byId.set(r.id, r)
+    return [...byId.values()]
+  }
+
   /** Merges a resources page into the current list (dedup by id, fresh wins) */
   function mergeResources(items: DtoResourceResponse[]): void {
-    const byId = new Map<number, DtoResourceResponse>()
-    for (const r of resources.value) if (r.id != null) byId.set(r.id, r)
-    for (const r of items) if (r.id != null) byId.set(r.id, r)
-    resources.value = [...byId.values()]
+    resources.value = mergeResourceLists(resources.value, items)
+  }
+
+  /** Whether two resource snapshots are equal field-by-field (same order, same
+   *  ids, same visible fields) — keeps the array reference stable on a
+   *  background refresh so dependent computeds/views do not re-render. */
+  function sameResources(a: DtoResourceResponse[], b: DtoResourceResponse[]): boolean {
+    if (a.length !== b.length) return false
+    for (let i = 0; i < a.length; i++) {
+      if (a[i]?.id !== b[i]?.id) return false
+      for (const key of Object.keys(a[i] ?? {}) as Array<keyof DtoResourceResponse>) {
+        if (a[i][key] !== b[i]?.[key]) return false
+      }
+    }
+    return true
   }
 
   async function loadResources(): Promise<void> {
@@ -690,7 +712,15 @@ export const useAppStore = defineStore('app', () => {
       const api = new TimesheetResourcesApi(apiConfig())
       const resp = await api.resourcesGet(PAGE_SIZE, undefined, 0)
       const data = resp.data?.data
-      resources.value = data?.items ?? []
+      const items = data?.items ?? []
+      // The background PULL must not truncate pages already loaded via
+      // "load more": merge the fresh first page into the existing list (dedup
+      // by id, fresh page wins, extra pages kept) — the same policy the
+      // offline path uses (mergeResources). The array identity is preserved
+      // when the merged roster equals the current one, so dependent views do
+      // not re-render on every quiet refresh cycle.
+      const merged = mergeResourceLists(resources.value, items)
+      if (!sameResources(merged, resources.value)) resources.value = merged
       resourcesTotal.value = data?.total ?? 0
     } catch (e: any) {
       resourcesError.value = e.message || String(e)
@@ -1466,12 +1496,17 @@ export const useTimesheetStore = defineStore('timesheet', () => {
     data?: { items?: DtoUserResponse[]; limit?: number; offset?: number; total?: number }
   }
 
+  /** Merges an employees page into the current list (dedup by id, fresh wins) — pure */
+  function mergeEmployeeLists(current: DtoUserResponse[], items: DtoUserResponse[]): DtoUserResponse[] {
+    const byId = new Map<number, DtoUserResponse>()
+    for (const e of current) if (e.id != null) byId.set(e.id, e)
+    for (const e of items) if (e.id != null) byId.set(e.id, e)
+    return [...byId.values()]
+  }
+
   /** Merges an employees page into the current list (dedup by id, fresh wins) */
   function mergeEmployees(items: DtoUserResponse[]): void {
-    const byId = new Map<number, DtoUserResponse>()
-    for (const e of employees.value) if (e.id != null) byId.set(e.id, e)
-    for (const e of items) if (e.id != null) byId.set(e.id, e)
-    employees.value = [...byId.values()]
+    employees.value = mergeEmployeeLists(employees.value, items)
   }
 
   /**
@@ -1522,12 +1557,17 @@ export const useTimesheetStore = defineStore('timesheet', () => {
       const data = resp.data?.data
       // Sorting is added by the computed employeesWithTitles.
       //
-      // The array identity is preserved when the roster did not change: it feeds
-      // timesheetRows → the whole grid. Replacing it with an equal-but-new array
-      // re-renders every row and flickers the "Табель" page on each background
-      // refresh (the same roster is now pulled on a timer).
-      const items = data?.items ?? []
-      if (!sameEmployees(items, employees.value)) employees.value = items
+      // The background PULL must not silently drop pages the user already
+      // opened via "Показать ещё" (PAGE_SIZE=50): instead of wholesale
+      // replacing the array with page 0, merge the fresh first page into the
+      // existing list — dedup by id, fresh page wins, already-loaded extra
+      // pages are kept (the same identity-preserving merge the offline path
+      // uses). The array reference stays stable when the merged roster equals
+      // the current one: it feeds timesheetRows → the whole grid, and
+      // replacing an equal-but-new array re-renders every row and flickers the
+      // "Табель" page on each background refresh.
+      const merged = mergeEmployeeLists(employees.value, data?.items ?? [])
+      if (!sameEmployees(merged, employees.value)) employees.value = merged
       employeesTotal.value = data?.total ?? 0
     } catch (e: any) {
       if (!silent) setError(e)
