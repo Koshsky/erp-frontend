@@ -207,8 +207,8 @@ describe('mergeResourceLists / sameResources (via refreshResources)', () => {
 describe('mergeEmployeeLists / sameEmployees (via refreshEmployees)', () => {
   it('dedups the roster by id, fresh wins, extras preserved, order stable', async () => {
     tsStore.employees = [
-      { id: 1, name: 'Анна', position: 'Инженер', manager_id: null, preset: 'worker' },
-      { id: 2, name: 'Борис', position: 'Директор', manager_id: null, preset: 'admin' },
+      { id: 1, name: 'Анна', position: 'Инженер', manager_id: undefined, preset: 'worker' },
+      { id: 2, name: 'Борис', position: 'Директор', manager_id: undefined, preset: 'admin' },
     ]
     pageEmployees(
       [
@@ -236,8 +236,8 @@ describe('mergeEmployeeLists / sameEmployees (via refreshEmployees)', () => {
   })
 
   it('preserves the employees array identity for equal snapshots (grid no flicker)', async () => {
-    tsStore.employees = [{ id: 1, name: 'Анна', position: 'Инженер', manager_id: null, preset: 'worker' }]
-    pageEmployees([{ id: 1, name: 'Анна', position: 'Инженер', manager_id: null, preset: 'worker' }], 1)
+    tsStore.employees = [{ id: 1, name: 'Анна', position: 'Инженер', manager_id: undefined, preset: 'worker' }]
+    pageEmployees([{ id: 1, name: 'Анна', position: 'Инженер', manager_id: undefined, preset: 'worker' }], 1)
 
     const before = tsStore.employees
     await tsStore.refreshEmployees()
@@ -247,10 +247,10 @@ describe('mergeEmployeeLists / sameEmployees (via refreshEmployees)', () => {
 
   it('keeps a load-more-extended roster when the background pull returns just page 0', async () => {
     tsStore.employees = [
-      { id: 1, name: 'Анна', position: 'Инженер', manager_id: null, preset: 'worker' },
-      { id: 2, name: 'Борис', position: 'Директор', manager_id: null, preset: 'admin' },
+      { id: 1, name: 'Анна', position: 'Инженер', manager_id: undefined, preset: 'worker' },
+      { id: 2, name: 'Борис', position: 'Директор', manager_id: undefined, preset: 'admin' },
     ]
-    pageEmployees([{ id: 1, name: 'Анна', position: 'Инженер', manager_id: null, preset: 'worker' }], 2)
+    pageEmployees([{ id: 1, name: 'Анна', position: 'Инженер', manager_id: undefined, preset: 'worker' }], 2)
 
     await tsStore.refreshEmployees()
 
@@ -271,7 +271,10 @@ describe('auth access-expiry decoding (a token-margin contract)', () => {
   })
 
   const jwt = (expSec: number): string => {
-    const payload = Buffer.from(JSON.stringify({ exp: expSec })).toString('base64url')
+    // btoa is the app's own base64url encoder input (see base64UrlDecode in
+    // store/index.ts) — node provides the global.
+    const b64 = btoa(JSON.stringify({ exp: expSec }))
+    const payload = b64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
     return `h.${payload}.s`
   }
 

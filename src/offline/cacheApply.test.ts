@@ -228,7 +228,7 @@ describe('getUserFields — hydrate across all cached pages (86316cc regression)
     expect(members.data.data[0]?.position).toBe('Директор')
     // The resource member counter on the (first-page) resources list is bumped.
     const resources = fake.find('/api/v1/resources') as {
-      data: { data: { items: Array<Record<string, unknown>> } }
+      data: { data: { items: Array<Record<string, unknown>>; total: number } }
     }
     expect(resources.data.data.items[0]?.employees_count).toBe(1)
   })
@@ -265,7 +265,9 @@ describe('applyToCache — basic list mutations', () => {
     })
 
     await applyToCache(entry({ entity: 'resource', method: 'PUT', url: 'http://api.test/api/v1/resource/1', body: { title: 'Один обновлён' } }))
-    let resources = fake.find('/api/v1/resources') as { data: { data: { items: Array<Record<string, unknown>> } } }
+    let resources = fake.find('/api/v1/resources') as {
+      data: { data: { items: Array<Record<string, unknown>>; total: number } }
+    }
     expect(resources.data.data.items[0]?.title).toBe('Один обновлён')
 
     await applyToCache(entry({ entity: 'resource', method: 'DELETE', url: 'http://api.test/api/v1/resource/1' }))
