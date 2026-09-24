@@ -619,6 +619,13 @@ export async function flushOutbox(): Promise<FlushResult> {
         } else {
           // DELETE of a non-existent entity (404/410) — it is already gone, the target
           // state is reached. Idempotent drop instead of endless retries.
+          // Tradeoff (kept by design): a 404 caused by a WRONG URL path (rebasedUrl
+          // only swaps the origin, so a path mistake still 404s) is also dropped
+          // silently — but DELETE is idempotent, retrying cannot fix the URL, and
+          // keeping the entry would just quarantine it. The temp-id case (a DELETE
+          // referencing a not-yet-created object) is covered by queue ordering: the
+          // flush sorts entries by enqueue time, so the creator entry goes out first
+          // and rewriteIds substitutes the real id before this DELETE is sent.
           const status = err.response.status
           const method = (entry.method || '').toUpperCase()
           if (method === 'DELETE' && (status === 404 || status === 410)) {
