@@ -134,7 +134,7 @@ function onRowKeydown(e: KeyboardEvent, u: DtoAdminUserResponse) {
 }
 
 // === Showing the generated password (once) ===
-const passwordModal = ref<{ password: string; caption: string } | null>(null)
+const passwordModal = ref<{ password?: string; notice?: string; caption: string } | null>(null)
 
 function showPassword(password: string | undefined, caption: string) {
   if (!password) return
@@ -143,8 +143,13 @@ function showPassword(password: string | undefined, caption: string) {
 
 async function onResetPassword(user: DtoAdminUserResponse) {
   if (user.id == null) return
-  const password = await app.resetPassword(user.id)
-  showPassword(password ?? undefined, `Новый пароль для «${user.name}»`)
+  const ok = await app.resetPassword(user.id)
+  if (ok) {
+    passwordModal.value = {
+      caption: `Пароль для «${user.name}» сброшен`,
+      notice: 'Новый пароль не передаётся по сети; сообщите пользователю о сбросе.',
+    }
+  }
 }
 
 onMounted(() => {

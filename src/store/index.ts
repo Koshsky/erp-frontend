@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed, watch, onScopeDispose } from 'vue'
 import axios, { type AxiosError, type Method } from 'axios'
 import { AuthApi, ProjectsApi, ProcessesApi, TasksApi, TimesheetResourcesApi, TimesheetCalendarApi, TimesheetStatesApi, PlanningApi, MilestonesApi, UsersApi, AssignmentsApi, AutoCreateApi, RBACApi, PermissionsApi, AuditApi, Configuration } from '@/api'
-import type { DtoUserInfo, DtoProject, DtoResourceResponse, DtoResourceCalendar, DtoResourceMemberResponse, DtoResourceAbsenceResponse, DtoUserResponse, DtoUserStateResponse, DtoStateResponse, DtoCreateResourceRequest, DtoUpdateResourceRequest, DtoCreateUserRequest, DtoUpdateUserRequest, DtoSetDaysRequest, DtoAdminUserResponse, DtoCreateUserResult, DtoResetPasswordResponse, DtoAutoCreateConfig, DtoAutoCreatedCounts, DtoCommentResponse, DomainPreset, DtoPresetRuleInput, DtoPresetRuleView, DtoMatrixCell, DtoRoutePolicyView, PoliciesKindInfo, DtoPermission, DtoUserPermissionsView, DtoUserPermissionsInput, DtoAuditEventView } from '@/api'
+import type { DtoUserInfo, DtoProject, DtoResourceResponse, DtoResourceCalendar, DtoResourceMemberResponse, DtoResourceAbsenceResponse, DtoUserResponse, DtoUserStateResponse, DtoStateResponse, DtoCreateResourceRequest, DtoUpdateResourceRequest, DtoCreateUserRequest, DtoUpdateUserRequest, DtoSetDaysRequest, DtoAdminUserResponse, DtoCreateUserResult, DtoAutoCreateConfig, DtoAutoCreatedCounts, DtoCommentResponse, DtoPresetView, DtoPresetRuleInput, DtoPresetRuleView, DtoMatrixCell, DtoRoutePolicyView, EngineKindInfo, DtoPermission, DtoUserPermissionsView, DtoUserPermissionsInput, DtoAuditEventView } from '@/api'
 import { apiErrorMessage } from '@/utils'
 import { getApiUrl } from '@/config'
 import { isOffline } from '@/offline/state'
@@ -1145,15 +1145,15 @@ export const useAppStore = defineStore('app', () => {
     }
   }
 
-  /** Resets a user's password; returns the new password (shown once) */
-  async function resetPassword(id: number): Promise<string | null> {
+  /** Resets a user's password (admin-only). The password itself is not exposed by the API. */
+  async function resetPassword(id: number): Promise<boolean> {
     try {
       const api = new UsersApi(apiConfig())
-      const resp = await api.userIdResetPasswordPost(id)
-      return resp.data?.data?.password ?? null
+      await api.userIdResetPasswordPost(id)
+      return true
     } catch (e: any) {
       adminUsersError.value = apiErrorMessage(e)
-      return null
+      return false
     }
   }
 
@@ -2960,7 +2960,7 @@ export const usePlanningStore = defineStore('planning', () => {
 // All operations are online-only (no outbox/offline support needed).
 // =============================================================
 export const useRbacStore = defineStore('rbac', () => {
-  const presets = ref<DomainPreset[]>([])
+  const presets = ref<DtoPresetView[]>([])
   /** Active preset matrix rules (with id — needed to delete "no access" entries). */
   const presetRules = ref<DtoPresetRuleView[]>([])
   /** Effective matrix (with the admin bypass) — the display source. */
@@ -2968,7 +2968,7 @@ export const useRbacStore = defineStore('rbac', () => {
   /** Route checks (read-only reference). */
   const routePolicies = ref<DtoRoutePolicyView[]>([])
   /** Reference of route check kinds. */
-  const kinds = ref<PoliciesKindInfo[]>([])
+  const kinds = ref<EngineKindInfo[]>([])
   const loading = ref(false)
   const saving = ref(false)
   const error = ref<string | null>(null)
