@@ -33,7 +33,18 @@ export default defineConfig({
     include: ['aria-query', 'lz-string', 'fast-deep-equal', 'pretty-format', 'react-is', 'util-deprecate'],
   },
   test: {
+    // the unit project legitimately has zero tests until logic tests land
+    passWithNoTests: true,
     projects: [
+      {
+        // Pure-logic unit tests (no DOM): plain *.test.ts next to the logic.
+        extends: true,
+        test: {
+          name: 'unit',
+          include: ['src/**/*.test.ts'],
+          environment: 'node',
+        },
+      },
       {
         extends: true,
         plugins: [
