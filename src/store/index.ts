@@ -24,8 +24,16 @@ import { hydrateFromCache, apiPath } from '@/offline/hydrate'
 import { cacheGetAllByPath } from '@/offline/cache'
 
 const USER_KEY = 'mvs_erp_user'
-/** Cache of my RBAC permissions for offline mode. */
-const PERMS_KEY = 'mvs_erp_perms'
+/**
+ * Cache of my RBAC permissions for offline mode — PER-USER: permissions are a
+ * user-specific matrix (preset + ACL grants/revokes + admin bypass), so the
+ * cache key carries the user id and a logout removes the whole key. Another
+ * account must never pick up a previous login's cached rights.
+ */
+const PERMS_KEY_PREFIX = 'mvs_erp_perms'
+function permsKey(uid: number | null | undefined): string {
+  return uid != null ? `${PERMS_KEY_PREFIX}_${uid}` : PERMS_KEY_PREFIX
+}
 
 /** How long before the token expires that proactive refresh kicks in */
 const REFRESH_MARGIN_MS = 120 * 1000
@@ -227,6 +235,7 @@ export const useAuthStore = defineStore('auth', () => {
     data: { access_token?: string; user?: DtoUserInfo } | undefined,
     warm = false,
   ) {
+    const prevUid = user.value?.id
     const token = data?.access_token
     setAccessToken(token ?? null)
     if (data?.user) {
@@ -236,6 +245,16 @@ export const useAuthStore = defineStore('auth', () => {
     isAuthenticated.value = Boolean(token)
     sessionMode.value = 'online'
     scheduleProactiveRefresh()
+    // Permission isolation: when a different user id arrives (a login or an
+    // account switch) drop the stale in-memory permission snapshot and fetch
+    // the new account's real rights immediately — the UI must never show the
+    // previous account's matrix. A token rotation keeps the same user, so
+    // nothing to do (the TTL pull cycle owns refreshes).
+    if (prevUid !== user.value?.id) {
+      const rbac = useRbacStore()
+      rbac.resetPermissions()
+      if (!isOffline.value) void rbac.refreshPermissions()
+    }
     // Background warm-up of the offline cache with data for the user's role
     if (warm) scheduleWarmup()
   }
@@ -248,6 +267,7 @@ export const useAuthStore = defineStore('auth', () => {
    */
   function enterOffline(username: string | null): boolean {
     const stored = readStoredUser()
+    const prevUid = user.value?.id
     if (stored?.username && (!username || stored.username === username)) {
       user.value = stored
     } else {
@@ -257,6 +277,8 @@ export const useAuthStore = defineStore('auth', () => {
     stopProactiveRefresh()
     isAuthenticated.value = true
     sessionMode.value = 'offline'
+    // Offline account switch — never keep another profile's permissions.
+    if (prevUid !== user.value?.id) useRbacStore().resetPermissions()
     return true
   }
 
@@ -472,6 +494,12 @@ export const useAuthStore = defineStore('auth', () => {
       }
     })()
     setAccessToken(null)
+    // The permission cache is per-user: drop the logged-out account's key and
+    // the in-memory snapshot so a later login (the same or another account)
+    // starts from its real /permissions/me, never from these rights.
+    const wasUid = user.value?.id
+    if (wasUid != null) localStorage.removeItem(permsKey(wasUid))
+    useRbacStore().resetPermissions()
     localStorage.removeItem(USER_KEY)
     user.value = null
     isAuthenticated.value = false
@@ -2934,7 +2962,17 @@ export const useRbacStore = defineStore('rbac', () => {
   const myPermissions = ref<DtoPermission[]>([])
   const permsLoaded = ref(false)
 
-  /** Scope ownership by resource — mirrors policies.go (own/parent/ancestor). */
+  /**
+   * Ownership (ABAC) satisfaction by scope — the client-side mirror of the
+   * backend owner-chain evaluation in internal/authz/engine (decision.go:
+   * ownField/parentField/ancestorMatch). Owners come from the card data
+   * (planning/app stores), not from the permission list:
+   *   own      — project → projectOwner, process → processOwner,
+   *              task/resource/worker → owner (worker: manager_id);
+   *   parent   — process → projectOwner, task/milestone/assignment → processOwner;
+   *   ancestor — any of owner/processOwner/projectOwner (task/milestone/assignment/process).
+   * Scopes themselves come from /permissions/me (the Casbin snapshot).
+   */
   function scopeSatisfied(scope: string, resource: string, uid: number, o: { owner?: number | null; projectOwner?: number | null; processOwner?: number | null }): boolean {
     if (scope === 'all') return true
     if (uid <= 0) return false
@@ -3005,7 +3043,7 @@ export const useRbacStore = defineStore('rbac', () => {
   async function loadMyPermissions(): Promise<boolean> {
     if (permsLoaded.value) return true
     try {
-      const cached = localStorage.getItem(PERMS_KEY)
+      const cached = localStorage.getItem(permsKey(useAuthStore().user?.id))
       if (cached) {
         const parsed = JSON.parse(cached)
         // Defensive: a valid-JSON non-array payload must not overwrite the ref
@@ -3030,7 +3068,10 @@ export const useRbacStore = defineStore('rbac', () => {
       myPermissions.value = resp.data?.data ?? []
       permsLoaded.value = true
       try {
-        localStorage.setItem(PERMS_KEY, JSON.stringify(myPermissions.value))
+        localStorage.setItem(
+          permsKey(useAuthStore().user?.id),
+          JSON.stringify(myPermissions.value),
+        )
       } catch {
         /* localStorage may be unavailable */
       }
@@ -3038,6 +3079,16 @@ export const useRbacStore = defineStore('rbac', () => {
     } catch {
       return false
     }
+  }
+
+  /**
+   * Drops the in-memory permission snapshot (called on account switch and
+   * logout): the UI must never keep rights of another user. The next
+   * /permissions/me (login refresh / router-guard load / TTL pull) fills it.
+   */
+  function resetPermissions() {
+    myPermissions.value = []
+    permsLoaded.value = false
   }
 
   /** Periodic permissions sync (TTL polling following the backend). */
@@ -3207,6 +3258,7 @@ export const useRbacStore = defineStore('rbac', () => {
     deletePreset,
     myPermissions,
     permsLoaded,
+    resetPermissions,
     can,
     perm,
     canOwn,
