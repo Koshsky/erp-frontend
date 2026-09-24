@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/vue3-vite'
+import { expect } from 'vitest'
 import MilestoneMarker from './MilestoneMarker.vue'
 import { makeDemoTimeline } from '@/components/planner/plannerStoryHelpers'
 
@@ -78,4 +79,60 @@ export const DecadeUnit: Story = {
       </div>
     `,
   }),
+}
+
+/**
+ * Test (regression for 9a82778): a milestone on a `decade` timeline snaps into
+ * its containing cell, but the label/tooltip must show the STORED date — here
+ * 15.01.2026 — not the cell start (11.01.2026). Asserts the ARIA label/value
+ * text and the actually rendered tooltip popup (opened via hover).
+ */
+export const DecadeTooltipShowsStoredDate: Story = {
+  name: 'Test: decade tooltip shows the stored date, not the cell start',
+  tags: ['vitest'],
+  render: () => ({
+    components: { MilestoneMarker },
+    data: () => ({
+      timeline: makeDemoTimeline(iso(day(1, 1)), 'decade'),
+      md: iso(day(1, 15)),
+    }),
+    template: `
+      <div style="position:relative;width:3000px;height:36px;background:#f0f0f0;">
+        <MilestoneMarker :timeline="timeline" :date="md" title="Завершение этапа" content="Окончание закупочной кампании" />
+      </div>
+    `,
+  }),
+  play: async ({ canvasElement, step }) => {
+    await step('mount: the marker is rendered in the decade timeline', async () => {
+      await new Promise((r) => setTimeout(r, 50))
+      const marker = canvasElement.querySelector('.ms-marker')
+      expect(marker).toBeTruthy()
+      // Snapped to its decade cell, not to the stored day.
+      expect(canvasElement.querySelector('.ms')).toBeTruthy()
+    })
+
+    const marker = canvasElement.querySelector<HTMLElement>('.ms-marker') as HTMLElement
+
+    await step('ARIA shows the stored date (15.01.2026), not the cell start (11.01.2026)', () => {
+      const valueText = marker.getAttribute('aria-valuetext')
+      const label = marker.getAttribute('aria-label') ?? ''
+      expect(valueText).toBe('15.01.2026')
+      expect(label).toContain('15.01.2026')
+      expect(label).not.toContain('11.01.2026')
+    })
+
+    await step('hover opens the tooltip with the stored date', async () => {
+      const trigger = canvasElement.querySelector<HTMLElement>('.tt-trigger')
+      expect(trigger).toBeTruthy()
+      trigger?.dispatchEvent(new MouseEvent('mouseenter', { clientX: 120, clientY: 80 }))
+      // TooltipCell opens after its 400ms hover delay.
+      await new Promise((r) => setTimeout(r, 500))
+      const popup = document.body.querySelector<HTMLElement>('.tt-popup')
+      expect(popup).toBeTruthy()
+      const text = popup?.textContent ?? ''
+      expect(text).toContain('Завершение этапа')
+      expect(text).toContain('15.01.2026')
+      expect(text).not.toContain('11.01.2026')
+    })
+  },
 }
