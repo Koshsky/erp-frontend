@@ -388,6 +388,7 @@ export interface DtoPresetRuleView {
 }
 export interface DtoPresetUpdateInput {
     'description'?: string;
+    'name'?: string;
 }
 export interface DtoPresetUpsertInput {
     'description'?: string;

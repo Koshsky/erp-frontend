@@ -35,29 +35,36 @@ const expanded = computed(() => hintOpen.value && hintPageRef.value === props.hi
 @import "../../../styles/tokens.css";
 .hb {
   flex-shrink: 0;
-  width: 22px;
-  height: 22px;
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
-  border: 1px solid var(--ui-accent);
-  background: transparent;
+  border: 2px solid var(--ui-accent);
+  background: var(--ui-accent-soft);
   color: var(--ui-accent);
-  font-size: 13px;
-  font-weight: 700;
+  font-size: 17px;
+  font-weight: 800;
   line-height: 1;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   padding: 0;
-  transition: background var(--ui-duration), color var(--ui-duration);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.14);
+  transition: background var(--ui-duration), color var(--ui-duration), transform 0.1s;
 }
 .hb:hover {
   background: var(--ui-accent);
   color: var(--ui-accent-on);
+  transform: scale(1.06);
+}
+.hb[aria-expanded="true"] {
+  background: var(--ui-accent);
+  color: var(--ui-accent-on);
+  border-color: var(--ui-accent);
 }
 .hb.is-sm {
-  width: 20px;
-  height: 20px;
-  font-size: 12px;
+  width: 26px;
+  height: 26px;
+  font-size: 15px;
 }
 </style>

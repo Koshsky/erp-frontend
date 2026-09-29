@@ -3429,11 +3429,22 @@ export const useRbacStore = defineStore('rbac', () => {
     }
   }
 
-  /** Updates a preset's description. */
-  async function updatePreset(name: string, description: string): Promise<boolean> {
+  /** Updates a preset: optional rename (patch.name) plus a new description. */
+  async function updatePreset(
+    name: string,
+    patch: { name?: string; description?: string },
+  ): Promise<boolean> {
     try {
-      await new RBACApi(apiConfig()).rbacPresetsNamePut(name, { description })
-      presets.value = presets.value.map((r) => (r.name === name ? { ...r, description } : r))
+      const resp = await new RBACApi(apiConfig()).rbacPresetsNamePut(name, {
+        name: patch.name,
+        description: patch.description ?? '',
+      })
+      const saved = resp.data?.data
+      if (saved) {
+        presets.value = presets.value
+          .filter((r) => r.name !== name)
+          .concat({ name: saved.name ?? name, description: saved.description ?? '' })
+      }
       return true
     } catch {
       return false

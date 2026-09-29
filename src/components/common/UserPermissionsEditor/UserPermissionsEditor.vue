@@ -4,9 +4,9 @@
  *
  * Карточки по ресурсам (вариант A): у каждого ресурса — карточка с шапкой
  * (название + сводка) и строками действий; в строке видны сразу все чипы
- * зон (self/up1/up/sib/down/all) + «⛔ запрет»; свободное выражение —
- * строкой ниже по клику «✎» или для нестандартной зоны. Подсказка — одна
- * кнопка «?» в шапке блока (центральная панель).
+ * зон (self/up1/up/sib/down/all) + «⛔ запрет»; сочетания собираются
+ * отметкой нескольких чипов. Подсказка — одна кнопка «?» в шапке блока
+ * (центральная панель).
  *
  * В шапке блока — переключатель пресета (вместо текста «от пресета …»).
  * Выбранный пресет сразу перестраивает базис правил ниже: в режиме draft —
@@ -22,7 +22,7 @@ import { computed, onMounted, reactive, watch } from 'vue'
 import { useRbacStore } from '../../../store'
 import type { PermissionCell, PermissionOverride, UserPermissionsModel } from './types'
 import { GROUPS, ACTIONS, RESOURCE_LABELS, ACTION_LABELS, SCOPE_OPTIONS } from './labels'
-import { canonicalScope, describeScopeExpr, isValidScopeExpr, scopeMoves, toggleScopeMove } from '@/rbacScope'
+import { canonicalScope, scopeMoves, toggleScopeMove } from '@/rbacScope'
 import HintButton from '../HintButton/HintButton.vue'
 
 const props = defineProps<{
@@ -167,7 +167,8 @@ function pick(r: string, a: string, val: string) {
 function resetAll() { for (const k of Object.keys(staged)) delete staged[k] }
 
 /* ── выражения области (дерево владения) ───────────────── */
-/** Текущая зона строки как выражение ('' — нет доступа/запрет). */
+/** Текущая зона строки как выражение ('' — нет доступа/запрет); показывается
+ *  компактной подписью при нескольких выбранных ходах. */
 function exprText(r: string, a: string): string {
   const z = effectiveZone(r, a)
   if (!z || !hasAccess(r, a)) return ''
@@ -212,33 +213,6 @@ function isChangedCell(r: string, a: string): boolean {
   if (s === 'revoked') return true
   if (s !== 'override') return false
   return canonicalScope(effectiveZone(r, a)) !== canonicalScope(presetMap.value[key(r, a)] ?? '')
-}
-
-/** Текущая зона содержит ход, которого нет среди чипов (нестандартная). */
-function isCustomZone(r: string, a: string): boolean {
-  const z = effectiveZone(r, a)
-  if (!z || rowSource(r, a) === 'revoked') return false
-  const chips = (SCOPE_OPTIONS[r] ?? []).map((o) => o.value)
-  return scopeMoves(z).some((m) => !chips.includes(m))
-}
-
-/** Применение свободного выражения: валидное — сохранить, пустое — вернуть
- *  к пресету, невалидное — не трогать (поле подсвечено). Выражение, равное
- *  зоне пресета, тоже возвращает к пресету (не создаёт мусорного override). */
-function onExprChange(e: Event, r: string, a: string) {
-  const v = (e.target as HTMLInputElement).value.trim()
-  if (v === '') { pick(r, a, 'revert'); return }
-  if (!isValidScopeExpr(v)) return
-  const preset = presetMap.value[key(r, a)] ?? ''
-  if (preset && canonicalScope(v) === canonicalScope(preset)) { pick(r, a, 'revert'); return }
-  pick(r, a, v)
-}
-
-/** Строки с раскрытым свободным выражением. */
-const exprOpen = reactive(new Set<string>())
-function toggleExpr(k: string) {
-  if (exprOpen.has(k)) exprOpen.delete(k)
-  else exprOpen.add(k)
 }
 
 /* ── сводка карточки ресурса ───────────────────────────── */
@@ -318,40 +292,10 @@ function cardSummary(res: string): string {
                 :title="rowSource(res, act) === 'revoked' ? 'Вернуть к пресету' : 'Запретить'"
                 @click="onRevokeClick(res, act)"
               >⛔ запрет</button>
-              <button
-                v-if="!exprOpen.has(key(res, act))"
-                type="button"
-                class="ur-expr-toggle"
-                title="Свободное выражение области"
-                @click="toggleExpr(key(res, act))"
-              >✎</button>
               <!-- Собранное выражение при множественном выборе -->
               <span v-if="scopeMoves(exprText(res, act)).length > 1" class="ur-zone-mini">
                 {{ exprText(res, act) }}
               </span>
-            </div>
-
-            <div
-              v-if="exprOpen.has(key(res, act)) || isCustomZone(res, act)"
-              class="ur-expr-block"
-            >
-              <input
-                class="ur-expr"
-                :class="{ bad: !isValidScopeExpr(exprText(res, act)) }"
-                :value="exprText(res, act)"
-                placeholder="выражение: self sib, up1, down…"
-                spellcheck="false"
-                @change="onExprChange($event, res, act)"
-              />
-              <span class="ur-expr-desc" :class="{ bad: !isValidScopeExpr(exprText(res, act)) }">
-                {{ exprText(res, act) === '' ? '—' : describeScopeExpr(exprText(res, act)) }}
-              </span>
-              <button
-                type="button"
-                class="ur-expr-close"
-                title="Скрыть"
-                @click="toggleExpr(key(res, act))"
-              >✕</button>
             </div>
           </div>
         </div>
@@ -505,16 +449,7 @@ function cardSummary(res: string): string {
   border-color: var(--ui-danger);
   color: #fff;
 }
-.ur-expr-toggle {
-  border: 1px solid var(--ui-border-strong);
-  border-radius: 999px;
-  padding: 3px 9px;
-  font-size: 11px;
-  color: var(--ui-text-muted);
-  background: var(--ui-surface);
-  cursor: pointer;
-}
-.ur-expr-toggle:hover { border-color: var(--ui-accent); color: var(--ui-accent); }
+
 /* Собранное выражение множественного выбора — компактная подпись */
 .ur-zone-mini {
   font-family: ui-monospace, Menlo, Consolas, monospace;
@@ -525,42 +460,7 @@ function cardSummary(res: string): string {
   padding: 2px 7px;
 }
 
-/* Свободное выражение — строка под чипами */
-.ur-expr-block {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 4px 0 2px 94px;
-  flex-wrap: wrap;
-}
-.ur-expr {
-  flex: 0 1 240px;
-  min-width: 160px;
-  font-family: ui-monospace, Menlo, Consolas, monospace;
-  font-size: 11px;
-  border: 1px solid var(--ui-border-strong);
-  border-radius: 6px;
-  padding: 4px 8px;
-  color: var(--ui-text);
-  background: var(--ui-surface);
-}
-.ur-expr.bad { border-color: var(--ui-danger); outline: 1px solid var(--ui-danger); }
-.ur-expr-desc { font-size: 11px; color: var(--ui-text-2); }
-.ur-expr-desc.bad { color: var(--ui-danger); }
-.ur-expr-close {
-  border: none;
-  background: transparent;
-  font-size: 11px;
-  color: var(--ui-text-muted);
-  cursor: pointer;
-  padding: 2px 5px;
-  border-radius: 5px;
-}
-.ur-expr-close:hover { background: var(--ui-surface-2); color: var(--ui-text); }
-
 @media (max-width: 640px) {
   .ur-cap { width: 100%; }
-  .ur-expr-block { padding-left: 0; }
 }
 </style>

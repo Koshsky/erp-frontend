@@ -9,9 +9,9 @@
  */
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
-import { ConfirmDialog, HintButton } from '../components/common'
+import { ConfirmDialog, ContextMenu, HintButton, ModalForm } from '../components/common'
 import { SCOPE_OPTIONS as SCOPE_CHIPS } from '../components/common/UserPermissionsEditor/labels'
-import { canonicalScope, describeScopeExpr, isValidScopeExpr, scopeMoves, toggleScopeMove } from '@/rbacScope'
+import { canonicalScope, scopeMoves, toggleScopeMove } from '@/rbacScope'
 import { useRbacStore } from '../store'
 import { useConfirm } from '../composables/useConfirm'
 
@@ -222,14 +222,6 @@ function isChipOn(resource: string, action: string, value: string): boolean {
   return scopeMoves(cellValue(selected.value, resource, action)).includes(value)
 }
 
-/** The row zone contains a move that has no chip (non-standard). */
-function isCustomZone(resource: string, action: string): boolean {
-  const v = rowText(resource, action)
-  if (!v) return false
-  const chips = (SCOPE_CHIPS[resource] ?? []).map((o) => o.value)
-  return scopeMoves(v).some((m) => !chips.includes(m))
-}
-
 /** Chip click toggles a move in the expression (multi-select; all/none are
  *  exclusive). Removing the last move or reaching the effective value —
  *  remove the staged edit. */
@@ -252,25 +244,6 @@ function onRevokeClick(resource: string, action: string) {
   const eff = effective.value[key] ?? 'none'
   if (canon('none') === canon(eff)) { delete staged[key]; return }
   staged[key] = 'none'
-}
-
-/** Free-expression input: valid — stage; empty — revert to effective;
- *  invalid — leave untouched (the field shows the error state). */
-function onExprChange(e: Event, resource: string, action: string) {
-  const v = (e.target as HTMLInputElement).value.trim()
-  const key = cellKey(selected.value, resource, action)
-  if (v === '') { delete staged[key]; return }
-  if (!isValidScopeExpr(v)) return
-  const eff = effective.value[key] ?? 'none'
-  if (canon(v) === canon(eff)) { delete staged[key]; return }
-  staged[key] = v
-}
-
-/** Rows with the free-expression input open. */
-const exprOpen = reactive(new Set<string>())
-function toggleExpr(key: string) {
-  if (exprOpen.has(key)) exprOpen.delete(key)
-  else exprOpen.add(key)
 }
 
 /** A cell holds a REAL change: its staged value differs from the effective
@@ -342,65 +315,139 @@ function cancelDirty() {
 // Reset to defaults.
 const { confirm: confirmDialog, ask, proceed, cancel } = useConfirm()
 
-// === Role management (catalog) ===
+// === Preset management (left panel) ===
+
+/** Only the admin preset is immutable (a code invariant on the backend);
+ *  every other preset — including the seeded dp/rp/vp/worker — can be
+ *  deleted or renamed by an administrator. */
+const BUILTIN_PRESETS = new Set(['admin'])
 
 /** Preset name pattern: latin letters, digits, «-», «_» (mirrors the backend codec). */
 const PRESET_NAME_RE = /^[a-zA-Z0-9_-]+$/
-const newPresetName = ref('')
-const newPresetDesc = ref('')
 const presetMsg = ref<{ ok: boolean; text: string } | null>(null)
-/** Client-side validation error of the required preset-name field (null = valid). */
-const newPresetNameError = ref<string | null>(null)
-const nameInput = ref<HTMLInputElement | null>(null)
 
-function failPresetName(message: string) {
-  newPresetNameError.value = message
-  nameInput.value?.focus()
+function validatePresetNameInput(name: string): string | null {
+  const trimmed = name.trim()
+  if (!trimmed) return 'Укажите имя пресета (латиница, цифры, «-», «_»), описание можно не заполнять'
+  if (!PRESET_NAME_RE.test(trimmed)) return 'Имя пресета: только латиница, цифры, «-», «_»'
+  if (rbac.presets.some((r) => r.name === trimmed)) return 'Пресет с таким именем уже существует'
+  return null
 }
 
-/** Drop the highlight as soon as the user starts typing. */
-watch(newPresetName, () => {
-  newPresetNameError.value = null
-})
+/* — create modal — */
+const createOpen = ref(false)
+const createForm = reactive({ name: '', description: '' })
+const createError = ref<string | null>(null)
+const createBusy = ref(false)
 
 async function onCreatePreset() {
-  const name = newPresetName.value.trim()
-  if (!name) {
-    failPresetName('Укажите имя пресета (латиница, цифры, «-», «_»), описание можно не заполнять')
+  const name = createForm.name.trim()
+  const localError = validatePresetNameInput(name)
+  if (localError) {
+    createError.value = localError
     return
   }
-  if (!PRESET_NAME_RE.test(name)) {
-    failPresetName('Имя пресета: только латиница, цифры, «-», «_»')
+  createError.value = null
+  createBusy.value = true
+  const ok = await rbac.createPreset({ name, description: createForm.description.trim() })
+  createBusy.value = false
+  if (!ok) {
+    createError.value = error.value ?? 'Не удалось создать пресет'
     return
   }
-  newPresetNameError.value = null
-  const ok = await rbac.createPreset({ name, description: newPresetDesc.value.trim() })
-  presetMsg.value = ok ? { ok: true, text: 'Пресет создан' } : { ok: false, text: error.value ?? 'Не удалось создать пресет' }
-  if (ok) {
-    newPresetName.value = ''
-    newPresetDesc.value = ''
+  presetMsg.value = { ok: true, text: `Пресет «${name}» создан` }
+  createOpen.value = false
+  selected.value = name
+  void rbac.loadRbac()
+}
+
+/* — rename modal (name + description) — */
+const renameOpen = ref(false)
+const renameTarget = ref<string>('')
+const renameForm = reactive({ name: '', description: '' })
+const renameError = ref<string | null>(null)
+const renameBusy = ref(false)
+
+function openRename(presetName: string) {
+  if (BUILTIN_PRESETS.has(presetName)) return
+  renameTarget.value = presetName
+  renameForm.name = presetName
+  renameForm.description = rbac.presets.find((r) => r.name === presetName)?.description ?? ''
+  renameError.value = null
+  renameOpen.value = true
+}
+
+async function onRenamePreset() {
+  const name = renameForm.name.trim()
+  const localError = validatePresetNameInput(name)
+  if (localError) {
+    renameError.value = localError
+    return
   }
+  renameError.value = null
+  renameBusy.value = true
+  const ok = await rbac.updatePreset(renameTarget.value, { name, description: renameForm.description.trim() })
+  renameBusy.value = false
+  if (!ok) {
+    renameError.value = error.value ?? 'Не удалось переименовать пресет'
+    return
+  }
+  presetMsg.value = ok ? { ok: true, text: `Пресет переименован в «${name}»` } : null
+  renameOpen.value = false
+  if (selected.value === renameTarget.value) selected.value = name
+  void rbac.loadRbac()
 }
 
-async function onUpdatePresetDesc(presetName: string) {
-  const desc = window.prompt('Новое описание пресета', rbac.presets.find((r) => r.name === presetName)?.description ?? '')
-  if (desc == null) return
-  const ok = await rbac.updatePreset(presetName, desc.trim())
-  presetMsg.value = ok ? { ok: true, text: 'Описание обновлено' } : { ok: false, text: 'Не удалось обновить описание' }
+/* — delete modal (confirmation by typing the preset name) — */
+const deleteOpen = ref(false)
+const deleteTarget = ref<string>('')
+const deleteConfirm = ref('')
+const deleteError = ref<string | null>(null)
+const deleteBusy = ref(false)
+
+function openDelete(presetName: string) {
+  if (BUILTIN_PRESETS.has(presetName)) return
+  deleteTarget.value = presetName
+  deleteConfirm.value = ''
+  deleteError.value = null
+  deleteOpen.value = true
 }
 
-function onDeletePreset(presetName: string) {
-  if (presetName === 'admin') return
-  ask(
-    'Удалить пресет «' + presetName + '»? Назначенные пользователи сохранятся, но потеряют базовые права этого пресета; правила пресета будут удалены.',
-    () => {
-      void (async () => {
-        const ok = await rbac.deletePreset(presetName)
-        presetMsg.value = ok ? null : { ok: false, text: 'Не удалось удалить пресет' }
-      })()
-    },
-    'Удалить пресет',
-  )
+async function onDeletePreset() {
+  if (deleteConfirm.value !== deleteTarget.value) return
+  deleteError.value = null
+  deleteBusy.value = true
+  const ok = await rbac.deletePreset(deleteTarget.value)
+  deleteBusy.value = false
+  if (!ok) {
+    deleteError.value = 'Не удалось удалить пресет'
+    return
+  }
+  presetMsg.value = { ok: true, text: `Пресет «${deleteTarget.value}» удалён` }
+  deleteOpen.value = false
+  if (selected.value === deleteTarget.value) {
+    const rest = presetList.value.filter((p) => p !== deleteTarget.value)
+    selected.value = rest[0] ?? ''
+  }
+  void rbac.loadRbac()
+}
+
+/* — context menu (ПКМ) — */
+const ctxMenu = reactive({ open: false, x: 0, y: 0, preset: '' })
+
+function onPresetContextMenu(e: MouseEvent, presetName: string) {
+  if (BUILTIN_PRESETS.has(presetName)) return
+  ctxMenu.open = true
+  ctxMenu.x = e.clientX
+  ctxMenu.y = e.clientY
+  ctxMenu.preset = presetName
+}
+
+function onCtxSelect(id: string) {
+  const target = ctxMenu.preset
+  ctxMenu.open = false
+  if (id === 'rename') openRename(target)
+  if (id === 'delete') openDelete(target)
 }
 
 function onReset() {
@@ -434,6 +481,8 @@ onMounted(() => {
       <HintButton hint="presets-editor" />
     </div>
 
+    <p v-if="presetMsg" class="pm-save-msg" :class="{ er: !presetMsg.ok }">{{ presetMsg.text }}</p>
+
     <p v-if="loading && !presetRules.length" class="pm-load">Загрузка...</p>
     <p v-if="error && !presetRules.length" class="pm-load er">{{ error }}</p>
 
@@ -447,12 +496,36 @@ onMounted(() => {
           class="pm-preset-btn"
           :class="{ active: preset === selected }"
           @click="selected = preset"
+          @contextmenu.prevent="onPresetContextMenu($event, preset)"
         >
           <span class="pm-preset-code">{{ preset }}</span>
           <span class="pm-preset-name">
             {{ presetTitle(preset) }}
           </span>
+          <span
+            v-if="!BUILTIN_PRESETS.has(preset)"
+            class="pm-preset-remove"
+            role="button"
+            tabindex="0"
+            :title="'Удалить пресет ' + preset"
+            @click.stop="openDelete(preset)"
+            @keydown.enter.stop.prevent="openDelete(preset)"
+          >✕</span>
         </button>
+        <button type="button" class="pm-preset-add" @click="createOpen = true">
+          + Добавить
+        </button>
+        <ContextMenu
+          :open="ctxMenu.open"
+          :x="ctxMenu.x"
+          :y="ctxMenu.y"
+          :items="[
+            { id: 'rename', label: 'Переименовать' },
+            { id: 'delete', label: 'Удалить' },
+          ]"
+          @select="onCtxSelect"
+          @close="ctxMenu.open = false"
+        />
       </nav>
 
       <!-- Editor of the selected preset -->
@@ -489,82 +562,75 @@ onMounted(() => {
                   :title="isZoneActive(resource, action, 'none') ? 'Вернуть' : 'Нет доступа'"
                   @click="onRevokeClick(resource, action)"
                 >⛔ нет доступа</button>
-                <button
-                  v-if="!exprOpen.has(cellKey(selected, resource, action))"
-                  type="button"
-                  class="pm-expr-toggle"
-                  title="Свободное выражение области"
-                  @click="toggleExpr(cellKey(selected, resource, action))"
-                >✎</button>
                 <!-- Собранное выражение при множественном выборе -->
                 <span v-if="scopeMoves(rowText(resource, action)).length > 1" class="pm-zone-mini">
                   {{ rowText(resource, action) }}
                 </span>
               </div>
-              <div
-                v-if="exprOpen.has(cellKey(selected, resource, action)) || isCustomZone(resource, action)"
-                class="pm-expr-block"
-              >
-                <input
-                  class="pm-expr"
-                  :class="{ bad: !isValidScopeExpr(rowText(resource, action)) }"
-                  :value="rowText(resource, action)"
-                  placeholder="выражение: self sib, up1, down…"
-                  spellcheck="false"
-                  @change="onExprChange($event, resource, action)"
-                />
-                <span class="pm-expr-desc" :class="{ bad: !isValidScopeExpr(rowText(resource, action)) }">
-                  {{ rowText(resource, action) === '' ? '—' : describeScopeExpr(rowText(resource, action)) }}
-                </span>
-                <button
-                  type="button"
-                  class="pm-expr-close"
-                  title="Скрыть"
-                  @click="toggleExpr(cellKey(selected, resource, action))"
-                >✕</button>
-              </div>
             </div>
           </div>
         </div>
 
-        <h3 class="pm-section-title">Пресеты</h3>
-        <div class="pm-presets-editor">
-          <div class="pm-preset-create">
-            <label class="pm-field">
-              <span class="pm-field-label">Имя пресета<span class="pm-req" title="обязательное поле">*</span></span>
-              <input
-                ref="nameInput"
-                v-model="newPresetName"
-                class="pm-input"
-                :class="{ invalid: !!newPresetNameError }"
-                :aria-invalid="!!newPresetNameError"
-                maxlength="32"
-                placeholder="имя пресета, напр. auditor"
-              />
-            </label>
-            <label class="pm-field">
-              <span class="pm-field-label">Описание</span>
-              <input v-model="newPresetDesc" class="pm-input" maxlength="80" placeholder="описание" />
-            </label>
-            <button type="button" class="pm-btn primary" @click="onCreatePreset">Создать пресет</button>
-          </div>
-          <p v-if="newPresetNameError" class="pm-field-error" role="alert">{{ newPresetNameError }}</p>
-          <p v-if="presetMsg" class="pm-save-msg" :class="{ er: !presetMsg.ok }">{{ presetMsg.text }}</p>
-          <div class="pm-preset-list">
-            <div v-for="r in presets" :key="r.name" class="pm-preset-editable">
-              <div class="pm-preset-editable-main">
-                <span class="pm-preset-code">{{ r.name }}</span>
-                <span class="pm-preset-editable-desc">{{ r.description || '—' }}</span>
-              </div>
-              <div class="pm-preset-editable-actions">
-                <button type="button" class="pm-btn" @click="onUpdatePresetDesc(r.name ?? '')">Описание</button>
-                <button type="button" class="pm-btn danger" :disabled="r.name === 'admin'" @click="onDeletePreset(r.name ?? '')" title="админ — инвариант в коде">Удалить</button>
-              </div>
-            </div>
-          </div>
-        </div>
+      </div>
+    </div>
 
+    <!-- Preset management modals: create / rename / delete (type the name) -->
+    <ModalForm
+      :open="createOpen"
+      title="Создать пресет"
+      submit-label="Создать пресет"
+      :busy="createBusy"
+      :error="createError"
+      :fields="[
+        { key: 'name', label: 'Имя пресета', type: 'text', required: true, placeholder: 'имя пресета, напр. auditor' },
+        { key: 'description', label: 'Описание', type: 'textarea', placeholder: 'описание' },
+      ]"
+      @save="(v: Record<string, string | number>) => { createForm.name = String(v.name ?? ''); createForm.description = String(v.description ?? ''); void onCreatePreset() }"
+      @close="createOpen = false"
+    />
+
+    <ModalForm
+      :open="renameOpen"
+      title="Переименовать пресет"
+      submit-label="Переименовать"
+      :busy="renameBusy"
+      :error="renameError"
+      :fields="[
+        { key: 'name', label: 'Имя пресета', type: 'text', required: true, value: renameForm.name, placeholder: 'имя пресета' },
+        { key: 'description', label: 'Описание', type: 'textarea', value: renameForm.description, placeholder: 'описание' },
+      ]"
+      @save="(v: Record<string, string | number>) => { renameForm.name = String(v.name ?? ''); renameForm.description = String(v.description ?? ''); void onRenamePreset() }"
+      @close="renameOpen = false"
+    />
+
+    <!-- Удаление с подтверждением: нужно ввести имя пресета -->
+    <div v-if="deleteOpen" class="pm-del-overlay" @mousedown.self="deleteOpen = false">
+      <div class="pm-del" role="dialog" aria-modal="true" aria-label="Удалить пресет">
+        <h3 class="pm-del-title">Удалить пресет «{{ deleteTarget }}»?</h3>
+        <p class="pm-del-text">
+          Назначенные пользователи сохранятся, но потеряют базовые права этого пресета;
+          правила пресета будут удалены. Введите имя пресета, чтобы подтвердить:
+        </p>
+        <input
+          v-model="deleteConfirm"
+          class="pm-del-input"
+          :class="{ invalid: deleteConfirm !== '' && deleteConfirm !== deleteTarget }"
+          :aria-invalid="deleteConfirm !== '' && deleteConfirm !== deleteTarget"
+          :placeholder="deleteTarget"
+        />
+        <p v-if="deleteError" class="pm-del-error" role="alert">{{ deleteError }}</p>
+        <div class="pm-del-actions">
+          <button type="button" class="pm-btn" @click="deleteOpen = false">Отмена</button>
+          <button
+            type="button"
+            class="pm-btn danger"
+            :disabled="deleteConfirm !== deleteTarget || deleteBusy"
+            @click="onDeletePreset"
+          >
+            {{ deleteBusy ? 'Удаление…' : 'Удалить' }}
+          </button>
         </div>
+      </div>
     </div>
 
     <!-- Save bar -->
@@ -635,7 +701,7 @@ onMounted(() => {
   align-items: center;
   gap: 10px;
   text-align: left;
-  padding: 11px 14px;
+  padding: 11px 10px 11px 14px;
   border: 1px solid var(--ui-border);
   border-radius: 10px;
   background: var(--ui-surface);
@@ -643,6 +709,56 @@ onMounted(() => {
   font-size: 14px;
   color: var(--ui-text);
   transition: border-color var(--ui-duration), background var(--ui-duration);
+}
+.pm-preset-btn .pm-preset-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Аккуратный крестик удаления на кнопке пресета */
+.pm-preset-remove {
+  margin-left: auto;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--ui-text-muted);
+  opacity: 0.65;
+  transition: background var(--ui-duration), color var(--ui-duration), opacity var(--ui-duration);
+}
+.pm-preset-remove:hover {
+  background: var(--ui-danger);
+  color: #fff;
+  opacity: 1;
+}
+.pm-preset-btn.active .pm-preset-remove {
+  color: var(--ui-accent-on);
+}
+.pm-preset-btn.active .pm-preset-remove:hover {
+  background: var(--ui-danger);
+}
+/* Добавить пресет */
+.pm-preset-add {
+  display: block;
+  width: 100%;
+  padding: 9px 14px;
+  border: 1px dashed var(--ui-border-strong);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ui-accent);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--ui-duration), border-color var(--ui-duration);
+}
+.pm-preset-add:hover {
+  background: var(--ui-accent-soft);
+  border-color: var(--ui-accent);
 }
 .pm-preset-btn:hover {
   border-color: var(--ui-border-strong);
@@ -831,8 +947,8 @@ onMounted(() => {
 
 @media (max-width: 640px) {
   .pm-row-label { width: 100%; }
-  .pm-expr-block { padding-left: 0; }
 }
+
 .pm-savebar {
   position: sticky;
   bottom: 12px;
@@ -908,100 +1024,63 @@ onMounted(() => {
 .pm-save-msg.er {
   color: var(--ui-danger);
 }
-.pm-section-title {
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--ui-text);
-  margin: 22px 0 8px;
-}
-.pm-presets-editor {
-  margin-bottom: 14px;
-}
-.pm-preset-create {
+
+/* Удаление пресета — модалка с подтверждением (ввод имени) */
+.pm-del-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 40001;
   display: flex;
-  gap: 8px;
-  margin-bottom: 10px;
-  flex-wrap: wrap;
-  align-items: flex-end;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.4);
+  padding: 16px;
 }
-.pm-field {
+.pm-del {
+  width: 100%;
+  max-width: 420px;
+  background: var(--ui-surface);
+  border-radius: 10px;
+  box-shadow: var(--ui-shadow-md);
+  padding: 18px 20px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  flex: 1;
-  min-width: 180px;
+  gap: 12px;
 }
-.pm-field-label {
-  font-size: 12px;
-  font-weight: 600;
+.pm-del-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ui-text);
+}
+.pm-del-text {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
   color: var(--ui-text-2);
 }
-.pm-req {
-  color: var(--ui-danger);
-  margin-left: 2px;
-}
-.pm-input.invalid {
-  border-color: var(--ui-danger);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ui-danger) 18%, transparent);
-  background: var(--ui-danger-soft);
-}
-.pm-field-error {
-  margin: 0 0 10px;
-  color: var(--ui-danger);
-  font-size: 12.5px;
-  font-weight: 500;
-}
-.pm-input {
-  font-size: 13px;
-  padding: 6px 10px;
+.pm-del-input {
+  font-family: inherit;
+  font-size: 14px;
+  padding: 8px 10px;
   border: 1px solid var(--ui-border-strong);
   border-radius: 7px;
   background: var(--ui-surface);
   color: var(--ui-text);
-  flex: 1;
-  min-width: 180px;
-  transition: border-color var(--ui-duration), box-shadow var(--ui-duration);
 }
-.pm-input:focus {
-  border-color: var(--ui-accent);
-  box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.12);
-  outline: none;
+.pm-del-input.invalid {
+  border-color: var(--ui-danger);
+  outline: 1px solid var(--ui-danger);
 }
-.pm-preset-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.pm-preset-editable {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 12px;
-  background: var(--ui-surface);
-  border: 1px solid var(--ui-border);
-  border-radius: 10px;
-  transition: border-color var(--ui-duration);
-}
-.pm-preset-editable:hover {
-  border-color: var(--ui-border-strong);
-}
-.pm-preset-editable-main {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-}
-.pm-preset-editable-desc {
-  color: var(--ui-text-2);
+.pm-del-error {
+  margin: 0;
   font-size: 13px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  color: var(--ui-danger);
 }
-.pm-preset-editable-actions {
+.pm-del-actions {
   display: flex;
-  gap: 6px;
-  flex-shrink: 0;
+  justify-content: flex-end;
+  gap: 10px;
 }
+
 </style>
