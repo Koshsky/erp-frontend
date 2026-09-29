@@ -1,11 +1,12 @@
 /**
  * Centralized hint-content registry: every "?" explanation lives in the hint
- * ASSETS (src/hints/assets): `default/` — the built-in pages, `user/` — the
- * optional user overrides. Lookup rule for EVERY asset: the user asset wins
- * when it exists, otherwise the default one is used. Invalid user assets are
- * ignored (fall back to the default), so a broken override can never break
- * the panel.
+ * ASSETS (src/assets/default/hints + src/assets/custom/hints — a single
+ * assets entry point with mirroring catalogs). Lookup rule (applies to every
+ * asset kind): the custom asset wins when it exists, otherwise the default
+ * one is used. Invalid custom assets are ignored (fall back to the default),
+ * so a broken override can never break the panel.
  */
+import { resolveAssets } from '@/assets'
 
 export type HintBlock =
   | { kind: 'p'; text: string }
@@ -17,16 +18,6 @@ export interface HintPage {
   title: string
   blocks: HintBlock[]
 }
-
-// Vite asset globs: keyed by file path, values are the JSON payloads.
-const defaultModules = import.meta.glob('./assets/default/*.json', {
-  eager: true,
-  import: 'default',
-}) as Record<string, unknown>
-const customModules = import.meta.glob('./assets/custom/*.json', {
-  eager: true,
-  import: 'default',
-}) as Record<string, unknown>
 
 /** Validates a raw JSON value as a HintPage (null — invalid). */
 export function parseHintPage(raw: unknown): HintPage | null {
@@ -58,17 +49,14 @@ export function mergeHintPages(defaults: HintPage[], custom: HintPage[]): Map<st
 }
 
 function loadAssets(): Map<string, HintPage> {
-  const defaults: HintPage[] = []
-  for (const raw of Object.values(defaultModules)) {
+  // resolveAssets('hints') already merges the catalogs custom-first (the rule
+  // for every asset kind); validation still guards against broken files.
+  const pages: HintPage[] = []
+  for (const raw of resolveAssets('hints').values()) {
     const page = parseHintPage(raw)
-    if (page) defaults.push(page)
+    if (page) pages.push(page)
   }
-  const custom: HintPage[] = []
-  for (const raw of Object.values(customModules)) {
-    const page = parseHintPage(raw)
-    if (page) custom.push(page)
-  }
-  return mergeHintPages(defaults, custom)
+  return new Map(pages.map((p) => [p.id, p]))
 }
 
 const pages = loadAssets()
