@@ -1,8 +1,6 @@
 import { ref, watch } from 'vue'
-import { useAppStore, useAuthStore, usePlanningStore, useTimesheetStore } from '@/store'
+import { useAppStore, useAuthStore, usePlanningStore, useTimesheetStore, useRbacStore } from '@/store'
 import { shouldAutoSync } from '@/settings'
-import { isElectron } from '@/electron'
-import { getSyncCredentials } from '@/syncCredentials'
 import { isLoggedOut } from '@/loggedOut'
 import { warmNow } from './warmup'
 import {
@@ -81,21 +79,28 @@ function reloadersFor(entity: MutationEntity): Reloader[] {
   const planning = usePlanningStore()
   const ts = useTimesheetStore()
   const auth = useAuthStore()
-  const isStaff = auth.user?.preset === 'vp' || auth.user?.preset === 'admin'
+  const rbac = useRbacStore()
+  // Roster-family reloads (employees/states/periods) apply when the user can
+  // see the roster. The RBAC matrix is authoritative; the preset is only a
+  // cold-start fallback (mirrors useNavigation and warmup).
+  const permsReady = rbac.permsLoaded || rbac.myPermissions.length > 0
+  const seesRoster = permsReady
+    ? rbac.can('worker', 'view')
+    : auth.user?.preset === 'vp' || auth.user?.preset === 'admin'
 
   switch (entity) {
     case 'resource':
       return [reload('resources', () => app.refreshResources()), reload('calendar', () => app.refreshCalendar())]
     case 'user':
-      return isStaff ? [reload('employees', () => ts.refreshEmployees())] : []
+      return seesRoster ? [reload('employees', () => ts.refreshEmployees(undefined, true))] : []
     case 'member':
-      return isStaff ? [reload('resources', () => app.refreshResources())] : []
+      return seesRoster ? [reload('resources', () => app.refreshResources())] : []
     case 'state':
-      return isStaff ? [reload('states', () => ts.refreshStates())] : []
+      return seesRoster ? [reload('states', () => ts.refreshStates())] : []
     case 'period':
-      return isStaff
+      return seesRoster
         ? [
-            reload('employees', () => ts.refreshEmployees()),
+            reload('employees', () => ts.refreshEmployees(undefined, true)),
             ...(ts.windowStart
               ? [reload('periods', () => ts.refreshPeriods(ts.windowStart, ts.windowEnd))]
               : []),
@@ -170,6 +175,10 @@ export function syncNow(): Promise<void> {
  * The "Sync all" button: PUSH (queue flush) then, if the network
  * is alive, PULL (offline cache warmup). Parts are independent: a failed one
  * does not break the other. Returns what actually ran (for the UI message).
+ *
+ * This is an explicit user action, so the PULL bypasses the per-domain TTL
+ * (`warmNow(true)`) — "Обновить" must really refetch, unlike the automatic
+ * warmups which skip domains that are still fresh.
  */
 export async function syncAll(): Promise<{ pushed: boolean; pulled: boolean }> {
   try {
@@ -178,7 +187,7 @@ export async function syncAll(): Promise<{ pushed: boolean; pulled: boolean }> {
     const pushed = n != null && (n.ok > 0 || n.failed > 0 || n.interrupted)
     let pulled = false
     if (!isOffline.value) {
-      pulled = await warmNow()
+      pulled = await warmNow(true)
     }
     return { pushed, pulled }
   } finally {
@@ -216,39 +225,31 @@ export async function initOfflineSync(): Promise<void> {
 }
 
 /**
- * Auto re-login for the desktop build (Electron).
- * If autosync is enabled, there is no session (tokens expired/missing) and the
- * safeStorage holds login+password — silently log in so autosync can
- * work without manual input. In the browser (no safeStorage) it does nothing.
- * After an explicit logout (mvs_erp_logged_out flag) it does not log in until manual login.
+ * Unified session renewal used by 401 handling and the router guard — the
+ * single path for ALL environments (web + desktop). The refresh token lives in
+ * the non-volatile IndexedDB 'session' store and is sent in the body of
+ * /auth/refresh (falling back to the HttpOnly cookie on the web when the store
+ * is empty). Returns whether a fresh session is available.
  */
-export async function ensureDesktopAutoSyncSession(): Promise<void> {
-  if (!isElectron || !shouldAutoSync()) return
-  if (isLoggedOut()) return
-  const auth = useAuthStore()
-  // Session already alive — don't touch it.
-  if (auth.isAuthenticated && !auth.accessExpired) return
-  if (isOffline.value) return
-  const creds = await getSyncCredentials()
-  if (!creds?.login || !creds.password) return
-  await auth.login(creds.login, creds.password)
+export async function ensureAutoSession(): Promise<boolean> {
+  return useAuthStore().refreshSession()
 }
 
-/** Background session maintenance period (extending the access token with a silent login) */
+/** Background session maintenance period (extending the access token silently) */
 const SESSION_MAINTENANCE_MS = 30 * 1000
 
 let maintenanceTimer: number | null = null
 
 /**
- * Background session maintenance in Desktop: every 30 s silently refresh the access
- * token with autosync credentials when it is about to expire (the refresh cookie does
- * not work cross-site, so we extend it by logging in). Idempotent: ensure... itself
- * filters out a fresh session, offline, and the "after logout" flag. An offline session
- * (login without network) automatically becomes real when the network returns.
+ * Background session maintenance: every 30 s renew a session that is about to
+ * expire (or already expired). The unified refresh path (ensureAutoSession)
+ * picks the right source — the stored refresh token in all environments.
+ * A fresh session and an unauthenticated visitor are left alone.
  */
 export function startSessionMaintenance(): void {
-  if (!isElectron || maintenanceTimer != null) return
+  if (maintenanceTimer != null) return
   maintenanceTimer = window.setInterval(() => {
-    void ensureDesktopAutoSyncSession()
+    const auth = useAuthStore()
+    if (auth.isAuthenticated && auth.accessExpired) void ensureAutoSession()
   }, SESSION_MAINTENANCE_MS)
 }

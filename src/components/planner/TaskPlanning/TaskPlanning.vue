@@ -11,6 +11,7 @@ import type { DtoDetailedProcess, DtoResource, DtoResourceResponse, DtoResourceC
 import type { Resource } from '@/components/common/ResourceHeader/types'
 import type { Process } from './types'
 import type { PlanningUnit } from '../calendar'
+import type { DependencyType } from '../dependencies'
 import { toDate, fmtDate } from '../calendar'
 import { shortName } from '@/utils'
 
@@ -103,6 +104,12 @@ const displayProcesses = computed<Process[]>(() =>
           owner_name: owner?.name,
           owner_short: owner ? shortName(owner) : undefined,
           comments_count: t.comments_count ?? 0,
+          status: t.status ?? 'not_started',
+          subtasks: (t.subtasks || []).map((s: any) => ({
+            id: s.id ?? 0,
+            title: s.title ?? '',
+            status: s.status ?? 'not_started',
+          })),
           resources: (t.resources || []).map((r) => ({
             resource_id: r.id ?? 0,
             assignment_id: r.assignment_id ?? 0,
@@ -119,6 +126,12 @@ const displayProcesses = computed<Process[]>(() =>
       content: m.content,
       color: m.color ?? '',
       date: m.date ?? '',
+    })),
+    dependencies: (dto.dependencies || []).map((e: any) => ({
+      id: e.id ?? 0,
+      task_id: e.task_id ?? 0,
+      depends_on_task_id: e.depends_on_task_id ?? 0,
+      type: e.type as DependencyType,
     })),
   })),
 )
@@ -226,6 +239,7 @@ function onGridCtx(p: { clientX: number; clientY: number; date: string | null; r
           :processId="proc.id"
           :tasks="proc.tasks || []"
           :milestones="proc.milestones || []"
+          :dependencies="proc.dependencies || []"
           :groupStartDate="proc.start_date"
           :groupEndDate="proc.end_date"
           :can-manage="canManage"

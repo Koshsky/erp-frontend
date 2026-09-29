@@ -60,7 +60,11 @@ export function useEmployeeFilters(): EmployeeFilters {
   /** All resources (for the filter select), sorted by code/title */
   const resourcesSorted = computed<DtoResourceResponse[]>(() => [...app.resources].sort(byResourceLabel))
 
-  /** Non-worker users that have at least one direct subordinate in the roster */
+  /**
+   * Users that can be a manager (non-worker with at least one direct
+   * subordinate in the roster). A DATA filter of the org structure, not an
+   * access gate — keep it out of the rbac checks.
+   */
   const managerFilterOptions = computed(() =>
     app.users
       .filter(

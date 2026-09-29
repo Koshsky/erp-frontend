@@ -5,7 +5,6 @@ import { useAuthStore } from '../store'
 import { PasswordField } from '../components/common'
 import { isOffline, probeBackend } from '../offline/state'
 import { isElectron } from '../electron'
-import { getSavedLogin, saveSyncCredentials } from '../syncCredentials'
 import { getServerBase } from '../config'
 
 const router = useRouter()
@@ -18,20 +17,19 @@ const password = ref('')
 
 const localError = ref<string | null>(null)
 
-const offline = computed(() => isElectron && isOffline.value)
+const offline = computed(() => isOffline.value)
 /** Server address to show on the login page (if set) */
 const serverBase = computed(() => getServerBase())
-/** Single login button: the label depends on the network state, the behavior is in onSubmit */
-const submitLabel = computed(() =>
-  auth.loading ? 'Подождите…' : offline.value ? 'Войти офлайн' : 'Войти →',
-)
+/** The submit button always performs an ONLINE login (explicit user intent);
+ *  offline entry has its own separate secondary button below. */
+const submitLabel = computed(() => (auth.loading ? 'Подождите…' : 'Войти →'))
 
 // === Server ping: symbol button + connection indicator ===
 const pinging = ref(false)
 /** Ping result: null — not attempted yet, true — reachable, false — unreachable */
 const pingOk = ref<boolean | null>(null)
 // If the server is already known to be unreachable (offline) — the indicator is red right away
-if (isElectron && isOffline.value) pingOk.value = false
+if (isOffline.value) pingOk.value = false
 
 const pingSymbol = computed(() => (pinging.value ? '⏳' : '⇄'))
 
@@ -70,11 +68,11 @@ function getError(): string | null {
 /**
  * Offline login: a local session without a token (data from the cache, mutations
  * go to a queue), the password is neither checked nor saved. Identity: typed
- * login → saved profile → autosync login (see the prefilled value below).
+ * login → the saved profile (see the prefilled value below).
  */
 function enterOffline() {
   const typed = username.value.trim()
-  const identity = typed || auth.user?.username || getSavedLogin()
+  const identity = typed || auth.user?.username
   if (!identity) {
     localError.value = 'Нет сохранённой сессии: войдите онлайн хотя бы один раз'
     return
@@ -85,39 +83,33 @@ function enterOffline() {
 
 async function onSubmit() {
   localError.value = null
-  if (offline.value) {
-    enterOffline()
-    return
-  }
-
   if (!username.value || !password.value) {
     localError.value = 'Заполните все поля'
     return
   }
   const ok = await auth.login(username.value, password.value)
   if (ok) {
-    // Desktop: credentials of a successful login — the autosync safeguard credentials (password in
-    // safeStorage). Only the verified password is saved.
-    if (isElectron) {
-      try {
-        await saveSyncCredentials(username.value, password.value)
-      } catch {
-        // autosync will simply remain without a password — not critical
-      }
-    }
     goToRedirect()
   }
+}
+
+/** Offline entry: explicit secondary action (only shown while the server is
+ *  unreachable). Creates a local session without a token — never a substitute
+ *  for the online submit, so an online login can never land in a token-less
+ *  session by accident. */
+function onOfflineClick() {
+  localError.value = null
+  // Re-probe first: if the server became reachable, prefer the online path.
+  if (!isOffline.value) {
+    onSubmit()
+    return
+  }
+  enterOffline()
 }
 
 function goToRedirect() {
   const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/'
   router.push(redirect)
-}
-
-// Offline: prefill the saved autosync login — the user only needs
-// to press one button.
-if (isElectron && isOffline.value && !username.value) {
-  username.value = getSavedLogin() ?? ''
 }
 </script>
 
@@ -137,19 +129,31 @@ if (isElectron && isOffline.value && !username.value) {
 
         <PasswordField v-model="password" label="Пароль" autocomplete="current-password" placeholder="••••••••" />
 
-        <p v-if="offline" class="lp-offline-hint">Сервер недоступен: вход офлайн не требует сети</p>
         <p v-if="getError()" class="lp-error">{{ getError() }}</p>
+        <p v-if="offline" class="lp-offline-hint">Сервер недоступен для проверки пароля — войдите офлайн ниже</p>
 
         <button type="submit" class="lp-btn" :disabled="auth.loading">
           {{ submitLabel }}
         </button>
+
+        <button
+          v-if="offline"
+          type="button"
+          class="lp-offline-btn"
+          :disabled="auth.loading"
+          @click="onOfflineClick"
+        >
+          Войти офлайн (без проверки пароля)
+        </button>
       </form>
 
-      <!-- The "Server: …" row + ping and server settings — desktop (Electron)
-           build only. In the online (web) version the address is set by the
-           deployment and cannot be changed — the block is not shown at all. -->
-      <div v-if="isElectron && serverBase" class="lp-server-row">
-        <span class="lp-server">Сервер: {{ serverBase }}</span>
+      <!-- The connection ping — available in every environment (offline cache
+           now works in the web too). The server-address text is shown where a
+           settable base exists (desktop); on the web the address is fixed by
+           the deployment. The "Настройки сервера" link stays desktop-only
+           (same-origin restriction on the web). -->
+      <div class="lp-server-row" :class="{ 'lp-server-row--no-base': !serverBase }">
+        <span v-if="serverBase" class="lp-server">Сервер: {{ serverBase }}</span>
         <button
           type="button"
           class="lp-ping"
@@ -170,6 +174,28 @@ if (isElectron && isOffline.value && !username.value) {
 
 <style scoped>
 @import '../styles/tokens.css';
+
+.lp-offline-btn {
+  margin-top: 8px;
+  padding: 11px 13px;
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius-md);
+  background: var(--ui-surface-2);
+  color: var(--ui-text-2);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--ui-duration), border-color var(--ui-duration);
+}
+.lp-offline-btn:hover:not(:disabled) {
+  background: var(--ui-border);
+  border-color: var(--ui-accent);
+  color: var(--ui-text);
+}
+.lp-offline-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
 </style>
 
 <style src="./LoginPage.css" scoped></style>

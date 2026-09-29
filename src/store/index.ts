@@ -1,26 +1,50 @@
 import { defineStore } from 'pinia'
-import { ref, computed, onScopeDispose } from 'vue'
+import { ref, computed, watch, onScopeDispose } from 'vue'
 import axios, { type AxiosError, type Method } from 'axios'
 import { AuthApi, ProjectsApi, ProcessesApi, TasksApi, TimesheetResourcesApi, TimesheetCalendarApi, TimesheetStatesApi, PlanningApi, MilestonesApi, UsersApi, AssignmentsApi, AutoCreateApi, RBACApi, PermissionsApi, AuditApi, Configuration } from '@/api'
-import type { DtoUserInfo, DtoProject, DtoResourceResponse, DtoResourceCalendar, DtoResourceMemberResponse, DtoResourceAbsenceResponse, DtoUserResponse, DtoUserStateResponse, DtoStateResponse, DtoCreateResourceRequest, DtoUpdateResourceRequest, DtoCreateUserRequest, DtoUpdateUserRequest, DtoSetDaysRequest, DtoAdminUserResponse, DtoCreateUserResult, DtoResetPasswordResponse, DtoAutoCreateConfig, DtoAutoCreatedCounts, DtoCommentResponse, DomainPreset, DtoPresetRuleInput, DtoPresetRuleView, DtoMatrixCell, DtoRoutePolicyView, PoliciesKindInfo, DtoPermission, DtoUserPermissionsView, DtoUserPermissionsInput, DtoAuditEventView } from '@/api'
+import type { DtoUserInfo, DtoProject, DtoResourceResponse, DtoResourceCalendar, DtoResourceMemberResponse, DtoResourceAbsenceResponse, DtoUserResponse, DtoUserStateResponse, DtoStateResponse, DtoCreateResourceRequest, DtoUpdateResourceRequest, DtoCreateUserRequest, DtoUpdateUserRequest, DtoSetDaysRequest, DtoAdminUserResponse, DtoCreateUserResult, DtoAutoCreateConfig, DtoAutoCreatedCounts, DtoCommentResponse, DtoPresetView, DtoPresetRuleInput, DtoPresetRuleView, DtoMatrixCell, DtoRoutePolicyView, EngineKindInfo, DtoPermission, DtoUserPermissionsView, DtoUserPermissionsInput, DtoAuditEventView } from '@/api'
 import { apiErrorMessage } from '@/utils'
 import { getApiUrl } from '@/config'
 import { isOffline } from '@/offline/state'
-import { isElectron, setDesktopPassword } from '@/electron'
 import { offlineFailFastAdapter } from '@/offline/failFast'
 import { scheduleWarmup } from '@/offline/warmup'
-import { enqueueMutation, isNetworkError, clearOutbox, type MutationEntity } from '@/offline/outbox'
+import { enqueueMutation, isNetworkError, pruneForeignOutbox, type MutationEntity } from '@/offline/outbox'
 import { applyRangeSplit } from '@/offline/periodSplit'
 import { getAccessToken, setAccessToken } from '@/token'
-import { tryAcquireRefreshLock, releaseRefreshLock, publishToken, subscribeToken } from '@/sessionSync'
+import {
+  tryAcquireRefreshLock,
+  releaseRefreshLock,
+  publishSession,
+  subscribeSession,
+  subscribeToken,
+} from '@/sessionSync'
 import { isLoggedOut, clearLoggedOut, setLoggedOut } from '@/loggedOut'
-import { getSavedLogin } from '@/syncCredentials'
-import { shouldAutoSync } from '@/settings'
+import { saveRefreshToken, loadRefreshToken, clearRefreshToken } from '@/offline/session'
 import { hydrateFromCache, apiPath } from '@/offline/hydrate'
+import { cacheGetAllByPath } from '@/offline/cache'
+import { evalScope } from '@/rbacScope'
+import {
+  resolveTaskMove,
+  resolveAddDependency,
+  resolveEdges,
+  persistenceOrder,
+  type DependencyEdge,
+  type DependencyType,
+  type TaskDates,
+  type TaskDatePatch,
+} from '@/components/planner/dependencies'
 
 const USER_KEY = 'mvs_erp_user'
-/** Cache of my RBAC permissions for offline mode. */
-const PERMS_KEY = 'mvs_erp_perms'
+/**
+ * Cache of my RBAC permissions for offline mode — PER-USER: permissions are a
+ * user-specific matrix (preset + ACL grants/revokes + admin bypass), so the
+ * cache key carries the user id and a logout removes the whole key. Another
+ * account must never pick up a previous login's cached rights.
+ */
+const PERMS_KEY_PREFIX = 'mvs_erp_perms'
+function permsKey(uid: number | null | undefined): string {
+  return uid != null ? `${PERMS_KEY_PREFIX}_${uid}` : PERMS_KEY_PREFIX
+}
 
 /** How long before the token expires that proactive refresh kicks in */
 const REFRESH_MARGIN_MS = 120 * 1000
@@ -28,6 +52,9 @@ const REFRESH_INTERVAL_MS = 30 * 1000
 
 /** Page size for listings (matches the backend default). */
 const PAGE_SIZE = 50
+
+/** Max employee ids per batch days request (backend contract — see GET /user/days). */
+const BATCH_IDS_MAX = 200
 
 /** Temporary (negative) id for entities created offline (unique over time) */
 function nextTempId(): number {
@@ -56,13 +83,20 @@ interface MutationOptions {
 async function runMutation(opts: MutationOptions): Promise<boolean> {
   try {
     const resp = await opts.call()
-    await opts.apply((resp as { data?: { data?: unknown } })?.data?.data ?? null)
+    // Unwrap the unified envelope exactly TWO levels: `resp.data` is the body
+    // ({ data: <payload>, error }), `resp.data.data` is the payload DTO the
+    // apply callback expects (the created/updated entity). Going one level
+    // deeper (resp.data.data.data = payload.data) yields undefined for every
+    // create/update DTO and would silently drop online mutations from the UI
+    // (the offline/optimistic path is unaffected — it never reads the payload).
+    await opts.apply((resp as { data?: { data?: unknown } } | undefined)?.data?.data ?? null)
     return true
   } catch (e: any) {
     const err = e as AxiosError
-    if (err?.config && isElectron && isNetworkError(e)) {
-      // Offline queue (outbox) — only in the desktop (Electron) build.
-      // On the web, a network failure in a mutation is a regular error (no optimistic path).
+    if (err?.config && isNetworkError(e)) {
+      // Mutation queue (outbox): on a network failure the request is stored in
+      // IndexedDB and the optimistic change is applied — in every environment
+      // (web and desktop share the same offline-first logic).
       try {
         await enqueueMutation({
           entity: opts.entity,
@@ -97,7 +131,26 @@ function apiConfig(): Configuration {
       // queue, GETs are served from cache. The adapter is only placed here (store clients)
       // so that the queue flush (flushOutbox, raw axios) goes to the network as
       // usual: otherwise, once the network is back, writes would fail with Network Error.
-      ...(isElectron && isOffline.value ? { adapter: offlineFailFastAdapter } : {}),
+      ...(isOffline.value ? { adapter: offlineFailFastAdapter } : {}),
+    },
+    apiKey: () => `Bearer ${getAccessToken()}`,
+  })
+}
+
+/**
+ * Configuration for AUTH requests only (/auth/login, /auth/refresh,
+ * /auth/logout). These must ALWAYS reach the network — even while isOffline is
+ * true: they are precisely how the app verifies the server came back (manual
+ * online login, silent session restore). The fail-fast adapter would otherwise
+ * swallow the login attempt while the monitor still thinks the server is dead,
+ * leaving the user stuck on /login with no way to reconnect.
+ */
+function authApiConfig(): Configuration {
+  return new Configuration({
+    basePath: getApiUrl(),
+    baseOptions: {
+      headers: { 'Content-Type': 'application/json' },
+      timeout: 10000,
     },
     apiKey: () => `Bearer ${getAccessToken()}`,
   })
@@ -183,7 +236,23 @@ export const useAuthStore = defineStore('auth', () => {
   const loading = ref(false)
   const error = ref<string | null>(null)
 
-  function applySession(data: { access_token?: string; user?: DtoUserInfo } | undefined) {
+  /**
+   * Applies a session (login or silent rotation).
+   *
+   * `warm` must be true ONLY for a manual login: the periodic token rotation
+   * (startSessionMaintenance / the proactive timer / the 401 interceptor) used
+   * to schedule a FULL warmup on every refresh. On the "Табель" page that
+   * re-fetched the roster and all employee periods every 30 s, replacing the
+   * employees array with a fresh one each time — the grid re-rendered and the
+   * page looked like it was constantly reloading and flickering. A rotation
+   * changes nothing about the data, so it must not touch it: freshness is the
+   * background PULL cycle's job (offline/connection.ts).
+   */
+  function applySession(
+    data: { access_token?: string; user?: DtoUserInfo } | undefined,
+    warm = false,
+  ) {
+    const prevUid = user.value?.id
     const token = data?.access_token
     setAccessToken(token ?? null)
     if (data?.user) {
@@ -193,8 +262,18 @@ export const useAuthStore = defineStore('auth', () => {
     isAuthenticated.value = Boolean(token)
     sessionMode.value = 'online'
     scheduleProactiveRefresh()
+    // Permission isolation: when a different user id arrives (a login or an
+    // account switch) drop the stale in-memory permission snapshot and fetch
+    // the new account's real rights immediately — the UI must never show the
+    // previous account's matrix. A token rotation keeps the same user, so
+    // nothing to do (the TTL pull cycle owns refreshes).
+    if (prevUid !== user.value?.id) {
+      const rbac = useRbacStore()
+      rbac.resetPermissions()
+      if (!isOffline.value) void rbac.refreshPermissions()
+    }
     // Background warm-up of the offline cache with data for the user's role
-    scheduleWarmup()
+    if (warm) scheduleWarmup()
   }
 
   /**
@@ -205,6 +284,7 @@ export const useAuthStore = defineStore('auth', () => {
    */
   function enterOffline(username: string | null): boolean {
     const stored = readStoredUser()
+    const prevUid = user.value?.id
     if (stored?.username && (!username || stored.username === username)) {
       user.value = stored
     } else {
@@ -214,22 +294,58 @@ export const useAuthStore = defineStore('auth', () => {
     stopProactiveRefresh()
     isAuthenticated.value = true
     sessionMode.value = 'offline'
+    // Offline account switch — never keep another profile's permissions.
+    if (prevUid !== user.value?.id) useRbacStore().resetPermissions()
     return true
   }
+
+  // Once the network returns after an offline login, silently try to restore a
+  // real online session (the refresh token is in IndexedDB or the cookie). The
+  // router guard alone cannot do it: it skips the refresh while isOffline is
+  // true and then admits the stored profile without an access token — which
+  // made every request go out with an empty Bearer and the server answered
+  // INVALID_TOKEN («Сессия истекла»). When no refresh token is available at
+  // all (a pure offline session), do nothing: the user stays offline (their
+  // data and queue are intact) and can log in online explicitly.
+  watch(
+    isOffline,
+    (offline) => {
+      if (offline) return
+      if (sessionMode.value !== 'offline') return
+      if (isLoggedOut()) return
+      void (async () => {
+        const stored = await loadRefreshToken()
+        if (stored == null) return // no session to restore — stay offline
+        await doRefresh()
+      })()
+    },
+    { flush: 'sync' },
+  )
 
   async function login(username: string, password: string) {
     loading.value = true
     error.value = null
     try {
-      const api = new AuthApi(apiConfig())
+      const api = new AuthApi(authApiConfig())
       const resp = await api.authLoginPost({ username: username.trim(), password })
       const body = resp.data
       const errBody = body?.error as { code?: unknown; message?: string } | undefined
       if (errBody && errBody.code != null) throw new Error(apiErrorMessage(errBody))
-      applySession(body?.data)
+      // Manual login: the offline cache is warmed for the user's role.
+      applySession(body?.data, true)
+      // Persist the rotation-eligible refresh token (the backend returns it in
+      // the login body) so the session survives reloads without the cookie.
+      if (body?.data?.refresh_token) {
+        await saveRefreshToken(body.data.refresh_token)
+      }
       // Manual login clears the "logged out" flag — auto-sync is allowed again
       clearLoggedOut()
       sessionMode.value = 'online'
+      // A verified login orphans the queue entries of the previous account
+      // (their session is revoked; the flush-time creator guard would park
+      // them forever). Same-account entries — e.g. pending work of a sibling
+      // tab — are kept. Non-fatal.
+      void pruneForeignOutbox(user.value?.username ?? username.trim()).catch(() => {})
       return true
     } catch (e: any) {
       error.value = e.message || String(e)
@@ -251,18 +367,6 @@ export const useAuthStore = defineStore('auth', () => {
       const body = resp.data
       const errBody = body?.error as { code?: unknown; message?: string } | undefined
       if (errBody && errBody.code != null) throw new Error(apiErrorMessage(errBody))
-      // Update the password saved for auto-sync so auto-sync does not break after a
-      // password change: credentials are tied to the last manual login (Desktop).
-      if (isElectron) {
-        const saved = getSavedLogin()
-        if (saved && user.value?.username && saved === user.value.username) {
-          try {
-            await setDesktopPassword(newPassword)
-          } catch {
-            // not critical: auto-sync will simply ask for credentials at login
-          }
-        }
-      }
       return true
     } catch (e: any) {
       error.value = apiErrorMessage(e?.response?.data?.error, e?.message ?? String(e))
@@ -279,17 +383,17 @@ export const useAuthStore = defineStore('auth', () => {
   /** Proactive refresh: timer + tab visibility return, so the access token never expires prematurely */
   function scheduleProactiveRefresh() {
     if (proactiveTimer != null) return
-    // Desktop + auto-sync: session renewal is done by session-maintenance
-    // (silent re-login with auto-sync credentials) — the refresh cookie does not work
-    // cross-site, so we skip it here to avoid a logout on 401.
+    // Refresh is unified across environments: the refresh token lives in the
+    // IndexedDB 'session' store (body of /auth/refresh), so the timer works the
+    // same on web and desktop.
     const renew = () => {
-      if (accessTokenExpiring() && !(isElectron && shouldAutoSync())) {
+      if (accessTokenExpiring()) {
         void refreshSession()
       }
     }
     proactiveTimer = window.setInterval(renew, REFRESH_INTERVAL_MS)
     onVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && accessTokenExpiring() && !(isElectron && shouldAutoSync())) {
+      if (document.visibilityState === 'visible' && accessTokenExpiring()) {
         void refreshSession()
       }
     }
@@ -320,7 +424,10 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function doRefresh(): Promise<boolean> {
-    // The refresh token lives in an HttpOnly cookie (AD-05): we do not send a body; the cookie is attached itself.
+    // The refresh token lives in the non-volatile IndexedDB 'session' store (offline/session).
+    // We send it in the body of /auth/refresh; if the store is empty we send no body and the
+    // backend falls back to the HttpOnly refresh cookie (legacy web path). The backend returns
+    // the rotated refresh token in the response body and we persist it for the next refresh.
     // Offline refresh is impossible: we do not log out; the session lives until the network returns.
     if (isOffline.value) return true
     // After an explicit logout (logout) we do not call /auth/refresh: the cookie is already revoked,
@@ -328,36 +435,43 @@ export const useAuthStore = defineStore('auth', () => {
     // the revoked token would trigger reuse detection (revoking all of the
     // user's sessions). We return false without the network — the caller is logged out.
     if (isLoggedOut()) return false
-    // Web only: coordinate the refresh across tabs. The refresh cookie is shared, and two tabs
-    // refreshing the same (rotating) session pair at once make the second tab hit the backend
-    // reuse detection — which revokes ALL of the user's sessions and logs every tab out.
-    // Only one tab refreshes at a time; the rest adopt the token it broadcasts.
-    const coordinated = !isElectron
+    // Cross-tab coordination for ALL environments: the refresh token is shared (the body/IndexedDB
+    // value or the cookie), so two tabs refreshing the same (rotating) session pair at once make the
+    // second tab hit the backend reuse detection — revoking ALL of the user's sessions and logging
+    // every tab out. Only one tab refreshes at a time; the rest adopt the token it broadcasts.
+    const coordinated = true
     if (coordinated && !tryAcquireRefreshLock()) {
       // Another tab is refreshing — wait briefly for its token, otherwise defer:
-      // the next 401 retry will use the already-rotated cookie (safe — the new
+      // the next 401 retry will use the already-rotated refresh (safe — the new
       // token is not revoked).
       return await waitForExternalToken()
     }
     loading.value = true
     error.value = null
     try {
-      const api = new AuthApi(apiConfig())
-      const resp = await api.authRefreshPost()
+      const api = new AuthApi(authApiConfig())
+      const stored = await loadRefreshToken()
+      const resp = await api.authRefreshPost(stored ? { refresh_token: stored } : undefined)
       const body = resp.data
       const errBody = body?.error as { code?: unknown; message?: string } | undefined
       if (errBody && errBody.code != null) throw new Error(apiErrorMessage(errBody))
       applySession(body?.data)
+      // Rotate: persist the refresh token returned by the backend for the next refresh.
+      if (body?.data?.refresh_token) {
+        await saveRefreshToken(body.data.refresh_token)
+      }
       const token = getAccessToken()
-      if (coordinated && token) publishToken(token)
+      if (coordinated && token) {
+        publishSession({ access: token, refresh: body?.data?.refresh_token })
+      }
       return true
     } catch (e: any) {
-      // Network error (no HTTP response): the server is unreachable. We do not log out.
-      // In the desktop build we switch to offline mode (the session and the change queue in
-      // IndexedDB live until the network returns); on the web there is no offline mode — we simply
-      // do not kick the user out. Logout happens only on a real server failure.
+      // Network error (no HTTP response): the server is unreachable. We do not log out —
+      // we switch to offline mode (the session and the change queue in IndexedDB live
+      // until the network returns), in every environment. Logout happens only on a
+      // real server failure.
       if (isNetworkError(e)) {
-        if (isElectron) isOffline.value = true
+        isOffline.value = true
         return true
       }
       error.value = e.message || String(e)
@@ -371,21 +485,51 @@ export const useAuthStore = defineStore('auth', () => {
 
   function logout() {
     stopProactiveRefresh()
-    // Do not let the queue flush under a new user/token
-    void clearOutbox()
-    // Revoke the refresh session on the server and clear the cookie (best-effort)
-    try {
-      void new AuthApi(apiConfig()).authLogoutPost()
-    } catch {
-      // the cookie will also be cleared on the client below
-    }
+    // The mutation queue is NOT wiped here: it is shared by every tab/window of
+    // this profile, and a sibling tab of the same user may still have pending
+    // edits (H-OFF-3). A foreign account can never flush someone else's queue —
+    // the flush-time creator guard parks mismatched entries, and after a logout
+    // auto-sync is disabled (isLoggedOut) until a manual login. Orphaned
+    // entries of the logged-out account are pruned on the next verified login
+    // (pruneForeignOutbox). The explicit full wipe is clearLocalData()/clearOutbox().
+    // Revoke the refresh session on the server: read the stored token and send it
+    // in the body of /auth/logout (falling back to the cookie when none is stored),
+    // then clear our local copy. Best-effort — the cookie is also cleared by the backend.
+    void (async () => {
+      try {
+        const stored = await loadRefreshToken()
+        await new AuthApi(authApiConfig()).authLogoutPost(
+          stored ? { refresh_token: stored } : undefined,
+        )
+      } catch {
+        // the session is revoked/expired on the client regardless
+      } finally {
+        // Local cleanup must never throw out of logout (an IndexedDB failure —
+        // e.g. a missing object store — would otherwise surface as an
+        // unhandled promise rejection after the user logged out).
+        await clearRefreshToken().catch(() => {})
+      }
+    })()
     setAccessToken(null)
+    // The permission cache is per-user: drop the logged-out account's key and
+    // the in-memory snapshot so a later login (the same or another account)
+    // starts from its real /permissions/me, never from these rights.
+    const wasUid = user.value?.id
+    if (wasUid != null) localStorage.removeItem(permsKey(wasUid))
+    useRbacStore().resetPermissions()
     localStorage.removeItem(USER_KEY)
     user.value = null
     isAuthenticated.value = false
     sessionMode.value = 'online'
-    // After an explicit logout, auto-sync does not log in until a manual login (Desktop)
+    // After an explicit logout, auto-sync does not log in until a manual login
     setLoggedOut()
+    // Drop the user-scoped payloads of the logged-out account so a later login
+    // (the same or another account) starts from its own server-scoped data —
+    // never from the previous session's rows (the GET cache itself is per-user
+    // keyed — see offline/cache.ts — so no cache wipe is needed).
+    useTimesheetStore().resetUserData()
+    useAppStore().resetUserData()
+    usePlanningStore().resetUserData()
   }
 
   /** Fetches fresh user data by id via UsersApi.usersIdGet */
@@ -409,9 +553,8 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  /** Local-first profile (desktop): hydrate from the cache; web fetches live */
+  /** Local-first profile: hydrate from the cache; network refresh via fetchProfile */
   async function loadProfile(userId: number): Promise<boolean> {
-    if (!isElectron) return fetchProfile(userId)
     if (user.value) return true
     await hydrateFromCache([
       {
@@ -435,17 +578,20 @@ export const useAuthStore = defineStore('auth', () => {
     scheduleWarmup()
   }
 
-  // Web: adopt fresher access tokens published by sibling tabs (cross-tab refresh
-  // coordination — the refresh cookie is shared and rotated once per family).
+  // Adopt fresher sessions (access token + rotated refresh token) published by
+  // sibling tabs (cross-tab refresh coordination in ALL environments — the
+  // refresh token is shared and rotated once per family).
   let unsubscribeSessionToken: (() => void) | null = null
-  if (!isElectron) {
-    unsubscribeSessionToken = subscribeToken((token) => {
+  unsubscribeSessionToken = subscribeSession(({ access, refresh }) => {
+    if (access) {
       const cur = decodeTokenExp(getAccessToken())
-      const next = decodeTokenExp(token)
-      if (next != null && (cur == null || next > cur)) setAccessToken(token)
-    })
-    onScopeDispose(() => unsubscribeSessionToken?.())
-  }
+      const next = decodeTokenExp(access)
+      if (next != null && (cur == null || next > cur)) setAccessToken(access)
+    }
+    // Every tab keeps its IndexedDB refresh store in sync with the rotation.
+    if (refresh) void saveRefreshToken(refresh)
+  })
+  onScopeDispose(() => unsubscribeSessionToken?.())
 
   return {
     user,
@@ -471,19 +617,18 @@ export const useAppStore = defineStore('app', () => {
   const projectsError = ref<string | null>(null)
 
   /**
-   * Local-first (desktop only): fill the projects list from the cache if empty.
-   * The web build has no offline cache — it reads straight from the server
-   * (refreshProjects), as before the offline-first refactor.
+   * Local-first: fill the projects list from the cache if empty. Network refresh
+   * happens only through the background PULL cycle (refreshProjects).
    */
   async function loadProjects(): Promise<void> {
-    if (!isElectron) {
-      await refreshProjects()
-      return
-    }
     if (projects.value.length) return
     await hydrateFromCache([
       {
-        path: apiPath('/projects'),
+        // Keep this path identical to the generated client endpoint (projectGet
+        // → `/project`, singular). The GET cache key is the full axios URL, and
+        // cacheGetFresh/cacheGetByPath match by pathname — a plural here makes
+        // offline hydration always miss and kills the warmup PULL TTL for projects.
+        path: apiPath('/project'),
         filled: () => projects.value.length > 0,
         apply: (body) => {
           const d = (body as { data?: { items?: DtoProject[] } } | undefined)?.data
@@ -494,10 +639,17 @@ export const useAppStore = defineStore('app', () => {
   }
 
   async function refreshProjects(): Promise<void> {
-    // Only admin/dp/rp can see projects (per the RBAC matrix). For other presets the
-    // listing is forbidden by the backend (403) — we do not send the request at all.
-    const preset = useAuthStore().user?.preset
-    if (preset && preset !== 'admin' && preset !== 'dp' && preset !== 'rp') {
+    // Only users with project.view (backend-enforced) may list projects; for
+    // the others the listing is forbidden (403) — we do not send the request
+    // at all. The RBAC matrix is authoritative once loaded; the preset is only
+    // a cold-start fallback (mirrors useNavigation / warmup).
+    const auth = useAuthStore()
+    const rbac = useRbacStore()
+    const permsReady = rbac.permsLoaded || rbac.myPermissions.length > 0
+    const allowed = permsReady
+      ? rbac.can('project', 'view')
+      : !auth.user?.preset || ['admin', 'dp', 'rp'].includes(auth.user.preset)
+    if (!allowed) {
       projects.value = []
       return
     }
@@ -517,21 +669,55 @@ export const useAppStore = defineStore('app', () => {
 
   const resources = ref<DtoResourceResponse[]>([])
   const resourcesLoading = ref(false)
+  /** Separate flag for "load more": the table must not flash its loading state */
+  const resourcesLoadingMore = ref(false)
+  /** Server-side total (from the list envelope) — drives the "load more" button */
+  const resourcesTotal = ref(0)
   const resourcesError = ref<string | null>(null)
 
-  async function loadResources(): Promise<void> {
-    if (!isElectron) {
-      await refreshResources()
-      return
+  /** Whether another resources page can be requested */
+  const resourcesHasMore = computed(() => resourcesTotal.value > resources.value.length)
+
+  /** Merges a resources page into the current list (dedup by id, fresh wins) — pure */
+  function mergeResourceLists(
+    current: DtoResourceResponse[],
+    items: DtoResourceResponse[],
+  ): DtoResourceResponse[] {
+    const byId = new Map<number, DtoResourceResponse>()
+    for (const r of current) if (r.id != null) byId.set(r.id, r)
+    for (const r of items) if (r.id != null) byId.set(r.id, r)
+    return [...byId.values()]
+  }
+
+  /** Merges a resources page into the current list (dedup by id, fresh wins) */
+  function mergeResources(items: DtoResourceResponse[]): void {
+    resources.value = mergeResourceLists(resources.value, items)
+  }
+
+  /** Whether two resource snapshots are equal field-by-field (same order, same
+   *  ids, same visible fields) — keeps the array reference stable on a
+   *  background refresh so dependent computeds/views do not re-render. */
+  function sameResources(a: DtoResourceResponse[], b: DtoResourceResponse[]): boolean {
+    if (a.length !== b.length) return false
+    for (let i = 0; i < a.length; i++) {
+      if (a[i]?.id !== b[i]?.id) return false
+      for (const key of Object.keys(a[i] ?? {}) as Array<keyof DtoResourceResponse>) {
+        if (a[i][key] !== b[i]?.[key]) return false
+      }
     }
+    return true
+  }
+
+  async function loadResources(): Promise<void> {
     if (resources.value.length) return
     await hydrateFromCache([
       {
         path: apiPath('/resources'),
         filled: () => resources.value.length > 0,
         apply: (body) => {
-          const d = (body as { data?: { items?: DtoResourceResponse[] } } | undefined)?.data
+          const d = (body as { data?: { items?: DtoResourceResponse[]; total?: number } } | undefined)?.data
           resources.value = d?.items ?? []
+          resourcesTotal.value = d?.total ?? 0
         },
       },
     ])
@@ -544,11 +730,60 @@ export const useAppStore = defineStore('app', () => {
       const api = new TimesheetResourcesApi(apiConfig())
       const resp = await api.resourcesGet(PAGE_SIZE, undefined, 0)
       const data = resp.data?.data
-      resources.value = data?.items ?? []
+      const items = data?.items ?? []
+      // The background PULL must not truncate pages already loaded via
+      // "load more": merge the fresh first page into the existing list (dedup
+      // by id, fresh page wins, extra pages kept) — the same policy the
+      // offline path uses (mergeResources). The array identity is preserved
+      // when the merged roster equals the current one, so dependent views do
+      // not re-render on every quiet refresh cycle.
+      const merged = mergeResourceLists(resources.value, items)
+      if (!sameResources(merged, resources.value)) resources.value = merged
+      resourcesTotal.value = data?.total ?? 0
     } catch (e: any) {
       resourcesError.value = e.message || String(e)
     } finally {
       resourcesLoading.value = false
+    }
+  }
+
+  /**
+   * Appends the next resources page ("load more"). Offline the pages cached by
+   * earlier online visits are merged instead of a network request: the offline
+   * cache fallback in http.ts serves the freshest response of a pathname, which
+   * would hand back page 0 for any offset.
+   */
+  async function loadMoreResources(): Promise<boolean> {
+    if (resourcesLoadingMore.value || !resourcesHasMore.value) return true
+    resourcesLoadingMore.value = true
+    resourcesError.value = null
+    try {
+      if (isOffline.value) {
+        const pages = await cacheGetAllByPath<{ data?: { items?: DtoResourceResponse[]; offset?: number; total?: number } }>(
+          apiPath('/resources'),
+        )
+        let merged = false
+        for (const page of pages) {
+          const d = page.data?.data
+          if (!d?.items?.length) continue
+          mergeResources(d.items)
+          if (typeof d.total === 'number' && (d.offset ?? 0) > 0) resourcesTotal.value = d.total
+          merged = true
+        }
+        if (!merged) resourcesError.value = 'Нет сохранённых данных: откройте эту страницу онлайн хотя бы раз'
+        return merged
+      }
+      const api = new TimesheetResourcesApi(apiConfig())
+      const resp = await api.resourcesGet(PAGE_SIZE, undefined, resources.value.length)
+      const data = resp.data?.data
+      mergeResources(data?.items ?? [])
+      resourcesTotal.value = data?.total ?? resourcesTotal.value
+      return true
+    } catch (e: any) {
+      resourcesError.value = e.message || String(e)
+      return false
+    } finally {
+      resourcesLoadingMore.value = false
     }
   }
 
@@ -623,10 +858,6 @@ export const useAppStore = defineStore('app', () => {
 
   /** Loads the member (user) list of a resource — local-first (cache) */
   async function loadResourceMembers(resourceId: number): Promise<void> {
-    if (!isElectron) {
-      await refreshResourceMembers(resourceId)
-      return
-    }
     if (resourceMembers.value[resourceId] != null) return
     await hydrateFromCache([
       {
@@ -777,10 +1008,6 @@ export const useAppStore = defineStore('app', () => {
 
   /** Loads resource availability for the "180 days back / 360 days forward" window (within the backend limit) */
   async function loadCalendar(): Promise<void> {
-    if (!isElectron) {
-      await refreshCalendar()
-      return
-    }
     if (calendar.value.length) return
     await hydrateFromCache([
       {
@@ -837,10 +1064,6 @@ export const useAppStore = defineStore('app', () => {
   const myStaffLoading = ref(false)
 
   async function loadUsers(): Promise<void> {
-    if (!isElectron) {
-      await refreshUsers()
-      return
-    }
     if (users.value.length) return
     await hydrateFromCache([
       {
@@ -870,10 +1093,6 @@ export const useAppStore = defineStore('app', () => {
 
   /** Loads "own staff" (scoped /users without a role filter). */
   async function loadMyStaff(): Promise<void> {
-    if (!isElectron) {
-      await refreshMyStaff()
-      return
-    }
     if (myStaff.value.length) return
     await hydrateFromCache([
       {
@@ -892,7 +1111,7 @@ export const useAppStore = defineStore('app', () => {
     myStaffLoading.value = true
     try {
       const api = new UsersApi(apiConfig())
-      const resp = await api.userGet(500, undefined, undefined, undefined, 0)
+      const resp = await api.userGet(500, undefined, undefined, undefined, undefined, 0)
       myStaff.value = resp.data?.data?.items ?? []
     } catch {
       // Not critical: the candidate pool stays as is.
@@ -907,12 +1126,22 @@ export const useAppStore = defineStore('app', () => {
   const adminUsersError = ref<string | null>(null)
 
   /** Full user list for the admin page (without password hashes) */
-  async function loadAdminUsers() {
+  async function loadAdminUsers(): Promise<void> {
+    await refreshAdminUsers('')
+  }
+
+  /**
+   * Reloads the admin user list applying a server-side search ('' = all users).
+   * The search is a case-insensitive substring of the full name/login
+   * (max 128 chars; LIKE escaping is done by the backend) and always starts
+   * from the first page (offset 0).
+   */
+  async function refreshAdminUsers(search: string): Promise<void> {
     adminUsersLoading.value = true
     adminUsersError.value = null
     try {
       const api = new UsersApi(apiConfig())
-      const resp = await api.userGet(500, undefined, undefined, false, 0)
+      const resp = await api.userGet(500, undefined, undefined, false, search || undefined, 0)
       adminUsers.value = resp.data?.data?.items ?? []
     } catch (e: any) {
       adminUsersError.value = apiErrorMessage(e)
@@ -934,15 +1163,15 @@ export const useAppStore = defineStore('app', () => {
     }
   }
 
-  /** Resets a user's password; returns the new password (shown once) */
-  async function resetPassword(id: number): Promise<string | null> {
+  /** Resets a user's password (admin-only). The password itself is not exposed by the API. */
+  async function resetPassword(id: number): Promise<boolean> {
     try {
       const api = new UsersApi(apiConfig())
-      const resp = await api.userIdResetPasswordPost(id)
-      return resp.data?.data?.password ?? null
+      await api.userIdResetPasswordPost(id)
+      return true
     } catch (e: any) {
       adminUsersError.value = apiErrorMessage(e)
-      return null
+      return false
     }
   }
 
@@ -1018,12 +1247,24 @@ export const useAppStore = defineStore('app', () => {
     }
   }
 
+  /** Clears the user-scoped payloads on logout/account switch (the GET cache
+   *  itself is per-user keyed — see offline/cache.ts). */
+  function resetUserData(): void {
+    users.value = []
+    resources.value = []
+    resourceMembers.value = {}
+    absenceByResource.value = {}
+  }
+
   return {
     projects,
     projectsLoading,
     projectsError,
     resources,
     resourcesLoading,
+    resourcesLoadingMore,
+    resourcesTotal,
+    resourcesHasMore,
     resourcesError,
     users,
     usersLoading,
@@ -1034,6 +1275,7 @@ export const useAppStore = defineStore('app', () => {
     loadProjects,
     refreshProjects,
     loadResources,
+    loadMoreResources,
     refreshResources,
     loadCalendar,
     refreshCalendar,
@@ -1049,6 +1291,7 @@ export const useAppStore = defineStore('app', () => {
     adminUsersLoading,
     adminUsersError,
     loadAdminUsers,
+    refreshAdminUsers,
     createUser,
     resetPassword,
     updateUser,
@@ -1070,6 +1313,7 @@ export const useAppStore = defineStore('app', () => {
     resourceByUser,
     ensureResourceMembers,
     changeEmployeeResource,
+    resetUserData,
   }
 })
 
@@ -1084,6 +1328,11 @@ export const useTimesheetStore = defineStore('timesheet', () => {
 
   const employees = ref<DtoUserResponse[]>([])
   const employeesTotal = ref(0)
+  /** Separate flag for "load more": the roster must not flash its loading state */
+  const employeesLoadingMore = ref(false)
+  /** User who loaded the current roster (null — none yet); the roster is
+   *  server-scoped, so an account switch must never reuse another user's rows. */
+  const employeesLoadedFor = ref<number | null>(null)
   const states = ref<DtoStateResponse[]>([])
   const periodsByEmployee = ref<Record<number, DtoUserStateResponse[]>>({})
   const windowStart = ref('')
@@ -1143,37 +1392,117 @@ export const useTimesheetStore = defineStore('timesheet', () => {
     await hydrateFromCache(targets)
   }
 
-  /** Network refresh (PULL): loads states (including the user's own) for [start, end] and merges them into the cache by id */
-  async function refreshPeriods(start: string, end: string): Promise<void> {
+  /** Merges a fresh [start, end] window response for one employee into the cache */
+  function mergeWindowPeriods(id: number, list: DtoUserStateResponse[], start: string, end: string): void {
+    const existing = periodsByEmployee.value[id] ?? []
+    // A fresh response for the [start, end] window is authoritative for periods overlapping it:
+    // old overlapping periods (e.g. cleared via DELETE) are removed,
+    // then new ones are merged. Periods outside the window are kept for incremental loading.
+    const kept = existing.filter(
+      (p) =>
+        !(p.start_date != null && p.end_date != null && !(p.end_date < start || p.start_date > end)),
+    )
+    const byId = new Map<number, DtoUserStateResponse>()
+    for (const p of kept) if (p.id != null) byId.set(p.id, p)
+    for (const p of list) if (p.id != null) byId.set(p.id, p)
+    const merged = [...byId.values()].sort((a, b) =>
+      (a.start_date ?? '').localeCompare(b.start_date ?? ''),
+    )
+    // Keep the previous array reference when nothing changed: the grid reads
+    // periodsByEmployee, and replacing it with an equal-but-new array re-renders
+    // every cell on each background refresh (flicker on "Табель").
+    if (!samePeriods(existing, merged)) periodsByEmployee.value[id] = merged
+  }
+
+  /** Field-by-field equality of two sorted periods lists (same ids + fields) */
+  function samePeriods(a: DtoUserStateResponse[], b: DtoUserStateResponse[]): boolean {
+    if (a.length !== b.length) return false
+    for (let i = 0; i < a.length; i++) {
+      if (a[i]?.id !== b[i]?.id) return false
+      for (const key of Object.keys(a[i] ?? {}) as Array<keyof DtoUserStateResponse>) {
+        if (a[i][key] !== b[i]?.[key]) return false
+      }
+    }
+    return true
+  }
+
+  /**
+   * Fallback: the pre-batch per-employee fetch (one GET /user/{id}/days per
+   * visible row), used when the batch endpoint is unavailable (e.g. an older
+   * backend without GET /user/days). The timesheet must keep working in that
+   * case — the batch is only an optimization. Lenient: a failed row keeps its
+   * previous cached data; returns false only when at least one row failed.
+   */
+  async function refreshPeriodsOneByOne(start: string, end: string): Promise<boolean> {
     const api = new UsersApi(apiConfig())
+    let failed: unknown = null
     const results = await Promise.all(
       timesheetRows.value.map((emp) =>
         api
           .userIdDaysGet(emp.id ?? 0, start, end)
           .then((r) => ({ id: emp.id, list: r.data?.data ?? [] }))
           .catch((e: any) => {
-            setError(e)
+            failed = failed ?? e
             return { id: emp.id, list: [] }
           }),
       ),
     )
     for (const { id, list } of results) {
       if (id == null) continue
-      const existing = periodsByEmployee.value[id] ?? []
-      // A fresh response for the [start, end] window is authoritative for periods overlapping it:
-      // old overlapping periods (e.g. cleared via DELETE) are removed,
-      // then new ones are merged. Periods outside the window are kept for incremental loading.
-      const kept = existing.filter(
-        (p) =>
-          !(p.start_date != null && p.end_date != null && !(p.end_date < start || p.start_date > end)),
-      )
-      const byId = new Map<number, DtoUserStateResponse>()
-      for (const p of kept) if (p.id != null) byId.set(p.id, p)
-      for (const p of list) if (p.id != null) byId.set(p.id, p)
-      periodsByEmployee.value[id] = [...byId.values()].sort((a, b) =>
-        (a.start_date ?? '').localeCompare(b.start_date ?? ''),
-      )
+      mergeWindowPeriods(id, list, start, end)
     }
+    return failed == null
+  }
+
+  /**
+   * Network refresh (PULL) for the whole timesheet in a single batch request.
+   * Replaces the previous per-employee N+1 fan-out: GET /user/days returns one
+   * entry per requested id (empty `days` when the worker has none).
+   * The [start, end] window stays authoritative for every employee in the batch.
+   * Ids are sent in chunks of BATCH_IDS_MAX (the backend limit ≤200); each
+   * chunk is still one request — no per-employee fan-out — and failures are
+   * reported once for the whole page. If the batch endpoint is not available
+   * (unexpected payload shape or a request error), falls back to the
+   * per-employee path so the timesheet renders even against an older backend.
+   */
+  async function refreshPeriodsBatch(start: string, end: string): Promise<boolean> {
+    const ids = timesheetRows.value
+      .map((e) => e.id)
+      .filter((id): id is number => id != null)
+    if (ids.length === 0) return true
+    const api = new UsersApi(apiConfig())
+    try {
+      const chunks: number[][] = []
+      for (let i = 0; i < ids.length; i += BATCH_IDS_MAX) chunks.push(ids.slice(i, i + BATCH_IDS_MAX))
+      const responses = await Promise.all(
+        chunks.map((chunk) => api.userDaysGet(chunk.join(','), start, end)),
+      )
+      for (const resp of responses) {
+        const entries = resp.data?.data
+        // Shape guard: an older backend (or a proxy) answering the URL with a
+        // non-batch payload must not be merged as if it were one.
+        if (!Array.isArray(entries)) throw new Error('batch days response: unexpected payload shape')
+        for (const entry of entries) {
+          if (entry.user_id == null) continue
+          mergeWindowPeriods(entry.user_id, entry.days ?? [], start, end)
+        }
+      }
+      // Unsync guard: if the backend omitted some requested ids, their current
+      // cached data is intentionally kept untouched instead of being wiped.
+      return true
+    } catch (e: any) {
+      // The batch endpoint may be missing on an older backend — fall back to
+      // the per-employee path; surface an error only when the fallback fails too.
+      const ok = await refreshPeriodsOneByOne(start, end)
+      if (!ok) setError(e)
+      else console.warn('[timesheet] batch days unavailable, fell back to per-employee:', e?.message ?? e)
+      return ok
+    }
+  }
+
+  /** Network refresh (PULL) entry point: keeps the (start, end) signature used by warmup/sync/ensureRange */
+  async function refreshPeriods(start: string, end: string): Promise<boolean> {
+    return refreshPeriodsBatch(start, end)
   }
 
   /** An employee's period covering a day (binary search over the sorted periods) */
@@ -1195,9 +1524,49 @@ export const useTimesheetStore = defineStore('timesheet', () => {
     return p && p.end_date != null && p.end_date >= iso ? p : undefined
   }
 
+  /** Response shape of the paginated employees list (`/user` with limit/offset) */
+  interface EmployeePage {
+    data?: { items?: DtoUserResponse[]; limit?: number; offset?: number; total?: number }
+  }
+
+  /** Merges an employees page into the current list (dedup by id, fresh wins) — pure */
+  function mergeEmployeeLists(current: DtoUserResponse[], items: DtoUserResponse[]): DtoUserResponse[] {
+    const byId = new Map<number, DtoUserResponse>()
+    for (const e of current) if (e.id != null) byId.set(e.id, e)
+    for (const e of items) if (e.id != null) byId.set(e.id, e)
+    return [...byId.values()]
+  }
+
+  /** Merges an employees page into the current list (dedup by id, fresh wins) */
+  function mergeEmployees(items: DtoUserResponse[]): void {
+    employees.value = mergeEmployeeLists(employees.value, items)
+  }
+
+  /**
+   * Whether two roster snapshots are equal field-by-field (same order, same ids,
+   * same visible fields). Used to keep the `employees` array reference stable on
+   * a background refresh so dependent computeds and the grid do not re-render.
+   */
+  function sameEmployees(a: DtoUserResponse[], b: DtoUserResponse[]): boolean {
+    if (a.length !== b.length) return false
+    for (let i = 0; i < a.length; i++) {
+      if (a[i]?.id !== b[i]?.id) return false
+      // Shallow compare: the roster DTO is flat (name/position/manager/…), so a
+      // field-by-field check is enough to notice a real change.
+      for (const key of Object.keys(a[i] ?? {}) as Array<keyof DtoUserResponse>) {
+        if (a[i][key] !== b[i]?.[key]) return false
+      }
+    }
+    return true
+  }
+
   /** Local-first: hydrate the employee list (scoped by the backend) from the cache */
   async function loadEmployeesList(): Promise<void> {
-    if (employees.value.length) return
+    // The roster is scoped to the authenticated user: reuse it only for the
+    // same account (an account switch must never surface another user's rows).
+    const uid = useAuthStore().user?.id ?? null
+    if (employeesLoadedFor.value === uid && employees.value.length) return
+    employeesLoadedFor.value = uid
     await hydrateFromCache([
       {
         path: apiPath('/user'),
@@ -1214,41 +1583,91 @@ export const useTimesheetStore = defineStore('timesheet', () => {
     ])
   }
 
-  async function refreshEmployees(managerId?: number): Promise<void> {
-    loading.value = true
-    error.value = null
+  async function refreshEmployees(managerId?: number, silent = false): Promise<void> {
+    if (!silent) {
+      loading.value = true
+      error.value = null
+    }
     try {
       const api = new UsersApi(apiConfig())
-      const resp = await api.userGet(PAGE_SIZE, undefined, managerId ?? undefined, undefined, 0)
+      const resp = await api.userGet(PAGE_SIZE, undefined, managerId ?? undefined, undefined, undefined, 0)
       const data = resp.data?.data
       // Sorting is added by the computed employeesWithTitles.
-      employees.value = data?.items ?? []
+      //
+      // The background PULL must not silently drop pages the user already
+      // opened via "Показать ещё" (PAGE_SIZE=50): instead of wholesale
+      // replacing the array with page 0, merge the fresh first page into the
+      // existing list — dedup by id, fresh page wins, already-loaded extra
+      // pages are kept (the same identity-preserving merge the offline path
+      // uses). The array reference stays stable when the merged roster equals
+      // the current one: it feeds timesheetRows → the whole grid, and
+      // replacing an equal-but-new array re-renders every row and flickers the
+      // "Табель" page on each background refresh.
+      const merged = mergeEmployeeLists(employees.value, data?.items ?? [])
+      if (!sameEmployees(merged, employees.value)) employees.value = merged
       employeesTotal.value = data?.total ?? 0
     } catch (e: any) {
-      setError(e)
+      if (!silent) setError(e)
     } finally {
-      loading.value = false
+      if (!silent) loading.value = false
+    }
+  }
+
+  /** Whether another employees page can be requested */
+  const employeesHasMore = computed(() => employeesTotal.value > employees.value.length)
+
+  /**
+   * Appends the next employees page ("load more"). The list is scoped
+   * server-side (admin: everyone, vp: own subordinates), so paging is a plain
+   * offset request. Offline the pages cached by earlier online visits are
+   * merged instead of a network call — the offline cache fallback in http.ts
+   * answers by pathname with the freshest page and would ignore the offset.
+   * Rows without an id cannot be deduplicated and are dropped.
+   */
+  async function loadMoreEmployees(): Promise<boolean> {
+    if (employeesLoadingMore.value || !employeesHasMore.value) return true
+    employeesLoadingMore.value = true
+    error.value = null
+    try {
+      if (isOffline.value) {
+        const pages = await cacheGetAllByPath<EmployeePage>(
+          apiPath('/user'),
+          (key) => /\blimit=50\b/.test(key),
+        )
+        let merged = false
+        for (const page of pages) {
+          const d = page.data?.data
+          if (!d?.items?.length) continue
+          mergeEmployees(d.items)
+          if (typeof d.total === 'number' && (d.offset ?? 0) > 0) employeesTotal.value = d.total
+          merged = true
+        }
+        if (!merged) error.value = 'Нет сохранённых данных: откройте эту страницу онлайн хотя бы раз'
+        return merged
+      }
+      const api = new UsersApi(apiConfig())
+      const resp = await api.userGet(PAGE_SIZE, undefined, undefined, undefined, undefined, employees.value.length)
+      const data = resp.data?.data
+      mergeEmployees(data?.items ?? [])
+      employeesTotal.value = data?.total ?? employeesTotal.value
+      return true
+    } catch (e: any) {
+      setError(e)
+      return false
+    } finally {
+      employeesLoadingMore.value = false
     }
   }
 
   /** Loads employees and initializes the states window (for the timesheet).
-   *  Desktop — local-first; web reads from the server as before. */
+   *  Local-first — the cache is filled by the background PULL cycle. */
   async function loadEmployees(): Promise<void> {
-    if (!isElectron) {
-      await refreshEmployees()
-      await loadInitialWindow()
-      return
-    }
     if (!employees.value.length) await loadEmployeesList()
     await loadInitialWindow()
   }
 
-  /** Loads the states reference — desktop local-first, web reads from the server */
+  /** Loads the states reference — local-first (cache) */
   async function loadStates(): Promise<void> {
-    if (!isElectron) {
-      await refreshStates()
-      return
-    }
     if (states.value.length) return
     await hydrateFromCache([
       {
@@ -1352,15 +1771,10 @@ export const useTimesheetStore = defineStore('timesheet', () => {
     }
   }
 
-  /** Initializes the "180 back / 360 forward" window: desktop — local hydrate,
-   *  web — network period load (as before the offline-first refactor). */
+  /** Initializes the "180 back / 360 forward" window: local hydrate from the cache */
   async function loadInitialWindow(): Promise<void> {
     windowStart.value = shiftDate(todayISO(), -WINDOW_BACK_DAYS)
     windowEnd.value = shiftDate(todayISO(), WINDOW_FORWARD_DAYS)
-    if (!isElectron) {
-      await refreshPeriods(windowStart.value, windowEnd.value)
-      return
-    }
     await fetchPeriodsLocal()
   }
 
@@ -1369,14 +1783,18 @@ export const useTimesheetStore = defineStore('timesheet', () => {
     if (startISO < windowStart.value) {
       const from = startISO
       const to = shiftDate(windowStart.value, -1)
-      windowStart.value = startISO
-      await refreshPeriods(from, to)
+      // Fetch first, commit the widened window only on success: advancing the
+      // window before the network round-trip would claim coverage for a range
+      // whose periods never loaded (a failed fetch leaves a silently data-less
+      // band until the next load).
+      const ok = await refreshPeriods(from, to)
+      if (ok) windowStart.value = startISO
     }
     if (endISO > windowEnd.value) {
       const from = shiftDate(windowEnd.value, 1)
       const to = endISO
-      windowEnd.value = endISO
-      await refreshPeriods(from, to)
+      const ok = await refreshPeriods(from, to)
+      if (ok) windowEnd.value = endISO
     }
   }
 
@@ -1467,11 +1885,25 @@ export const useTimesheetStore = defineStore('timesheet', () => {
     }
   }
 
+  /** Clears the user-scoped payloads on logout/account switch. The GET cache
+   *  itself is per-user keyed (offline/cache.ts), so no cache wipe is needed —
+   *  only the in-memory state must not leak across accounts. */
+  function resetUserData(): void {
+    employees.value = []
+    employeesTotal.value = 0
+    employeesLoadedFor.value = null
+    periodsByEmployee.value = {}
+    windowStart.value = ''
+    windowEnd.value = ''
+  }
+
   return {
     employees,
     employeesWithTitles,
     timesheetRows,
     employeesTotal,
+    employeesLoadingMore,
+    employeesHasMore,
     states,
     periodsByEmployee,
     windowStart,
@@ -1481,6 +1913,7 @@ export const useTimesheetStore = defineStore('timesheet', () => {
     error,
     loadEmployees,
     refreshEmployees,
+    loadMoreEmployees,
     loadStates,
     refreshStates,
     refreshPeriods,
@@ -1491,6 +1924,7 @@ export const useTimesheetStore = defineStore('timesheet', () => {
     periodFor,
     assignRange,
     clearRange,
+    resetUserData,
   }
 })
 
@@ -1542,10 +1976,6 @@ export const usePlanningStore = defineStore('planning', () => {
   }
 
   async function loadProjectPlanning(): Promise<void> {
-    if (!isElectron) {
-      await refreshProjectPlanning()
-      return
-    }
     await hydratePlanning(
       () => projectPlanning.value,
       (v) => {
@@ -1556,10 +1986,6 @@ export const usePlanningStore = defineStore('planning', () => {
   }
 
   async function loadProcessPlanning(): Promise<void> {
-    if (!isElectron) {
-      await refreshProcessPlanning()
-      return
-    }
     await hydratePlanning(
       () => processPlanning.value,
       (v) => {
@@ -1570,10 +1996,6 @@ export const usePlanningStore = defineStore('planning', () => {
   }
 
   async function loadTaskPlanning(): Promise<void> {
-    if (!isElectron) {
-      await refreshTaskPlanning()
-      return
-    }
     await hydratePlanning(
       () => taskPlanning.value,
       (v) => {
@@ -1618,9 +2040,25 @@ export const usePlanningStore = defineStore('planning', () => {
     return undefined
   }
 
+  /** Finds a task (top-level or subtask) anywhere in the planning data. */
   function findTaskRow(id: number): any {
     for (const p of taskPlanning.value?.processes ?? []) {
       const t = (p.tasks ?? []).find((x: any) => x.id === id)
+      if (t) return t
+      const s = (p.tasks ?? [])
+        .flatMap((x: any) => x.subtasks ?? [])
+        .find((x: any) => x.id === id)
+      if (s) return s
+    }
+    return undefined
+  }
+
+  /** Locates the object holding a subtask list (a top-level task with subtasks). */
+  function findSubtaskOwner(id: number): any {
+    for (const p of taskPlanning.value?.processes ?? []) {
+      const t = (p.tasks ?? []).find((x: any) =>
+        (x.subtasks ?? []).some((s: any) => s.id === id),
+      )
       if (t) return t
     }
     return undefined
@@ -1645,6 +2083,184 @@ export const usePlanningStore = defineStore('planning', () => {
       optimistic: () => {
         const t = findTaskRow(id)
         if (t) Object.assign(t, { start_date, end_date })
+      },
+      onError: (m) => {
+        error.value = m
+      },
+    })
+  }
+
+  // === Dependency constraints (scheduling links between top-level tasks) ===
+
+  /** The process whose task list contains the given task (top-level or subtask). */
+  function findProcessOfTask(id: number): any {
+    for (const p of taskPlanning.value?.processes ?? []) {
+      if ((p.tasks ?? []).some((x: any) => x.id === id)) return p
+      if ((p.tasks ?? []).some((x: any) => (x.subtasks ?? []).some((s: any) => s.id === id))) return p
+    }
+    return undefined
+  }
+
+  /** Dependency edges of the process containing a task. */
+  function dependencyEdgesOf(id: number): DependencyEdge[] {
+    const p = findProcessOfTask(id)
+    return ((p?.dependencies ?? []) as any[]).map((e: any) => ({
+      id: e.id,
+      task_id: e.task_id,
+      depends_on_task_id: e.depends_on_task_id,
+      type: e.type as DependencyType,
+    }))
+  }
+
+  /** Date rows of the process's top-level tasks (the constraint engine input —
+   *  links live on top-level tasks only). */
+  function dateRowsOf(id: number): TaskDates[] {
+    const p = findProcessOfTask(id)
+    return ((p?.tasks ?? []) as any[]).map((t: any) => ({
+      id: t.id,
+      start_date: t.start_date,
+      end_date: t.end_date,
+    }))
+  }
+
+  /** Persists a Map of date patches in predecessor-first order (the backend
+   *  guard validates a successor against its predecessors' committed dates).
+   *  Optimistic patches are applied immediately; a silent refresh after each
+   *  write settles the server state (offline — each PUT goes to the outbox). */
+  async function persistDatePatches(changes: Map<number, TaskDatePatch>): Promise<boolean> {
+    if (changes.size === 0) return true
+    for (const [tid, patch] of changes) {
+      const t = findTaskRow(tid)
+      if (t) Object.assign(t, patch)
+    }
+    const edges = dependencyEdgesOf([...changes.keys()][0])
+    const order = persistenceOrder([...changes.keys()], edges)
+    let ok = true
+    for (const tid of order) {
+      const patch = changes.get(tid)!
+      const okOne = await runMutation({
+        entity: 'task',
+        call: () =>
+          new TasksApi(apiConfig()).taskIdPut(tid, {
+            start_date: patch.start_date,
+            end_date: patch.end_date,
+          }),
+        apply: async () => {
+          await refreshTaskPlanning(true)
+        },
+        optimistic: () => {
+          const t = findTaskRow(tid)
+          if (t) Object.assign(t, patch)
+        },
+        onError: (m) => {
+          error.value = m
+        },
+      })
+      if (!okOne) {
+        ok = false
+        break
+      }
+    }
+    return ok
+  }
+
+  /** Bar date shift WITH the dependency constraints: resolves the cascade
+   *  (successors pushed right, the dragged task clamped to its bound) and
+   *  persists every adjusted task in dependency order. Falls back to a plain
+   *  date update when the task has no process context. */
+  async function moveTask(id: number, start_date: string, end_date: string): Promise<boolean> {
+    if (!findProcessOfTask(id)) return updateTaskDates(id, start_date, end_date)
+    const changes = resolveTaskMove(dateRowsOf(id), dependencyEdgesOf(id), id, start_date, end_date)
+    return persistDatePatches(changes)
+  }
+
+  /** Creates a dependency link. When the new link contradicts the schedule,
+   *  the successor's dates are adjusted (and persisted) BEFORE the link is
+   *  stored — the backend rejects an inconsistent link. */
+  async function addTaskDependency(
+    taskId: number,
+    dependsOnTaskId: number,
+    type: DependencyType,
+  ): Promise<boolean> {
+    if (findProcessOfTask(taskId)) {
+      const adjust = resolveAddDependency(
+        dateRowsOf(taskId),
+        dependencyEdgesOf(taskId),
+        taskId,
+        dependsOnTaskId,
+        type,
+      )
+      if (!(await persistDatePatches(adjust))) return false
+    }
+    return runMutation({
+      entity: 'task',
+      call: () =>
+        new TasksApi(apiConfig()).taskIdDependenciesPost(taskId, {
+          depends_on_task_id: dependsOnTaskId,
+          type,
+        }),
+      apply: async () => {
+        await refreshTaskPlanning(true)
+      },
+      optimistic: () => {
+        const proc = findProcessOfTask(taskId)
+        if (proc) {
+          ;(proc.dependencies ??= []).push({
+            id: nextTempId(),
+            task_id: taskId,
+            depends_on_task_id: dependsOnTaskId,
+            type,
+          })
+        }
+      },
+      onError: (m) => {
+        error.value = m
+      },
+    })
+  }
+
+  /** Changes a link type; a type that contradicts the successor's dates first
+   *  adjusts (and persists) the successor's dates. */
+  async function changeTaskDependencyType(
+    depId: number,
+    taskId: number,
+    type: DependencyType,
+  ): Promise<boolean> {
+    if (findProcessOfTask(taskId)) {
+      const edges = dependencyEdgesOf(taskId).map((e) => (e.id === depId ? { ...e, type } : e))
+      const adjust = resolveEdges(dateRowsOf(taskId), edges)
+      if (!(await persistDatePatches(adjust))) return false
+    }
+    return runMutation({
+      entity: 'task',
+      call: () => new TasksApi(apiConfig()).taskIdDependenciesDepIdPut(taskId, depId, { type }),
+      apply: async () => {
+        await refreshTaskPlanning(true)
+      },
+      optimistic: () => {
+        const proc = findProcessOfTask(taskId)
+        const e = (proc?.dependencies ?? []).find((x: any) => x.id === depId)
+        if (e) e.type = type
+      },
+      onError: (m) => {
+        error.value = m
+      },
+    })
+  }
+
+  /** Deletes a dependency link (idempotent). */
+  async function deleteTaskDependency(depId: number, taskId: number): Promise<boolean> {
+    return runMutation({
+      entity: 'task',
+      call: () => new TasksApi(apiConfig()).taskIdDependenciesDepIdDelete(taskId, depId),
+      apply: async () => {
+        await refreshTaskPlanning(true)
+      },
+      optimistic: () => {
+        const proc = findProcessOfTask(taskId)
+        if (proc) {
+          proc.dependencies = (proc.dependencies ?? []).filter((x: any) => x.id !== depId)
+        }
       },
       onError: (m) => {
         error.value = m
@@ -1746,7 +2362,10 @@ export const usePlanningStore = defineStore('planning', () => {
     })
   }
 
-  async function updateTaskMeta(id: number, patch: { title?: string; owner_id?: number; color?: string }): Promise<boolean> {
+  async function updateTaskMeta(
+    id: number,
+    patch: { title?: string; owner_id?: number; color?: string; status?: string },
+  ): Promise<boolean> {
     return runMutation({
       entity: 'task',
       call: () => new TasksApi(apiConfig()).taskIdPut(id, patch),
@@ -1918,6 +2537,7 @@ export const usePlanningStore = defineStore('planning', () => {
       start_date: string
       end_date: string
       color?: string
+      status?: string
     },
     index?: number,
   ): Promise<boolean> {
@@ -1933,7 +2553,7 @@ export const usePlanningStore = defineStore('planning', () => {
       },
       apply: (dto) => {
         if (!dto) return
-        const d = dto as { id?: number; title?: string; start_date?: string; end_date?: string; color?: string }
+        const d = dto as { id?: number; title?: string; start_date?: string; end_date?: string; color?: string; status?: string }
         const proc = taskPlanning.value?.processes?.find((p: any) => p.id === payload.process_id)
         insertAt(proc?.tasks, index, {
           id: d.id ?? 0,
@@ -1942,6 +2562,7 @@ export const usePlanningStore = defineStore('planning', () => {
           end_date: d.end_date ?? payload.end_date,
           resources: [],
           color: d.color ?? payload.color,
+          status: d.status ?? payload.status ?? 'not_started',
         })
       },
       optimistic: () => {
@@ -1953,8 +2574,105 @@ export const usePlanningStore = defineStore('planning', () => {
           end_date: payload.end_date,
           resources: [],
           color: payload.color,
+          status: payload.status ?? 'not_started',
         })
       },
+      onError: (m) => {
+        error.value = m
+      },
+    })
+  }
+
+  /** Creates a subtask (operation) attached to a top-level task. The backend
+   *  inherits the parent's process and dates, so only title/color/status are
+   *  sent. Optimistically appended to the parent's subtasks list. */
+  async function createSubtask(
+    parentId: number,
+    payload: { title: string; color?: string; status?: string },
+  ): Promise<boolean> {
+    const tempId = nextTempId()
+    const parent = findTaskRow(parentId)
+    return runMutation({
+      entity: 'task',
+      tempId,
+      call: async () => {
+        const resp = await new TasksApi(apiConfig()).taskPost({
+          parent_id: parentId,
+          // The RBAC middleware authorizes task.create by the process from the
+          // body; a subtask always lives in its parent's process.
+          process_id: parent?.process_id,
+          title: payload.title,
+          color: payload.color,
+          status: payload.status,
+        })
+        const errBody = resp.data?.error as { code?: unknown; message?: string } | undefined
+        if (errBody && errBody.code != null) throw new Error(apiErrorMessage(errBody))
+        return resp
+      },
+      apply: (dto) => {
+        if (!dto) return
+        const d = dto as { id?: number; title?: string; color?: string; status?: string }
+        const p = findTaskRow(parentId)
+        if (!p) return
+        ;(p.subtasks ??= []).push({
+          id: d.id ?? 0,
+          title: d.title ?? payload.title,
+          color: d.color ?? payload.color,
+          status: d.status ?? payload.status ?? 'not_started',
+          resources: [],
+          subtasks: [],
+        })
+      },
+      optimistic: () => {
+        if (!parent) return
+        ;(parent.subtasks ??= []).push({
+          id: tempId,
+          title: payload.title,
+          color: payload.color,
+          status: payload.status ?? 'not_started',
+          resources: [],
+          subtasks: [],
+        })
+      },
+      onError: (m) => {
+        error.value = m
+      },
+    })
+  }
+
+  /** Updates a subtask: title/color/status via PUT /task/{id}. */
+  async function updateSubtask(
+    id: number,
+    patch: { title?: string; color?: string; status?: string },
+  ): Promise<boolean> {
+    return runMutation({
+      entity: 'task',
+      call: () => new TasksApi(apiConfig()).taskIdPut(id, patch),
+      apply: async () => {
+        await refreshTaskPlanning(true)
+      },
+      optimistic: () => {
+        const s = findTaskRow(id)
+        if (s) Object.assign(s, patch)
+      },
+      onError: (m) => {
+        error.value = m
+      },
+    })
+  }
+
+  /** Deletes a subtask (or a top-level task — both share PUT/Delete routes). */
+  async function deleteSubtask(id: number): Promise<boolean> {
+    const remove = () => {
+      const owner = findSubtaskOwner(id)
+      if (owner) removeById(owner.subtasks, id)
+      else for (const p of taskPlanning.value?.processes ?? []) removeById(p.tasks, id)
+    }
+    return runMutation({
+      entity: 'task',
+      call: () => new TasksApi(apiConfig()).taskIdDelete(id),
+      apply: remove,
+      optimistic: remove,
       onError: (m) => {
         error.value = m
       },
@@ -2046,7 +2764,9 @@ export const usePlanningStore = defineStore('planning', () => {
 
   async function deleteTask(id: number): Promise<boolean> {
     const remove = () => {
-      for (const p of taskPlanning.value?.processes ?? []) removeById(p.tasks, id)
+      const owner = findSubtaskOwner(id)
+      if (owner) removeById(owner.subtasks, id)
+      else for (const p of taskPlanning.value?.processes ?? []) removeById(p.tasks, id)
     }
     return runMutation({
       entity: 'task',
@@ -2076,14 +2796,11 @@ export const usePlanningStore = defineStore('planning', () => {
 
   /** Finds a task's resource (from /planning/tasks) by resource_id together with assignment_id */
   function findAssigned(taskId: number, resourceId: number) {
-    for (const p of taskPlanning.value?.processes ?? []) {
-      const t = (p.tasks ?? []).find((x: any) => x.id === taskId)
-      if (!t) continue
-      return (t.resources ?? []).find((r: any) => r.id === resourceId) as
-        | { id?: number; assignment_id?: number }
-        | undefined
-    }
-    return undefined
+    const t = findTaskRow(taskId)
+    if (!t) return undefined
+    return (t.resources ?? []).find((r: any) => r.id === resourceId) as
+      | { id?: number; assignment_id?: number }
+      | undefined
   }
 
   /**
@@ -2093,8 +2810,10 @@ export const usePlanningStore = defineStore('planning', () => {
    */
   function taskOwnerIds(taskId: number): number[] {
     const owners: number[] = []
-    const process = (taskPlanning.value?.processes ?? []).find((p: any) =>
-      (p.tasks ?? []).some((t: any) => t.id === taskId),
+    // Subtasks share their parent's process (enforced by the backend).
+    const process = (taskPlanning.value?.processes ?? []).find(
+      (p: any) =>
+        (p.tasks ?? []).some((t: any) => t.id === taskId || (t.subtasks ?? []).some((s: any) => s.id === taskId)),
     )
     if (!process) return owners
     if (process.owner_id != null) owners.push(process.owner_id)
@@ -2107,8 +2826,10 @@ export const usePlanningStore = defineStore('planning', () => {
 
   /**
    * Assigns a resource to a task: POST /assignment + silent reload of tasks.
-   * For non-admin, owners are checked beforehand (the data is already in the planning cache):
-   * a definitely-403 assignment goes neither to an online request nor to the offline queue.
+   * Owners are checked beforehand (the data is already in the planning cache) for a
+   * scope narrower than "all": a definitely-403 assignment goes neither to an online
+   * request nor to the offline queue. A global assignment.create scope (or the admin
+   * preset on a cold start) skips the pre-check — the backend still enforces.
    */
   async function assignResource(
     taskId: number,
@@ -2116,7 +2837,10 @@ export const usePlanningStore = defineStore('planning', () => {
     quantity: number,
   ): Promise<boolean> {
     const auth = useAuthStore()
-    const owners = auth.user?.preset === 'admin' ? [] : taskOwnerIds(taskId)
+    const rbac = useRbacStore()
+    const permsReady = rbac.permsLoaded || rbac.myPermissions.length > 0
+    const assignAll = permsReady ? rbac.perm('assignment', 'create') === 'all' : auth.user?.preset === 'admin'
+    const owners = assignAll ? [] : taskOwnerIds(taskId)
     if (owners.length > 0) {
       const res = useAppStore().resources.find((r: any) => r.id === resourceId)
       if (res?.owner_id == null || !owners.includes(res.owner_id)) {
@@ -2223,9 +2947,8 @@ export const usePlanningStore = defineStore('planning', () => {
       )
     } catch (e: any) {
       const err = e as AxiosError
-      if (err?.config && isElectron && isNetworkError(e)) {
+      if (err?.config && isNetworkError(e)) {
         // Offline: the local reorder is already applied; the PUTs go to the queue.
-        // (the queue — only in the desktop build)
         const base = axios.getUri(err.config).replace(/\d+$/, '')
         for (const c of changes) {
           try {
@@ -2280,7 +3003,7 @@ export const usePlanningStore = defineStore('planning', () => {
       await new ProcessesApi(apiConfig()).processOrderPut({ project_id: projectId, ids })
     } catch (e: any) {
       const err = e as AxiosError
-      if (err?.config && isElectron && isNetworkError(e)) {
+      if (err?.config && isNetworkError(e)) {
         try {
           await enqueueMutation({
             entity: 'reorder',
@@ -2322,7 +3045,7 @@ export const usePlanningStore = defineStore('planning', () => {
       await new TasksApi(apiConfig()).taskOrderPut({ process_id: processId, ids })
     } catch (e: any) {
       const err = e as AxiosError
-      if (err?.config && isElectron && isNetworkError(e)) {
+      if (err?.config && isNetworkError(e)) {
         try {
           await enqueueMutation({
             entity: 'reorder',
@@ -2411,6 +3134,15 @@ export const usePlanningStore = defineStore('planning', () => {
     }
   }
 
+  /** Clears the user-scoped planning payloads on logout/account switch (the GET
+   *  cache itself is per-user keyed — see offline/cache.ts). */
+  function resetUserData(): void {
+    projectPlanning.value = null
+    processPlanning.value = null
+    taskPlanning.value = null
+    commentsByTask.value = {}
+  }
+
   return {
     projectPlanning,
     processPlanning,
@@ -2427,6 +3159,10 @@ export const usePlanningStore = defineStore('planning', () => {
     refreshProcessPlanning,
     refreshTaskPlanning,
     updateTaskDates,
+    moveTask,
+    addTaskDependency,
+    changeTaskDependencyType,
+    deleteTaskDependency,
     updateProcessDates,
     updateProjectDates,
     updateMilestoneDate,
@@ -2437,6 +3173,9 @@ export const usePlanningStore = defineStore('planning', () => {
     createProject,
     createProcess,
     createTask,
+    createSubtask,
+    updateSubtask,
+    deleteSubtask,
     createMilestone,
     deleteProject,
     deleteProcess,
@@ -2451,6 +3190,7 @@ export const usePlanningStore = defineStore('planning', () => {
     loadTaskComments,
     createTaskComment,
     deleteTaskComment,
+    resetUserData,
   }
 })
 
@@ -2460,7 +3200,7 @@ export const usePlanningStore = defineStore('planning', () => {
 // All operations are online-only (no outbox/offline support needed).
 // =============================================================
 export const useRbacStore = defineStore('rbac', () => {
-  const presets = ref<DomainPreset[]>([])
+  const presets = ref<DtoPresetView[]>([])
   /** Active preset matrix rules (with id — needed to delete "no access" entries). */
   const presetRules = ref<DtoPresetRuleView[]>([])
   /** Effective matrix (with the admin bypass) — the display source. */
@@ -2468,7 +3208,7 @@ export const useRbacStore = defineStore('rbac', () => {
   /** Route checks (read-only reference). */
   const routePolicies = ref<DtoRoutePolicyView[]>([])
   /** Reference of route check kinds. */
-  const kinds = ref<PoliciesKindInfo[]>([])
+  const kinds = ref<EngineKindInfo[]>([])
   const loading = ref(false)
   const saving = ref(false)
   const error = ref<string | null>(null)
@@ -2514,45 +3254,16 @@ export const useRbacStore = defineStore('rbac', () => {
   const myPermissions = ref<DtoPermission[]>([])
   const permsLoaded = ref(false)
 
-  /** Scope ownership by resource — mirrors policies.go (own/parent/ancestor). */
+  /**
+   * Ownership (ABAC) satisfaction by scope — the client-side mirror of the
+   * backend owner-chain evaluation (internal/authz/engine eval.go). The scope
+   * is a TREE EXPRESSION (all/self/up1/up/sib/down/…); owners come from the
+   * card data (planning/app stores), not from the permission list. sib/down
+   * moves need the tree data — the caller supplies the probe results.
+   * Expressions come from /permissions/me (the Casbin snapshot).
+   */
   function scopeSatisfied(scope: string, resource: string, uid: number, o: { owner?: number | null; projectOwner?: number | null; processOwner?: number | null }): boolean {
-    if (scope === 'all') return true
-    if (uid <= 0) return false
-    switch (scope) {
-      case 'own':
-        switch (resource) {
-          case 'project': return o.projectOwner === uid
-          case 'process': return o.processOwner === uid
-          case 'task':
-          case 'resource':
-          case 'worker':
-            return o.owner === uid
-          default:
-            return false
-        }
-      case 'parent':
-        switch (resource) {
-          case 'process': return o.projectOwner === uid
-          case 'task':
-          case 'milestone':
-          case 'assignment':
-            return o.processOwner === uid
-          default:
-            return false
-        }
-      case 'ancestor':
-        switch (resource) {
-          case 'task':
-          case 'milestone':
-          case 'assignment':
-          case 'process':
-            return o.owner === uid || o.processOwner === uid || o.projectOwner === uid
-          default:
-            return false
-        }
-      default:
-        return false
-    }
+    return evalScope(scope, resource, o, uid)
   }
 
   /** Whether the current role has the right to the action at all. */
@@ -2578,15 +3289,14 @@ export const useRbacStore = defineStore('rbac', () => {
   }
 
   /**
-   * Loads my permissions — desktop LOCAL-FIRST (read the cached copy, never
-   * issue a GET from the render/guard path). The web build reads straight from
-   * the server (refreshPermissions) as before the offline-first refactor.
+   * Loads my permissions — LOCAL-FIRST (read the cached copy, never issue a GET
+   * from the render/guard path). The background PULL cycle owns the network
+   * refresh (refreshPermissions).
    */
   async function loadMyPermissions(): Promise<boolean> {
-    if (!isElectron) return refreshPermissions()
     if (permsLoaded.value) return true
     try {
-      const cached = localStorage.getItem(PERMS_KEY)
+      const cached = localStorage.getItem(permsKey(useAuthStore().user?.id))
       if (cached) {
         const parsed = JSON.parse(cached)
         // Defensive: a valid-JSON non-array payload must not overwrite the ref
@@ -2611,7 +3321,10 @@ export const useRbacStore = defineStore('rbac', () => {
       myPermissions.value = resp.data?.data ?? []
       permsLoaded.value = true
       try {
-        localStorage.setItem(PERMS_KEY, JSON.stringify(myPermissions.value))
+        localStorage.setItem(
+          permsKey(useAuthStore().user?.id),
+          JSON.stringify(myPermissions.value),
+        )
       } catch {
         /* localStorage may be unavailable */
       }
@@ -2619,6 +3332,16 @@ export const useRbacStore = defineStore('rbac', () => {
     } catch {
       return false
     }
+  }
+
+  /**
+   * Drops the in-memory permission snapshot (called on account switch and
+   * logout): the UI must never keep rights of another user. The next
+   * /permissions/me (login refresh / router-guard load / TTL pull) fills it.
+   */
+  function resetPermissions() {
+    myPermissions.value = []
+    permsLoaded.value = false
   }
 
   /** Periodic permissions sync (TTL polling following the backend). */
@@ -2706,11 +3429,22 @@ export const useRbacStore = defineStore('rbac', () => {
     }
   }
 
-  /** Updates a preset's description. */
-  async function updatePreset(name: string, description: string): Promise<boolean> {
+  /** Updates a preset: optional rename (patch.name) plus a new description. */
+  async function updatePreset(
+    name: string,
+    patch: { name?: string; description?: string },
+  ): Promise<boolean> {
     try {
-      await new RBACApi(apiConfig()).rbacPresetsNamePut(name, { description })
-      presets.value = presets.value.map((r) => (r.name === name ? { ...r, description } : r))
+      const resp = await new RBACApi(apiConfig()).rbacPresetsNamePut(name, {
+        name: patch.name,
+        description: patch.description ?? '',
+      })
+      const saved = resp.data?.data
+      if (saved) {
+        presets.value = presets.value
+          .filter((r) => r.name !== name)
+          .concat({ name: saved.name ?? name, description: saved.description ?? '' })
+      }
       return true
     } catch {
       return false
@@ -2732,6 +3466,10 @@ export const useRbacStore = defineStore('rbac', () => {
   async function loadUserPermissions(id: number): Promise<boolean> {
     userPermissionsLoading.value = true
     userPermissionsError.value = null
+    // Reset the snapshot while loading: the editor must never render the
+    // permissions of the previously opened user (e.g. the admin stub shown
+    // for a non-admin right after opening the admin).
+    userPermissions.value = null
     try {
       const resp = await new RBACApi(apiConfig()).rbacUsersIdPermissionsGet(id)
       userPermissions.value = resp.data?.data ?? null
@@ -2784,6 +3522,7 @@ export const useRbacStore = defineStore('rbac', () => {
     deletePreset,
     myPermissions,
     permsLoaded,
+    resetPermissions,
     can,
     perm,
     canOwn,

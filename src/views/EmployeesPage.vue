@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { storeToRefs } from 'pinia'
-import { ContextMenu, ModalForm } from '../components/common'
+import { ContextMenu, ModalForm, PendingMark } from '../components/common'
 import type { ContextMenuItem } from '../components/common/ContextMenu'
 import type { ModalField } from '../components/common/ModalForm'
 import { useContextMenu } from '../composables/useContextMenu'
 import { useEditModal } from '../composables/useEditModal'
 import { useRoleAccess } from '../composables/useRoleAccess'
 import { useEmployeeFilters } from '../composables/useEmployeeFilters'
-import { useAppStore, useTimesheetStore } from '../store'
+import { useAppStore, useTimesheetStore, useRbacStore } from '../store'
 import type { DtoResourceResponse, DtoUserResponse } from '@/api'
 
 const ts = useTimesheetStore()
@@ -21,8 +21,15 @@ const { resources, resourcesError } = storeToRefs(app)
 // Edit/delete are NOT available here: an employee IS a system user, so profile
 // editing happens only on the admin "Пользователи" page (user-edit right).
 // This page only changes the employee's resource.
-const { role, userId } = useRoleAccess()
-const isAdmin = computed(() => role.value === 'admin')
+const { role, userId, canManageResource } = useRoleAccess()
+
+const rbac = useRbacStore()
+/** Permissions arrived (or were cached) — the matrix is authoritative; the preset is the cold-start fallback. */
+const permsReady = computed(() => rbac.permsLoaded || rbac.myPermissions.length > 0)
+/** The manager column/filter makes sense only on the full roster — worker.view with scope all. */
+const seesAllEmployees = computed(() =>
+  permsReady.value ? rbac.perm('worker', 'view') === 'all' : role.value === 'admin',
+)
 
 /**
  * Employee resource (membership is unique: UNIQUE(user_id)) — for the badge,
@@ -39,7 +46,11 @@ const byResourceLabel = (a: DtoResourceResponse, b: DtoResourceResponse): number
 
 /** Resources the user can manage (admin — all, others — their own) */
 const manageableResources = computed<DtoResourceResponse[]>(() =>
-  resources.value.filter((r) => isAdmin.value || r.owner_id === userId.value).sort(byResourceLabel),
+  resources.value
+    .filter((r) =>
+      permsReady.value ? canManageResource(r.owner_id) : role.value === 'admin' || r.owner_id === userId.value,
+    )
+    .sort(byResourceLabel),
 )
 
 /**
@@ -163,13 +174,18 @@ function handleSelect(id: string) {
 
 onMounted(async () => {
   if (!employees.value.length) await ts.loadEmployees()
-  if (isAdmin.value && !users.value.length) await app.loadUsers()
+  if (seesAllEmployees.value && !users.value.length) await app.loadUsers()
   // Load resources and their members unconditionally: resources are often already in the store
   // (dashboard/planner load them earlier), but members — only here;
   // a gate on resources.length would leave everyone "without a resource" without badges.
   // Local-first: hydrate from the cache (no network from the render path).
   await app.ensureResourceMembers(false)
 })
+
+/** "Load more": appends the next page of the server-scoped roster */
+function onLoadMore() {
+  void ts.loadMoreEmployees()
+}
 </script>
 
 <template>
@@ -178,7 +194,7 @@ onMounted(async () => {
       <h2 class="ep-title">Сотрудники</h2>
       <div class="ep-actions">
         <input v-model="search" type="search" class="ep-search" placeholder="Поиск по ФИО или должности" />
-        <select v-if="isAdmin" v-model="managerFilter" class="ep-filter">
+        <select v-if="seesAllEmployees" v-model="managerFilter" class="ep-filter">
           <option value="">Все руководители</option>
           <option value="none">Без руководителя</option>
           <option v-for="u in managerFilterOptions" :key="u.id" :value="u.id">{{ u.name ?? `#${u.id}` }}</option>
@@ -201,22 +217,25 @@ onMounted(async () => {
       instead of replacing it, so the header and filter controls remain usable.
     -->
     <div v-if="employees.length || (!loading && !error)" class="table">
-      <div class="tr th" :class="{ 'tr--no-manager': !isAdmin }">
+      <div class="tr th" :class="{ 'tr--no-manager': !seesAllEmployees }">
         <div>ФИО</div>
         <div>Должность</div>
         <div>Дата приёма</div>
         <div>Дата увольнения</div>
-        <div v-if="isAdmin">Руководитель</div>
+        <div v-if="seesAllEmployees">Руководитель</div>
       </div>
       <template v-if="filteredEmployees.length">
         <div
           v-for="emp in filteredEmployees"
           :key="emp.id"
           class="tr"
-          :class="{ 'tr--no-manager': !isAdmin }"
+          :class="{ 'tr--no-manager': !seesAllEmployees }"
           @contextmenu.prevent.stop="onRowContextMenu($event, emp)"
         >
-          <div class="name">{{ emp.name }}</div>
+          <div class="name">
+            {{ emp.name }}
+            <PendingMark entity="user" :id="emp.id" />
+          </div>
           <div class="pos-cell">
             <span
               v-if="resourceOf(emp.id)"
@@ -230,10 +249,18 @@ onMounted(async () => {
           </div>
           <div>{{ fmtDate(emp.hire_date) }}</div>
           <div>{{ fmtDate(emp.termination_date) }}</div>
-          <div v-if="isAdmin">{{ managerLabel(emp.manager_id) }}</div>
+          <div v-if="seesAllEmployees">{{ managerLabel(emp.manager_id) }}</div>
         </div>
       </template>
       <p v-else class="ep-st">{{ employees.length ? 'Ничего не найдено' : 'Нет данных о сотрудниках' }}</p>
+    </div>
+
+    <!-- Roster pagination: the backend returns PAGE_SIZE (50) rows plus a total;
+         the rest is appended on demand (dedup by id). -->
+    <div v-if="ts.employeesHasMore" class="ep-more">
+      <button type="button" class="ep-more-btn" :disabled="ts.employeesLoadingMore" @click="onLoadMore">
+        {{ ts.employeesLoadingMore ? 'Загрузка…' : `Показать ещё (${employees.length} из ${ts.employeesTotal})` }}
+      </button>
     </div>
 
     <ContextMenu v-bind="menuBind" @select="select" @close="closeMenu" />
@@ -316,6 +343,34 @@ onMounted(async () => {
   text-align: center;
 }
 .er { color: var(--ui-danger); }
+
+/* "Load more" footer: the roster is paged server-side (PAGE_SIZE per request) */
+.ep-more {
+  display: flex;
+  justify-content: center;
+  padding: 16px 0 4px;
+}
+.ep-more-btn {
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius-sm);
+  padding: 9px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  background: var(--ui-surface);
+  color: var(--ui-text-2);
+  transition: background var(--ui-duration), border-color var(--ui-duration), color var(--ui-duration);
+}
+.ep-more-btn:hover:not(:disabled) {
+  background: var(--ui-surface-2);
+  border-color: var(--ui-accent);
+  color: var(--ui-text);
+}
+.ep-more-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
 
 .table {
   background: var(--ui-surface);

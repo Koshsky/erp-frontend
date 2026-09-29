@@ -6,6 +6,7 @@
  * колонка сортируется (вверх/вниз), причём сортировка применяется к текущей
  * странице (Loki отдаёт страницы без глобальной сортировки по полям).
  */
+import { HintButton } from '../components/common'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useAuditStore } from '../store'
@@ -27,7 +28,7 @@ const ENTITY_LABELS: Record<string, string> = {
   resource_member: 'Участники ресурса',
   state: 'Статусы',
   user: 'Пользователи',
-  auto_create: 'Автосоздание проектов',
+  auto_create: 'Триггер создания проекта',
   rbac: 'Права (RBAC)',
 }
 
@@ -301,6 +302,7 @@ onMounted(() => {
     <div class="al-head">
       <h2 class="al-title">Журнал действий</h2>
       <div class="al-head-tools">
+        <HintButton hint="audit" />
         <input
           v-model="filters.search"
           class="al-search"

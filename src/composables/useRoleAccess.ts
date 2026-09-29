@@ -33,7 +33,7 @@ export function useRoleAccess() {
     const project = planning.processPlanning?.projects?.find((p: any) =>
       (p.processes ?? []).some((pr: any) => pr.id === processId),
     )
-    return project?.project?.owner_id ?? null
+    return project?.owner_id ?? null
   }
 
   /** Process owner of a task/milestone (task/milestone.update — parent scope) */

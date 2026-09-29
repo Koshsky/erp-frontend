@@ -8,15 +8,23 @@ export interface PasswordRule {
   test: (value: string) => boolean
 }
 
+/** NIST-lean password rules: length 8..64 (code points, so emoji count once),
+ *  at least one letter and one digit; all other characters are allowed
+ *  (spaces, Cyrillic, emoji, repeats). No upper/lower/special requirements. */
 const DEFAULT_RULES: PasswordRule[] = [
-  { id: 'length', label: 'не меньше 8 символов', test: (v) => v.length >= 8 },
-  { id: 'lower', label: 'строчные буквы', test: (v) => /\p{Ll}/u.test(v) },
-  { id: 'upper', label: 'заглавные буквы', test: (v) => /\p{Lu}/u.test(v) },
-  { id: 'digit', label: 'цифры', test: (v) => /\p{N}/u.test(v) },
-  { id: 'special', label: 'спецсимволы', test: (v) => /[^\p{L}\p{N}]/u.test(v) },
+  {
+    id: 'length',
+    label: 'от 8 до 64 символов',
+    test: (v) => {
+      const n = [...v].length
+      return n >= 8 && n <= 64
+    },
+  },
+  { id: 'letter', label: 'минимум одна буква', test: (v) => /\p{L}/u.test(v) },
+  { id: 'digit', label: 'минимум одна цифра', test: (v) => /\p{N}/u.test(v) },
 ]
 
-/** Password rule set (default: length, cases, digits, special characters). */
+/** Password rule set (default: length 8-64, a letter and a digit). */
 export function passwordRules(custom?: PasswordRule[]): PasswordRule[] {
   return custom && custom.length ? custom : DEFAULT_RULES
 }

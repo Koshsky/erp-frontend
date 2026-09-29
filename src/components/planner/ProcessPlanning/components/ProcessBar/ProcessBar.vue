@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import LabeledBar from '../../../Bar/Bar.vue'
 import { BarTooltip } from '@/components/common'
+import { viewSettings } from '@/settings'
 import type { ProcessBarProps } from './types'
 
 const props = withDefaults(defineProps<ProcessBarProps>(), {
@@ -49,7 +50,7 @@ const emit = defineEmits<{
         <BarTooltip
           :title="title"
           :accent="color || 'var(--ui-gantt-process)'"
-          :rows="[ownerName ? `Владелец: ${ownerName}` : '', dateRange].filter(Boolean)"
+          :rows="[viewSettings.badgeOwner && ownerName ? `Владелец: ${ownerName}` : '', dateRange].filter(Boolean)"
         />
       </slot>
     </template>

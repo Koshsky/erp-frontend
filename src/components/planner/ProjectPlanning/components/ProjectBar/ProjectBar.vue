@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import LabeledBar from '../../../Bar/Bar.vue'
 import { BarTooltip } from '@/components/common'
+import { viewSettings } from '@/settings'
 import type { ProjectBarProps } from './types'
 
 const props = withDefaults(defineProps<ProjectBarProps>(), {
@@ -38,7 +39,7 @@ const emit = defineEmits<{
         :accent="color || 'var(--ui-gantt-project)'"
         :rows="[
           priority != null ? `Приоритет: ${priority}` : '',
-          ownerName ? `Владелец: ${ownerName}` : '',
+          viewSettings.badgeOwner && ownerName ? `Владелец: ${ownerName}` : '',
           dateRange,
         ].filter(Boolean)"
       />

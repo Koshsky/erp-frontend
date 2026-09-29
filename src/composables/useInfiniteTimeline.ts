@@ -11,6 +11,7 @@ import {
   type PlanningUnit,
 } from '../components/planner/calendar'
 import { CELL_WIDTH, LABEL_WIDTH } from '../components/planner/layout'
+import { viewSettings, MAX_CELL_PX } from '../settings'
 import { ensureRange, growStep, readRootCellWidth, windowStartFor, type TimelineRange } from './timelineHelpers'
 import { useTableState } from './useTableState'
 import { useTimelineZoom } from './useTimelineZoom'
@@ -261,11 +262,16 @@ export function useInfiniteTimeline(
     })
   }
 
+  /** Initial scale applied on open when no in-session table state exists yet:
+   *  1 = no seeding; >1 = the default view scale seeded for a fresh open. */
+  let openedScale = 1
+
   function initialize() {
     // Restore the saved state (scale) before measure(),
     // so measure() picks up the saved --cell-width from the computed style.
     const stored = tableState.get(id)
     const el0 = container.value
+    openedScale = 1
     if (stored && el0) {
       cellPx.value = stored.cellPx
       // Set the inline --cell-width only when it differs from the responsive :root
@@ -275,6 +281,29 @@ export function useInfiniteTimeline(
       }
       tableScale.value = stored.scale
       if (contentEl.value) contentEl.value.style.zoom = String(stored.scale)
+    } else {
+      // No in-session table state (a genuinely fresh open): open at the user's
+      // default scale instead of 100%. The scale only seeds the initial view —
+      // any later Ctrl+wheel / dblclick zoom behaves normally. Bounded to the
+      // same range as useTimelineZoom (0.5–2 = 50–200%).
+      const raw = (viewSettings.defaultScale ?? 100) / 100
+      const base = raw >= 0.5 && raw <= 2 ? raw : 1
+      if (base !== 1 && contentEl.value) {
+        openedScale = base
+        tableScale.value = base
+        contentEl.value.style.zoom = String(base)
+      }
+      // Cell-width ("Ctrl+Shift+wheel") default: percent (%) of the responsive
+      // base column width for the current window. 100% keeps the adaptive default
+      // (no inline --cell-width → still reacts to window resize like resetAll);
+      // other values freeze the width at the requested size (bound to 1..100 px).
+      const wpct = viewSettings.defaultCellZoom ?? 100
+      if (wpct !== 100) {
+        const basePx = readRootCellWidth()
+        const px = Math.min(Math.max(Math.round((basePx * wpct) / 100), 1), MAX_CELL_PX)
+        cellPx.value = px
+        if (el0 && px !== basePx) el0.style.setProperty('--cell-width', px + 'px')
+      }
     }
     measure()
     const step = growStep(viewportCells.value)
@@ -282,13 +311,16 @@ export function useInfiniteTimeline(
     rightCells.value = viewportCells.value + step * 2
     // Extend the range for the saved scrollLeft up front (before flush), otherwise
     // the browser clamps scrollLeft to the smaller content width and the position is lost.
-    if (stored) {
-      const local = stored.scrollLeft / tableScale.value
+    const restoreLeft = stored ? stored.scrollLeft : 0
+    if (restoreLeft > 0 || openedScale > 1) {
+      const local = (restoreLeft / (stored ? tableScale.value : openedScale)) || 0
       const vs = windowStartFor(local, cellPx.value, leftPad.value)
       ensureRange(vs, range)
     }
     const el = container.value
-    if (el) el.scrollLeft = leftPad.value * cellPx.value
+    // scrollLeft is in scaled px — multiply by the active scale so the opening
+    // position (origin near the left edge) is identical at any default zoom.
+    if (el) el.scrollLeft = leftPad.value * cellPx.value * (stored ? tableScale.value : openedScale)
     windowStart.value = 0
   }
 
@@ -319,7 +351,7 @@ export function useInfiniteTimeline(
         el.scrollTop = stored.scrollTop <= maxScroll ? stored.scrollTop : 0
         sync()
       } else {
-        el.scrollLeft = leftPad.value * cellPx.value
+        el.scrollLeft = leftPad.value * cellPx.value * openedScale
         windowStart.value = 0
       }
       stateReady = true

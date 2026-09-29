@@ -9,8 +9,7 @@
 export const APP_ICONS = {
   menu: ['M4 6h16', 'M4 12h16', 'M4 18h16'],
   close: ['M18 6 6 18', 'M6 6l12 12'],
-  'chevron-down': ['m6 9 6 6 6-6'],
-  sun: [
+  'chevron-down': ['m6 9 6 6 6-6'],  sun: [
     'M12 2v2',
     'M12 20v2',
     'M4.93 4.93l1.41 1.41',
@@ -70,6 +69,10 @@ export const APP_ICONS = {
     'M4.5 20.5a7.5 7.5 0 0 1 15 0',
   ],
   list: ['M3 6h2', 'M3 12h2', 'M3 18h2', 'M8 6h13', 'M8 12h13', 'M8 18h13'],
+  clock: [
+    'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z',
+    'M12 7v5l3 3',
+  ],
 } as const
 
 /** Available icon names */

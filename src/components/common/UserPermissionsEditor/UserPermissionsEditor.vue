@@ -2,11 +2,11 @@
 /**
  * UserPermissionsEditor — права доступа пользователя.
  *
- * Компактный список способностей в мягких карточках ресурсов:
- * каждая строка «действие + ресурс» содержит фиксированный по ширине
- * кастомный dropdown (всегда виден → нет сдвигов layout). Выбор зоны /
- * запрета / возврата к пресету через выпадающее меню. Статус строки
- * подсвечен цветом источника (пресет/индивидуально/запрет).
+ * Карточки по ресурсам (вариант A): у каждого ресурса — карточка с шапкой
+ * (название + сводка) и строками действий; в строке видны сразу все чипы
+ * зон (self/up1/up/sib/down/all) + «⛔ запрет»; сочетания собираются
+ * отметкой нескольких чипов. Подсказка — одна кнопка «?» в шапке блока
+ * (центральная панель).
  *
  * В шапке блока — переключатель пресета (вместо текста «от пресета …»).
  * Выбранный пресет сразу перестраивает базис правил ниже: в режиме draft —
@@ -18,10 +18,12 @@
  * Эмиты: update:overrides (полный набор переопределений), update:dirty,
  * update:preset (смена пресета).
  */
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, reactive, watch } from 'vue'
 import { useRbacStore } from '../../../store'
 import type { PermissionCell, PermissionOverride, UserPermissionsModel } from './types'
-import { GROUPS, ACTIONS, RESOURCE_LABELS, ACTION_LABELS, SCOPE_OPTIONS, scopeLabel, DEFAULT_GRANT_ZONE } from './labels'
+import { GROUPS, ACTIONS, RESOURCE_LABELS, ACTION_LABELS, SCOPE_OPTIONS } from './labels'
+import { canonicalScope, scopeMoves, toggleScopeMove } from '@/rbacScope'
+import HintButton from '../HintButton/HintButton.vue'
 
 const props = defineProps<{
   userId: number
@@ -130,7 +132,12 @@ function ensureLoaded(id: number) {
   // The live baseline (both modes) is built from the effective matrix.
   if (!rbac.matrix.length && !rbac.loading) void rbac.loadRbac()
   if (isDraft.value) return
-  if (id <= 0 || rbac.userPermissions) return
+  if (id <= 0) return
+  // Load per user: the store keeps the snapshot of the LAST opened user; a
+  // non-null snapshot of another user must not block this one (otherwise the
+  // editor shows the previous user's permissions — e.g. the admin stub for a
+  // non-admin).
+  if (rbac.userPermissions?.user_id === id) return
   void rbac.loadUserPermissions(id)
 }
 onMounted(() => ensureLoaded(props.userId))
@@ -151,26 +158,6 @@ function rowSource(r: string, a: string): Src {
 }
 function hasAccess(r: string, a: string) { return effectiveZone(r, a) !== '' }
 
-function statusText(r: string, a: string): string {
-  const z = effectiveZone(r, a); const s = rowSource(r, a)
-  if (s === 'revoked') return 'Запретить'
-  if (!z) return 'Нет доступа'
-  if (s === 'override') return `Индивидуально: ${scopeLabel(r, z)}`
-  return `По пресету: ${scopeLabel(r, z)}`
-}
-function statusClass(r: string, a: string): string {
-  switch (rowSource(r, a)) { case 'override': return 'ov'; case 'revoked': return 'rev'; default: return '' }
-}
-function ddValue(r: string, a: string): string {
-  // Value shown in dropdown button text
-  const z = effectiveZone(r, a); const s = rowSource(r, a)
-  if (s === 'revoked') return 'revoke'
-  if (!z) return 'none'
-  if (s === 'override') return `ov:${z}`
-  return `pr:${z}`
-}
-function defaultZone(r: string) { return DEFAULT_GRANT_ZONE[r] ?? 'all' }
-
 /* ── действия ──────────────────────────────────────────── */
 function pick(r: string, a: string, val: string) {
   if (val === 'revert') { delete staged[key(r, a)]; return }
@@ -179,13 +166,65 @@ function pick(r: string, a: string, val: string) {
 }
 function resetAll() { for (const k of Object.keys(staged)) delete staged[k] }
 
-/* ── управление открытым dropdown (только один открыт) ─── */
-const openDD = ref<string | null>(null)   // key(resource/action) или null
-function toggleDD(k: string) { openDD.value = openDD.value === k ? null : k }
-document.addEventListener('click', (e: Event) => {
-  const t = e.target as HTMLElement
-  if (!t.closest('.dd-wrap')) openDD.value = null
-})
+/* ── выражения области (дерево владения) ───────────────── */
+/** Текущая зона строки как выражение ('' — нет доступа/запрет); показывается
+ *  компактной подписью при нескольких выбранных ходах. */
+function exprText(r: string, a: string): string {
+  const z = effectiveZone(r, a)
+  if (!z || !hasAccess(r, a)) return ''
+  return z
+}
+
+/** Чип активен, если его ход присутствует в текущем выражении зоны
+ *  (мульти-выбор: активны все отмеченные ходы). */
+function isChipOn(r: string, a: string, value: string): boolean {
+  const z = effectiveZone(r, a)
+  if (!z) return false
+  return scopeMoves(z).includes(value)
+}
+
+/** Клик по чипу переключает ход в выражении (мульти-выбор); all/none
+ *  эксклюзивны. Снятие всех ходов или результат, равный пресету, —
+ *  возврат к пресету. */
+function onChipClick(r: string, a: string, value: string) {
+  const next = toggleScopeMove(effectiveZone(r, a), value)
+  if (next === '') { pick(r, a, 'revert'); return }
+  const preset = presetMap.value[key(r, a)] ?? ''
+  if (preset && canonicalScope(next) === canonicalScope(preset)) { pick(r, a, 'revert'); return }
+  pick(r, a, next)
+}
+
+/** Переключатель «запрет»: повторный клик возвращает к пресету. */
+function onRevokeClick(r: string, a: string) {
+  if (rowSource(r, a) === 'revoked') pick(r, a, 'revert')
+  else pick(r, a, 'revoke')
+}
+
+/** Пресе-ход строки (стиль «по пресету»). */
+function isPresetZone(r: string, a: string, value: string): boolean {
+  return rowSource(r, a) === 'preset' && isChipOn(r, a, value)
+}
+
+/** Реальное изменение строки относительно базиса: запрет — всегда; override
+ *  — только если его зона канонически отличается от зоны пресета (override,
+ *  совпадающий с пресетом, изменением не является). */
+function isChangedCell(r: string, a: string): boolean {
+  const s = rowSource(r, a)
+  if (s === 'revoked') return true
+  if (s !== 'override') return false
+  return canonicalScope(effectiveZone(r, a)) !== canonicalScope(presetMap.value[key(r, a)] ?? '')
+}
+
+/* ── сводка карточки ресурса ───────────────────────────── */
+function cardSummary(res: string): string {
+  const ind = ACTIONS.filter((a) => rowSource(res, a) === 'override' && isChangedCell(res, a)).length
+  const rev = ACTIONS.filter((a) => rowSource(res, a) === 'revoked').length
+  if (ind === 0 && rev === 0) return 'по пресету'
+  const parts: string[] = []
+  if (ind) parts.push(`${ind} из ${ACTIONS.length} — индивидуально`)
+  if (rev) parts.push(`${rev} запрет${rev > 1 ? 'а' : ''}`)
+  return parts.join(' · ')
+}
 </script>
 
 <template>
@@ -206,6 +245,8 @@ document.addEventListener('click', (e: Event) => {
         </select>
         <span v-if="dirty" class="uped-dirty">есть изменения</span>
         <button v-if="dirty" type="button" class="uped-reset" @click="resetAll">Сбросить индивидуальные</button>
+        <!-- Единственная подсказка блока — в шапке (центральная панель) -->
+        <HintButton hint="permissions-editor" />
       </div>
     </div>
 
@@ -216,54 +257,50 @@ document.addEventListener('click', (e: Event) => {
       Администратор — полный доступ (обход в коде); индивидуальные права не применимы.
     </div>
 
-    <!-- Список карточек ресурсов -->
+    <!-- Список карточек ресурсов (вариант A: шапка-сводка + строки действий с чипами) -->
     <div v-else-if="model" class="uped-list">
       <div v-for="group in GROUPS" :key="group.key" class="uped-group">
         <h4 class="uped-group-title">{{ group.title }}</h4>
         <div v-for="res in group.resources" :key="res" class="uped-res-card">
-          <div class="uped-res-title">{{ RESOURCE_LABELS[res] ?? res }}</div>
-          <div v-for="act in ACTIONS" :key="act" class="uped-row">
-            <span class="uped-cap">{{ ACTION_LABELS[act] }}</span>
-            <span class="uped-status" :class="statusClass(res, act)">{{ statusText(res, act) }}</span>
+          <div class="uped-res-head">
+            <span class="uped-res-title">{{ RESOURCE_LABELS[res] ?? res }}</span>
+            <span class="uped-res-summary">{{ cardSummary(res) }}</span>
+          </div>
 
-            <!-- Кастомный dropdown — всегда занимает место, нет сдвигов -->
-            <div class="dd-wrap">
-              <button class="dd-btn" :class="{ open: openDD === key(res, act) }"
-                      @click.stop="toggleDD(key(res, act))">
-                <span>{{ ddValue(res, act) === 'revoke' ? 'Запретить'
-                     : ddValue(res, act) === 'none' ? 'Нет доступа'
-                     : ddValue(res, act).startsWith('ov:') ? 'Индивидуально: ' + scopeLabel(res, ddValue(res, act).slice(3))
-                     : 'По пресету: ' + scopeLabel(res, ddValue(res, act).slice(3)) }}</span>
-                <span class="dd-chevron">▾</span>
+          <div v-for="act in ACTIONS" :key="act" class="ur-row" :class="{ changed: isChangedCell(res, act) }">
+            <span class="ur-cap">{{ ACTION_LABELS[act] }}</span>
+
+            <div class="ur-chips">
+              <button
+                v-for="opt in SCOPE_OPTIONS[res] ?? []"
+                :key="opt.value"
+                type="button"
+                class="ur-chip"
+                :class="{
+                  on: isChipOn(res, act, opt.value),
+                  preset: isPresetZone(res, act, opt.value),
+                }"
+                :title="opt.label"
+                @click="onChipClick(res, act, opt.value)"
+              >
+                {{ opt.label }}
               </button>
-              <div class="dd-menu" :class="{ show: openDD === key(res, act) }">
-                <!-- Возврат к пресету (только если есть override) -->
-                <div v-if="overrideOf(res, act)" class="dd-opt revert"
-                     @click.stop="pick(res, act, 'revert'); toggleDD(key(res, act))">
-                  ↩ Вернуть к пресету
-                </div>
-                <!-- Зоны (resource-aware labels: e.g. process parent = «В своих проектах») -->
-                <div v-for="opt in SCOPE_OPTIONS[res] ?? []" :key="opt.value"
-                     class="dd-opt" :class="{ active: ddValue(res, act) === `ov:${opt.value}` || ddValue(res, act) === `pr:${opt.value}` }"
-                     @click.stop="pick(res, act, opt.value); toggleDD(key(res, act))">
-                  {{ opt.label }}
-                </div>
-                <!-- Запрет -->
-                <div class="dd-opt" :class="{ active: ddValue(res, act) === 'revoke' }"
-                     @click.stop="pick(res, act, 'revoke'); toggleDD(key(res, act))">
-                  Запретить
-                </div>
-              </div>
+              <button
+                type="button"
+                class="ur-chip rev"
+                :class="{ on: rowSource(res, act) === 'revoked' }"
+                :title="rowSource(res, act) === 'revoked' ? 'Вернуть к пресету' : 'Запретить'"
+                @click="onRevokeClick(res, act)"
+              >⛔ запрет</button>
+              <!-- Собранное выражение при множественном выборе -->
+              <span v-if="scopeMoves(exprText(res, act)).length > 1" class="ur-zone-mini">
+                {{ exprText(res, act) }}
+              </span>
             </div>
           </div>
         </div>
       </div>
     </div>
-
-    <p class="uped-note">
-      Dropdown всегда виден → переключение состояния не сдвигает элементы.
-      Сохраняется кнопкой «Сохранить».
-    </p>
   </section>
 </template>
 
@@ -318,85 +355,112 @@ document.addEventListener('click', (e: Event) => {
   letter-spacing: 0.05em; text-transform: uppercase; color: var(--ui-text-muted);
 }
 
-/* Карточка ресурса — мягкая тень, скругление. No overflow clipping: the
-   absolutely-positioned dropdown must overlay the following cards. */
+/* Карточка ресурса — мягкая тень, скругление */
 .uped-res-card {
   background: var(--ui-surface);
   border: 1px solid var(--ui-border);
   border-radius: 12px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
-  margin-bottom: 6px;
+  margin-bottom: 8px;
+}
+.uped-res-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px 8px;
+  border-bottom: 1px solid var(--ui-border);
 }
 .uped-res-title {
-  font-size: 13px; font-weight: 700; color: var(--ui-text);
-  padding: 10px 14px 6px; border-bottom: 1px solid var(--ui-border);
-}
-
-/* Строка способности — фиксированная высота, три колонки */
-.uped-row {
-  display: grid;
-  grid-template-columns: minmax(90px, 130px) minmax(110px, 1fr) 220px;
-  align-items: center;
-  gap: 12px;
-  padding: 7px 14px;
-  min-height: 42px;
-}
-.uped-row + .uped-row { border-top: 1px solid var(--ui-border); }
-
-.uped-cap {
-  font-size: 13px; color: var(--ui-text);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.uped-status {
-  font-size: 11px; color: var(--ui-text-muted);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.uped-status.ov { color: var(--ui-accent); font-weight: 600; }
-.uped-status.rev { color: var(--ui-danger); font-weight: 600; }
-
-/* ── Кастомный dropdown ─────────────────────────────── */
-.dd-wrap { position: relative; width: 100%; }
-.dd-btn {
-  width: 100%; display: flex; justify-content: space-between; align-items: center;
-  padding: 6px 10px; border: 1px solid var(--ui-border-strong);
-  border-radius: 8px; background: var(--ui-surface); color: var(--ui-text);
-  font-family: inherit; font-size: 12px; cursor: pointer;
-  transition: border-color 0.15s ease-out;
-  text-align: left;
-}
-.dd-btn:hover { border-color: var(--ui-accent); }
-.dd-btn.open {
-  border-color: var(--ui-accent);
-  border-bottom-left-radius: 0; border-bottom-right-radius: 0;
-}
-.dd-chevron { color: var(--ui-text-muted); font-size: 10px; flex: none; margin-left: 6px; }
-
-.dd-menu {
-  position: absolute; top: 100%; left: 0; right: 0;
-  background: var(--ui-surface); border: 1px solid var(--ui-accent);
-  border-top: none; border-bottom-left-radius: 8px; border-bottom-right-radius: 8px;
-  z-index: 20; display: none; flex-direction: column;
-  max-height: 220px; overflow-y: auto;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
-}
-.dd-menu.show { display: flex; }
-
-.dd-opt {
-  padding: 8px 12px; font-size: 12px; cursor: pointer;
-  display: flex; align-items: center; gap: 6px;
-  transition: background 0.1s;
+  font-size: 13px;
+  font-weight: 700;
   color: var(--ui-text);
 }
-.dd-opt:hover { background: var(--ui-surface-2); }
-.dd-opt.active::before { content: '✓'; color: var(--ui-ok, var(--ui-accent)); font-weight: 700; }
-.dd-opt.revert { color: var(--ui-accent); font-style: italic; }
+.uped-res-summary {
+  font-size: 11px;
+  color: var(--ui-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
-.uped-note { margin: 2px 0 0; font-size: 11px; color: var(--ui-text-muted); }
+/* Строка действия: подпись + чипы зон + запрет/выражение */
+.ur-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 14px;
+  flex-wrap: wrap;
+  transition: background 0.12s;
+}
+.ur-row + .ur-row { border-top: 1px solid var(--ui-border); }
+.ur-row:hover { background: var(--ui-surface-3); }
+/* Реальное изменение (override ≠ пресет или запрет) — подсветка;
+   без изменения строка сохраняет исходный цвет. */
+.ur-row.changed { background: var(--ui-warning-soft); }
+
+.ur-cap {
+  width: 84px;
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--ui-text);
+}
+.ur-chips {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  flex: 1;
+  min-width: 0;
+}
+.ur-chip {
+  border: 1px solid var(--ui-border-strong);
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 11px;
+  font-family: inherit;
+  color: var(--ui-text-2);
+  background: var(--ui-surface);
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+  white-space: nowrap;
+}
+.ur-chip:hover { border-color: var(--ui-accent); }
+.ur-chip.on {
+  background: var(--ui-accent);
+  border-color: var(--ui-accent);
+  color: var(--ui-accent-on);
+  font-weight: 600;
+}
+/* Активная зона, унаследованная от пресета — полупрозрачная подсветка */
+.ur-chip.on.preset {
+  background: color-mix(in srgb, var(--ui-accent) 16%, transparent);
+  border-color: var(--ui-accent);
+  color: var(--ui-accent);
+  font-weight: 600;
+}
+.ur-chip.rev {
+  color: var(--ui-danger);
+  border-color: light-dark(rgba(185, 28, 28, 0.45), rgba(248, 113, 113, 0.55));
+  background: transparent;
+}
+.ur-chip.rev.on {
+  background: var(--ui-danger);
+  border-color: var(--ui-danger);
+  color: #fff;
+}
+
+/* Собранное выражение множественного выбора — компактная подпись */
+.ur-zone-mini {
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 10px;
+  color: var(--ui-text-muted);
+  background: var(--ui-surface-2);
+  border-radius: 5px;
+  padding: 2px 7px;
+}
 
 @media (max-width: 640px) {
-  .uped-row {
-    grid-template-columns: 1fr;
-    gap: 4px; padding: 8px 12px;
-  }
+  .ur-cap { width: 100%; }
 }
 </style>

@@ -63,11 +63,6 @@ export interface AutoCreateConfigGet200Response {
     'data'?: DtoAutoCreateConfig;
     'error'?: object;
 }
-export interface DomainPreset {
-    'description'?: string;
-    'id'?: number;
-    'name'?: string;
-}
 export interface DtoAddMemberRequest {
     'user_id'?: number;
 }
@@ -116,6 +111,7 @@ export interface DtoAuditEventView {
 export interface DtoAuthResponse {
     'access_token'?: string;
     'expires_in'?: number;
+    'refresh_token'?: string;
     'token_type'?: string;
     'user'?: DtoUserInfo;
 }
@@ -165,6 +161,20 @@ export interface DtoCreateCommentRequest {
      */
     'parent_id'?: number;
 }
+export interface DtoCreateDependencyRequest {
+    'depends_on_task_id'?: number;
+    'type'?: DtoCreateDependencyRequestTypeEnum;
+}
+
+export const DtoCreateDependencyRequestTypeEnum = {
+    Fs: 'fs',
+    Ss: 'ss',
+    Ff: 'ff',
+    Sf: 'sf',
+} as const;
+
+export type DtoCreateDependencyRequestTypeEnum = typeof DtoCreateDependencyRequestTypeEnum[keyof typeof DtoCreateDependencyRequestTypeEnum];
+
 export interface DtoCreateMilestoneRequest {
     'color'?: string;
     'content'?: string;
@@ -213,8 +223,13 @@ export interface DtoCreateTaskRequest {
     'color'?: string;
     'end_date'?: string;
     'owner_id'?: number;
+    /**
+     * ParentID — optional subtask (operation) link: task of the given parent. When set, process_id must point to the parent\'s process; dates and owner may be omitted and are inherited from the parent by the service.
+     */
+    'parent_id'?: number;
     'process_id'?: number;
     'start_date'?: string;
+    'status'?: string;
     'title'?: string;
 }
 export interface DtoCreateUserRequest {
@@ -237,8 +252,27 @@ export interface DtoCreateUserResult {
     'password'?: string;
     'user'?: DtoUserResponse;
 }
+export interface DtoDependencyResponse {
+    /**
+     * Predecessor task of the link.
+     */
+    'depends_on_task_id'?: number;
+    'id'?: number;
+    /**
+     * Dependent task (successor) of the link.
+     */
+    'task_id'?: number;
+    /**
+     * Dependency type: fs | ss | ff | sf.
+     */
+    'type'?: string;
+}
 export interface DtoDetailedProcess {
     'color'?: string;
+    /**
+     * Scheduling links between the tasks of the process (the successor task_id depends on depends_on_task_id with the given type).
+     */
+    'dependencies'?: Array<DtoTaskDependency>;
     'end_date'?: string;
     'id'?: number;
     'milestones'?: Array<DtoMilestone>;
@@ -272,13 +306,25 @@ export interface DtoDetailedTask {
     'end_date'?: string;
     'id'?: number;
     /**
-     * Order of the task within its process (ascending display order).
+     * Order of the task within its parent group (ascending display order): top-level tasks sort within the process, subtasks within the parent.
      */
     'order'?: number;
     'owner_id'?: number;
+    /**
+     * ParentID — subtask (operation) link; NULL for top-level tasks.
+     */
+    'parent_id'?: number;
     'process_id'?: number;
     'resources'?: Array<DtoResource>;
     'start_date'?: string;
+    /**
+     * Execution status: not_started | in_progress | done.
+     */
+    'status'?: string;
+    /**
+     * Subtasks (operations) attached to this task, in display order. Present only on top-level tasks; subtasks cannot have subtasks.
+     */
+    'subtasks'?: Array<DtoDetailedTask>;
     'title'?: string;
 }
 export interface DtoExplainResult {
@@ -311,6 +357,9 @@ export interface DtoMilestoneResponse {
     'process_id'?: number;
     'title'?: string;
 }
+export interface DtoOperationTemplate {
+    'title'?: string;
+}
 export interface DtoPermission {
     'action'?: string;
     'resource'?: string;
@@ -339,10 +388,16 @@ export interface DtoPresetRuleView {
 }
 export interface DtoPresetUpdateInput {
     'description'?: string;
+    'name'?: string;
 }
 export interface DtoPresetUpsertInput {
     'description'?: string;
     'name': string;
+}
+export interface DtoPresetView {
+    'description'?: string;
+    'id'?: number;
+    'name'?: string;
 }
 export interface DtoProcess {
     'color'?: string;
@@ -401,6 +456,9 @@ export interface DtoProjectResponse {
     'priority'?: number;
     'start_date'?: string;
 }
+export interface DtoRefreshRequest {
+    'refresh_token'?: string;
+}
 export interface DtoReorderProcessRequest {
     'ids'?: Array<number>;
     'project_id'?: number;
@@ -408,9 +466,6 @@ export interface DtoReorderProcessRequest {
 export interface DtoReorderTaskRequest {
     'ids'?: Array<number>;
     'process_id'?: number;
-}
-export interface DtoResetPasswordResponse {
-    'password'?: string;
 }
 export interface DtoResource {
     'assignment_id'?: number;
@@ -481,6 +536,12 @@ export interface DtoStateResponse {
     'is_available'?: boolean;
     'name'?: string;
 }
+export interface DtoTaskDependency {
+    'depends_on_task_id'?: number;
+    'id'?: number;
+    'task_id'?: number;
+    'type'?: string;
+}
 export interface DtoTaskPlanning {
     'processes'?: Array<DtoDetailedProcess>;
 }
@@ -489,16 +550,28 @@ export interface DtoTaskResponse {
     'end_date'?: string;
     'id'?: number;
     /**
-     * Order of the task within its process (ascending display order).
+     * Order of the task within its parent group (ascending display order): top-level tasks sort within the process, subtasks within the parent.
      */
     'order'?: number;
     'owner_id'?: number;
+    /**
+     * ParentID — subtask (operation) link; NULL for top-level tasks.
+     */
+    'parent_id'?: number;
     'process_id'?: number;
     'start_date'?: string;
+    /**
+     * Execution status: not_started | in_progress | done.
+     */
+    'status'?: string;
     'title'?: string;
 }
 export interface DtoTaskTemplate {
     'color'?: string;
+    /**
+     * Operations (subtasks) of the task — created as subtasks (parent_id) with the task\'s dates. Status is always not_started; resources are not bound to subtasks.
+     */
+    'operations'?: Array<DtoOperationTemplate>;
     'resources'?: Array<DtoResourceBinding>;
     'title'?: string;
 }
@@ -507,6 +580,19 @@ export interface DtoUpdateAssignmentRequest {
     'resource_id'?: number;
     'task_id'?: number;
 }
+export interface DtoUpdateDependencyRequest {
+    'type'?: DtoUpdateDependencyRequestTypeEnum;
+}
+
+export const DtoUpdateDependencyRequestTypeEnum = {
+    Fs: 'fs',
+    Ss: 'ss',
+    Ff: 'ff',
+    Sf: 'sf',
+} as const;
+
+export type DtoUpdateDependencyRequestTypeEnum = typeof DtoUpdateDependencyRequestTypeEnum[keyof typeof DtoUpdateDependencyRequestTypeEnum];
+
 export interface DtoUpdateManagerRequest {
     'manager_id'?: number;
 }
@@ -547,9 +633,12 @@ export interface DtoUpdateStateRequest {
 export interface DtoUpdateTaskRequest {
     'color'?: string;
     'end_date'?: string;
+    /**
+     * ProcessID is intentionally absent: a task never changes its process. ParentID is absent too: the parent is fixed at creation.
+     */
     'owner_id'?: number;
-    'process_id'?: number;
     'start_date'?: string;
+    'status'?: string;
     'title'?: string;
 }
 export interface DtoUpdateUserRequest {
@@ -613,6 +702,23 @@ export interface DtoUserStateResponse {
     'state_code'?: string;
     'state_id'?: number;
     'state_name'?: string;
+    /**
+     * UserID is set only in batch responses (GET /user/days), where one worker\'s ranges are nested among several — hence omitempty.
+     */
+    'user_id'?: number;
+}
+export interface DtoUserStatesResponse {
+    'days'?: Array<DtoUserStateResponse>;
+    'user_id'?: number;
+}
+export interface EngineKindInfo {
+    'name'?: string;
+    'params'?: Array<EngineParamInfo>;
+}
+export interface EngineParamInfo {
+    'key'?: string;
+    'required'?: boolean;
+    'type'?: string;
 }
 export interface ErrorsDomainError {
     'code'?: string;
@@ -648,15 +754,6 @@ export interface PlanningProjectsGet200Response {
 export interface PlanningTasksGet200Response {
     'data'?: DtoTaskPlanning;
     'error'?: object;
-}
-export interface PoliciesKindInfo {
-    'name'?: string;
-    'params'?: Array<PoliciesParamInfo>;
-}
-export interface PoliciesParamInfo {
-    'key'?: string;
-    'required'?: boolean;
-    'type'?: string;
 }
 export interface ProcessGet200Response {
     'data'?: ProcessGet200ResponseAllOfData;
@@ -695,7 +792,7 @@ export interface RbacExplainGet200Response {
     'error'?: object;
 }
 export interface RbacKindsGet200Response {
-    'data'?: Array<PoliciesKindInfo>;
+    'data'?: Array<EngineKindInfo>;
     'error'?: object;
 }
 export interface RbacMatrixGet200Response {
@@ -719,11 +816,11 @@ export interface RbacPresetRulesPut200Response {
     'error'?: object;
 }
 export interface RbacPresetsGet200Response {
-    'data'?: Array<DomainPreset>;
+    'data'?: Array<DtoPresetView>;
     'error'?: object;
 }
 export interface RbacPresetsPost201Response {
-    'data'?: DomainPreset;
+    'data'?: DtoPresetView;
     'error'?: object;
 }
 export interface RbacUsersIdPermissionsGet200Response {
@@ -788,6 +885,14 @@ export interface TaskIdCommentsPost201Response {
     'data'?: DtoCommentResponse;
     'error'?: object;
 }
+export interface TaskIdDependenciesGet200Response {
+    'data'?: Array<DtoDependencyResponse>;
+    'error'?: object;
+}
+export interface TaskIdDependenciesPost201Response {
+    'data'?: DtoDependencyResponse;
+    'error'?: object;
+}
 export interface TaskPost201Response {
     'data'?: DtoTaskResponse;
     'error'?: object;
@@ -812,6 +917,10 @@ export interface UserChangePasswordPost200Response {
     'data'?: DtoChangePasswordResponse;
     'error'?: object;
 }
+export interface UserDaysGet200Response {
+    'data'?: Array<DtoUserStatesResponse>;
+    'error'?: object;
+}
 export interface UserGet200Response {
     'data'?: UserGet200ResponseAllOfData;
     'error'?: object;
@@ -828,10 +937,6 @@ export interface UserIdDaysGet200Response {
 }
 export interface UserIdGet200Response {
     'data'?: DtoUserResponse;
-    'error'?: object;
-}
-export interface UserIdResetPasswordPost200Response {
-    'data'?: DtoResetPasswordResponse;
     'error'?: object;
 }
 export interface UserPost201Response {
@@ -1452,7 +1557,7 @@ export class AuditApi extends BaseAPI {
 export const AuthApiAxiosParamCreator = function (configuration?: Configuration) {
     return {
         /**
-         * Authenticate user; the refresh token goes into an HttpOnly cookie
+         * Authenticate user; the refresh token is returned both in the response body and in an HttpOnly cookie
          * @summary Login
          * @param {DtoLoginRequest} request Login credentials
          * @param {*} [options] Override http request option.
@@ -1487,12 +1592,13 @@ export const AuthApiAxiosParamCreator = function (configuration?: Configuration)
             };
         },
         /**
-         * Revoke the refresh session and clear the cookie (idempotent)
+         * Revoke the refresh session and clear the cookie; the token is read from the body ({refresh_token}) or the HttpOnly cookie (idempotent)
          * @summary Logout
+         * @param {DtoRefreshRequest} [request] Refresh token (optional; falls back to the HttpOnly cookie)
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        authLogoutPost: async (options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+        authLogoutPost: async (request?: DtoRefreshRequest, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
             const localVarPath = `/auth/logout`;
             // use dummy base URL string because the URL constructor only accepts absolute URLs.
             const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
@@ -1505,11 +1611,13 @@ export const AuthApiAxiosParamCreator = function (configuration?: Configuration)
             const localVarHeaderParameter = {} as any;
             const localVarQueryParameter = {} as any;
 
+            localVarHeaderParameter['Content-Type'] = 'application/json';
             localVarHeaderParameter['Accept'] = 'application/json';
 
             setSearchParams(localVarUrlObj, localVarQueryParameter);
             let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
             localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+            localVarRequestOptions.data = serializeDataIfNeeded(request, localVarRequestOptions, configuration)
 
             return {
                 url: toPathString(localVarUrlObj),
@@ -1517,12 +1625,13 @@ export const AuthApiAxiosParamCreator = function (configuration?: Configuration)
             };
         },
         /**
-         * Rotate the refresh session from the HttpOnly cookie; returns a new access token
+         * Rotate the refresh session; the token is read from the body ({refresh_token}) or the HttpOnly cookie, and a new refresh token is returned in both
          * @summary Refresh Token
+         * @param {DtoRefreshRequest} [request] Refresh token (optional; falls back to the HttpOnly cookie)
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        authRefreshPost: async (options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+        authRefreshPost: async (request?: DtoRefreshRequest, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
             const localVarPath = `/auth/refresh`;
             // use dummy base URL string because the URL constructor only accepts absolute URLs.
             const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
@@ -1535,11 +1644,13 @@ export const AuthApiAxiosParamCreator = function (configuration?: Configuration)
             const localVarHeaderParameter = {} as any;
             const localVarQueryParameter = {} as any;
 
+            localVarHeaderParameter['Content-Type'] = 'application/json';
             localVarHeaderParameter['Accept'] = 'application/json';
 
             setSearchParams(localVarUrlObj, localVarQueryParameter);
             let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
             localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+            localVarRequestOptions.data = serializeDataIfNeeded(request, localVarRequestOptions, configuration)
 
             return {
                 url: toPathString(localVarUrlObj),
@@ -1556,7 +1667,7 @@ export const AuthApiFp = function(configuration?: Configuration) {
     const localVarAxiosParamCreator = AuthApiAxiosParamCreator(configuration)
     return {
         /**
-         * Authenticate user; the refresh token goes into an HttpOnly cookie
+         * Authenticate user; the refresh token is returned both in the response body and in an HttpOnly cookie
          * @summary Login
          * @param {DtoLoginRequest} request Login credentials
          * @param {*} [options] Override http request option.
@@ -1569,25 +1680,27 @@ export const AuthApiFp = function(configuration?: Configuration) {
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
-         * Revoke the refresh session and clear the cookie (idempotent)
+         * Revoke the refresh session and clear the cookie; the token is read from the body ({refresh_token}) or the HttpOnly cookie (idempotent)
          * @summary Logout
+         * @param {DtoRefreshRequest} [request] Refresh token (optional; falls back to the HttpOnly cookie)
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async authLogoutPost(options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<AuthLogoutPost200Response>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.authLogoutPost(options);
+        async authLogoutPost(request?: DtoRefreshRequest, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<AuthLogoutPost200Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.authLogoutPost(request, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
             const localVarOperationServerBasePath = operationServerMap['AuthApi.authLogoutPost']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
-         * Rotate the refresh session from the HttpOnly cookie; returns a new access token
+         * Rotate the refresh session; the token is read from the body ({refresh_token}) or the HttpOnly cookie, and a new refresh token is returned in both
          * @summary Refresh Token
+         * @param {DtoRefreshRequest} [request] Refresh token (optional; falls back to the HttpOnly cookie)
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async authRefreshPost(options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<AuthLoginPost200Response>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.authRefreshPost(options);
+        async authRefreshPost(request?: DtoRefreshRequest, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<AuthLoginPost200Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.authRefreshPost(request, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
             const localVarOperationServerBasePath = operationServerMap['AuthApi.authRefreshPost']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
@@ -1602,7 +1715,7 @@ export const AuthApiFactory = function (configuration?: Configuration, basePath?
     const localVarFp = AuthApiFp(configuration)
     return {
         /**
-         * Authenticate user; the refresh token goes into an HttpOnly cookie
+         * Authenticate user; the refresh token is returned both in the response body and in an HttpOnly cookie
          * @summary Login
          * @param {DtoLoginRequest} request Login credentials
          * @param {*} [options] Override http request option.
@@ -1612,22 +1725,24 @@ export const AuthApiFactory = function (configuration?: Configuration, basePath?
             return localVarFp.authLoginPost(request, options).then((request) => request(axios, basePath));
         },
         /**
-         * Revoke the refresh session and clear the cookie (idempotent)
+         * Revoke the refresh session and clear the cookie; the token is read from the body ({refresh_token}) or the HttpOnly cookie (idempotent)
          * @summary Logout
+         * @param {DtoRefreshRequest} [request] Refresh token (optional; falls back to the HttpOnly cookie)
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        authLogoutPost(options?: RawAxiosRequestConfig): AxiosPromise<AuthLogoutPost200Response> {
-            return localVarFp.authLogoutPost(options).then((request) => request(axios, basePath));
+        authLogoutPost(request?: DtoRefreshRequest, options?: RawAxiosRequestConfig): AxiosPromise<AuthLogoutPost200Response> {
+            return localVarFp.authLogoutPost(request, options).then((request) => request(axios, basePath));
         },
         /**
-         * Rotate the refresh session from the HttpOnly cookie; returns a new access token
+         * Rotate the refresh session; the token is read from the body ({refresh_token}) or the HttpOnly cookie, and a new refresh token is returned in both
          * @summary Refresh Token
+         * @param {DtoRefreshRequest} [request] Refresh token (optional; falls back to the HttpOnly cookie)
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        authRefreshPost(options?: RawAxiosRequestConfig): AxiosPromise<AuthLoginPost200Response> {
-            return localVarFp.authRefreshPost(options).then((request) => request(axios, basePath));
+        authRefreshPost(request?: DtoRefreshRequest, options?: RawAxiosRequestConfig): AxiosPromise<AuthLoginPost200Response> {
+            return localVarFp.authRefreshPost(request, options).then((request) => request(axios, basePath));
         },
     };
 };
@@ -1637,7 +1752,7 @@ export const AuthApiFactory = function (configuration?: Configuration, basePath?
  */
 export class AuthApi extends BaseAPI {
     /**
-     * Authenticate user; the refresh token goes into an HttpOnly cookie
+     * Authenticate user; the refresh token is returned both in the response body and in an HttpOnly cookie
      * @summary Login
      * @param {DtoLoginRequest} request Login credentials
      * @param {*} [options] Override http request option.
@@ -1648,23 +1763,25 @@ export class AuthApi extends BaseAPI {
     }
 
     /**
-     * Revoke the refresh session and clear the cookie (idempotent)
+     * Revoke the refresh session and clear the cookie; the token is read from the body ({refresh_token}) or the HttpOnly cookie (idempotent)
      * @summary Logout
+     * @param {DtoRefreshRequest} [request] Refresh token (optional; falls back to the HttpOnly cookie)
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      */
-    public authLogoutPost(options?: RawAxiosRequestConfig) {
-        return AuthApiFp(this.configuration).authLogoutPost(options).then((request) => request(this.axios, this.basePath));
+    public authLogoutPost(request?: DtoRefreshRequest, options?: RawAxiosRequestConfig) {
+        return AuthApiFp(this.configuration).authLogoutPost(request, options).then((request) => request(this.axios, this.basePath));
     }
 
     /**
-     * Rotate the refresh session from the HttpOnly cookie; returns a new access token
+     * Rotate the refresh session; the token is read from the body ({refresh_token}) or the HttpOnly cookie, and a new refresh token is returned in both
      * @summary Refresh Token
+     * @param {DtoRefreshRequest} [request] Refresh token (optional; falls back to the HttpOnly cookie)
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      */
-    public authRefreshPost(options?: RawAxiosRequestConfig) {
-        return AuthApiFp(this.configuration).authRefreshPost(options).then((request) => request(this.axios, this.basePath));
+    public authRefreshPost(request?: DtoRefreshRequest, options?: RawAxiosRequestConfig) {
+        return AuthApiFp(this.configuration).authRefreshPost(request, options).then((request) => request(this.axios, this.basePath));
     }
 }
 
@@ -4883,6 +5000,172 @@ export const TasksApiAxiosParamCreator = function (configuration?: Configuration
             };
         },
         /**
+         * Delete a dependency link by ID
+         * @summary Delete task dependency
+         * @param {number} id Task ID
+         * @param {number} depId Dependency ID
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        taskIdDependenciesDepIdDelete: async (id: number, depId: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'id' is not null or undefined
+            assertParamExists('taskIdDependenciesDepIdDelete', 'id', id)
+            // verify required parameter 'depId' is not null or undefined
+            assertParamExists('taskIdDependenciesDepIdDelete', 'depId', depId)
+            const localVarPath = `/task/{id}/dependencies/{dep_id}`
+                .replace('{id}', encodeURIComponent(String(id)))
+                .replace('{dep_id}', encodeURIComponent(String(depId)));
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'DELETE', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication ApiKeyAuth required
+            await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
+
+            localVarHeaderParameter['Accept'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * Change the type of an existing dependency link (fs/ss/ff/sf)
+         * @summary Update task dependency
+         * @param {number} id Task ID
+         * @param {number} depId Dependency ID
+         * @param {DtoUpdateDependencyRequest} dependency New dependency type
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        taskIdDependenciesDepIdPut: async (id: number, depId: number, dependency: DtoUpdateDependencyRequest, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'id' is not null or undefined
+            assertParamExists('taskIdDependenciesDepIdPut', 'id', id)
+            // verify required parameter 'depId' is not null or undefined
+            assertParamExists('taskIdDependenciesDepIdPut', 'depId', depId)
+            // verify required parameter 'dependency' is not null or undefined
+            assertParamExists('taskIdDependenciesDepIdPut', 'dependency', dependency)
+            const localVarPath = `/task/{id}/dependencies/{dep_id}`
+                .replace('{id}', encodeURIComponent(String(id)))
+                .replace('{dep_id}', encodeURIComponent(String(depId)));
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'PUT', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication ApiKeyAuth required
+            await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
+
+            localVarHeaderParameter['Content-Type'] = 'application/json';
+            localVarHeaderParameter['Accept'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+            localVarRequestOptions.data = serializeDataIfNeeded(dependency, localVarRequestOptions, configuration)
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * Get all dependency links of a task (the predecessors it depends on, with the link type)
+         * @summary List task dependencies
+         * @param {number} id Task ID
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        taskIdDependenciesGet: async (id: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'id' is not null or undefined
+            assertParamExists('taskIdDependenciesGet', 'id', id)
+            const localVarPath = `/task/{id}/dependencies`
+                .replace('{id}', encodeURIComponent(String(id)));
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'GET', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication ApiKeyAuth required
+            await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
+
+            localVarHeaderParameter['Accept'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * Create a scheduling link: the task (task_id) depends on depends_on_task_id with the given type (fs/ss/ff/sf)
+         * @summary Create task dependency
+         * @param {number} id Task ID
+         * @param {DtoCreateDependencyRequest} dependency Dependency data
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        taskIdDependenciesPost: async (id: number, dependency: DtoCreateDependencyRequest, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'id' is not null or undefined
+            assertParamExists('taskIdDependenciesPost', 'id', id)
+            // verify required parameter 'dependency' is not null or undefined
+            assertParamExists('taskIdDependenciesPost', 'dependency', dependency)
+            const localVarPath = `/task/{id}/dependencies`
+                .replace('{id}', encodeURIComponent(String(id)));
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'POST', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication ApiKeyAuth required
+            await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
+
+            localVarHeaderParameter['Content-Type'] = 'application/json';
+            localVarHeaderParameter['Accept'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+            localVarRequestOptions.data = serializeDataIfNeeded(dependency, localVarRequestOptions, configuration)
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
          * Get a task by its ID
          * @summary Get a task by ID
          * @param {number} id Task ID
@@ -5116,6 +5399,62 @@ export const TasksApiFp = function(configuration?: Configuration) {
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
+         * Delete a dependency link by ID
+         * @summary Delete task dependency
+         * @param {number} id Task ID
+         * @param {number} depId Dependency ID
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async taskIdDependenciesDepIdDelete(id: number, depId: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<void>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.taskIdDependenciesDepIdDelete(id, depId, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['TasksApi.taskIdDependenciesDepIdDelete']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
+         * Change the type of an existing dependency link (fs/ss/ff/sf)
+         * @summary Update task dependency
+         * @param {number} id Task ID
+         * @param {number} depId Dependency ID
+         * @param {DtoUpdateDependencyRequest} dependency New dependency type
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async taskIdDependenciesDepIdPut(id: number, depId: number, dependency: DtoUpdateDependencyRequest, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<TaskIdDependenciesPost201Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.taskIdDependenciesDepIdPut(id, depId, dependency, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['TasksApi.taskIdDependenciesDepIdPut']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
+         * Get all dependency links of a task (the predecessors it depends on, with the link type)
+         * @summary List task dependencies
+         * @param {number} id Task ID
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async taskIdDependenciesGet(id: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<TaskIdDependenciesGet200Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.taskIdDependenciesGet(id, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['TasksApi.taskIdDependenciesGet']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
+         * Create a scheduling link: the task (task_id) depends on depends_on_task_id with the given type (fs/ss/ff/sf)
+         * @summary Create task dependency
+         * @param {number} id Task ID
+         * @param {DtoCreateDependencyRequest} dependency Dependency data
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async taskIdDependenciesPost(id: number, dependency: DtoCreateDependencyRequest, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<TaskIdDependenciesPost201Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.taskIdDependenciesPost(id, dependency, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['TasksApi.taskIdDependenciesPost']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
          * Get a task by its ID
          * @summary Get a task by ID
          * @param {number} id Task ID
@@ -5232,6 +5571,50 @@ export const TasksApiFactory = function (configuration?: Configuration, basePath
             return localVarFp.taskIdDelete(id, options).then((request) => request(axios, basePath));
         },
         /**
+         * Delete a dependency link by ID
+         * @summary Delete task dependency
+         * @param {number} id Task ID
+         * @param {number} depId Dependency ID
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        taskIdDependenciesDepIdDelete(id: number, depId: number, options?: RawAxiosRequestConfig): AxiosPromise<void> {
+            return localVarFp.taskIdDependenciesDepIdDelete(id, depId, options).then((request) => request(axios, basePath));
+        },
+        /**
+         * Change the type of an existing dependency link (fs/ss/ff/sf)
+         * @summary Update task dependency
+         * @param {number} id Task ID
+         * @param {number} depId Dependency ID
+         * @param {DtoUpdateDependencyRequest} dependency New dependency type
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        taskIdDependenciesDepIdPut(id: number, depId: number, dependency: DtoUpdateDependencyRequest, options?: RawAxiosRequestConfig): AxiosPromise<TaskIdDependenciesPost201Response> {
+            return localVarFp.taskIdDependenciesDepIdPut(id, depId, dependency, options).then((request) => request(axios, basePath));
+        },
+        /**
+         * Get all dependency links of a task (the predecessors it depends on, with the link type)
+         * @summary List task dependencies
+         * @param {number} id Task ID
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        taskIdDependenciesGet(id: number, options?: RawAxiosRequestConfig): AxiosPromise<TaskIdDependenciesGet200Response> {
+            return localVarFp.taskIdDependenciesGet(id, options).then((request) => request(axios, basePath));
+        },
+        /**
+         * Create a scheduling link: the task (task_id) depends on depends_on_task_id with the given type (fs/ss/ff/sf)
+         * @summary Create task dependency
+         * @param {number} id Task ID
+         * @param {DtoCreateDependencyRequest} dependency Dependency data
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        taskIdDependenciesPost(id: number, dependency: DtoCreateDependencyRequest, options?: RawAxiosRequestConfig): AxiosPromise<TaskIdDependenciesPost201Response> {
+            return localVarFp.taskIdDependenciesPost(id, dependency, options).then((request) => request(axios, basePath));
+        },
+        /**
          * Get a task by its ID
          * @summary Get a task by ID
          * @param {number} id Task ID
@@ -5336,6 +5719,54 @@ export class TasksApi extends BaseAPI {
      */
     public taskIdDelete(id: number, options?: RawAxiosRequestConfig) {
         return TasksApiFp(this.configuration).taskIdDelete(id, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * Delete a dependency link by ID
+     * @summary Delete task dependency
+     * @param {number} id Task ID
+     * @param {number} depId Dependency ID
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    public taskIdDependenciesDepIdDelete(id: number, depId: number, options?: RawAxiosRequestConfig) {
+        return TasksApiFp(this.configuration).taskIdDependenciesDepIdDelete(id, depId, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * Change the type of an existing dependency link (fs/ss/ff/sf)
+     * @summary Update task dependency
+     * @param {number} id Task ID
+     * @param {number} depId Dependency ID
+     * @param {DtoUpdateDependencyRequest} dependency New dependency type
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    public taskIdDependenciesDepIdPut(id: number, depId: number, dependency: DtoUpdateDependencyRequest, options?: RawAxiosRequestConfig) {
+        return TasksApiFp(this.configuration).taskIdDependenciesDepIdPut(id, depId, dependency, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * Get all dependency links of a task (the predecessors it depends on, with the link type)
+     * @summary List task dependencies
+     * @param {number} id Task ID
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    public taskIdDependenciesGet(id: number, options?: RawAxiosRequestConfig) {
+        return TasksApiFp(this.configuration).taskIdDependenciesGet(id, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * Create a scheduling link: the task (task_id) depends on depends_on_task_id with the given type (fs/ss/ff/sf)
+     * @summary Create task dependency
+     * @param {number} id Task ID
+     * @param {DtoCreateDependencyRequest} dependency Dependency data
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    public taskIdDependenciesPost(id: number, dependency: DtoCreateDependencyRequest, options?: RawAxiosRequestConfig) {
+        return TasksApiFp(this.configuration).taskIdDependenciesPost(id, dependency, options).then((request) => request(this.axios, this.basePath));
     }
 
     /**
@@ -6703,17 +7134,72 @@ export const UsersApiAxiosParamCreator = function (configuration?: Configuration
             };
         },
         /**
+         * Batch replacement of GET /user/{id}/days: returns the state ranges of several workers over one date range, with one entry per requested id (empty days when the worker has none) and no N+1 requests per employee.
+         * @summary Batch list worker days
+         * @param {string} ids Comma-separated user IDs (max 200)
+         * @param {string} startDate Start date (YYYY-MM-DD)
+         * @param {string} endDate End date (YYYY-MM-DD)
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        userDaysGet: async (ids: string, startDate: string, endDate: string, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'ids' is not null or undefined
+            assertParamExists('userDaysGet', 'ids', ids)
+            // verify required parameter 'startDate' is not null or undefined
+            assertParamExists('userDaysGet', 'startDate', startDate)
+            // verify required parameter 'endDate' is not null or undefined
+            assertParamExists('userDaysGet', 'endDate', endDate)
+            const localVarPath = `/user/days`;
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'GET', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication ApiKeyAuth required
+            await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
+
+            if (ids !== undefined) {
+                localVarQueryParameter['ids'] = ids;
+            }
+
+            if (startDate !== undefined) {
+                localVarQueryParameter['start_date'] = startDate;
+            }
+
+            if (endDate !== undefined) {
+                localVarQueryParameter['end_date'] = endDate;
+            }
+
+            localVarHeaderParameter['Accept'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
          * Returns a paged list of users; admin sees all, vp sees own subordinates + self.
          * @summary List users
          * @param {number} [limit] Page size (default 50, max 500)
          * @param {string} [preset] Filter by preset (e.g. worker)
          * @param {number} [managerId] Filter by manager (admin)
          * @param {boolean} [includeHash] Include password_hash (admin only)
+         * @param {string} [search] Case-insensitive substring of the full name or login (max 128 chars)
          * @param {number} [offset] Page offset
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        userGet: async (limit?: number, preset?: string, managerId?: number, includeHash?: boolean, offset?: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+        userGet: async (limit?: number, preset?: string, managerId?: number, includeHash?: boolean, search?: string, offset?: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
             const localVarPath = `/user`;
             // use dummy base URL string because the URL constructor only accepts absolute URLs.
             const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
@@ -6743,6 +7229,10 @@ export const UsersApiAxiosParamCreator = function (configuration?: Configuration
 
             if (includeHash !== undefined) {
                 localVarQueryParameter['include_hash'] = includeHash;
+            }
+
+            if (search !== undefined) {
+                localVarQueryParameter['search'] = search;
             }
 
             if (offset !== undefined) {
@@ -6910,7 +7400,7 @@ export const UsersApiAxiosParamCreator = function (configuration?: Configuration
             };
         },
         /**
-         * Delete a user by ID (soft delete)
+         * Delete a user by ID (moves the account to the archive; 409 if the user is referenced)
          * @summary Delete a user
          * @param {number} id User ID
          * @param {*} [options] Override http request option.
@@ -7068,7 +7558,7 @@ export const UsersApiAxiosParamCreator = function (configuration?: Configuration
             };
         },
         /**
-         * Generate a new random password for a user and return it once
+         * Generate a new random password for a user (admin only; the new password is never returned)
          * @summary Reset user password
          * @param {number} id User ID
          * @param {*} [options] Override http request option.
@@ -7177,18 +7667,34 @@ export const UsersApiFp = function(configuration?: Configuration) {
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
+         * Batch replacement of GET /user/{id}/days: returns the state ranges of several workers over one date range, with one entry per requested id (empty days when the worker has none) and no N+1 requests per employee.
+         * @summary Batch list worker days
+         * @param {string} ids Comma-separated user IDs (max 200)
+         * @param {string} startDate Start date (YYYY-MM-DD)
+         * @param {string} endDate End date (YYYY-MM-DD)
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async userDaysGet(ids: string, startDate: string, endDate: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<UserDaysGet200Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.userDaysGet(ids, startDate, endDate, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['UsersApi.userDaysGet']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
          * Returns a paged list of users; admin sees all, vp sees own subordinates + self.
          * @summary List users
          * @param {number} [limit] Page size (default 50, max 500)
          * @param {string} [preset] Filter by preset (e.g. worker)
          * @param {number} [managerId] Filter by manager (admin)
          * @param {boolean} [includeHash] Include password_hash (admin only)
+         * @param {string} [search] Case-insensitive substring of the full name or login (max 128 chars)
          * @param {number} [offset] Page offset
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async userGet(limit?: number, preset?: string, managerId?: number, includeHash?: boolean, offset?: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<UserGet200Response>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.userGet(limit, preset, managerId, includeHash, offset, options);
+        async userGet(limit?: number, preset?: string, managerId?: number, includeHash?: boolean, search?: string, offset?: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<UserGet200Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.userGet(limit, preset, managerId, includeHash, search, offset, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
             const localVarOperationServerBasePath = operationServerMap['UsersApi.userGet']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
@@ -7239,7 +7745,7 @@ export const UsersApiFp = function(configuration?: Configuration) {
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
-         * Delete a user by ID (soft delete)
+         * Delete a user by ID (moves the account to the archive; 409 if the user is referenced)
          * @summary Delete a user
          * @param {number} id User ID
          * @param {*} [options] Override http request option.
@@ -7293,13 +7799,13 @@ export const UsersApiFp = function(configuration?: Configuration) {
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
-         * Generate a new random password for a user and return it once
+         * Generate a new random password for a user (admin only; the new password is never returned)
          * @summary Reset user password
          * @param {number} id User ID
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async userIdResetPasswordPost(id: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<UserIdResetPasswordPost200Response>> {
+        async userIdResetPasswordPost(id: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<void>> {
             const localVarAxiosArgs = await localVarAxiosParamCreator.userIdResetPasswordPost(id, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
             const localVarOperationServerBasePath = operationServerMap['UsersApi.userIdResetPasswordPost']?.[localVarOperationServerIndex]?.url;
@@ -7347,18 +7853,31 @@ export const UsersApiFactory = function (configuration?: Configuration, basePath
             return localVarFp.userChangePasswordPost(request, options).then((request) => request(axios, basePath));
         },
         /**
+         * Batch replacement of GET /user/{id}/days: returns the state ranges of several workers over one date range, with one entry per requested id (empty days when the worker has none) and no N+1 requests per employee.
+         * @summary Batch list worker days
+         * @param {string} ids Comma-separated user IDs (max 200)
+         * @param {string} startDate Start date (YYYY-MM-DD)
+         * @param {string} endDate End date (YYYY-MM-DD)
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        userDaysGet(ids: string, startDate: string, endDate: string, options?: RawAxiosRequestConfig): AxiosPromise<UserDaysGet200Response> {
+            return localVarFp.userDaysGet(ids, startDate, endDate, options).then((request) => request(axios, basePath));
+        },
+        /**
          * Returns a paged list of users; admin sees all, vp sees own subordinates + self.
          * @summary List users
          * @param {number} [limit] Page size (default 50, max 500)
          * @param {string} [preset] Filter by preset (e.g. worker)
          * @param {number} [managerId] Filter by manager (admin)
          * @param {boolean} [includeHash] Include password_hash (admin only)
+         * @param {string} [search] Case-insensitive substring of the full name or login (max 128 chars)
          * @param {number} [offset] Page offset
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        userGet(limit?: number, preset?: string, managerId?: number, includeHash?: boolean, offset?: number, options?: RawAxiosRequestConfig): AxiosPromise<UserGet200Response> {
-            return localVarFp.userGet(limit, preset, managerId, includeHash, offset, options).then((request) => request(axios, basePath));
+        userGet(limit?: number, preset?: string, managerId?: number, includeHash?: boolean, search?: string, offset?: number, options?: RawAxiosRequestConfig): AxiosPromise<UserGet200Response> {
+            return localVarFp.userGet(limit, preset, managerId, includeHash, search, offset, options).then((request) => request(axios, basePath));
         },
         /**
          * Clear state ranges of a worker overlapping a date range (splits overlaps, optional state filter)
@@ -7397,7 +7916,7 @@ export const UsersApiFactory = function (configuration?: Configuration, basePath
             return localVarFp.userIdDaysPut(id, body, options).then((request) => request(axios, basePath));
         },
         /**
-         * Delete a user by ID (soft delete)
+         * Delete a user by ID (moves the account to the archive; 409 if the user is referenced)
          * @summary Delete a user
          * @param {number} id User ID
          * @param {*} [options] Override http request option.
@@ -7439,13 +7958,13 @@ export const UsersApiFactory = function (configuration?: Configuration, basePath
             return localVarFp.userIdPut(id, body, options).then((request) => request(axios, basePath));
         },
         /**
-         * Generate a new random password for a user and return it once
+         * Generate a new random password for a user (admin only; the new password is never returned)
          * @summary Reset user password
          * @param {number} id User ID
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        userIdResetPasswordPost(id: number, options?: RawAxiosRequestConfig): AxiosPromise<UserIdResetPasswordPost200Response> {
+        userIdResetPasswordPost(id: number, options?: RawAxiosRequestConfig): AxiosPromise<void> {
             return localVarFp.userIdResetPasswordPost(id, options).then((request) => request(axios, basePath));
         },
         /**
@@ -7487,18 +8006,32 @@ export class UsersApi extends BaseAPI {
     }
 
     /**
+     * Batch replacement of GET /user/{id}/days: returns the state ranges of several workers over one date range, with one entry per requested id (empty days when the worker has none) and no N+1 requests per employee.
+     * @summary Batch list worker days
+     * @param {string} ids Comma-separated user IDs (max 200)
+     * @param {string} startDate Start date (YYYY-MM-DD)
+     * @param {string} endDate End date (YYYY-MM-DD)
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    public userDaysGet(ids: string, startDate: string, endDate: string, options?: RawAxiosRequestConfig) {
+        return UsersApiFp(this.configuration).userDaysGet(ids, startDate, endDate, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
      * Returns a paged list of users; admin sees all, vp sees own subordinates + self.
      * @summary List users
      * @param {number} [limit] Page size (default 50, max 500)
      * @param {string} [preset] Filter by preset (e.g. worker)
      * @param {number} [managerId] Filter by manager (admin)
      * @param {boolean} [includeHash] Include password_hash (admin only)
+     * @param {string} [search] Case-insensitive substring of the full name or login (max 128 chars)
      * @param {number} [offset] Page offset
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      */
-    public userGet(limit?: number, preset?: string, managerId?: number, includeHash?: boolean, offset?: number, options?: RawAxiosRequestConfig) {
-        return UsersApiFp(this.configuration).userGet(limit, preset, managerId, includeHash, offset, options).then((request) => request(this.axios, this.basePath));
+    public userGet(limit?: number, preset?: string, managerId?: number, includeHash?: boolean, search?: string, offset?: number, options?: RawAxiosRequestConfig) {
+        return UsersApiFp(this.configuration).userGet(limit, preset, managerId, includeHash, search, offset, options).then((request) => request(this.axios, this.basePath));
     }
 
     /**
@@ -7541,7 +8074,7 @@ export class UsersApi extends BaseAPI {
     }
 
     /**
-     * Delete a user by ID (soft delete)
+     * Delete a user by ID (moves the account to the archive; 409 if the user is referenced)
      * @summary Delete a user
      * @param {number} id User ID
      * @param {*} [options] Override http request option.
@@ -7587,7 +8120,7 @@ export class UsersApi extends BaseAPI {
     }
 
     /**
-     * Generate a new random password for a user and return it once
+     * Generate a new random password for a user (admin only; the new password is never returned)
      * @summary Reset user password
      * @param {number} id User ID
      * @param {*} [options] Override http request option.

@@ -3,10 +3,17 @@ import { ref, onMounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import TaskPlanning from '../components/planner/TaskPlanning/TaskPlanning.vue'
+import { HintButton } from '../components/common'
 import { PdfExport } from '../components/planner'
-import { ResourceManagerModal, TaskComments } from '../components/planner'
+import { ResourceManagerModal, TaskComments, TaskEditor } from '../components/planner'
 import type { AssignedResource, AddResourcePayload } from '../components/planner/ResourceManagerModal'
 import type { SendCommentPayload, DeleteCommentPayload } from '../components/planner/TaskComments'
+import type {
+  NewSubtaskPayload,
+  UpdateSubtaskPayload,
+  TaskEditorTask,
+  TaskEditorPatch,
+} from '../components/planner/TaskEditor'
 import { ContextMenu, ModalForm, ConfirmDialog } from '../components/common'
 import type { ContextMenuItem } from '../components/common/ContextMenu'
 import type { ModalField } from '../components/common/ModalForm'
@@ -18,9 +25,10 @@ import { usePlanningOrigin } from '../composables/usePlanningOrigin'
 import { useUnitMenu } from '../composables/useUnitMenu'
 import { useRoleAccess } from '../composables/useRoleAccess'
 import { useFindPlanningItem } from '../composables/useFindPlanningItem'
-import { usePlanningStore, useAppStore } from '../store'
+import { usePlanningStore, useAppStore, useRbacStore } from '../store'
 import { compareByName } from '../utils'
 import { addDaysISO, shiftSpanDates, clampDateToBounds } from '../components/planner/calendar'
+import type { DependencyType } from '../components/planner/dependencies'
 import { CELL_WIDTH } from '../components/planner/layout'
 import { randomPaletteColor } from '../components/common/ColorField/palette'
 import type { PdfGanttGroup } from '../components/planner/PdfExport/pdfRenderer'
@@ -95,6 +103,14 @@ const {
   userId,
 } = useRoleAccess()
 
+const rbac = useRbacStore()
+/** Permissions arrived (or were cached) — the matrix is authoritative; presets are only the cold-start fallback. */
+const permsReady = computed(() => rbac.permsLoaded || rbac.myPermissions.length > 0)
+/** Unrestricted resource visibility (resource.view scope all) — e.g. admin sees every resource. */
+const seesAllResources = computed(() =>
+  permsReady.value ? rbac.perm('resource', 'view') === 'all' : role.value === 'admin',
+)
+
 /** Drag/resize/reorder/assign are enabled when the user can manage at least one visible process */
 const anyManageableTask = computed(() =>
   (taskPlanning.value?.processes ?? []).some((p: any) => canManageTask(p.id)),
@@ -148,9 +164,8 @@ const menuItems = computed<ContextMenuItem[]>(() => {
   return items
 })
 
-// Edit modal for a task (title, assignee, color) or a milestone (title + content, color)
+// Edit modal for a milestone (title + content, color); tasks use TaskEditor.
 type EditState =
-  | { type: 'task'; id: number; title: string; ownerId?: number; color?: string }
   | { type: 'milestone'; id: number; title: string; content: string; color?: string }
 
 /** Candidates for task "assignee" — own employees only (direct subordinates) */
@@ -170,45 +185,161 @@ const { open: openEdit, close: closeEdit, submit: submitEdit, bind: editBind } =
       required: true,
     }
     const colorField: ModalField = { key: 'color', label: 'Цвет', type: 'color', value: state.color ?? '' }
-    if (state.type === 'milestone') {
-      return [
-        base,
-        colorField,
-        { key: 'content', label: 'Контент', type: 'textarea', value: state.content },
-      ]
-    }
     return [
       base,
       colorField,
-      // The assignee is chosen from own employees. The owner cannot be removed
-      // (set null); if none is selected from the list — the owner_id field is not sent.
-      {
-        key: 'owner_id',
-        label: 'Ответственный',
-        type: 'select',
-        value: state.ownerId ?? '',
-        options: ownerOptions.value,
-      },
+      { key: 'content', label: 'Контент', type: 'textarea', value: state.content },
     ]
   },
   async (state, values) => {
-    const title = String(values.title ?? '')
-    const color = String(values.color ?? '')
-    if (state.type === 'task') {
-      // Empty value (no employee selected) — the owner is not changed: the field is not sent.
-      const ownerId = values.owner_id === '' ? undefined : Number(values.owner_id)
-      const ok = await planning.updateTaskMeta(state.id, { title, color, owner_id: ownerId })
-      return { ok, error: ok ? null : planning.error }
-    }
     const ok = await planning.updateMilestoneMeta(state.id, {
-      title,
-      color,
+      title: String(values.title ?? ''),
+      color: String(values.color ?? ''),
       content: String(values.content ?? ''),
     })
     return { ok, error: ok ? null : planning.error }
   },
-  (state) => (state.type === 'task' ? 'Редактировать задачу' : 'Редактировать веху'),
+  () => 'Редактировать веху',
 )
+
+// === Task editor modal (left: task fields; right: subtasks todo list) ===
+const taskEditorId = ref<number | null>(null)
+const taskEditorBusy = ref(false)
+const taskEditorError = ref<string | null>(null)
+
+/** The task being edited (with process_id for the permission check) */
+const taskEditorTask = computed<TaskEditorTask | null>(() => {
+  if (taskEditorId.value == null) return null
+  const t = findTask(taskEditorId.value)
+  if (!t) return null
+  return {
+    id: t.id,
+    title: t.title ?? '',
+    color: t.color ?? '',
+    status: t.status ?? 'not_started',
+    owner_id: t.owner_id ?? null,
+    process_id: t.process_id,
+  }
+})
+
+/** Subtask rows for the right panel (from the planning cache) */
+const taskEditorSubtasks = computed(() => {
+  if (taskEditorId.value == null) return []
+  return (findTask(taskEditorId.value)?.subtasks ?? []).map((s: any) => ({
+    id: s.id,
+    title: s.title ?? '',
+    color: s.color ?? '',
+    status: s.status ?? 'not_started',
+  }))
+})
+
+function openTaskEdit(id: number) {
+  const task = findTask(id)
+  if (!task) return
+  taskEditorId.value = id
+  taskEditorError.value = null
+  taskEditorBusy.value = false
+}
+
+function closeTaskEdit() {
+  taskEditorId.value = null
+  taskEditorError.value = null
+}
+
+async function onSaveTaskEditor(patch: TaskEditorPatch) {
+  if (taskEditorId.value == null) return
+  taskEditorBusy.value = true
+  taskEditorError.value = null
+  const ok = await planning.updateTaskMeta(taskEditorId.value, patch)
+  taskEditorBusy.value = false
+  if (!ok) taskEditorError.value = planning.error
+}
+
+async function onAddSubtask(payload: NewSubtaskPayload) {
+  if (taskEditorId.value == null) return
+  taskEditorBusy.value = true
+  taskEditorError.value = null
+  const ok = await planning.createSubtask(taskEditorId.value, payload)
+  taskEditorBusy.value = false
+  if (!ok) taskEditorError.value = planning.error
+}
+
+async function onUpdateSubtask(payload: UpdateSubtaskPayload) {
+  taskEditorBusy.value = true
+  taskEditorError.value = null
+  const ok = await planning.updateSubtask(payload.id, payload.patch)
+  taskEditorBusy.value = false
+  if (!ok) taskEditorError.value = planning.error
+}
+
+async function onDeleteSubtask(id: number) {
+  if (taskEditorId.value == null) return
+  const ok = await planning.deleteSubtask(id)
+  if (!ok) taskEditorError.value = planning.error
+}
+
+// === Task dependencies (scheduling links) ===
+
+/** Predecessor links of the edited task (with the predecessor title resolved
+ *  from the planning cache), for the "Зависимости" panel. */
+const taskEditorDependencies = computed(() => {
+  if (taskEditorId.value == null) return []
+  const proc = taskPlanning.value?.processes?.find(
+    (p: any) => p.id === findTask(taskEditorId.value!)?.process_id,
+  )
+  return ((proc?.dependencies ?? []) as any[])
+    .filter((e: any) => e.task_id === taskEditorId.value)
+    .map((e: any) => ({
+      id: e.id,
+      task_id: e.task_id,
+      depends_on_task_id: e.depends_on_task_id,
+      type: e.type as DependencyType,
+      title: findTask(e.depends_on_task_id)?.title ?? `#${e.depends_on_task_id}`,
+    }))
+})
+
+/** Candidate predecessors for the add form: top-level tasks of the same
+ *  process, excluding the task itself and its current predecessors. */
+const taskEditorDependencyOptions = computed(() => {
+  if (taskEditorId.value == null) return []
+  const proc = taskPlanning.value?.processes?.find(
+    (p: any) => p.id === findTask(taskEditorId.value!)?.process_id,
+  )
+  const taken = new Set(
+    ((proc?.dependencies ?? []) as any[])
+      .filter((e: any) => e.task_id === taskEditorId.value)
+      .map((e: any) => e.depends_on_task_id),
+  )
+  taken.add(taskEditorId.value)
+  return ((proc?.tasks ?? []) as any[])
+    .filter((t: any) => t.parent_id == null && !taken.has(t.id))
+    .map((t: any) => ({ value: t.id, label: t.title ?? `#${t.id}` }))
+})
+
+async function onAddDependency(payload: { depends_on_task_id: number; type: DependencyType }) {
+  if (taskEditorId.value == null) return
+  taskEditorBusy.value = true
+  taskEditorError.value = null
+  const ok = await planning.addTaskDependency(taskEditorId.value, payload.depends_on_task_id, payload.type)
+  taskEditorBusy.value = false
+  if (!ok) taskEditorError.value = planning.error
+}
+
+async function onChangeDependency(payload: { id: number; type: DependencyType }) {
+  if (taskEditorId.value == null) return
+  taskEditorBusy.value = true
+  taskEditorError.value = null
+  const ok = await planning.changeTaskDependencyType(payload.id, taskEditorId.value, payload.type)
+  taskEditorBusy.value = false
+  if (!ok) taskEditorError.value = planning.error
+}
+
+async function onDeleteDependency(id: number) {
+  if (taskEditorId.value == null) return
+  taskEditorError.value = null
+  const ok = await planning.deleteTaskDependency(id, taskEditorId.value)
+  if (!ok) taskEditorError.value = planning.error
+}
 
 function onContextMenu(p: { clientX: number; clientY: number; date: string | null; rowIndex: number; processId?: number; taskId?: number; milestoneId?: number }) {
   if (!canViewTasks.value) return
@@ -232,24 +363,13 @@ function onHeaderCtx(p: { clientX: number; clientY: number }) {
 
 const { open: openMenu, close: closeMenu, select, bind: menuBind } = useContextMenu(menu, menuItems, handleSelect)
 
-/** Click on a task bar — open the task editor (task.update on the task's process) */
+/** Click on a task bar — open the task editor. Editable for users with
+ *  task.update on the task's process; everyone else with task.view gets the
+ *  same modal in read-only mode (fields and operations disabled). */
 function onTaskBarEdit(id: number) {
   const task = findTask(id)
-  if (!task || !canManageTask(task.process_id)) return
+  if (!task || !canViewTasks.value) return
   openTaskEdit(id)
-}
-
-function openTaskEdit(id: number) {
-  const task = findTask(id)
-  if (task) {
-    openEdit({
-      type: 'task',
-      id,
-      title: task.title ?? '',
-      ownerId: task.owner_id ?? undefined,
-      color: task.color ?? '',
-    })
-  }
 }
 
 function openMilestoneEdit(id: number) {
@@ -342,7 +462,7 @@ const assignedResources = computed<AssignedResource[]>(() => {
 const resourceOptions = computed(() => {
   const opts = resources.value.filter((r) => r.id != null)
   const owners = planning.taskOwnerIds(resourcesModalTaskId.value ?? 0)
-  const allowed = role.value === 'admin' || owners.length === 0 ? null : new Set(owners)
+  const allowed = seesAllResources.value || owners.length === 0 ? null : new Set(owners)
   return opts
     .filter((r) => allowed == null || (r.owner_id != null && allowed.has(r.owner_id)))
     .map((r) => ({ id: r.id as number, title: r.title, code: r.code }))
@@ -417,6 +537,9 @@ onMounted(async () => {
   // and when the timeline mounts the group order is already final (otherwise the navigation anchor drifts).
   // Projects are fetched by admin/dp/rp only; vp/worker do not have them (403) — sorting by id.
   if (canViewProjects.value && !app.projects.length) await app.loadProjects()
+  // Full project snapshot (with priorities) — local-first from the cache; the background PULL
+  // refreshes it. Used by processesByPriority instead of the truncated CRUD list (PAGE_SIZE).
+  await planning.loadProjectPlanning()
   if (!resources.value.length) await app.loadResources()
   // User catalog — for task assignee names (owner_id → name)
   if (!app.users.length) await app.loadUsers()
@@ -430,16 +553,24 @@ onMounted(async () => {
 
 /**
  * Processes on the Tasks page are sorted by the priority of their project
- * (priority first, then by id). Priorities come from app.projects.
+ * (priority first, then by id). Priorities come from the full planning snapshot
+ * (planning.projectPlanning.projects — loaded local-first, refreshed by PULL);
+ * the truncated CRUD list (app.projects, PAGE_SIZE) is only a fallback so the
+ * sort does not drift once there are more projects than one page.
  */
 const processesByPriority = computed(() => {
   const prio = new Map<number, number>()
-  for (const p of app.projects) {
+  const snapshot = planning.projectPlanning?.projects
+  const source = snapshot && snapshot.length ? snapshot : app.projects
+  for (const p of source) {
     if (p.id != null) prio.set(p.id, p.priority ?? Number.MAX_SAFE_INTEGER)
   }
   let list = taskPlanning.value?.processes ?? []
-  // vp: show only processes in projects where vp owns at least one process
-  if (role.value === 'vp' && userId.value != null) {
+  // vp-like scope (task.view = parent): show only processes in projects where
+  // the user owns at least one process. The matrix is authoritative once loaded;
+  // the preset is only a cold-start fallback (rp keeps the ancestor view — the
+  // backend already scopes that list).
+  if ((permsReady.value ? ['parent', 'up1'].includes(rbac.perm('task', 'view')) : role.value === 'vp') && userId.value != null) {
     const myProjects = new Set(
       list.filter((p: any) => p.owner_id === userId.value).map((p: any) => p.project_id),
     )
@@ -493,6 +624,7 @@ const taskGroups = computed<PdfGanttGroup[]>(() =>
         :scale="viewRange.scale"
         page-title="Диаграмма задач"
       />
+      <HintButton hint="planner" />
     </div>
 
     <!-- Tasks Diagram: PlannerPage (view) loads the data via the store,
@@ -512,7 +644,7 @@ const taskGroups = computed<PdfGanttGroup[]>(() =>
       :focus-date="focusDate"
       :focus-group-id="focusGroupId"
       :comments-by-task="planning.commentsByTask"
-      @change="(p) => planning.updateTaskDates(p.id, p.start_date, p.end_date)"
+      @change="(p) => planning.moveTask(p.id, p.start_date, p.end_date)"
       @milestone-change="(p) => planning.updateMilestoneDate(p.id, p.date)"
       @contextmenu="onContextMenu"
       @header-ctxmenu="onHeaderCtx"
@@ -537,6 +669,29 @@ const taskGroups = computed<PdfGanttGroup[]>(() =>
     />
 
     <ModalForm v-bind="editBind" @save="submitEdit" @close="closeEdit" />
+
+    <TaskEditor
+      :open="taskEditorId != null"
+      :task="taskEditorTask"
+      :subtasks="taskEditorSubtasks"
+      :owner-options="ownerOptions"
+      :dependencies="taskEditorDependencies"
+      :dependency-options="taskEditorDependencyOptions"
+      :can-manage="taskEditorTask ? canManageTask(taskEditorTask.process_id) : false"
+      :can-create-subtask="taskEditorTask ? canManageTask(taskEditorTask.process_id) : false"
+      :can-manage-dependencies="taskEditorTask ? canManageTask(taskEditorTask.process_id) : false"
+      :busy="taskEditorBusy"
+      :error="taskEditorError"
+      :disabled-reason="isOffline ? 'Недоступно в офлайне' : null"
+      @save="onSaveTaskEditor"
+      @add-subtask="onAddSubtask"
+      @update-subtask="onUpdateSubtask"
+      @delete-subtask="onDeleteSubtask"
+      @add-dependency="onAddDependency"
+      @update-dependency="onChangeDependency"
+      @delete-dependency="onDeleteDependency"
+      @close="closeTaskEdit"
+    />
 
     <ResourceManagerModal
       :open="resourcesModalTaskId != null"

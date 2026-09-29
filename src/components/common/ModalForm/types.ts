@@ -29,4 +29,6 @@ export interface ModalFormProps {
   busy?: boolean
   /** Error text inside the modal */
   error?: string | null
+  /** Modal max width; default 420px (CSS), e.g. '960px' for wide editors */
+  maxWidth?: string
 }

@@ -26,4 +26,10 @@ export interface BarProps {
    *  this with the pointerdown event (horizontal drags keep changing dates).
    *  null/undefined — the bar body only drags dates. */
   startRowReorder?: ((e: PointerEvent) => void) | null
+  /** Accessible name of the bar (role="slider") for screen readers.
+   *  Empty — the label is assembled from `title` and the date range. */
+  ariaLabel?: string
+  /** Keyboard move step in cells (arrows). Defaults to the timeline unit:
+   *  1 day for `day`, 3 days (one decade) for `decade`; Shift/Alt multiply it. */
+  moveStepCells?: number
 }

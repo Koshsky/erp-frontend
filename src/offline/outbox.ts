@@ -1,6 +1,6 @@
 import { ref } from 'vue'
 import axios, { type AxiosError, type Method } from 'axios'
-import { idbAll, idbDel, idbPut, IDMAP_STORE_NAME, type IdMapEntry } from './db'
+import { idbAll, idbCount, idbDel, idbPut, IDMAP_STORE_NAME, type IdMapEntry } from './db'
 import { applyToCache } from './cacheApply'
 import { probeBackend } from './state'
 import { getApiUrl } from '@/config'
@@ -14,6 +14,16 @@ import { getAccessToken } from '../token'
  *
  * FIFO: entries are executed strictly in order — later edits/deletes of
  * entities created offline depend on previous ones.
+ *
+ * STORAGE: the queue is stored indefinitely — it has no TTL and is never
+ * swept by age/timers. Entries are removed only after a successful send, on a
+ * verified login of a different account (pruneForeignOutbox — the previous
+ * account is logged out, so the flush-time creator guard would park its entries
+ * forever), or by explicit user actions (discardFailed / discardEntry /
+ * clearLocalData). Logout itself does NOT wipe the queue: a sibling tab of the
+ * same user may still have pending edits (H-OFF-3). Backoff and quarantined
+ * flags only gate auto-retries; they never delete an entry.
+ * See docs/no-ttl-local-storage.md.
  */
 
 const OUTBOX_STORE = 'outbox'
@@ -69,6 +79,15 @@ export const OUTBOX_STORE_NAME = OUTBOX_STORE
 
 /** Number of changes awaiting sync (reactive for UI). Quarantined ones are not counted. */
 export const pendingCount = ref(0)
+
+/**
+ * Reactive set of objects that have at least one unsent mutation in the queue —
+ * keys are `${entity}:${id}` (id from the URL or the temporary id for creates).
+ * Used by lists (composables/usePendingMark) to show the "awaiting sync" clock
+ * mark next to the affected rows. Includes quarantined entries — their change
+ * has not reached the server either.
+ */
+export const pendingRefs = ref<Set<string>>(new Set())
 
 /** Live queue push progress (for UI): { done, total } or null when not running */
 export const pushProgress = ref<{ done: number; total: number } | null>(null)
@@ -275,6 +294,15 @@ export async function refreshQueue(): Promise<void> {
 export async function refreshPendingCount(): Promise<void> {
   const entries = await idbAll<OutboxEntry>(OUTBOX_STORE).catch(() => [] as OutboxEntry[])
   pendingCount.value = entries.filter((e) => !e.quarantined).length
+  // Rebuild the "awaiting sync" mark set from all queued entries (quarantined
+  // included — they still wait for a manual retry). Entries without a resolvable
+  // target id (e.g. a bare POST with no temporary id) produce no mark.
+  const refs = new Set<string>()
+  for (const e of entries) {
+    const id = entryIdOf(e)
+    if (id != null) refs.add(`${e.entity}:${id}`)
+  }
+  pendingRefs.value = refs
   await refreshQueue()
 }
 
@@ -591,6 +619,13 @@ export async function flushOutbox(): Promise<FlushResult> {
         } else {
           // DELETE of a non-existent entity (404/410) — it is already gone, the target
           // state is reached. Idempotent drop instead of endless retries.
+          // Tradeoff (kept by design): a 404 caused by a WRONG URL path (rebasedUrl
+          // only swaps the origin, so a path mistake still 404s) is also dropped
+          // silently — but DELETE is idempotent, retrying cannot fix the URL, and
+          // keeping the entry would just quarantine it. The temp-id case (a DELETE
+          // referencing a not-yet-created object) is covered by queue ordering: the
+          // flush sorts entries by enqueue time, so the creator entry goes out first
+          // and rewriteIds substitutes the real id before this DELETE is sent.
           const status = err.response.status
           const method = (entry.method || '').toUpperCase()
           if (method === 'DELETE' && (status === 404 || status === 410)) {
@@ -647,7 +682,7 @@ export async function flushOutbox(): Promise<FlushResult> {
   return result
 }
 
-/** Clears the queue (called on logout, so someone else's queue is not sent under a new token) */
+/** Clears the queue (the explicit "clear all" action in the sync UI / reset) */
 export async function clearOutbox(): Promise<void> {
   const entries = await idbAll<OutboxEntry>(OUTBOX_STORE)
   await Promise.all(entries.map((e) => idbDel(OUTBOX_STORE, e.id)))
@@ -655,6 +690,35 @@ export async function clearOutbox(): Promise<void> {
   // not accidentally be replaced with old correspondences.
   const maps = await idbAll<IdMapEntry>(IDMAP_STORE_NAME).catch(() => [] as IdMapEntry[])
   await Promise.all(maps.map((m) => idbDel(IDMAP_STORE_NAME, String(m.temp))))
+  await refreshPendingCount()
+}
+
+/**
+ * Deletes queue entries created under another account — called after a verified
+ * online login: the previous account is logged out (its session revoked), so
+ * the flush-time creator guard would otherwise park those entries forever with
+ * a "created under account X" error. Same-account entries (e.g. pending work of
+ * a sibling tab of the same user) are kept — the wipe-on-logout that used to
+ * delete them is gone (H-OFF-3). idmap rows are removed only when their temp id
+ * is no longer referenced by any remaining entry.
+ */
+export async function pruneForeignOutbox(keepCreator: string): Promise<void> {
+  const entries = await idbAll<OutboxEntry>(OUTBOX_STORE).catch(() => [] as OutboxEntry[])
+  const kept: OutboxEntry[] = []
+  const removed: OutboxEntry[] = []
+  for (const e of entries) {
+    if (e.creator && e.creator !== keepCreator) removed.push(e)
+    else kept.push(e)
+  }
+  if (removed.length) {
+    await Promise.all(removed.map((e) => idbDel(OUTBOX_STORE, e.id)))
+    // Drop mappings whose temp id is not referenced by the kept queue.
+    const keptText = kept.map((e) => `${e.url} ${typeof e.body === 'string' ? e.body : JSON.stringify(e.body ?? '')}`).join(' ')
+    const maps = await idbAll<IdMapEntry>(IDMAP_STORE_NAME).catch(() => [] as IdMapEntry[])
+    await Promise.all(
+      maps.filter((m) => !keptText.includes(String(m.temp))).map((m) => idbDel(IDMAP_STORE_NAME, String(m.temp))),
+    )
+  }
   await refreshPendingCount()
 }
 
@@ -704,10 +768,54 @@ export async function discardFailed(): Promise<void> {
  *    unsynced changes;
  *  - after each fresh successful GET write (http.ts) — so warmup/reconcile
  *    do not erase deltas with server truth.
+ *
+ * Hot-path optimizations (http.ts calls this after EVERY successful GET):
+ *  - Fast exit when the queue is empty — the common case online — so a GET
+ *    costs only one cheap IndexedDB count() instead of a full queue + cache
+ *    scan (idbAll + applyToCache per entry).
+ *  - Concurrent callers (parallel GET responses, or a GET racing startup
+ *    initOfflineSync) share a single in-flight replay instead of each
+ *    re-scanning; awaiters join the same promise, so "replay before cache
+ *    read" (hydrateFromCache) still holds even when a replay is already
+ *    running — they wait for the same completion.
  */
+let replayInFlight: Promise<void> | null = null
+
 export async function replayOutboxToCache(): Promise<void> {
-  const entries = await idbAll<OutboxEntry>(OUTBOX_STORE).catch(() => [] as OutboxEntry[])
-  for (const entry of entries) {
-    await applyToCache(entry)
-  }
+  if ((await idbCount(OUTBOX_STORE)) === 0) return
+  if (replayInFlight) return replayInFlight
+  replayInFlight = (async () => {
+    try {
+      const entries = await idbAll<OutboxEntry>(OUTBOX_STORE).catch(() => [] as OutboxEntry[])
+      for (const entry of entries) {
+        await applyToCache(entry)
+      }
+    } finally {
+      replayInFlight = null
+    }
+  })()
+  return replayInFlight
+}
+
+/**
+ * Coalesced variant for the http.ts GET hot path: a burst of parallel
+ * successful GETs schedules AT MOST ONE replay per microtask tick/event-loop
+ * turn instead of one per response. The replay itself still applies the whole
+ * queue (the last write wins on the shared cache entries), so firing it once
+ * after the burst is equivalent to firing it after each response.
+ *
+ * Callers that must observe the overlay before reading the cache
+ * (hydrateFromCache, initOfflineSync) keep using the awaited
+ * replayOutboxToCache() — this variant is only for "fire and forget after a
+ * fresh write".
+ */
+let replayScheduled = false
+
+export function scheduleReplayOutboxToCache(): void {
+  if (replayScheduled) return
+  replayScheduled = true
+  void Promise.resolve().then(async () => {
+    replayScheduled = false
+    await replayOutboxToCache()
+  })
 }

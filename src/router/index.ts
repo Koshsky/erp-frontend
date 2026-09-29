@@ -2,7 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore, useRbacStore } from '../store'
 import { isOffline } from '../offline/state'
 import { isElectron } from '../electron'
-import { ensureDesktopAutoSyncSession } from '../offline/sync'
+import { ensureAutoSession } from '../offline/sync'
 import { shouldAutoSync } from '../settings'
 import { isLoggedOut } from '../loggedOut'
 import MainLayout from '../layouts/MainLayout.vue'
@@ -104,6 +104,13 @@ const router = createRouter({
           component: () => import('../views/UserFormPage.vue'),
         },
         {
+          // User rights (permission overrides) — a dedicated page threaded off
+          // the edit page ("Изменить права").
+          path: 'users/:id/edit/access',
+          name: 'user-access',
+          component: () => import('../views/UserAccessPage.vue'),
+        },
+        {
           path: 'structure',
           name: 'structure',
           component: () => import('../views/CompanyStructure.vue'),
@@ -134,9 +141,24 @@ const router = createRouter({
           component: () => import('../views/ProfileEditPage.vue'),
         },
         {
-          path: 'sync',
-          name: 'sync',
-          component: () => import('../views/SyncPage.vue'),
+          path: 'system/console',
+          name: 'system-console',
+          component: () => import('../views/SystemConsolePage.vue'),
+        },
+        {
+          path: 'system/queue',
+          name: 'system-queue',
+          component: () => import('../views/SystemQueuePage.vue'),
+        },
+        {
+          path: 'system/status',
+          name: 'system-status',
+          component: () => import('../views/SystemStatusPage.vue'),
+        },
+        {
+          path: 'system/settings',
+          name: 'system-settings',
+          component: () => import('../views/SystemSettingsPage.vue'),
         },
       ],
     },
@@ -219,14 +241,14 @@ router.beforeEach(async (to) => {
   ) {
     if (isElectron && shouldAutoSync() && !isLoggedOut()) {
       await Promise.race([
-        ensureDesktopAutoSyncSession().catch(() => {}),
+        ensureAutoSession().catch(() => {}),
         new Promise((resolve) => setTimeout(resolve, DESKTOP_AUTOSYNC_BOUND_MS)),
       ])
     } else {
       // Desktop without autosync (disabled or after logout): the refresh
-      // request is bounded by the axios timeout, but a stale server must not
-      // hold first paint — cap the wait on desktop too. Web keeps the normal
-      // cookie refresh (fast and same-origin).
+      // request is bounded by the timeout below, but a stale server must not
+      // hold first paint — cap the wait on desktop too. Web relies on the
+      // same unified IndexedDB refresh token (fast, same-origin).
       const refresh =
         isElectron && !isOffline.value
           ? Promise.race([
@@ -269,6 +291,7 @@ router.beforeEach(async (to) => {
     users: ['user_admin', 'view'],
     'user-new': ['user_admin', 'view'],
     'user-edit': ['user_admin', 'view'],
+    'user-access': ['user_admin', 'view'],
     structure: ['org_structure', 'view'],
     'auto-create': ['rbac_config', 'view'],
     permissions: ['rbac_config', 'view'],
@@ -291,22 +314,25 @@ router.beforeEach(async (to) => {
     to.meta.requiresAuth &&
     to.name !== 'profile' &&
     to.name !== 'profile-edit' &&
-    to.name !== 'sync' &&
-    !pagePerm[to.name as string] &&
-    !rbac.can('project', 'view') &&
-    !rbac.can('process', 'view') &&
-    !rbac.can('task', 'view') &&
-    !rbac.can('resource', 'view') &&
-    !rbac.can('worker', 'view') &&
-    auth.user?.preset !== 'admin'
+    to.name !== 'system-console' &&
+    to.name !== 'system-queue' &&
+    to.name !== 'system-status' &&
+    to.name !== 'system-settings' &&
+    !pagePerm[to.name as string]
   ) {
-    return { name: 'profile' }
-  }
-
-  // Sync (offline settings) — available only in the desktop (Electron)
-  // build. The web version has no offline, so the page is unavailable.
-  if (to.name === 'sync' && !isElectron) {
-    return { name: 'home' }
+    const permsReady = rbac.permsLoaded || rbac.myPermissions.length > 0
+    const hasAnyViewPerm =
+      rbac.can('project', 'view') ||
+      rbac.can('process', 'view') ||
+      rbac.can('task', 'view') ||
+      rbac.can('resource', 'view') ||
+      rbac.can('worker', 'view')
+    // The matrix is authoritative once loaded (admin's bypass populates every
+    // view permission); on a cold start the preset is the fallback — admin must
+    // never land on the profile while /permissions/me is still loading.
+    if (permsReady ? !hasAnyViewPerm : auth.user?.preset !== 'admin') {
+      return { name: 'profile' }
+    }
   }
 
   // Server address settings — desktop (Electron) build only. In the online

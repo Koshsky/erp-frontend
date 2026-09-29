@@ -2,9 +2,9 @@ import { ref } from 'vue'
 import { AssignmentsApi } from '@/api'
 import { apiConfig, useAppStore, useAuthStore, usePlanningStore, useRbacStore, useTimesheetStore } from '@/store'
 import { isOffline } from './state'
-import { isElectron } from '@/electron'
 import { cacheGetFresh } from './cache'
 import { apiPath } from './hydrate'
+import { warmupEnabled } from '@/settings'
 
 /**
  * Background PULL: refreshes the offline data cache from the backend.
@@ -77,7 +77,12 @@ function pause(): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, PAUSE_MS))
 }
 
-/** PULL steps per user preset (heavy requests at the end of the queue) */
+/**
+ * PULL steps per the user's RBAC matrix (heavy requests at the end of the
+ * queue). Preset strings are only a cold-start fallback before /permissions/me
+ * arrives — a custom preset or a server-side matrix grant must not silently
+ * starve the user of data (mirrors useNavigation's permsReady logic).
+ */
 export function buildPullSteps(): PullStep[] {
   const auth = useAuthStore()
   const app = useAppStore()
@@ -86,11 +91,21 @@ export function buildPullSteps(): PullStep[] {
   const rbac = useRbacStore()
 
   const preset = auth.user?.preset ?? ''
-  const isStaff = preset === 'vp' || preset === 'admin'
   const userId = auth.user?.id
 
-  // worker does not read data (profile only) — nothing to warm
-  if (preset === 'worker') return []
+  // The matrix is authoritative once loaded; the preset is only a fallback.
+  const permsReady = rbac.permsLoaded || rbac.myPermissions.length > 0
+  const canView = (resource: string, roles: string[]): boolean =>
+    permsReady ? rbac.can(resource, 'view') : roles.includes(preset)
+
+  // Which data domains the user actually reads, per the matrix:
+  const timesheet = canView('worker', ['vp', 'admin']) // states / employees / periods
+  const resourceList = canView('resource', ['vp', 'admin']) || canView('task', ['dp', 'rp', 'admin', 'vp'])
+  const planningData =
+    canView('task', ['dp', 'rp', 'admin', 'vp']) ||
+    canView('process', ['dp', 'rp', 'admin']) ||
+    canView('project', ['dp', 'rp', 'admin'])
+  const projects = canView('project', ['dp', 'rp', 'admin'])
 
   const steps: PullStep[] = [
     {
@@ -107,32 +122,68 @@ export function buildPullSteps(): PullStep[] {
           },
         ]
       : []),
-    { name: 'projects', path: apiPath('/projects'), refresh: () => app.refreshProjects() },
-    { name: 'resources', path: apiPath('/resources'), refresh: () => app.refreshResources() },
-    { name: 'users', path: apiPath('/user/all'), refresh: () => app.refreshUsers() },
-    {
-      name: 'project-plan',
-      path: apiPath('/planning/projects'),
-      refresh: () => planning.refreshProjectPlanning(true),
-    },
-    {
-      name: 'process-plan',
-      path: apiPath('/planning/processes'),
-      refresh: () => planning.refreshProcessPlanning(true),
-    },
-    {
-      name: 'task-plan',
-      path: apiPath('/planning/tasks'),
-      refresh: () => planning.refreshTaskPlanning(true),
-    },
+  ]
+  if (projects) {
+    // Keep this path identical to the generated client endpoint (projectGet →
+    // `/project`, singular); the cache key must match store hydration
+    // (loadProjects) so offline reads and the PULL freshness gate find the
+    // same keys. Re-check both after regenerating src/api.
+    steps.push({ name: 'projects', path: apiPath('/project'), refresh: () => app.refreshProjects() })
+  }
+  if (resourceList) {
+    steps.push({ name: 'resources', path: apiPath('/resources'), refresh: () => app.refreshResources() })
+    // Resource members (/resources/{id}/members): consumed by the "Employees"
+    // resource badges and the "Resources" expandable rows. They are read
+    // local-first (cache hydrate); without a PULL step the cache stays empty
+    // and every badge disappears. Fetched only on full warmup — one request
+    // per resource (heavy when many).
+    steps.push({
+      name: 'members',
+      path: apiPath('/resources'),
+      keyPredicate: (key) => /\/resources\/\d+\/members/.test(key),
+      refresh: async () => {
+        if (!app.resources.length) await app.refreshResources()
+        for (const r of app.resources) {
+          if (r.id != null) await app.refreshResourceMembers(r.id)
+        }
+      },
+      cycle: false,
+    })
+    steps.push({ name: 'users', path: apiPath('/user/all'), refresh: () => app.refreshUsers() })
     // Assignments reference (fallback in removeResource)
-    {
+    steps.push({
       name: 'assignments',
       path: apiPath('/assignment'),
       refresh: () => new AssignmentsApi(apiConfig()).assignmentGet(500, undefined, 0),
-    },
-  ]
-  if (isStaff) {
+    })
+  }
+  if (planningData) {
+    // Task "assignee" candidate pool (own employees): the SPA editor reads it
+    // from the cache under /user?limit=500 — without this pull the select is
+    // always empty (local-first rendering never issues its own GETs).
+    steps.push({
+      name: 'myStaff',
+      path: apiPath('/user'),
+      keyPredicate: (key) => /\blimit=500\b/.test(key),
+      refresh: () => app.refreshMyStaff(),
+    })
+    steps.push({
+      name: 'project-plan',
+      path: apiPath('/planning/projects'),
+      refresh: () => planning.refreshProjectPlanning(true),
+    })
+    steps.push({
+      name: 'process-plan',
+      path: apiPath('/planning/processes'),
+      refresh: () => planning.refreshProcessPlanning(true),
+    })
+    steps.push({
+      name: 'task-plan',
+      path: apiPath('/planning/tasks'),
+      refresh: () => planning.refreshTaskPlanning(true),
+    })
+  }
+  if (timesheet) {
     steps.push({
       name: 'states',
       path: apiPath('/timesheet/states'),
@@ -142,23 +193,29 @@ export function buildPullSteps(): PullStep[] {
       name: 'employees',
       path: apiPath('/user'),
       keyPredicate: (key) => /\blimit=50\b/.test(key),
-      refresh: () => ts.refreshEmployees(),
+      refresh: () => ts.refreshEmployees(undefined, true),
     })
-    // Timesheet periods are per-employee, date-windowed: staleness cannot be
-    // cheaply checked per domain — pull them only on full warmup / reconcile.
+    // Timesheet periods: the batch endpoint (/user/days) is a single request
+    // (chunked at BATCH_IDS_MAX), so the step participates in the 60-second
+    // cycle like the planning diagrams — the staleness gate uses its cache copy
+    // (written by http.ts on the same pathname): repeat pulls skip it while the
+    // copy is still fresh, so the user sees current ranges without needing a
+    // mutation first (previously cycle:false left periods stale until an edit).
     steps.push({
       name: 'periods',
-      path: '',
+      path: apiPath('/user/days'),
       refresh: () =>
         ts.windowStart
           ? ts.refreshPeriods(ts.windowStart, ts.windowEnd)
           : Promise.resolve(),
-      cycle: false,
     })
   }
-  // Availability calendar (540 days) — the heaviest, warmed last
-  steps.push({ name: 'calendar', path: apiPath('/timesheet/calendar'), refresh: () => app.refreshCalendar() })
-  return steps
+  if (planningData || timesheet) {
+    // Availability calendar (540 days) — the heaviest, warmed last
+    steps.push({ name: 'calendar', path: apiPath('/timesheet/calendar'), refresh: () => app.refreshCalendar() })
+  }
+  // Skip domains the user turned off on the "Какие данные прогревать" screen.
+  return steps.filter((s) => warmupEnabled[s.name] !== false)
 }
 
 /** Whether the cached copy of `step` is still fresh (younger than its TTL). */
@@ -173,8 +230,15 @@ async function isStepFresh(step: PullStep): Promise<boolean> {
  * Runs the pull steps sequentially with a rate pause. `cycle` mode skips heavy
  * steps flagged cycle:false and refreshes only stale domains. Stops on offline
  * or logout (otherwise every 401 would trigger session refresh attempts).
+ *
+ * The TTL staleness gate applies in BOTH modes. It used to be cycle-only, so a
+ * repeat full warmup (e.g. scheduled by a silent session rotation) re-fetched
+ * every domain even though the cached copies were seconds old — on the "Табель"
+ * page that reloaded the roster and all employee periods on every trigger and
+ * made the grid re-render/flicker. `refreshAll` (the explicit "Обновить" /
+ * manual warm) is the only caller allowed to bypass the gate.
  */
-async function runPull(settings: { cycle: boolean }): Promise<number> {
+async function runPull(settings: { cycle: boolean; refreshAll?: boolean }): Promise<number> {
   const steps = buildPullSteps()
   const targets = settings.cycle ? steps.filter((s) => s.cycle !== false) : steps
   const total = targets.length
@@ -183,8 +247,9 @@ async function runPull(settings: { cycle: boolean }): Promise<number> {
   warmupProgress.value = total > 0 ? 0 : null
   for (const step of targets) {
     if (isOffline.value || !useAuthStore().isAuthenticated) break
-    // The cycle only refreshes data that actually went stale.
-    if (settings.cycle && (await isStepFresh(step))) {
+    // Fresh cached copies are left alone in every mode, unless an explicit
+    // full refresh was requested.
+    if (!settings.refreshAll && (await isStepFresh(step))) {
       done++
       continue
     }
@@ -205,13 +270,15 @@ async function runPull(settings: { cycle: boolean }): Promise<number> {
 
 /**
  * Full (TTL-aware) warmup — the "Warm data"/"Обновить" path. Returns true if
- * actually started.
+ * actually started. Runs in every environment.
+ *
+ * `force` bypasses the per-domain TTL (explicit user action); the automatic
+ * callers (login, reconnect) leave it false so repeat triggers are cheap.
  */
-export function warmNow(): Promise<boolean> {
-  if (!isElectron) return Promise.resolve(false)
+export function warmNow(force = false): Promise<boolean> {
   if (running || isOffline.value) return Promise.resolve(false)
   running = true
-  return runPull({ cycle: false })
+  return runPull({ cycle: false, refreshAll: force })
     .then(() => {
       lastWarmedAt.value = Date.now()
       try {
@@ -253,10 +320,8 @@ export function pullStaleCycle(): Promise<number> {
     })
 }
 
-/** Schedules full warmup when idle. Idempotent (one run at a time).
- *  Offline cache warmup — only in the desktop (Electron) build. */
+/** Schedules full warmup when idle. Idempotent (one run at a time). */
 export function scheduleWarmup(): void {
-  if (!isElectron) return
   if (running || scheduled) return
   if (isOffline.value) return
   if (!useAuthStore().isAuthenticated) return

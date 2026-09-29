@@ -1,2 +1,2 @@
 export { default as AppNavDrawer } from './AppNavDrawer.vue'
-export type { AppNavDrawerProps, AppNavDrawerEmits, DrawerSyncStats } from './types'
+export type { AppNavDrawerProps, AppNavDrawerEmits } from './types'

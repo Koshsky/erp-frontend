@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, useSlots, watch } from 'vue'
-import { cellRangeForSpan, clampSpanDates, spanToDates, formatDateRange } from '../calendar'
+import { cellRangeForSpan, clampSpanDates, spanToDates, formatDateRange, fmtDate, toDate } from '../calendar'
 import { useTimelineItem } from '../../../composables/useTimelineItem'
 import { useWindowPointerTrack } from '../../../utils'
 import { TooltipCell } from '../../common'
+import { viewSettings } from '@/settings'
 import type { BarProps } from './types'
 
 const slots = useSlots()
@@ -37,6 +38,9 @@ const emit = defineEmits<{
   dragend: []
   /** Bar tooltip became visible — for lazy loading of related data */
   'tooltip-open': []
+  /** A keyboard action started a date change (arrows): the proposed dates, same
+   *  contract as `dragstart` — for the live loading preview. */
+  keyboardmove: [payload: { start_date: string; end_date: string }]
 }>()
 
 // === Distinguishing a single click from a double click ===
@@ -152,10 +156,84 @@ watch(
   { flush: 'sync' },
 )
 
+// === Keyboard move (accessibility) ===
+// A draggable bar is focusable and exposes the same date shift as the pointer
+// drag: ←/→ move by one unit (a day, or a decade cell), Shift+←/→ by five such
+// units, Alt+←/→ always by one DAY (in decade mode a single cell step would
+// move ten days, so the fine step is computed in days). The shift is applied to
+// the cell span and committed through the very same `change` emit the drag uses
+// (see `onCommit` above), so the result equals a mouse drag by the same number
+// of cells. The resize handles stay pointer-only: they keep `aria-hidden`.
+
+/** Cells in one keyboard step: the timeline unit itself, overridable by prop */
+const moveStepCells = computed(() => {
+  if (props.moveStepCells != null && props.moveStepCells > 0) return props.moveStepCells
+  return props.timeline.unit === 'decade' ? 3 : 1
+})
+
+/** Screen-reader value: the same range as the tooltip, in words */
+const ariaValueText = computed(() => span.value ? formatDateRange(props.startDate, props.endDate) : '')
+
+/** Accessible name of the bar (role="slider"): range + title, overridable */
+const ariaLabel = computed(() => {
+  if (props.ariaLabel) return props.ariaLabel
+  const name = props.title ? `«${props.title}»` : 'Задача'
+  return `Задача ${name}: ${dateRange.value}`
+})
+
+/** aria-value* bounds: the parent (process/project) span when it is known */
+const ariaMin = computed(() =>
+  bounds.value ? Math.min(bounds.value.startCell, bounds.value.endCell - 1) : undefined,
+)
+const ariaMax = computed(() => bounds.value?.endCell)
+const ariaNow = computed(() => span.value?.startCell)
+
+/** Keyboard move: Δ cells (negative — earlier), committed like a drag release */
+function moveBy(deltaCells: number) {
+  const s = span.value
+  if (!s) return
+  const shifted = { startCell: s.startCell + deltaCells, endCell: s.endCell + deltaCells }
+  const dates = spanToDates(props.timeline.origin, props.timeline.unit, shifted.startCell, shifted.endCell)
+  const payload = clampSpanDates(dates.start_date, dates.end_date, props.groupStartDate, props.groupEndDate)
+  // Live loading preview, exactly like a pointer drag started/continued
+  emit('keyboardmove', payload)
+  emit('change', payload)
+}
+
+/** Keyboard fine-step: shifts the whole span by a single calendar day (any unit) */
+function moveByDays(deltaDays: number) {
+  const s = span.value
+  if (!s) return
+  const from = toDate(props.startDate)
+  const to = toDate(props.endDate)
+  const payload = clampSpanDates(
+    fmtDate(new Date(from.getFullYear(), from.getMonth(), from.getDate() + deltaDays)),
+    fmtDate(new Date(to.getFullYear(), to.getMonth(), to.getDate() + deltaDays)),
+    props.groupStartDate,
+    props.groupEndDate,
+  )
+  emit('keyboardmove', payload)
+  emit('change', payload)
+}
+
+function onKeydown(e: KeyboardEvent) {
+  if (!props.draggable || e.ctrlKey || e.metaKey) return
+  if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return
+  e.preventDefault()
+  if (e.altKey) {
+    // Fine-grained step: exactly one day in decade mode too.
+    moveByDays(e.key === 'ArrowLeft' ? -1 : 1)
+    return
+  }
+  const base = moveStepCells.value
+  const step = e.shiftKey ? base * 5 : base
+  moveBy(e.key === 'ArrowLeft' ? -step : step)
+}
+
 const barStyle = computed<Record<string, string | number> | null>(() => {
-  if (!span.value || !visible.value) return null
   const t = props.timeline
   const s = span.value
+  if (!s || !visible.value) return null
   return {
     left: t.cellLeft(s.startCell) + 'px',
     width: (s.endCell - s.startCell) * t.cellPx + 'px',
@@ -201,15 +279,23 @@ function onContextMenu(e: MouseEvent) {
     :class="{ 'gb-draggable': draggable, 'gb-shadow': shadow, 'is-dragging': isDragging }"
     :style="[barStyle, previewStyle, cursorStyle]"
     :title="hasTooltip ? undefined : title"
+    :tabindex="draggable ? 0 : undefined"
+    :role="draggable ? 'slider' : undefined"
+    :aria-label="draggable ? ariaLabel : undefined"
+    :aria-valuemin="draggable ? ariaMin : undefined"
+    :aria-valuemax="draggable ? ariaMax : undefined"
+    :aria-valuenow="draggable ? ariaNow : undefined"
+    :aria-valuetext="draggable ? ariaValueText : undefined"
     @pointerdown="onBodyPointerDown"
     @pointerup="onPointerUp"
     @dblclick="onDblClick"
+    @keydown="onKeydown"
     @contextmenu.prevent.stop="onContextMenu"
   >
     <TooltipCell v-if="hasTooltip" :text="tooltip ?? ''" :multiline="true" @open="emit('tooltip-open')">
       <slot>
         <span class="lb-title">{{ title }}</span>
-        <span v-if="projectCode" class="lb-code">{{ projectCode }}</span>
+        <span v-if="projectCode && viewSettings.badgeProjectCode" class="lb-code">{{ projectCode }}</span>
       </slot>
       <template #popup>
         <slot name="tooltip" :dateRange="dateRange">
@@ -222,17 +308,19 @@ function onContextMenu(e: MouseEvent) {
     </TooltipCell>
     <slot v-else>
       <span class="lb-title">{{ title }}</span>
-      <span v-if="projectCode" class="lb-code">{{ projectCode }}</span>
+      <span v-if="projectCode && viewSettings.badgeProjectCode" class="lb-code">{{ projectCode }}</span>
     </slot>
     <template v-if="draggable">
       <span
         class="gb-handle gb-handle-l"
         style="cursor: ew-resize"
+        aria-hidden="true"
         @pointerdown.stop="onHandlePointerDown($event, 'resizeStart')"
       />
       <span
         class="gb-handle gb-handle-r"
         style="cursor: ew-resize"
+        aria-hidden="true"
         @pointerdown.stop="onHandlePointerDown($event, 'resizeEnd')"
       />
     </template>
@@ -259,6 +347,13 @@ function onContextMenu(e: MouseEvent) {
 }
 .gantt-bar:hover {
   opacity: 0.95 !important;
+}
+/* Keyboard focus: the bar is a focusable slider, the outline must stay visible
+   above the neighbouring rows (light outline over the light bar) */
+.gantt-bar:focus-visible {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: 1px;
+  z-index: 1;
 }
 .gb-draggable {
   touch-action: none;

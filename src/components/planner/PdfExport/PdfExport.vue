@@ -4,6 +4,7 @@ import { preloadPdfPreview, renderPdfPreview } from './previewPdf'
 import type { PdfPreviewHandle } from './previewPdf'
 import type { PdfExportProps } from './types'
 import { fmtDate, toDate } from '../calendar'
+import { viewSettings } from '@/settings'
 
 const props = withDefaults(defineProps<PdfExportProps>(), {
   groups: () => [],
@@ -182,6 +183,8 @@ const previewEmpty = computed(
 const open = ref(false)
 const busy = ref(false)
 const previewError = ref<string | null>(null)
+/** The last render cut the period (P-07): the range was wider than the page */
+const truncatedWarning = ref(false)
 const previewLoading = ref(false)
 const pageCount = ref(0)
 const currentBytes = ref<Uint8Array | null>(null)
@@ -265,6 +268,7 @@ async function generateOnce(force: boolean) {
   // All data filtered out — preview is empty, printing unavailable
   if (visibleGroups.value.length === 0) {
     previewError.value = null
+    truncatedWarning.value = false
     pageCount.value = 0
     currentBytes.value = null
     return
@@ -278,7 +282,7 @@ async function generateOnce(force: boolean) {
     await warmup()
     const { renderGanttPdf } = await import('./pdfRenderer')
     const period = resolvePeriod()
-    const bytes = await renderGanttPdf(visibleGroups.value, {
+    const result = await renderGanttPdf(visibleGroups.value, {
       from: period.from,
       to: period.to,
       origin: props.origin,
@@ -312,14 +316,15 @@ async function generateOnce(force: boolean) {
         : [],
     })
     if (token !== genToken) return
-    currentBytes.value = bytes
+    currentBytes.value = result
+    truncatedWarning.value = result.truncated === true
     renderedParams = params
 
     const el = previewEl.value
     if (el) {
       previewHandle?.destroy()
       previewHandle = null
-      const handle = await renderPdfPreview(bytes, el)
+      const handle = await renderPdfPreview(result, el)
       if (token !== genToken) {
         handle.destroy()
         return
@@ -330,6 +335,7 @@ async function generateOnce(force: boolean) {
   } catch (e: any) {
     if (token === genToken) {
       previewError.value = e?.message || String(e)
+      truncatedWarning.value = false
       pageCount.value = 0
       currentBytes.value = null
     }
@@ -364,6 +370,7 @@ function openDialog() {
   // Process filters persist in the session; the period and width come from the page.
   renderedParams = ''
   previewError.value = null
+  truncatedWarning.value = false
   pageCount.value = 0
   currentBytes.value = null
   open.value = true
@@ -383,6 +390,7 @@ function closeDialog() {
   previewHandle = null
   previewLoading.value = false
   previewError.value = null
+  truncatedWarning.value = false
 }
 
 function download(bytes: Uint8Array, name: string) {
@@ -491,6 +499,17 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="pe">
+    <!-- Visible toolbar trigger above the diagram (gated by the view settings
+         "Экспорт диаграмм"). Ctrl/Cmd+P/S always works regardless of this flag. -->
+    <button
+      v-if="viewSettings.showPdfButtons"
+      type="button"
+      class="pe-open"
+      @click="openDialog"
+    >
+      <span class="pe-open-icon" aria-hidden="true">⤓</span>
+      Сохранить в PDF / Печать
+    </button>
     <Teleport to="body">
       <div v-if="open" class="pe-overlay" @mousedown.self="closeDialog">
         <div class="pe-modal" role="dialog" aria-modal="true" aria-label="Печать диаграммы в PDF">
@@ -599,6 +618,9 @@ onBeforeUnmount(() => {
               <div v-if="periodFallbackHint" class="pe-period-hint">
                 Период со страницы не определён — используется диапазон данных. Измените вид страницы и откройте заново.
               </div>
+              <div v-else-if="!previewLoading && truncatedWarning" class="pe-period-hint pe-truncate-hint" role="status">
+                Период шире, чем помещается на страницу: напечатана только его начальная часть. Сузьте период на странице.
+              </div>
               <div class="pe-preview-head">
                 <span class="pe-pages-count">Страниц: {{ pageCount }}</span>
                 <span v-if="previewLoading" class="pe-updating">Обновляем…</span>
@@ -651,6 +673,34 @@ onBeforeUnmount(() => {
   opacity: 0.6;
   cursor: not-allowed;
 }
+
+/* Visible toolbar trigger placed above the diagram (the pages put <PdfExport>
+   at the top of their area; this button is the on-screen affordance). */
+.pe-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius-sm);
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  padding: 9px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.pe-open:hover {
+  background: var(--ui-surface-2);
+  border-color: var(--ui-border-stronger);
+}
+.pe-open-icon {
+  font-size: 14px;
+  line-height: 1;
+  color: var(--ui-accent);
+}
+
 
 /* === Modal === */
 .pe-overlay {
@@ -893,6 +943,12 @@ onBeforeUnmount(() => {
   color: #b45309;
   background: #fef3c7;
   border-bottom: 1px solid #fde68a;
+}
+/* Wide period truncated to the page width (P-07) */
+.pe-truncate-hint {
+  color: #b3261e;
+  background: #fdecea;
+  border-bottom-color: #f7c8c4;
 }
 
 /* === Preview === */

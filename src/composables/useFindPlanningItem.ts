@@ -5,9 +5,15 @@ export function useFindPlanningItem() {
   const planning = usePlanningStore()
 
   function findTask(id: number) {
-    return planning.taskPlanning?.processes
-      ?.flatMap((p: any) => p.tasks ?? [])
-      .find((x: any) => x.id === id)
+    for (const p of planning.taskPlanning?.processes ?? []) {
+      const t = (p.tasks ?? []).find((x: any) => x.id === id)
+      if (t) return t
+      const s = (p.tasks ?? [])
+        .flatMap((x: any) => x.subtasks ?? [])
+        .find((x: any) => x.id === id)
+      if (s) return s
+    }
+    return undefined
   }
 
   function findMilestone(id: number) {
