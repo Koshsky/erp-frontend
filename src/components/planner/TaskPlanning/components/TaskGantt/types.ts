@@ -1,6 +1,7 @@
 import type { TimelineCtx } from '@/composables/timeline-context'
 import type { DtoCommentResponse, DtoUserInfo } from '@/api'
 import type { Task } from './components/TaskBar/types'
+import type { DependencyEdge } from '../../../dependencies'
 
 /** Process milestone — a single point on the timeline with a title and description */
 export interface Milestone {
@@ -30,4 +31,6 @@ export interface TaskGanttProps {
   users?: DtoUserInfo[] | null
   /** Per-task comment cache (for the log in the tooltip) */
   commentsByTask?: Record<number, DtoCommentResponse[]> | null
+  /** Scheduling links between the process's top-level tasks (arrow overlay) */
+  dependencies?: DependencyEdge[]
 }

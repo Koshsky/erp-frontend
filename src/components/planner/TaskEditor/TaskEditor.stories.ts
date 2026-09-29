@@ -21,6 +21,16 @@ const ownerOptions = [
   { value: 7, label: 'Петров П.П.' },
 ]
 
+const dependencies = [
+  { id: 91, task_id: 1, depends_on_task_id: 2, type: 'fs' as const, title: 'Пуско-наладка' },
+  { id: 92, task_id: 1, depends_on_task_id: 3, type: 'ss' as const, title: 'Закупка материалов' },
+]
+
+const dependencyOptions = [
+  { value: 4, label: 'Обучение персонала' },
+  { value: 5, label: 'Сдача объекта' },
+]
+
 const meta: Meta<typeof TaskEditor> = {
   title: 'Components/Planner/TaskEditor',
   component: TaskEditor,
@@ -31,8 +41,11 @@ const meta: Meta<typeof TaskEditor> = {
     task,
     subtasks,
     ownerOptions,
+    dependencies,
+    dependencyOptions,
     canManage: true,
     canCreateSubtask: true,
+    canManageDependencies: true,
   },
 }
 export default meta
@@ -46,6 +59,7 @@ export const ReadOnly: Story = {
   args: {
     canManage: false,
     canCreateSubtask: false,
+    canManageDependencies: false,
   },
 }
 
@@ -53,6 +67,13 @@ export const ReadOnly: Story = {
 export const NoSubtasks: Story = {
   args: {
     subtasks: [],
+  },
+}
+
+/** No dependency links yet — the "Зависимостей нет" empty state */
+export const NoDependencies: Story = {
+  args: {
+    dependencies: [],
   },
 }
 

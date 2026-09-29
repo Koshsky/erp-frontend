@@ -3,6 +3,7 @@ import type { PlanningUnit } from '../calendar'
 import type { Milestone } from './components/TaskGantt/types'
 import type { Task } from './components/TaskGantt/components/TaskBar/types'
 import type { Resource } from '@/components/common/ResourceHeader/types'
+import type { DependencyEdge } from '../dependencies'
 
 export interface Process {
   id: number
@@ -12,6 +13,7 @@ export interface Process {
   project_code?: string
   tasks: Task[]
   milestones: Milestone[]
+  dependencies?: DependencyEdge[]
 }
 
 export interface TaskPlanningProps {

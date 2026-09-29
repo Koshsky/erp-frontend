@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { GroupGantt } from '../../../GroupGantt'
 import { MilestoneMarker } from '../../../MilestoneMarker'
 import TaskBar from './components/TaskBar/TaskBar.vue'
+import { TaskDependencyLinks } from './components/TaskDependencyLinks'
 import type { TaskGanttProps } from './types'
 import { LABEL_WIDTH } from '../../../layout'
 import { toDate } from '../../../calendar'
@@ -12,6 +13,7 @@ const props = withDefaults(defineProps<TaskGanttProps>(), {
   reorderable: false,
   users: null,
   commentsByTask: null,
+  dependencies: () => [],
 })
 
 const emit = defineEmits<{
@@ -59,6 +61,8 @@ function onMilestoneEdit(id: number) {
   <div class="tg-task-group">
     <!-- Opaque sticky label-column cell for the milestone row (otherwise bars show through) -->
     <div class="tg-ms-label" :style="{ width: LABEL_WIDTH + 'px' }" />
+    <!-- Dependency arrows between the process's top-level tasks -->
+    <TaskDependencyLinks :timeline="timeline" :tasks="groupItems" :dependencies="dependencies" />
     <GroupGantt
       :timeline="timeline"
       :items="groupItems"

@@ -1,7 +1,7 @@
 import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios'
 import router from './router'
 import { apiErrorMessage } from './utils'
-import { cacheGet, cacheGetByPath, cachePut } from './offline/cache'
+import { cacheGet, cacheGetByPath, cachePut, userCachePrefix } from './offline/cache'
 import { replayOutboxToCache, scheduleReplayOutboxToCache } from './offline/outbox'
 import { isOffline } from './offline/state'
 import { getAccessToken } from './token'
@@ -15,9 +15,12 @@ interface RetryableConfig extends InternalAxiosRequestConfig {
   _retried?: boolean
 }
 
-/** Full request URL — the single cache key (both write and read) */
+/** Full request URL prefixed by the current user (`u<id>:`+url) — the single
+ *  cache key (both write and read). The prefix keeps each account's scoped
+ *  responses separate: the Authorization header never enters the key, so
+ *  without it the responses of different users would overwrite each other. */
 function cacheKey(config: InternalAxiosRequestConfig): string {
-  return axios.getUri(config)
+  return userCachePrefix() + axios.getUri(config)
 }
 
 /** The single in-flight refresh for all parallel 401s */

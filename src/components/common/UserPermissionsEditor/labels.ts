@@ -8,41 +8,49 @@ export interface ScopeOption {
   label: string
 }
 
-/** Available scopes with human-readable labels in the resource context. */
+/** Available scope EXPRESSIONS with human-readable labels in the resource
+ *  context (mirrors the backend tree applicability: engine tree.go). The
+ *  values are canonical expressions; free-form expressions are allowed too
+ *  (the row input), these presets cover the common cases. */
 export const SCOPE_OPTIONS: Record<string, ScopeOption[]> = {
   project: [
-    { value: 'own', label: 'Только свои' },
+    { value: 'self', label: 'Свои' },
+    { value: 'down', label: 'Поддерево' },
     { value: 'all', label: 'Все' },
   ],
   process: [
-    { value: 'own', label: 'Только своё' },
-    { value: 'parent', label: 'В своих проектах' },
-    { value: 'ancestor', label: 'Свои и в своих проектах' },
+    { value: 'self', label: 'Свои' },
+    { value: 'up1', label: 'Родители' },
+    { value: 'up', label: 'Предки' },
+    { value: 'sib', label: 'Сиблинги' },
+    { value: 'down', label: 'Поддерево' },
     { value: 'all', label: 'Все' },
   ],
   task: [
-    { value: 'own', label: 'Только своё' },
-    { value: 'parent', label: 'В своих процессах' },
-    { value: 'ancestor', label: 'Свои и в своих процессах/проектах' },
+    { value: 'self', label: 'Свои' },
+    { value: 'up1', label: 'Родители' },
+    { value: 'up', label: 'Предки' },
+    { value: 'sib', label: 'Сиблинги' },
+    { value: 'down', label: 'Поддерево' },
     { value: 'all', label: 'Все' },
   ],
   milestone: [
-    { value: 'parent', label: 'В своих процессах' },
-    { value: 'ancestor', label: 'Свои и в своих процессах/проектах' },
+    { value: 'up1', label: 'Родители' },
+    { value: 'up', label: 'Предки' },
     { value: 'all', label: 'Все' },
   ],
   assignment: [
-    { value: 'parent', label: 'В своих процессах' },
-    { value: 'ancestor', label: 'Свои и в своих процессах/проектах' },
+    { value: 'up1', label: 'Родители' },
+    { value: 'up', label: 'Предки' },
     { value: 'all', label: 'Все' },
   ],
   state: [{ value: 'all', label: 'Всё' }],
   resource: [
-    { value: 'own', label: 'Только свои' },
+    { value: 'self', label: 'Свои' },
     { value: 'all', label: 'Все' },
   ],
   worker: [
-    { value: 'own', label: 'Только свои (подчинённые)' },
+    { value: 'self', label: 'Свои (подчинённые)' },
     { value: 'all', label: 'Все' },
   ],
   user_catalog: [{ value: 'all', label: 'Доступен' }],
@@ -88,16 +96,16 @@ export function scopeLabel(resource: string, scope: string): string {
 }
 
 /** Default grant zone per resource when enabling a capability with no preset
- *  zone (mirrors the backend applicability; first applicable by order). */
+ *  zone (mirrors the backend applicability; canonical expressions). */
 export const DEFAULT_GRANT_ZONE: Record<string, string> = {
-  project: 'own',
-  process: 'parent',
-  task: 'parent',
-  milestone: 'parent',
-  assignment: 'parent',
+  project: 'self',
+  process: 'up1',
+  task: 'up1',
+  milestone: 'up1',
+  assignment: 'up1',
   state: 'all',
-  resource: 'own',
-  worker: 'own',
+  resource: 'self',
+  worker: 'self',
   user_catalog: 'all',
   user_admin: 'all',
   rbac_config: 'all',

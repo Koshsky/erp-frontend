@@ -5,6 +5,61 @@ const CACHE_STORE = 'cache'
 const VERSION_KEY = 'meta:app-version'
 
 /**
+ * Per-user namespacing of the GET cache. The cache key is the full request URL
+ * (see http.ts cacheKey) and the Authorization token lives in a header, so
+ * without a user prefix the scoped responses of different accounts would share
+ * one key and the last writer would win — the next account would hydrate
+ * someone else's data (e.g. the timesheet roster of the previous admin). The
+ * prefix is `u<userId>:`, using the same localStorage key the auth store
+ * bootstraps the current user from. When the user is not known yet (boot,
+ * logged out) only unprefixed keys are served — never another user's entries.
+ */
+
+/** localStorage key of the current user (mirrors user/USER_KEY in store) */
+const USER_KEY = 'mvs_erp_user'
+
+const USER_PREFIX_RE = /^u\d+:/
+
+/** Current user id from localStorage (null — not known yet / logged out). */
+export function currentUserId(): number | null {
+  try {
+    const raw = localStorage.getItem(USER_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as { id?: unknown } | null
+    return typeof parsed?.id === 'number' ? parsed.id : null
+  } catch {
+    return null
+  }
+}
+
+/** Prefix of the current user's cache keys (`u<id>:`, '' when unknown). */
+export function userCachePrefix(): string {
+  const id = currentUserId()
+  return id != null ? userKeyOf('', id) : ''
+}
+
+/** Pure helpers (unit-tested without IndexedDB). */
+
+/** Cache key of a URL for a user: `u<userId>:` + url. */
+export function userKeyOf(url: string, userId: number): string {
+  return `u${userId}:${url}`
+}
+
+/** Removes a user prefix, if any (so URL parsing sees the plain url). */
+export function stripUserPrefix(key: string): string {
+  return key.replace(USER_PREFIX_RE, '')
+}
+
+/** Whether a key belongs to the given user: its `u<id>:` prefix must match.
+ *  With an unknown user (null) only keys WITHOUT a user prefix are served —
+ *  foreign user entries are never readable. */
+export function keyMatchesUser(key: string, userId: number | null): boolean {
+  const m = key.match(USER_PREFIX_RE)
+  if (userId == null) return !m
+  return m != null && `u${userId}:` === m[0]
+}
+
+/**
  * Cache of API responses in IndexedDB. The key is the full URL of the GET
  * request (axios.getUri).
  *
@@ -52,11 +107,12 @@ export async function cacheGet<T>(key: string): Promise<T | null> {
 }
 
 function pathnameOf(key: string): string | null {
+  const plain = stripUserPrefix(key)
   try {
-    return new URL(key).pathname
+    return new URL(plain).pathname
   } catch {
     // relative key (no base) — take everything up to '?', as in cacheApply
-    return key.split('?')[0]
+    return plain.split('?')[0]
   }
 }
 
@@ -76,8 +132,11 @@ export async function cacheGetByPath<T>(
 ): Promise<T | null> {
   try {
     const keys = await idbKeys(CACHE_STORE)
+    const userId = currentUserId()
     let best: { ts: number; data: T } | null = null
     for (const key of keys) {
+      // Never serve another user's cached responses (per-user key prefix).
+      if (!keyMatchesUser(key, userId)) continue
       if (pathnameOf(key) !== pathname) continue
       if (keyPredicate && !keyPredicate(key)) continue
       const entry = await idbGet<CachedEntry<T>>(CACHE_STORE, key)
@@ -109,8 +168,10 @@ export async function cacheGetAllByPath<T>(
 ): Promise<Array<{ key: string; ts: number; data: T }>> {
   try {
     const keys = await idbKeys(CACHE_STORE)
+    const userId = currentUserId()
     const out: Array<{ key: string; ts: number; data: T }> = []
     for (const key of keys) {
+      if (!keyMatchesUser(key, userId)) continue
       if (pathnameOf(key) !== pathname) continue
       if (keyPredicate && !keyPredicate(key)) continue
       const entry = await idbGet<CachedEntry<T>>(CACHE_STORE, key)
@@ -136,8 +197,10 @@ export async function cacheGetFresh<T>(
 ): Promise<FreshEntry<T> | null> {
   try {
     const keys = await idbKeys(CACHE_STORE)
+    const userId = currentUserId()
     let best: FreshEntry<T> | null = null
     for (const key of keys) {
+      if (!keyMatchesUser(key, userId)) continue
       if (pathnameOf(key) !== pathname) continue
       if (keyPredicate && !keyPredicate(key)) continue
       const entry = await idbGet<CachedEntry<T>>(CACHE_STORE, key)
