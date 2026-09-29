@@ -161,6 +161,20 @@ export interface DtoCreateCommentRequest {
      */
     'parent_id'?: number;
 }
+export interface DtoCreateDependencyRequest {
+    'depends_on_task_id'?: number;
+    'type'?: DtoCreateDependencyRequestTypeEnum;
+}
+
+export const DtoCreateDependencyRequestTypeEnum = {
+    Fs: 'fs',
+    Ss: 'ss',
+    Ff: 'ff',
+    Sf: 'sf',
+} as const;
+
+export type DtoCreateDependencyRequestTypeEnum = typeof DtoCreateDependencyRequestTypeEnum[keyof typeof DtoCreateDependencyRequestTypeEnum];
+
 export interface DtoCreateMilestoneRequest {
     'color'?: string;
     'content'?: string;
@@ -238,8 +252,27 @@ export interface DtoCreateUserResult {
     'password'?: string;
     'user'?: DtoUserResponse;
 }
+export interface DtoDependencyResponse {
+    /**
+     * Predecessor task of the link.
+     */
+    'depends_on_task_id'?: number;
+    'id'?: number;
+    /**
+     * Dependent task (successor) of the link.
+     */
+    'task_id'?: number;
+    /**
+     * Dependency type: fs | ss | ff | sf.
+     */
+    'type'?: string;
+}
 export interface DtoDetailedProcess {
     'color'?: string;
+    /**
+     * Scheduling links between the tasks of the process (the successor task_id depends on depends_on_task_id with the given type).
+     */
+    'dependencies'?: Array<DtoTaskDependency>;
     'end_date'?: string;
     'id'?: number;
     'milestones'?: Array<DtoMilestone>;
@@ -502,6 +535,12 @@ export interface DtoStateResponse {
     'is_available'?: boolean;
     'name'?: string;
 }
+export interface DtoTaskDependency {
+    'depends_on_task_id'?: number;
+    'id'?: number;
+    'task_id'?: number;
+    'type'?: string;
+}
 export interface DtoTaskPlanning {
     'processes'?: Array<DtoDetailedProcess>;
 }
@@ -540,6 +579,19 @@ export interface DtoUpdateAssignmentRequest {
     'resource_id'?: number;
     'task_id'?: number;
 }
+export interface DtoUpdateDependencyRequest {
+    'type'?: DtoUpdateDependencyRequestTypeEnum;
+}
+
+export const DtoUpdateDependencyRequestTypeEnum = {
+    Fs: 'fs',
+    Ss: 'ss',
+    Ff: 'ff',
+    Sf: 'sf',
+} as const;
+
+export type DtoUpdateDependencyRequestTypeEnum = typeof DtoUpdateDependencyRequestTypeEnum[keyof typeof DtoUpdateDependencyRequestTypeEnum];
+
 export interface DtoUpdateManagerRequest {
     'manager_id'?: number;
 }
@@ -830,6 +882,14 @@ export interface TaskIdCommentsGet200Response {
 }
 export interface TaskIdCommentsPost201Response {
     'data'?: DtoCommentResponse;
+    'error'?: object;
+}
+export interface TaskIdDependenciesGet200Response {
+    'data'?: Array<DtoDependencyResponse>;
+    'error'?: object;
+}
+export interface TaskIdDependenciesPost201Response {
+    'data'?: DtoDependencyResponse;
     'error'?: object;
 }
 export interface TaskPost201Response {
@@ -4939,6 +4999,172 @@ export const TasksApiAxiosParamCreator = function (configuration?: Configuration
             };
         },
         /**
+         * Delete a dependency link by ID
+         * @summary Delete task dependency
+         * @param {number} id Task ID
+         * @param {number} depId Dependency ID
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        taskIdDependenciesDepIdDelete: async (id: number, depId: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'id' is not null or undefined
+            assertParamExists('taskIdDependenciesDepIdDelete', 'id', id)
+            // verify required parameter 'depId' is not null or undefined
+            assertParamExists('taskIdDependenciesDepIdDelete', 'depId', depId)
+            const localVarPath = `/task/{id}/dependencies/{dep_id}`
+                .replace('{id}', encodeURIComponent(String(id)))
+                .replace('{dep_id}', encodeURIComponent(String(depId)));
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'DELETE', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication ApiKeyAuth required
+            await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
+
+            localVarHeaderParameter['Accept'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * Change the type of an existing dependency link (fs/ss/ff/sf)
+         * @summary Update task dependency
+         * @param {number} id Task ID
+         * @param {number} depId Dependency ID
+         * @param {DtoUpdateDependencyRequest} dependency New dependency type
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        taskIdDependenciesDepIdPut: async (id: number, depId: number, dependency: DtoUpdateDependencyRequest, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'id' is not null or undefined
+            assertParamExists('taskIdDependenciesDepIdPut', 'id', id)
+            // verify required parameter 'depId' is not null or undefined
+            assertParamExists('taskIdDependenciesDepIdPut', 'depId', depId)
+            // verify required parameter 'dependency' is not null or undefined
+            assertParamExists('taskIdDependenciesDepIdPut', 'dependency', dependency)
+            const localVarPath = `/task/{id}/dependencies/{dep_id}`
+                .replace('{id}', encodeURIComponent(String(id)))
+                .replace('{dep_id}', encodeURIComponent(String(depId)));
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'PUT', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication ApiKeyAuth required
+            await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
+
+            localVarHeaderParameter['Content-Type'] = 'application/json';
+            localVarHeaderParameter['Accept'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+            localVarRequestOptions.data = serializeDataIfNeeded(dependency, localVarRequestOptions, configuration)
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * Get all dependency links of a task (the predecessors it depends on, with the link type)
+         * @summary List task dependencies
+         * @param {number} id Task ID
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        taskIdDependenciesGet: async (id: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'id' is not null or undefined
+            assertParamExists('taskIdDependenciesGet', 'id', id)
+            const localVarPath = `/task/{id}/dependencies`
+                .replace('{id}', encodeURIComponent(String(id)));
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'GET', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication ApiKeyAuth required
+            await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
+
+            localVarHeaderParameter['Accept'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * Create a scheduling link: the task (task_id) depends on depends_on_task_id with the given type (fs/ss/ff/sf)
+         * @summary Create task dependency
+         * @param {number} id Task ID
+         * @param {DtoCreateDependencyRequest} dependency Dependency data
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        taskIdDependenciesPost: async (id: number, dependency: DtoCreateDependencyRequest, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'id' is not null or undefined
+            assertParamExists('taskIdDependenciesPost', 'id', id)
+            // verify required parameter 'dependency' is not null or undefined
+            assertParamExists('taskIdDependenciesPost', 'dependency', dependency)
+            const localVarPath = `/task/{id}/dependencies`
+                .replace('{id}', encodeURIComponent(String(id)));
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'POST', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication ApiKeyAuth required
+            await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
+
+            localVarHeaderParameter['Content-Type'] = 'application/json';
+            localVarHeaderParameter['Accept'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+            localVarRequestOptions.data = serializeDataIfNeeded(dependency, localVarRequestOptions, configuration)
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
          * Get a task by its ID
          * @summary Get a task by ID
          * @param {number} id Task ID
@@ -5172,6 +5398,62 @@ export const TasksApiFp = function(configuration?: Configuration) {
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
+         * Delete a dependency link by ID
+         * @summary Delete task dependency
+         * @param {number} id Task ID
+         * @param {number} depId Dependency ID
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async taskIdDependenciesDepIdDelete(id: number, depId: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<void>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.taskIdDependenciesDepIdDelete(id, depId, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['TasksApi.taskIdDependenciesDepIdDelete']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
+         * Change the type of an existing dependency link (fs/ss/ff/sf)
+         * @summary Update task dependency
+         * @param {number} id Task ID
+         * @param {number} depId Dependency ID
+         * @param {DtoUpdateDependencyRequest} dependency New dependency type
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async taskIdDependenciesDepIdPut(id: number, depId: number, dependency: DtoUpdateDependencyRequest, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<TaskIdDependenciesPost201Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.taskIdDependenciesDepIdPut(id, depId, dependency, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['TasksApi.taskIdDependenciesDepIdPut']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
+         * Get all dependency links of a task (the predecessors it depends on, with the link type)
+         * @summary List task dependencies
+         * @param {number} id Task ID
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async taskIdDependenciesGet(id: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<TaskIdDependenciesGet200Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.taskIdDependenciesGet(id, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['TasksApi.taskIdDependenciesGet']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
+         * Create a scheduling link: the task (task_id) depends on depends_on_task_id with the given type (fs/ss/ff/sf)
+         * @summary Create task dependency
+         * @param {number} id Task ID
+         * @param {DtoCreateDependencyRequest} dependency Dependency data
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async taskIdDependenciesPost(id: number, dependency: DtoCreateDependencyRequest, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<TaskIdDependenciesPost201Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.taskIdDependenciesPost(id, dependency, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['TasksApi.taskIdDependenciesPost']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
          * Get a task by its ID
          * @summary Get a task by ID
          * @param {number} id Task ID
@@ -5288,6 +5570,50 @@ export const TasksApiFactory = function (configuration?: Configuration, basePath
             return localVarFp.taskIdDelete(id, options).then((request) => request(axios, basePath));
         },
         /**
+         * Delete a dependency link by ID
+         * @summary Delete task dependency
+         * @param {number} id Task ID
+         * @param {number} depId Dependency ID
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        taskIdDependenciesDepIdDelete(id: number, depId: number, options?: RawAxiosRequestConfig): AxiosPromise<void> {
+            return localVarFp.taskIdDependenciesDepIdDelete(id, depId, options).then((request) => request(axios, basePath));
+        },
+        /**
+         * Change the type of an existing dependency link (fs/ss/ff/sf)
+         * @summary Update task dependency
+         * @param {number} id Task ID
+         * @param {number} depId Dependency ID
+         * @param {DtoUpdateDependencyRequest} dependency New dependency type
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        taskIdDependenciesDepIdPut(id: number, depId: number, dependency: DtoUpdateDependencyRequest, options?: RawAxiosRequestConfig): AxiosPromise<TaskIdDependenciesPost201Response> {
+            return localVarFp.taskIdDependenciesDepIdPut(id, depId, dependency, options).then((request) => request(axios, basePath));
+        },
+        /**
+         * Get all dependency links of a task (the predecessors it depends on, with the link type)
+         * @summary List task dependencies
+         * @param {number} id Task ID
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        taskIdDependenciesGet(id: number, options?: RawAxiosRequestConfig): AxiosPromise<TaskIdDependenciesGet200Response> {
+            return localVarFp.taskIdDependenciesGet(id, options).then((request) => request(axios, basePath));
+        },
+        /**
+         * Create a scheduling link: the task (task_id) depends on depends_on_task_id with the given type (fs/ss/ff/sf)
+         * @summary Create task dependency
+         * @param {number} id Task ID
+         * @param {DtoCreateDependencyRequest} dependency Dependency data
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        taskIdDependenciesPost(id: number, dependency: DtoCreateDependencyRequest, options?: RawAxiosRequestConfig): AxiosPromise<TaskIdDependenciesPost201Response> {
+            return localVarFp.taskIdDependenciesPost(id, dependency, options).then((request) => request(axios, basePath));
+        },
+        /**
          * Get a task by its ID
          * @summary Get a task by ID
          * @param {number} id Task ID
@@ -5392,6 +5718,54 @@ export class TasksApi extends BaseAPI {
      */
     public taskIdDelete(id: number, options?: RawAxiosRequestConfig) {
         return TasksApiFp(this.configuration).taskIdDelete(id, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * Delete a dependency link by ID
+     * @summary Delete task dependency
+     * @param {number} id Task ID
+     * @param {number} depId Dependency ID
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    public taskIdDependenciesDepIdDelete(id: number, depId: number, options?: RawAxiosRequestConfig) {
+        return TasksApiFp(this.configuration).taskIdDependenciesDepIdDelete(id, depId, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * Change the type of an existing dependency link (fs/ss/ff/sf)
+     * @summary Update task dependency
+     * @param {number} id Task ID
+     * @param {number} depId Dependency ID
+     * @param {DtoUpdateDependencyRequest} dependency New dependency type
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    public taskIdDependenciesDepIdPut(id: number, depId: number, dependency: DtoUpdateDependencyRequest, options?: RawAxiosRequestConfig) {
+        return TasksApiFp(this.configuration).taskIdDependenciesDepIdPut(id, depId, dependency, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * Get all dependency links of a task (the predecessors it depends on, with the link type)
+     * @summary List task dependencies
+     * @param {number} id Task ID
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    public taskIdDependenciesGet(id: number, options?: RawAxiosRequestConfig) {
+        return TasksApiFp(this.configuration).taskIdDependenciesGet(id, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * Create a scheduling link: the task (task_id) depends on depends_on_task_id with the given type (fs/ss/ff/sf)
+     * @summary Create task dependency
+     * @param {number} id Task ID
+     * @param {DtoCreateDependencyRequest} dependency Dependency data
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    public taskIdDependenciesPost(id: number, dependency: DtoCreateDependencyRequest, options?: RawAxiosRequestConfig) {
+        return TasksApiFp(this.configuration).taskIdDependenciesPost(id, dependency, options).then((request) => request(this.axios, this.basePath));
     }
 
     /**

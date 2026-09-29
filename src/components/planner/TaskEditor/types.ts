@@ -1,3 +1,5 @@
+import type { DependencyType } from '../dependencies'
+
 /** A subtask (operation) row in the task editor todo list. */
 export interface SubtaskItem {
   id: number
@@ -41,6 +43,28 @@ export interface UpdateSubtaskPayload {
   patch: { title?: string; color?: string; status?: string }
 }
 
+/** One predecessor link of the edited task (from the planning aggregate). */
+export interface DependencyItem {
+  id: number
+  task_id: number
+  depends_on_task_id: number
+  type: DependencyType
+  /** Predecessor title (resolved by the view) for the list row. */
+  title: string
+}
+
+/** Payload of the "add dependency" form (sent to the view). */
+export interface AddDependencyPayload {
+  depends_on_task_id: number
+  type: DependencyType
+}
+
+/** Payload of a dependency type change. */
+export interface UpdateDependencyPayload {
+  id: number
+  type: DependencyType
+}
+
 export interface TaskEditorProps {
   /** Modal visibility */
   open: boolean
@@ -50,10 +74,17 @@ export interface TaskEditorProps {
   subtasks: SubtaskItem[]
   /** Employees for the "owner" select */
   ownerOptions: OwnerOption[]
+  /** Predecessor links of the edited task (the "Зависимости" panel) */
+  dependencies?: DependencyItem[]
+  /** Candidate predecessors for the add form (same-process top-level tasks,
+   *  excluding the task itself and current predecessors) */
+  dependencyOptions?: OwnerOption[]
   /** Whether the user can change the task (status/owner/title/color) */
   canManage?: boolean
   /** Whether the user can add subtasks (same as canManage) */
   canCreateSubtask?: boolean
+  /** Whether the user can manage dependencies (same as canManage) */
+  canManageDependencies?: boolean
   busy?: boolean
   error?: string | null
   /** Subtask form is disabled — shown instead of a spinner */
@@ -69,5 +100,11 @@ export interface TaskEditorEmits {
   updateSubtask: [payload: UpdateSubtaskPayload]
   /** Right panel: delete a subtask */
   deleteSubtask: [id: number]
+  /** Dependencies panel: add a predecessor link */
+  addDependency: [payload: AddDependencyPayload]
+  /** Dependencies panel: change a link type */
+  updateDependency: [payload: UpdateDependencyPayload]
+  /** Dependencies panel: delete a link */
+  deleteDependency: [id: number]
   close: []
 }

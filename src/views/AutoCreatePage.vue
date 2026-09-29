@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { HintButton } from '../components/common'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
 import { storeToRefs } from 'pinia'
@@ -339,7 +340,7 @@ async function onSave() {
   <section class="ac">
     <div class="ac-head">
       <h2 class="ac-title">Триггер создания проекта</h2>
-      <p class="ac-hint">При создании проекта автоматически создаются процессы (с владельцем) и их задачи с назначенными ресурсами.</p>
+      <HintButton hint="auto-create" />
     </div>
 
     <p v-if="autoCreateLoading && !autoCreateConfig" class="ac-st">Загрузка...</p>
@@ -483,17 +484,17 @@ async function onSave() {
 
 .ac-head {
   margin-bottom: 20px;
+
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 .ac-title {
   font-size: 24px;
   font-weight: 700;
   color: var(--ui-text);
   margin: 0 0 6px;
-}
-.ac-hint {
-  margin: 0;
-  font-size: 13px;
-  color: var(--ui-text-muted);
 }
 .ac-st {
   color: var(--ui-text-muted);

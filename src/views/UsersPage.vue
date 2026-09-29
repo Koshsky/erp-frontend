@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useRouter } from 'vue-router'
-import { ContextMenu, ConfirmDialog, PasswordDialog } from '../components/common'
+import { HintButton, ContextMenu, ConfirmDialog, PasswordDialog } from '../components/common'
 import type { ContextMenuItem } from '../components/common/ContextMenu'
 import { useConfirm } from '../composables/useConfirm'
 import { useContextMenu } from '../composables/useContextMenu'
@@ -186,6 +186,7 @@ async function refreshAfterMutation() {
   <section class="up">
     <div class="up-head">
       <h2 class="up-title">Пользователи</h2>
+      <HintButton hint="users" />
       <div class="up-actions">
         <input v-model="search" type="search" class="up-search" placeholder="Поиск по ФИО или логину" />
         <button v-if="rbac.can('user_admin', 'create')" type="button" class="up-add" @click="router.push('/users/new')">
@@ -266,7 +267,6 @@ async function refreshAfterMutation() {
 .up-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
   margin-bottom: 20px;
   flex-wrap: wrap;
@@ -281,6 +281,8 @@ async function refreshAfterMutation() {
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
+
+  margin-left: auto;
 }
 .up-add {
   border: none;

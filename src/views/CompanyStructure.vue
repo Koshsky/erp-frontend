@@ -130,7 +130,7 @@ onMounted(() => {
   <section class="cs">
     <div class="cs-head">
       <h2 class="cs-title">Структура компании</h2>
-      <p class="cs-hint">Управление иерархией: выберите руководителя для каждого сотрудника. Прямые и косвенные подчинённые учитываются при подсчёте.</p>
+      <HintButton hint="structure" />
     </div>
 
     <p v-if="saveError" class="cs-st er cs-save-error">{{ saveError }}</p>
@@ -180,17 +180,17 @@ onMounted(() => {
 
 .cs-head {
   margin-bottom: 20px;
+
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 .cs-title {
   font-size: 24px;
   font-weight: 700;
   color: var(--ui-text);
   margin: 0 0 6px;
-}
-.cs-hint {
-  margin: 0;
-  font-size: 13px;
-  color: var(--ui-text-muted);
 }
 .cs-st {
   color: var(--ui-text-muted);

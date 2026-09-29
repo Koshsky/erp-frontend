@@ -75,18 +75,12 @@ export const NoPreset: Story = {
 }
 
 /**
- * Test (regression for 9e0b093): the document click listener is per-instance —
- * it is added on mount, only acts when THIS instance has an open dropdown and
- * closes it on an outside click. Two mounted editors must stay isolated.
- *
- * Unmount-cleanup note: the play model here cannot unmount a story mid-test
- * (no @storybook/test `mount` in this repo), so the "listener removed on
- * unmount" half of the fix is asserted only by the mounted behavior contract:
- * the listener is inert while the dropdown is closed (outside clicks do not
- * throw or mutate anything).
+ * Test: the visible zone chips (Variant A) toggle a multi-move expression —
+ * two selected moves stay active together, "запрет" is exclusive and clears
+ * every other chip, and the two mounted instances stay isolated.
  */
-export const DropdownOutsideClickAndIsolation: Story = {
-  name: 'Test: dropdown opens on click, closes on outside click (per instance)',
+export const ChipMultiSelect: Story = {
+  name: 'Test: chips toggle a multi-move expression; «запрет» is exclusive (per instance)',
   tags: ['vitest'],
   render: () => ({
     components: { UserPermissionsEditor },
@@ -102,43 +96,63 @@ export const DropdownOutsideClickAndIsolation: Story = {
       </div>
     `,
   }),
-  play: async ({ canvasElement, step }) => {
-    await step('mount: both editors render dropdown buttons', async () => {
-      await new Promise((r) => setTimeout(r, 50))
-      expect(document.querySelectorAll('.dd-btn').length).toBeGreaterThan(0)
-      expect(document.querySelectorAll('section[data-editor="second"] .dd-btn').length).toBeGreaterThan(0)
+  play: async ({ step }) => {
+    const wait = (ms: number) => new Promise((r) => setTimeout(r, ms))
+    await step('mount: both editors render zone chips', async () => {
+      await wait(50)
+      expect(document.querySelectorAll('.ur-chip').length).toBeGreaterThan(0)
+      expect(document.querySelectorAll('section[data-editor="second"] .ur-chip').length).toBeGreaterThan(0)
     })
 
-    await step('clicking a button opens its dropdown menu', async () => {
-      const btn = document.querySelector('.dd-btn') as HTMLButtonElement
-      btn.click()
-      await new Promise((r) => setTimeout(r, 30))
-      const menu = btn.parentElement?.querySelector<HTMLElement>('.dd-menu')
-      expect(menu?.classList.contains('show')).toBe(true)
+    await step('clicking a chip toggles its move on and off', async () => {
+      // "Процессы" card — a resource with several ordinary moves.
+      const cards = document.querySelectorAll('.uped-res-card')
+      const row = cards[1]?.querySelector('.ur-row') as HTMLElement
+      const chips = [...row.querySelectorAll<HTMLButtonElement>('.ur-chip:not(.rev)')]
+      const first = chips.find((c) => !c.classList.contains('on'))
+      expect(first).toBeTruthy()
+      first!.click()
+      await wait(30)
+      expect(first!.classList.contains('on')).toBe(true)
+      first!.click()
+      await wait(30)
+      expect(first!.classList.contains('on')).toBe(false)
     })
 
-    await step('the second editor stays closed (per-instance state)', () => {
-      const menus = [...document.querySelectorAll('section[data-editor="second"] .dd-menu')]
-      expect(menus.every((m) => !m.classList.contains('show'))).toBe(true)
+    await step('two moves compose one expression: both chips stay active', async () => {
+      const cards = document.querySelectorAll('.uped-res-card')
+      const row = cards[1]?.querySelector('.ur-row') as HTMLElement
+      const chips = [...row.querySelectorAll<HTMLButtonElement>('.ur-chip:not(.rev)')].filter(
+        (c) => c.textContent !== 'Все',
+      )
+      const inactive = chips.filter((c) => !c.classList.contains('on'))
+      const a = inactive[0]
+      const b = inactive[1] ?? inactive[0]
+      a.click()
+      b.click()
+      await wait(30)
+      expect(a.classList.contains('on')).toBe(true)
+      expect(b.classList.contains('on')).toBe(true)
+      a.click()
+      b.click()
+      await wait(30)
     })
 
-    await step('document click outside closes the dropdown', async () => {
-      document.body.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
-      await new Promise((r) => setTimeout(r, 30))
-      const menus = [...document.querySelectorAll('.dd-menu')]
-      expect(menus.length).toBeGreaterThan(0)
-      expect(menus.every((m) => !m.classList.contains('show'))).toBe(true)
-    })
-
-    await step('the closed-instance listener is inert: clicks inside a row keep it closed', async () => {
-      // Re-opening and closing again proves a full open/close cycle still works.
-      const btn = document.querySelector('.dd-btn') as HTMLButtonElement
-      btn.click()
-      await new Promise((r) => setTimeout(r, 30))
-      expect(btn.parentElement?.querySelector('.dd-menu')?.classList.contains('show')).toBe(true)
-      document.body.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
-      await new Promise((r) => setTimeout(r, 30))
-      expect(btn.parentElement?.querySelector('.dd-menu')?.classList.contains('show')).toBe(false)
+    await step('«⛔ запрет» is exclusive: selecting it clears all other chips', async () => {
+      const cards = document.querySelectorAll('.uped-res-card')
+      const row = cards[1]?.querySelector('.ur-row') as HTMLElement
+      const chips = [...row.querySelectorAll<HTMLButtonElement>('.ur-chip:not(.rev)')]
+      const rev = row.querySelector<HTMLButtonElement>('.ur-chip.rev')
+      const inactive = chips.filter((c) => !c.classList.contains('on'))
+      inactive[0]?.click()
+      rev?.click()
+      await wait(30)
+      expect(rev?.classList.contains('on')).toBe(true)
+      expect(chips.every((c) => !c.classList.contains('on'))).toBe(true)
+      // Second click returns to the preset — the row restores its baseline.
+      rev?.click()
+      await wait(30)
+      expect(rev?.classList.contains('on')).toBe(false)
     })
   },
 }

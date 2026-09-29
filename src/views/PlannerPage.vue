@@ -3,6 +3,7 @@ import { ref, onMounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import TaskPlanning from '../components/planner/TaskPlanning/TaskPlanning.vue'
+import { HintButton } from '../components/common'
 import { PdfExport } from '../components/planner'
 import { ResourceManagerModal, TaskComments, TaskEditor } from '../components/planner'
 import type { AssignedResource, AddResourcePayload } from '../components/planner/ResourceManagerModal'
@@ -27,6 +28,7 @@ import { useFindPlanningItem } from '../composables/useFindPlanningItem'
 import { usePlanningStore, useAppStore, useRbacStore } from '../store'
 import { compareByName } from '../utils'
 import { addDaysISO, shiftSpanDates, clampDateToBounds } from '../components/planner/calendar'
+import type { DependencyType } from '../components/planner/dependencies'
 import { CELL_WIDTH } from '../components/planner/layout'
 import { randomPaletteColor } from '../components/common/ColorField/palette'
 import type { PdfGanttGroup } from '../components/planner/PdfExport/pdfRenderer'
@@ -276,6 +278,69 @@ async function onDeleteSubtask(id: number) {
   if (!ok) taskEditorError.value = planning.error
 }
 
+// === Task dependencies (scheduling links) ===
+
+/** Predecessor links of the edited task (with the predecessor title resolved
+ *  from the planning cache), for the "Зависимости" panel. */
+const taskEditorDependencies = computed(() => {
+  if (taskEditorId.value == null) return []
+  const proc = taskPlanning.value?.processes?.find(
+    (p: any) => p.id === findTask(taskEditorId.value!)?.process_id,
+  )
+  return ((proc?.dependencies ?? []) as any[])
+    .filter((e: any) => e.task_id === taskEditorId.value)
+    .map((e: any) => ({
+      id: e.id,
+      task_id: e.task_id,
+      depends_on_task_id: e.depends_on_task_id,
+      type: e.type as DependencyType,
+      title: findTask(e.depends_on_task_id)?.title ?? `#${e.depends_on_task_id}`,
+    }))
+})
+
+/** Candidate predecessors for the add form: top-level tasks of the same
+ *  process, excluding the task itself and its current predecessors. */
+const taskEditorDependencyOptions = computed(() => {
+  if (taskEditorId.value == null) return []
+  const proc = taskPlanning.value?.processes?.find(
+    (p: any) => p.id === findTask(taskEditorId.value!)?.process_id,
+  )
+  const taken = new Set(
+    ((proc?.dependencies ?? []) as any[])
+      .filter((e: any) => e.task_id === taskEditorId.value)
+      .map((e: any) => e.depends_on_task_id),
+  )
+  taken.add(taskEditorId.value)
+  return ((proc?.tasks ?? []) as any[])
+    .filter((t: any) => t.parent_id == null && !taken.has(t.id))
+    .map((t: any) => ({ value: t.id, label: t.title ?? `#${t.id}` }))
+})
+
+async function onAddDependency(payload: { depends_on_task_id: number; type: DependencyType }) {
+  if (taskEditorId.value == null) return
+  taskEditorBusy.value = true
+  taskEditorError.value = null
+  const ok = await planning.addTaskDependency(taskEditorId.value, payload.depends_on_task_id, payload.type)
+  taskEditorBusy.value = false
+  if (!ok) taskEditorError.value = planning.error
+}
+
+async function onChangeDependency(payload: { id: number; type: DependencyType }) {
+  if (taskEditorId.value == null) return
+  taskEditorBusy.value = true
+  taskEditorError.value = null
+  const ok = await planning.changeTaskDependencyType(payload.id, taskEditorId.value, payload.type)
+  taskEditorBusy.value = false
+  if (!ok) taskEditorError.value = planning.error
+}
+
+async function onDeleteDependency(id: number) {
+  if (taskEditorId.value == null) return
+  taskEditorError.value = null
+  const ok = await planning.deleteTaskDependency(id, taskEditorId.value)
+  if (!ok) taskEditorError.value = planning.error
+}
+
 function onContextMenu(p: { clientX: number; clientY: number; date: string | null; rowIndex: number; processId?: number; taskId?: number; milestoneId?: number }) {
   if (!canViewTasks.value) return
   // Empty group area: creation requires the corresponding right, a parent process and a known date.
@@ -505,7 +570,7 @@ const processesByPriority = computed(() => {
   // the user owns at least one process. The matrix is authoritative once loaded;
   // the preset is only a cold-start fallback (rp keeps the ancestor view — the
   // backend already scopes that list).
-  if ((permsReady.value ? rbac.perm('task', 'view') === 'parent' : role.value === 'vp') && userId.value != null) {
+  if ((permsReady.value ? ['parent', 'up1'].includes(rbac.perm('task', 'view')) : role.value === 'vp') && userId.value != null) {
     const myProjects = new Set(
       list.filter((p: any) => p.owner_id === userId.value).map((p: any) => p.project_id),
     )
@@ -559,6 +624,7 @@ const taskGroups = computed<PdfGanttGroup[]>(() =>
         :scale="viewRange.scale"
         page-title="Диаграмма задач"
       />
+      <HintButton hint="planner" />
     </div>
 
     <!-- Tasks Diagram: PlannerPage (view) loads the data via the store,
@@ -578,7 +644,7 @@ const taskGroups = computed<PdfGanttGroup[]>(() =>
       :focus-date="focusDate"
       :focus-group-id="focusGroupId"
       :comments-by-task="planning.commentsByTask"
-      @change="(p) => planning.updateTaskDates(p.id, p.start_date, p.end_date)"
+      @change="(p) => planning.moveTask(p.id, p.start_date, p.end_date)"
       @milestone-change="(p) => planning.updateMilestoneDate(p.id, p.date)"
       @contextmenu="onContextMenu"
       @header-ctxmenu="onHeaderCtx"
@@ -609,8 +675,11 @@ const taskGroups = computed<PdfGanttGroup[]>(() =>
       :task="taskEditorTask"
       :subtasks="taskEditorSubtasks"
       :owner-options="ownerOptions"
+      :dependencies="taskEditorDependencies"
+      :dependency-options="taskEditorDependencyOptions"
       :can-manage="taskEditorTask ? canManageTask(taskEditorTask.process_id) : false"
       :can-create-subtask="taskEditorTask ? canManageTask(taskEditorTask.process_id) : false"
+      :can-manage-dependencies="taskEditorTask ? canManageTask(taskEditorTask.process_id) : false"
       :busy="taskEditorBusy"
       :error="taskEditorError"
       :disabled-reason="isOffline ? 'Недоступно в офлайне' : null"
@@ -618,6 +687,9 @@ const taskGroups = computed<PdfGanttGroup[]>(() =>
       @add-subtask="onAddSubtask"
       @update-subtask="onUpdateSubtask"
       @delete-subtask="onDeleteSubtask"
+      @add-dependency="onAddDependency"
+      @update-dependency="onChangeDependency"
+      @delete-dependency="onDeleteDependency"
       @close="closeTaskEdit"
     />
 

@@ -22,6 +22,17 @@ import { isLoggedOut, clearLoggedOut, setLoggedOut } from '@/loggedOut'
 import { saveRefreshToken, loadRefreshToken, clearRefreshToken } from '@/offline/session'
 import { hydrateFromCache, apiPath } from '@/offline/hydrate'
 import { cacheGetAllByPath } from '@/offline/cache'
+import { evalScope } from '@/rbacScope'
+import {
+  resolveTaskMove,
+  resolveAddDependency,
+  resolveEdges,
+  persistenceOrder,
+  type DependencyEdge,
+  type DependencyType,
+  type TaskDates,
+  type TaskDatePatch,
+} from '@/components/planner/dependencies'
 
 const USER_KEY = 'mvs_erp_user'
 /**
@@ -512,6 +523,13 @@ export const useAuthStore = defineStore('auth', () => {
     sessionMode.value = 'online'
     // After an explicit logout, auto-sync does not log in until a manual login
     setLoggedOut()
+    // Drop the user-scoped payloads of the logged-out account so a later login
+    // (the same or another account) starts from its own server-scoped data —
+    // never from the previous session's rows (the GET cache itself is per-user
+    // keyed — see offline/cache.ts — so no cache wipe is needed).
+    useTimesheetStore().resetUserData()
+    useAppStore().resetUserData()
+    usePlanningStore().resetUserData()
   }
 
   /** Fetches fresh user data by id via UsersApi.usersIdGet */
@@ -1229,6 +1247,15 @@ export const useAppStore = defineStore('app', () => {
     }
   }
 
+  /** Clears the user-scoped payloads on logout/account switch (the GET cache
+   *  itself is per-user keyed — see offline/cache.ts). */
+  function resetUserData(): void {
+    users.value = []
+    resources.value = []
+    resourceMembers.value = {}
+    absenceByResource.value = {}
+  }
+
   return {
     projects,
     projectsLoading,
@@ -1286,6 +1313,7 @@ export const useAppStore = defineStore('app', () => {
     resourceByUser,
     ensureResourceMembers,
     changeEmployeeResource,
+    resetUserData,
   }
 })
 
@@ -1302,6 +1330,9 @@ export const useTimesheetStore = defineStore('timesheet', () => {
   const employeesTotal = ref(0)
   /** Separate flag for "load more": the roster must not flash its loading state */
   const employeesLoadingMore = ref(false)
+  /** User who loaded the current roster (null — none yet); the roster is
+   *  server-scoped, so an account switch must never reuse another user's rows. */
+  const employeesLoadedFor = ref<number | null>(null)
   const states = ref<DtoStateResponse[]>([])
   const periodsByEmployee = ref<Record<number, DtoUserStateResponse[]>>({})
   const windowStart = ref('')
@@ -1531,7 +1562,11 @@ export const useTimesheetStore = defineStore('timesheet', () => {
 
   /** Local-first: hydrate the employee list (scoped by the backend) from the cache */
   async function loadEmployeesList(): Promise<void> {
-    if (employees.value.length) return
+    // The roster is scoped to the authenticated user: reuse it only for the
+    // same account (an account switch must never surface another user's rows).
+    const uid = useAuthStore().user?.id ?? null
+    if (employeesLoadedFor.value === uid && employees.value.length) return
+    employeesLoadedFor.value = uid
     await hydrateFromCache([
       {
         path: apiPath('/user'),
@@ -1850,6 +1885,18 @@ export const useTimesheetStore = defineStore('timesheet', () => {
     }
   }
 
+  /** Clears the user-scoped payloads on logout/account switch. The GET cache
+   *  itself is per-user keyed (offline/cache.ts), so no cache wipe is needed —
+   *  only the in-memory state must not leak across accounts. */
+  function resetUserData(): void {
+    employees.value = []
+    employeesTotal.value = 0
+    employeesLoadedFor.value = null
+    periodsByEmployee.value = {}
+    windowStart.value = ''
+    windowEnd.value = ''
+  }
+
   return {
     employees,
     employeesWithTitles,
@@ -1877,6 +1924,7 @@ export const useTimesheetStore = defineStore('timesheet', () => {
     periodFor,
     assignRange,
     clearRange,
+    resetUserData,
   }
 })
 
@@ -2035,6 +2083,184 @@ export const usePlanningStore = defineStore('planning', () => {
       optimistic: () => {
         const t = findTaskRow(id)
         if (t) Object.assign(t, { start_date, end_date })
+      },
+      onError: (m) => {
+        error.value = m
+      },
+    })
+  }
+
+  // === Dependency constraints (scheduling links between top-level tasks) ===
+
+  /** The process whose task list contains the given task (top-level or subtask). */
+  function findProcessOfTask(id: number): any {
+    for (const p of taskPlanning.value?.processes ?? []) {
+      if ((p.tasks ?? []).some((x: any) => x.id === id)) return p
+      if ((p.tasks ?? []).some((x: any) => (x.subtasks ?? []).some((s: any) => s.id === id))) return p
+    }
+    return undefined
+  }
+
+  /** Dependency edges of the process containing a task. */
+  function dependencyEdgesOf(id: number): DependencyEdge[] {
+    const p = findProcessOfTask(id)
+    return ((p?.dependencies ?? []) as any[]).map((e: any) => ({
+      id: e.id,
+      task_id: e.task_id,
+      depends_on_task_id: e.depends_on_task_id,
+      type: e.type as DependencyType,
+    }))
+  }
+
+  /** Date rows of the process's top-level tasks (the constraint engine input —
+   *  links live on top-level tasks only). */
+  function dateRowsOf(id: number): TaskDates[] {
+    const p = findProcessOfTask(id)
+    return ((p?.tasks ?? []) as any[]).map((t: any) => ({
+      id: t.id,
+      start_date: t.start_date,
+      end_date: t.end_date,
+    }))
+  }
+
+  /** Persists a Map of date patches in predecessor-first order (the backend
+   *  guard validates a successor against its predecessors' committed dates).
+   *  Optimistic patches are applied immediately; a silent refresh after each
+   *  write settles the server state (offline — each PUT goes to the outbox). */
+  async function persistDatePatches(changes: Map<number, TaskDatePatch>): Promise<boolean> {
+    if (changes.size === 0) return true
+    for (const [tid, patch] of changes) {
+      const t = findTaskRow(tid)
+      if (t) Object.assign(t, patch)
+    }
+    const edges = dependencyEdgesOf([...changes.keys()][0])
+    const order = persistenceOrder([...changes.keys()], edges)
+    let ok = true
+    for (const tid of order) {
+      const patch = changes.get(tid)!
+      const okOne = await runMutation({
+        entity: 'task',
+        call: () =>
+          new TasksApi(apiConfig()).taskIdPut(tid, {
+            start_date: patch.start_date,
+            end_date: patch.end_date,
+          }),
+        apply: async () => {
+          await refreshTaskPlanning(true)
+        },
+        optimistic: () => {
+          const t = findTaskRow(tid)
+          if (t) Object.assign(t, patch)
+        },
+        onError: (m) => {
+          error.value = m
+        },
+      })
+      if (!okOne) {
+        ok = false
+        break
+      }
+    }
+    return ok
+  }
+
+  /** Bar date shift WITH the dependency constraints: resolves the cascade
+   *  (successors pushed right, the dragged task clamped to its bound) and
+   *  persists every adjusted task in dependency order. Falls back to a plain
+   *  date update when the task has no process context. */
+  async function moveTask(id: number, start_date: string, end_date: string): Promise<boolean> {
+    if (!findProcessOfTask(id)) return updateTaskDates(id, start_date, end_date)
+    const changes = resolveTaskMove(dateRowsOf(id), dependencyEdgesOf(id), id, start_date, end_date)
+    return persistDatePatches(changes)
+  }
+
+  /** Creates a dependency link. When the new link contradicts the schedule,
+   *  the successor's dates are adjusted (and persisted) BEFORE the link is
+   *  stored — the backend rejects an inconsistent link. */
+  async function addTaskDependency(
+    taskId: number,
+    dependsOnTaskId: number,
+    type: DependencyType,
+  ): Promise<boolean> {
+    if (findProcessOfTask(taskId)) {
+      const adjust = resolveAddDependency(
+        dateRowsOf(taskId),
+        dependencyEdgesOf(taskId),
+        taskId,
+        dependsOnTaskId,
+        type,
+      )
+      if (!(await persistDatePatches(adjust))) return false
+    }
+    return runMutation({
+      entity: 'task',
+      call: () =>
+        new TasksApi(apiConfig()).taskIdDependenciesPost(taskId, {
+          depends_on_task_id: dependsOnTaskId,
+          type,
+        }),
+      apply: async () => {
+        await refreshTaskPlanning(true)
+      },
+      optimistic: () => {
+        const proc = findProcessOfTask(taskId)
+        if (proc) {
+          ;(proc.dependencies ??= []).push({
+            id: nextTempId(),
+            task_id: taskId,
+            depends_on_task_id: dependsOnTaskId,
+            type,
+          })
+        }
+      },
+      onError: (m) => {
+        error.value = m
+      },
+    })
+  }
+
+  /** Changes a link type; a type that contradicts the successor's dates first
+   *  adjusts (and persists) the successor's dates. */
+  async function changeTaskDependencyType(
+    depId: number,
+    taskId: number,
+    type: DependencyType,
+  ): Promise<boolean> {
+    if (findProcessOfTask(taskId)) {
+      const edges = dependencyEdgesOf(taskId).map((e) => (e.id === depId ? { ...e, type } : e))
+      const adjust = resolveEdges(dateRowsOf(taskId), edges)
+      if (!(await persistDatePatches(adjust))) return false
+    }
+    return runMutation({
+      entity: 'task',
+      call: () => new TasksApi(apiConfig()).taskIdDependenciesDepIdPut(taskId, depId, { type }),
+      apply: async () => {
+        await refreshTaskPlanning(true)
+      },
+      optimistic: () => {
+        const proc = findProcessOfTask(taskId)
+        const e = (proc?.dependencies ?? []).find((x: any) => x.id === depId)
+        if (e) e.type = type
+      },
+      onError: (m) => {
+        error.value = m
+      },
+    })
+  }
+
+  /** Deletes a dependency link (idempotent). */
+  async function deleteTaskDependency(depId: number, taskId: number): Promise<boolean> {
+    return runMutation({
+      entity: 'task',
+      call: () => new TasksApi(apiConfig()).taskIdDependenciesDepIdDelete(taskId, depId),
+      apply: async () => {
+        await refreshTaskPlanning(true)
+      },
+      optimistic: () => {
+        const proc = findProcessOfTask(taskId)
+        if (proc) {
+          proc.dependencies = (proc.dependencies ?? []).filter((x: any) => x.id !== depId)
+        }
       },
       onError: (m) => {
         error.value = m
@@ -2908,6 +3134,15 @@ export const usePlanningStore = defineStore('planning', () => {
     }
   }
 
+  /** Clears the user-scoped planning payloads on logout/account switch (the GET
+   *  cache itself is per-user keyed — see offline/cache.ts). */
+  function resetUserData(): void {
+    projectPlanning.value = null
+    processPlanning.value = null
+    taskPlanning.value = null
+    commentsByTask.value = {}
+  }
+
   return {
     projectPlanning,
     processPlanning,
@@ -2924,6 +3159,10 @@ export const usePlanningStore = defineStore('planning', () => {
     refreshProcessPlanning,
     refreshTaskPlanning,
     updateTaskDates,
+    moveTask,
+    addTaskDependency,
+    changeTaskDependencyType,
+    deleteTaskDependency,
     updateProcessDates,
     updateProjectDates,
     updateMilestoneDate,
@@ -2951,6 +3190,7 @@ export const usePlanningStore = defineStore('planning', () => {
     loadTaskComments,
     createTaskComment,
     deleteTaskComment,
+    resetUserData,
   }
 })
 
@@ -3016,53 +3256,14 @@ export const useRbacStore = defineStore('rbac', () => {
 
   /**
    * Ownership (ABAC) satisfaction by scope — the client-side mirror of the
-   * backend owner-chain evaluation in internal/authz/engine (decision.go:
-   * ownField/parentField/ancestorMatch). Owners come from the card data
-   * (planning/app stores), not from the permission list:
-   *   own      — project → projectOwner, process → processOwner,
-   *              task/resource/worker → owner (worker: manager_id);
-   *   parent   — process → projectOwner, task/milestone/assignment → processOwner;
-   *   ancestor — any of owner/processOwner/projectOwner (task/milestone/assignment/process).
-   * Scopes themselves come from /permissions/me (the Casbin snapshot).
+   * backend owner-chain evaluation (internal/authz/engine eval.go). The scope
+   * is a TREE EXPRESSION (all/self/up1/up/sib/down/…); owners come from the
+   * card data (planning/app stores), not from the permission list. sib/down
+   * moves need the tree data — the caller supplies the probe results.
+   * Expressions come from /permissions/me (the Casbin snapshot).
    */
   function scopeSatisfied(scope: string, resource: string, uid: number, o: { owner?: number | null; projectOwner?: number | null; processOwner?: number | null }): boolean {
-    if (scope === 'all') return true
-    if (uid <= 0) return false
-    switch (scope) {
-      case 'own':
-        switch (resource) {
-          case 'project': return o.projectOwner === uid
-          case 'process': return o.processOwner === uid
-          case 'task':
-          case 'resource':
-          case 'worker':
-            return o.owner === uid
-          default:
-            return false
-        }
-      case 'parent':
-        switch (resource) {
-          case 'process': return o.projectOwner === uid
-          case 'task':
-          case 'milestone':
-          case 'assignment':
-            return o.processOwner === uid
-          default:
-            return false
-        }
-      case 'ancestor':
-        switch (resource) {
-          case 'task':
-          case 'milestone':
-          case 'assignment':
-          case 'process':
-            return o.owner === uid || o.processOwner === uid || o.projectOwner === uid
-          default:
-            return false
-        }
-      default:
-        return false
-    }
+    return evalScope(scope, resource, o, uid)
   }
 
   /** Whether the current role has the right to the action at all. */

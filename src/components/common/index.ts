@@ -16,3 +16,6 @@ export { default as ColorField } from './ColorField/ColorField.vue'
 export { default as PendingMark } from './PendingMark/PendingMark.vue'
 export * from './Tooltips'
 export { default as UserPermissionsEditor } from './UserPermissionsEditor/UserPermissionsEditor.vue'
+
+export { default as HintPanel } from './HintPanel/HintPanel.vue'
+export { default as HintButton } from './HintButton/HintButton.vue'

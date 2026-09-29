@@ -5,15 +5,15 @@ import type { UserPermissionsModel, PermissionOverride, PermissionCell } from '.
 /** Builds a sample editor model (an rp user with individual tweaks). */
 export function sampleModel(): UserPermissionsModel {
   const presetScope: PermissionCell[] = [
-    { resource: 'project', action: 'view', scope: 'own' },
-    { resource: 'project', action: 'create', scope: 'own' },
-    { resource: 'project', action: 'update', scope: 'own' },
-    { resource: 'process', action: 'view', scope: 'parent' },
-    { resource: 'process', action: 'create', scope: 'parent' },
-    { resource: 'task', action: 'view', scope: 'ancestor' },
-    { resource: 'task', action: 'create', scope: 'parent' },
-    { resource: 'worker', action: 'view', scope: 'own' },
-    { resource: 'resource', action: 'view', scope: 'own' },
+    { resource: 'project', action: 'view', scope: 'self' },
+    { resource: 'project', action: 'create', scope: 'self' },
+    { resource: 'project', action: 'update', scope: 'self' },
+    { resource: 'process', action: 'view', scope: 'up1' },
+    { resource: 'process', action: 'create', scope: 'up1' },
+    { resource: 'task', action: 'view', scope: 'up' },
+    { resource: 'task', action: 'create', scope: 'up1' },
+    { resource: 'worker', action: 'view', scope: 'self' },
+    { resource: 'resource', action: 'view', scope: 'self' },
   ]
   const overrides: PermissionOverride[] = [
     { resource: 'task', action: 'delete', granted: false },

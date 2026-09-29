@@ -7,14 +7,19 @@ import type {
   UpdateSubtaskPayload,
   TaskEditorPatch,
 } from './types'
+import type { DependencyType } from '../dependencies'
+import { DEPENDENCY_LABELS, DEPENDENCY_TYPES } from '../dependencies'
 
 const props = withDefaults(defineProps<TaskEditorProps>(), {
   task: null,
   canManage: false,
   canCreateSubtask: false,
+  canManageDependencies: false,
   busy: false,
   error: null,
   disabledReason: null,
+  dependencies: () => [],
+  dependencyOptions: () => [],
 })
 
 const emit = defineEmits<{
@@ -22,6 +27,9 @@ const emit = defineEmits<{
   addSubtask: [payload: NewSubtaskPayload]
   updateSubtask: [payload: UpdateSubtaskPayload]
   deleteSubtask: [id: number]
+  addDependency: [payload: { depends_on_task_id: number; type: DependencyType }]
+  updateDependency: [payload: { id: number; type: DependencyType }]
+  deleteDependency: [id: number]
   close: []
 }>()
 
@@ -103,6 +111,37 @@ function cycleStatus(s: { id: number; status?: string }) {
 
 function onDeleteSubtask(id: number) {
   emit('deleteSubtask', id)
+}
+
+// === Dependencies panel (predecessor links) ===
+const newDepTaskId = ref<number | ''>('')
+const newDepType = ref<DependencyType>('fs')
+
+/** Type options with the localized labels (Окончание → Начало, ...). */
+const depTypeOptions = DEPENDENCY_TYPES.map((t) => ({ value: t, label: DEPENDENCY_LABELS[t] }))
+
+const canAddDependency = computed(
+  () =>
+    props.canManageDependencies &&
+    !props.busy &&
+    newDepTaskId.value !== '' &&
+    props.dependencyOptions.some((o) => o.value === newDepTaskId.value),
+)
+
+function onAddDependency() {
+  if (!canAddDependency.value || newDepTaskId.value === '') return
+  emit('addDependency', { depends_on_task_id: newDepTaskId.value, type: newDepType.value })
+  newDepTaskId.value = ''
+  newDepType.value = 'fs'
+}
+
+function onDepTypeChange(dep: { id: number; type: DependencyType }, type: DependencyType) {
+  if (dep.type === type) return
+  emit('updateDependency', { id: dep.id, type })
+}
+
+function onDeleteDependency(id: number) {
+  emit('deleteDependency', id)
 }
 </script>
 
@@ -230,6 +269,66 @@ function onDeleteSubtask(id: number) {
           </button>
         </div>
         <p v-if="disabledReason" class="te-note">{{ disabledReason }}</p>
+
+        <h4 class="te-subtitle">Зависимости</h4>
+
+        <div v-if="dependencies.length" class="te-list">
+          <div v-for="d in dependencies" :key="d.id" class="te-item">
+            <span class="te-item-title" :title="d.title">{{ d.title }}</span>
+            <select
+              class="te-input te-select te-dep-type"
+              :value="d.type"
+              :disabled="!canManageDependencies || busy"
+              :aria-label="`Тип связи с «${d.title}»`"
+              @change="onDepTypeChange(d, ($event.target as HTMLSelectElement).value as DependencyType)"
+            >
+              <option v-for="o in depTypeOptions" :key="o.value" :value="o.value">
+                {{ o.label }}
+              </option>
+            </select>
+            <button
+              type="button"
+              class="te-remove"
+              :disabled="!canManageDependencies || busy"
+              :aria-label="`Удалить связь с «${d.title}»`"
+              @click="onDeleteDependency(d.id)"
+            >✕</button>
+          </div>
+        </div>
+        <div v-else class="te-empty">Зависимостей нет</div>
+
+        <div class="te-dep-add">
+          <select
+            v-model="newDepTaskId"
+            class="te-input te-select"
+            :disabled="!canManageDependencies || busy"
+            :aria-label="'Задача-предшественник'"
+          >
+            <option value="">— предшественник —</option>
+            <option v-for="o in dependencyOptions" :key="o.value" :value="o.value">
+              {{ o.label }}
+            </option>
+          </select>
+          <select
+            v-model="newDepType"
+            class="te-input te-select te-dep-type"
+            :disabled="!canManageDependencies || busy"
+            :aria-label="'Тип связи'"
+          >
+            <option v-for="o in depTypeOptions" :key="o.value" :value="o.value">
+              {{ o.label }}
+            </option>
+          </select>
+          <button
+            type="button"
+            class="te-add-btn"
+            :disabled="!canAddDependency"
+            @click="onAddDependency"
+          >
+            Добавить
+          </button>
+        </div>
+        <p class="te-note">При добавлении или изменении связи даты задач корректируются автоматически.</p>
       </div>
     </div>
   </ModalForm>
@@ -452,6 +551,24 @@ function onDeleteSubtask(id: number) {
 .te-add-btn:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+/* Dependency panel: a compact type select inside the row + the add row */
+.te-dep-type {
+  flex-shrink: 0;
+  width: auto;
+  max-width: 170px;
+  height: 30px;
+  padding: 3px 8px;
+  font-size: 12px;
+}
+.te-dep-add {
+  display: flex;
+  gap: 8px;
+}
+.te-dep-add .te-select {
+  flex: 1;
+  min-width: 0;
 }
 
 @media (max-width: 640px) {

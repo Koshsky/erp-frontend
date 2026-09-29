@@ -2,7 +2,7 @@
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
-import { PasswordDialog, UserPermissionsEditor } from '../components/common'
+import { HintButton, PasswordDialog, UserPermissionsEditor } from '../components/common'
 import { useAppStore, useAuthStore, useRbacStore } from '../store'
 import { compareByName, translitPhio } from '../utils'
 import type { DtoAdminUserResponse, DtoCreateUserRequest, DtoUpdateUserRequest } from '@/api'
@@ -131,25 +131,30 @@ function fillForm(u: DtoAdminUserResponse) {
 }
 
 // === Индивидуальные права (admin) ===
-/** Staged-переопределения (полный набор) */
+/** Staged-переопределения (полный набор; черновик при создании уходит в
+ *  payload, при редактировании — на отдельную страницу /edit/access). */
 const permissionOverrides = ref<PermissionOverride[]>([])
-/** Есть ли несохранённые изменения прав */
-const permissionDirty = ref(false)
-/** Ошибка сохранения прав (показывается у карточки прав) */
-const permissionError = ref<string | null>(null)
+/** Профиль успешно сохранён (показывается у кнопки «Сохранить» слева) */
+const profileSaved = ref(false)
 
-async function savePermissions(): Promise<boolean> {
-  const id = editingUserId.value
-  if (id == null) return false
-  permissionError.value = null
-  const ok = await rbac.saveUserPermissions(id, permissionOverrides.value)
-  if (!ok) {
-    permissionError.value = rbac.userPermissionsError ?? 'Не удалось сохранить права'
-    return false
-  }
-  permissionDirty.value = false
-  return true
-}
+/** Сброс «Сохранено» после повторного редактирования профиля */
+watch(
+  () =>
+    [
+      form.lastName,
+      form.firstName,
+      form.middleName,
+      form.login,
+      form.preset,
+      form.managerId,
+      form.position,
+      form.hireDate,
+      form.terminationDate,
+    ] as const,
+  () => {
+    profileSaved.value = false
+  },
+)
 
 onMounted(async () => {
   void rbac.ensurePresets()
@@ -251,14 +256,16 @@ async function onSubmit() {
       const ok = await app.updateUser(id, patch)
       const nextManager = form.managerId === '' ? null : Number(form.managerId)
       if (ok && nextManager !== savedManagerId.value) await app.updateManager(id, nextManager)
-      // Индивидуальные права сохраняются отдельно (admin-only редактор)
-      let permsOk = true
-      if (ok && canManageUserRights.value && permissionDirty.value) permsOk = await savePermissions()
-      if (ok && permsOk) {
-        void router.push('/users')
-      } else {
-        error.value = permsOk ? adminUsersError.value : permissionError.value
+      if (!ok) {
+        error.value = adminUsersError.value
+        return
       }
+      // Сохранение профиля НЕ закрывает страницу (права доступа — на отдельной
+      // странице /edit/access); при повторном сохранении менеджер считается
+      // «сохранённым».
+      savedManagerId.value = nextManager
+      error.value = null
+      profileSaved.value = true
       return
     }
     const payload: DtoCreateUserRequest = {
@@ -302,9 +309,21 @@ async function onSubmit() {
 </script>
 
 <template>
-  <section class="ufp">
-    <div class="ufp-head">
+  <section class="ufp" :class="{ 'is-edit': isEdit }">
+    <div class="ufp-head" :class="{ 'is-edit': isEdit }">
       <h2 class="ufp-title">{{ isEdit ? 'Редактировать пользователя' : 'Создать пользователя' }}</h2>
+      <HintButton hint="user-form" />
+      <!-- Вариант 3: переход к правам — кнопкой в шапке (прав на странице нет) -->
+      <button
+        v-if="isEdit"
+        type="button"
+        class="ufp-head-access"
+        :disabled="!canManageUserRights"
+        :title="canManageUserRights ? 'Индивидуальные права доступа' : 'Изменение прав доступно только администратору'"
+        @click="router.push(`/users/${editingUserId}/edit/access`)"
+      >
+        ⚙ Изменить права
+      </button>
     </div>
 
     <!-- Редактирование: список грузится — заглушка вместо пустой формы -->
@@ -315,10 +334,10 @@ async function onSubmit() {
       <p class="ufp-error">{{ error || 'Пользователь не найден' }}</p>
     </div>
 
-    <div v-else class="ufp-layout">
-      <!-- Левая колонка: профиль в один столбик, закреплён на экране при
-           прокрутке длинной правой колонки прав -->
-      <aside class="ufp-aside">
+    <div v-else :class="isEdit ? 'ufp-edit-wrap' : 'ufp-layout'">
+      <!-- Карточка профиля: в редактировании — одна широкая карточка,
+           в создании — левая колонка (закреплённая) -->
+      <section :class="isEdit ? 'ufp-card-wrap' : 'ufp-aside'">
         <div class="ufp-card">
           <label class="ufp-field">
             <span class="ufp-label">Фамилия *</span>
@@ -379,38 +398,24 @@ async function onSubmit() {
               }}
             </button>
           </div>
+          <p v-if="profileSaved" class="ufp-ok" role="status">Сохранено</p>
         </div>
-      </aside>
+      </section>
 
-      <!-- Правая колонка: права пользователя (admin only; гейт rbac.manage на
-           бэкенде). Общая страница для создания и редактирования: draft-режим
-           строится из выбранного пресета и отдаёт переопределения в payload. -->
-      <main class="ufp-main">
+      <!-- Правая колонка (только создание): черновик прав (admin only,
+           переопределения уходят в payload создания) -->
+      <main v-if="!isEdit" class="ufp-main">
         <div v-if="canManageUserRights" class="ufp-perms">
-          <!-- Переключатель пресета живёт в шапке карточки прав (см.
-               UserPermissionsEditor): смена пресета сразу перестраивает
-               базис правил ниже и отправляется вместе с профилем. -->
+          <!-- Черновик прав при создании: переключатель пресета живёт в шапке
+               редактора, переопределения уходят в payload создания. -->
           <UserPermissionsEditor
-            v-if="isEdit"
-            mode="user"
-            :user-id="editingUserId ?? 0"
-            :preset="form.preset"
-            :preset-options="presetOptions"
-            @update:preset="form.preset = $event"
-            @update:overrides="permissionOverrides = $event"
-            @update:dirty="permissionDirty = $event"
-          />
-          <UserPermissionsEditor
-            v-else
             mode="draft"
             :preset="form.preset"
             :preset-options="presetOptions"
             :user-id="0"
             @update:preset="form.preset = $event"
             @update:overrides="permissionOverrides = $event"
-            @update:dirty="permissionDirty = $event"
           />
-          <p v-if="permissionError" class="ufp-error" role="alert">{{ permissionError }}</p>
         </div>
       </main>
     </div>
@@ -468,6 +473,23 @@ async function onSubmit() {
   .ufp-aside {
     position: static;
   }
+}
+/* Редактирование: вся страница (шапка + карточка профиля) — один
+   центрированный блок; заголовок слева, кнопка прав в строке шапки */
+.ufp.is-edit {
+  max-width: 720px;
+}
+.ufp-head.is-edit {
+  align-items: center;
+}
+.ufp-head.is-edit .ufp-head-access {
+  margin-left: auto;
+}
+.ufp-edit-wrap {
+  min-width: 0;
+}
+.ufp-card-wrap {
+  min-width: 0;
 }
 .ufp-card {
   background: var(--ui-surface);
@@ -530,6 +552,32 @@ async function onSubmit() {
   margin: 0;
   font-size: 13px;
   color: var(--ui-danger);
+}
+.ufp-ok {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ui-success, #22c55e);
+}
+/* Кнопка перехода к правам в шапке страницы — сразу после заголовка,
+   а не у дальнего края широкой колонки */
+.ufp-head-access {
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius-sm);
+  background: var(--ui-surface);
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ui-accent);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ufp-head-access:hover:not(:disabled) {
+  background: var(--ui-accent-soft);
+}
+.ufp-head-access:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 .ufp-st {
   color: var(--ui-text-2);

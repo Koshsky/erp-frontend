@@ -104,6 +104,13 @@ const router = createRouter({
           component: () => import('../views/UserFormPage.vue'),
         },
         {
+          // User rights (permission overrides) — a dedicated page threaded off
+          // the edit page ("Изменить права").
+          path: 'users/:id/edit/access',
+          name: 'user-access',
+          component: () => import('../views/UserAccessPage.vue'),
+        },
+        {
           path: 'structure',
           name: 'structure',
           component: () => import('../views/CompanyStructure.vue'),
@@ -284,6 +291,7 @@ router.beforeEach(async (to) => {
     users: ['user_admin', 'view'],
     'user-new': ['user_admin', 'view'],
     'user-edit': ['user_admin', 'view'],
+    'user-access': ['user_admin', 'view'],
     structure: ['org_structure', 'view'],
     'auto-create': ['rbac_config', 'view'],
     permissions: ['rbac_config', 'view'],
