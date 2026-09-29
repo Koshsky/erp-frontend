@@ -34,10 +34,13 @@ export function addDaysISO(date: Date | string | number, days: number): string {
   return fmtDate(new Date(d.getFullYear(), d.getMonth(), d.getDate() + days))
 }
 
-/** Date n calendar months later (YYYY-MM-DD, local timezone) */
+/** Date n calendar months later (YYYY-MM-DD, local timezone), clamped to the
+ *  last day of the target month (May 31 + 6 months = Nov 30, not Dec 1). */
 export function addMonthsISO(date: Date | string | number, months: number): string {
   const d = toDayStart(date)
-  return fmtDate(new Date(d.getFullYear(), d.getMonth() + months, d.getDate()))
+  const target = new Date(d.getFullYear(), d.getMonth() + months, 1)
+  const lastDay = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate()
+  return fmtDate(new Date(target.getFullYear(), target.getMonth(), Math.min(d.getDate(), lastDay)))
 }
 
 /** Date range "dd.mm.yyyy — dd.mm.yyyy" (local timezone) for bar tooltips */
@@ -64,8 +67,12 @@ export interface CalendarCell {
 // ============================================================================
 // Infinite timeline in absolute cell indices.
 // origin — the anchor date; cell i — the absolute index (may be negative).
-// Day:   i  = origin + i days.  Decade: strictly by the calendar (1-10/11-20/21-end),
-// cell 0 — the decade containing origin; month = month(origin) + floor(i/3).
+// Day:   i  = origin + i days.
+// Decade: cells are aligned to calendar months (1–10 / 11–20 / 21–end), and the
+// first decade of the anchor month is partial — it starts at the anchor day
+// (cell 0 = [anchor … end of the anchor's calendar decade]). The anchor's own
+// calendar decade is split at the anchor: days before it keep a calendar-aligned
+// cell with a negative index; every other cell of every month is a full decade.
 // ============================================================================
 
 /** Month in absolute count: year*12 + month (for month differences). */
@@ -80,16 +87,66 @@ function decadeIndexOfDay(d: Date): number {
   return 2
 }
 
-/** First day of the month and decade number for cell i (correct for negative i). */
-function cellMonthDec(origin: Date, i: number): { first: Date; dec: number } {
-  const first = new Date(origin.getFullYear(), origin.getMonth() + Math.floor(i / 3), 1)
-  const dec = ((i % 3) + 3) % 3
-  return { first, dec }
+/**
+ * Decade layout around the anchor (AGENTS.md: "the first decade of the anchor
+ * month is partial — starts at the anchor"). Consequence: the anchor's own
+ * calendar decade is split at the anchor day into a before-anchor cell (only
+ * when the anchor is strictly inside its decade, not on its first day) and cell
+ * 0 — the partial first decade. All other cells stay calendar-aligned, so the
+ * anchor month is covered by 3 cells, or 4 when the anchor splits its decade.
+ */
+interface DecadeLayout {
+  /** Anchor month (absolute month number) */
+  month: number
+  /** Anchor day of month (1..last) */
+  anchorDay: number
+  /** Calendar decade of the anchor within its month (0/1/2) */
+  anchorDec: number
+  /** Whether the anchor is strictly inside its calendar decade (a before-anchor cell exists) */
+  split: boolean
+  /** Cell index of the first cell of the anchor month (0 or negative) */
+  base: number
+  /** Number of cells covering the anchor month (3, or 4 when split) */
+  cells: number
+}
+
+function decadeLayout(origin: Date): DecadeLayout {
+  const month = monthNumber(origin)
+  const anchorDay = origin.getDate()
+  const anchorDec = decadeIndexOfDay(origin)
+  const split = anchorDay > 10 * anchorDec + 1
+  const base = -(anchorDec + (split ? 1 : 0))
+  return { month, anchorDay, anchorDec, split, base, cells: 3 + (split ? 1 : 0) }
+}
+
+/** Date of an absolute month number and a day of month (JS normalizes overflow). */
+function dateAtMonth(month: number, day: number): Date {
+  return new Date(Math.floor(month / 12), month % 12, day)
+}
+
+/** Calendar decade (0/1/2) of cell i under the anchor layout. */
+function decadeOfCell(o: Date, i: number): number {
+  const { anchorDec, split, base, cells } = decadeLayout(o)
+  if (i >= base + cells) {
+    const rel = i - (base + cells)
+    return rel % 3
+  }
+  if (i < base) {
+    const n = base - i
+    return 2 - ((n - 1) % 3)
+  }
+  if (i === 0) return anchorDec
+  if (i < 0) {
+    const k = i - base
+    return k < anchorDec ? k : anchorDec
+  }
+  return anchorDec + i
 }
 
 /**
  * Absolute index of the cell containing the date. Always exists (may be
- * negative). For days — the day difference from origin; for decades — calendar anchoring.
+ * negative). For days — the day difference from origin; for decades — calendar
+ * anchoring with the partial first anchor decade (see decadeLayout).
  */
 export function cellIndexForDate(
   origin: Date | string | number,
@@ -99,23 +156,60 @@ export function cellIndexForDate(
   const o = toDayStart(origin)
   const d = toDayStart(date)
   if (unit === 'day') return Math.round((d.getTime() - o.getTime()) / DAY_MS)
-  return (monthNumber(d) - monthNumber(o)) * 3 + decadeIndexOfDay(d)
+  const { month, anchorDay, anchorDec, split, base, cells } = decadeLayout(o)
+  const dm = monthNumber(d)
+  if (dm === month) {
+    const dec = decadeIndexOfDay(d)
+    if (dec < anchorDec) return base + dec
+    if (dec > anchorDec) return base + dec + (split ? 1 : 0)
+    // The anchor's own calendar decade, split at the anchor day.
+    return d.getDate() < anchorDay ? base + anchorDec : 0
+  }
+  if (dm > month) return base + cells + 3 * (dm - month - 1) + decadeIndexOfDay(d)
+  return base - 3 * (month - dm) + decadeIndexOfDay(d)
 }
 
 /** Start date of cell i (local midnight). */
 export function cellStartDate(origin: Date | string | number, unit: PlanningUnit, i: number): Date {
   const o = toDayStart(origin)
   if (unit === 'day') return new Date(o.getFullYear(), o.getMonth(), o.getDate() + i)
-  const { first, dec } = cellMonthDec(o, i)
-  return new Date(first.getFullYear(), first.getMonth(), 1 + dec * 10)
+  const { month, anchorDec, split, base, cells } = decadeLayout(o)
+  if (i >= base + cells) {
+    const rel = i - (base + cells)
+    return dateAtMonth(month + 1 + Math.floor(rel / 3), 1 + (rel % 3) * 10)
+  }
+  if (i < base) {
+    const n = base - i
+    return dateAtMonth(month - 1 - Math.floor((n - 1) / 3), 1 + (2 - ((n - 1) % 3)) * 10)
+  }
+  // Cells of the anchor month: [base .. base+cells-1]
+  if (i === 0) return o
+  if (i < 0) {
+    const k = i - base
+    // k in [0 .. anchorDec): a full calendar decade; k === anchorDec: the
+    // before-anchor part of the split decade (starts at the decade start).
+    return k < anchorDec ? dateAtMonth(month, 1 + 10 * k) : dateAtMonth(month, 1 + 10 * anchorDec)
+  }
+  return dateAtMonth(month, 1 + (anchorDec + i) * 10)
 }
 
 /** End date of cell i (inclusive, local midnight). */
 export function cellEndDate(origin: Date | string | number, unit: PlanningUnit, i: number): Date {
   if (unit === 'day') return cellStartDate(origin, unit, i)
-  const { first, dec } = cellMonthDec(toDayStart(origin), i)
-  if (dec < 2) return new Date(first.getFullYear(), first.getMonth(), 10 + dec * 10)
-  return lastDayOfMonth(first)
+  const o = toDayStart(origin)
+  const { anchorDay, anchorDec, split, base } = decadeLayout(o)
+  const start = cellStartDate(origin, unit, i)
+  if (i === 0) {
+    // Partial first decade: from the anchor day to the end of its calendar decade.
+    if (anchorDec === 2) return lastDayOfMonth(start)
+    return new Date(start.getFullYear(), start.getMonth(), 10 + 10 * anchorDec)
+  }
+  if (split && i >= base && i < 0 && i - base === anchorDec) {
+    // Before-anchor part of the split decade: decade start … the day before the anchor.
+    return new Date(start.getFullYear(), start.getMonth(), anchorDay - 1)
+  }
+  if (decadeOfCell(o, i) === 2) return lastDayOfMonth(start)
+  return new Date(start.getFullYear(), start.getMonth(), start.getDate() + 9)
 }
 
 /** count consecutive cells starting from fromCell (absolute indices). */

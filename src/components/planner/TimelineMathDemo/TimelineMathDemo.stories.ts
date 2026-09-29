@@ -1,5 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/vue3-vite'
+import { expect } from 'vitest'
 import {
+  addMonthsISO,
   cellIndexForDate,
   cellStartDate,
   cellEndDate,
@@ -78,8 +80,9 @@ export const DayCells: Story = {
           </div>
         </div>
         <p style="font-size:12px;color:#555;margin:0 0 20px;">
-          Декады строго по календарю (1-10/11-20/21-конец), фоном выделены месяцы.
-          Ячейка 0 — декада, содержащая origin (средняя декада июля), слева от неё декады того же месяца с отрицательными индексами.
+          Декады выровнены по календарю (1-10/11-20/21-конец), фоном выделены месяцы.
+          Первая декада месяца-якоря частичная: ячейка 0 начинается в день якоря (15.07) и идёт до конца своей
+          календарной декады (11–20 → 15–20); дни 11–14 лежат в ячейке −1.
         </p>
 
         <h3 style="margin:0 0 6px;font-size:15px;">Декада: origin = 2026-07-01 (первое число — как стартовая позиция)</h3>
@@ -98,4 +101,46 @@ export const DayCells: Story = {
       </div>
     `,
   }),
+}
+
+/**
+ * Unit test (vitest via @storybook/addon-vitest): pure calendar math —
+ * the decade cells around a mid-month anchor are internally consistent,
+ * cell 0 starts at the anchor day, and addMonthsISO clamps month-ends.
+ */
+export const CalendarMath: Story = {
+  tags: ['vitest'],
+  render: () => ({ template: '<div />' }),
+  play: async () => {
+    const fmt = (d: Date) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+
+    // Partial first decade of the anchor month: cell 0 starts at the anchor.
+    expect(fmt(cellStartDate('2026-07-17', 'decade', 0))).toBe('2026-07-17')
+    expect(fmt(cellEndDate('2026-07-17', 'decade', 0))).toBe('2026-07-20')
+    // Days before the anchor stay in a negative cell of the same month.
+    expect(cellIndexForDate('2026-07-17', 'decade', '2026-07-15')).toBe(-1)
+    expect(cellIndexForDate('2026-07-17', 'decade', '2026-07-05')).toBe(-2)
+    expect(fmt(cellStartDate('2026-07-17', 'decade', 1))).toBe('2026-07-21')
+    // An anchor on a decade boundary leaves the month fully aligned.
+    expect(fmt(cellStartDate('2026-07-11', 'decade', 0))).toBe('2026-07-11')
+
+    // Consistency (each cell's range maps back to itself) across anchors.
+    for (const day of [5, 11, 17, 25]) {
+      const origin = `2026-07-${String(day).padStart(2, '0')}`
+      expect(consistency(origin, 'decade', -50, 100)).toBe(true)
+    }
+    const cells = windowCells('2026-07-17', 'decade', -4, 8)
+    for (const c of cells) {
+      expect(cellIndexForDate('2026-07-17', 'decade', c.start)).toBe(c.index)
+      expect(cellIndexForDate('2026-07-17', 'decade', c.end)).toBe(c.index)
+    }
+
+    // addMonthsISO clamps to the last day of the target month.
+    expect(addMonthsISO('2026-05-31', 6)).toBe('2026-11-30')
+    expect(addMonthsISO('2026-01-31', 1)).toBe('2026-02-28')
+    expect(addMonthsISO('2024-01-31', 1)).toBe('2024-02-29')
+    expect(addMonthsISO('2026-03-15', 3)).toBe('2026-06-15')
+    expect(addMonthsISO('2026-07-31', 6)).toBe('2027-01-31')
+  },
 }

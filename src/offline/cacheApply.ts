@@ -461,7 +461,8 @@ async function getStateFields(stateId: number | undefined): Promise<Record<strin
         return { state_code: st.code, state_name: st.name, is_available: st.is_available }
       }
     }
-    break
+    // Keep scanning ALL cached pages for the id (the list is cached per page):
+    // the first page may predate a later page that already contains the target.
   }
   return {}
 }
@@ -480,7 +481,7 @@ async function getResourceFields(resourceId: number | undefined): Promise<Record
         return { code: r.code, title: r.title }
       }
     }
-    break
+    // Keep scanning ALL cached pages for the id (the list is cached per page).
   }
   return {}
 }
@@ -534,7 +535,8 @@ async function getUserFields(userId: number | undefined): Promise<Record<string,
         termination_date: u.termination_date,
       }
     }
-    break
+    // Keep scanning ALL cached pages for the id (the roster is cached per
+    // page): a first page cached before a limit=500 page may lack the target.
   }
   return {}
 }

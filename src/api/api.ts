@@ -63,11 +63,6 @@ export interface AutoCreateConfigGet200Response {
     'data'?: DtoAutoCreateConfig;
     'error'?: object;
 }
-export interface DomainPreset {
-    'description'?: string;
-    'id'?: number;
-    'name'?: string;
-}
 export interface DtoAddMemberRequest {
     'user_id'?: number;
 }
@@ -365,6 +360,11 @@ export interface DtoPresetUpsertInput {
     'description'?: string;
     'name': string;
 }
+export interface DtoPresetView {
+    'description'?: string;
+    'id'?: number;
+    'name'?: string;
+}
 export interface DtoProcess {
     'color'?: string;
     'end_date'?: string;
@@ -432,9 +432,6 @@ export interface DtoReorderProcessRequest {
 export interface DtoReorderTaskRequest {
     'ids'?: Array<number>;
     'process_id'?: number;
-}
-export interface DtoResetPasswordResponse {
-    'password'?: string;
 }
 export interface DtoResource {
     'assignment_id'?: number;
@@ -661,6 +658,15 @@ export interface DtoUserStatesResponse {
     'days'?: Array<DtoUserStateResponse>;
     'user_id'?: number;
 }
+export interface EngineKindInfo {
+    'name'?: string;
+    'params'?: Array<EngineParamInfo>;
+}
+export interface EngineParamInfo {
+    'key'?: string;
+    'required'?: boolean;
+    'type'?: string;
+}
 export interface ErrorsDomainError {
     'code'?: string;
     'message'?: string;
@@ -695,15 +701,6 @@ export interface PlanningProjectsGet200Response {
 export interface PlanningTasksGet200Response {
     'data'?: DtoTaskPlanning;
     'error'?: object;
-}
-export interface PoliciesKindInfo {
-    'name'?: string;
-    'params'?: Array<PoliciesParamInfo>;
-}
-export interface PoliciesParamInfo {
-    'key'?: string;
-    'required'?: boolean;
-    'type'?: string;
 }
 export interface ProcessGet200Response {
     'data'?: ProcessGet200ResponseAllOfData;
@@ -742,7 +739,7 @@ export interface RbacExplainGet200Response {
     'error'?: object;
 }
 export interface RbacKindsGet200Response {
-    'data'?: Array<PoliciesKindInfo>;
+    'data'?: Array<EngineKindInfo>;
     'error'?: object;
 }
 export interface RbacMatrixGet200Response {
@@ -766,11 +763,11 @@ export interface RbacPresetRulesPut200Response {
     'error'?: object;
 }
 export interface RbacPresetsGet200Response {
-    'data'?: Array<DomainPreset>;
+    'data'?: Array<DtoPresetView>;
     'error'?: object;
 }
 export interface RbacPresetsPost201Response {
-    'data'?: DomainPreset;
+    'data'?: DtoPresetView;
     'error'?: object;
 }
 export interface RbacUsersIdPermissionsGet200Response {
@@ -879,10 +876,6 @@ export interface UserIdDaysGet200Response {
 }
 export interface UserIdGet200Response {
     'data'?: DtoUserResponse;
-    'error'?: object;
-}
-export interface UserIdResetPasswordPost200Response {
-    'data'?: DtoResetPasswordResponse;
     'error'?: object;
 }
 export interface UserPost201Response {
@@ -7032,7 +7025,7 @@ export const UsersApiAxiosParamCreator = function (configuration?: Configuration
             };
         },
         /**
-         * Delete a user by ID (soft delete)
+         * Delete a user by ID (moves the account to the archive; 409 if the user is referenced)
          * @summary Delete a user
          * @param {number} id User ID
          * @param {*} [options] Override http request option.
@@ -7190,7 +7183,7 @@ export const UsersApiAxiosParamCreator = function (configuration?: Configuration
             };
         },
         /**
-         * Generate a new random password for a user and return it once
+         * Generate a new random password for a user (admin only; the new password is never returned)
          * @summary Reset user password
          * @param {number} id User ID
          * @param {*} [options] Override http request option.
@@ -7377,7 +7370,7 @@ export const UsersApiFp = function(configuration?: Configuration) {
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
-         * Delete a user by ID (soft delete)
+         * Delete a user by ID (moves the account to the archive; 409 if the user is referenced)
          * @summary Delete a user
          * @param {number} id User ID
          * @param {*} [options] Override http request option.
@@ -7431,13 +7424,13 @@ export const UsersApiFp = function(configuration?: Configuration) {
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
-         * Generate a new random password for a user and return it once
+         * Generate a new random password for a user (admin only; the new password is never returned)
          * @summary Reset user password
          * @param {number} id User ID
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async userIdResetPasswordPost(id: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<UserIdResetPasswordPost200Response>> {
+        async userIdResetPasswordPost(id: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<void>> {
             const localVarAxiosArgs = await localVarAxiosParamCreator.userIdResetPasswordPost(id, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
             const localVarOperationServerBasePath = operationServerMap['UsersApi.userIdResetPasswordPost']?.[localVarOperationServerIndex]?.url;
@@ -7548,7 +7541,7 @@ export const UsersApiFactory = function (configuration?: Configuration, basePath
             return localVarFp.userIdDaysPut(id, body, options).then((request) => request(axios, basePath));
         },
         /**
-         * Delete a user by ID (soft delete)
+         * Delete a user by ID (moves the account to the archive; 409 if the user is referenced)
          * @summary Delete a user
          * @param {number} id User ID
          * @param {*} [options] Override http request option.
@@ -7590,13 +7583,13 @@ export const UsersApiFactory = function (configuration?: Configuration, basePath
             return localVarFp.userIdPut(id, body, options).then((request) => request(axios, basePath));
         },
         /**
-         * Generate a new random password for a user and return it once
+         * Generate a new random password for a user (admin only; the new password is never returned)
          * @summary Reset user password
          * @param {number} id User ID
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        userIdResetPasswordPost(id: number, options?: RawAxiosRequestConfig): AxiosPromise<UserIdResetPasswordPost200Response> {
+        userIdResetPasswordPost(id: number, options?: RawAxiosRequestConfig): AxiosPromise<void> {
             return localVarFp.userIdResetPasswordPost(id, options).then((request) => request(axios, basePath));
         },
         /**
@@ -7706,7 +7699,7 @@ export class UsersApi extends BaseAPI {
     }
 
     /**
-     * Delete a user by ID (soft delete)
+     * Delete a user by ID (moves the account to the archive; 409 if the user is referenced)
      * @summary Delete a user
      * @param {number} id User ID
      * @param {*} [options] Override http request option.
@@ -7752,7 +7745,7 @@ export class UsersApi extends BaseAPI {
     }
 
     /**
-     * Generate a new random password for a user and return it once
+     * Generate a new random password for a user (admin only; the new password is never returned)
      * @summary Reset user password
      * @param {number} id User ID
      * @param {*} [options] Override http request option.

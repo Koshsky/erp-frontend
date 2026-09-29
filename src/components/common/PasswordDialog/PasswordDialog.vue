@@ -25,8 +25,9 @@ const { dialogEl, onKeydown } = useModalFocus({
     <div v-if="open" class="pd-overlay" @mousedown.self="emit('close')">
       <div ref="dialogEl" class="pd-card" role="dialog" aria-modal="true" :aria-label="caption" tabindex="-1" @keydown="onKeydown">
         <div class="pd-caption">{{ caption }}</div>
-        <CopyField :value="password" />
-        <p class="pd-note">Пароль показывается один раз. Скопируйте его и передайте пользователю.</p>
+        <CopyField v-if="password" :value="password" />
+        <p v-else-if="notice" class="pd-note">{{ notice }}</p>
+        <p v-if="password" class="pd-note">Пароль показывается один раз. Скопируйте его и передайте пользователю.</p>
         <button type="button" class="pd-close" @click="emit('close')">Закрыть</button>
       </div>
     </div>

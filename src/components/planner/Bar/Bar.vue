@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, useSlots, watch } from 'vue'
-import { cellRangeForSpan, clampSpanDates, spanToDates, formatDateRange } from '../calendar'
+import { cellRangeForSpan, clampSpanDates, spanToDates, formatDateRange, fmtDate, toDate } from '../calendar'
 import { useTimelineItem } from '../../../composables/useTimelineItem'
 import { useWindowPointerTrack } from '../../../utils'
 import { TooltipCell } from '../../common'
@@ -159,10 +159,11 @@ watch(
 // === Keyboard move (accessibility) ===
 // A draggable bar is focusable and exposes the same date shift as the pointer
 // drag: ←/→ move by one unit (a day, or a decade cell), Shift+←/→ by five such
-// units, Alt+←/→ always by one day. The shift is applied to the cell span and
-// committed through the very same `change` emit the drag uses (see `onCommit`
-// above), so the result equals a mouse drag by the same number of cells.
-// The resize handles stay pointer-only: they keep `aria-hidden`.
+// units, Alt+←/→ always by one DAY (in decade mode a single cell step would
+// move ten days, so the fine step is computed in days). The shift is applied to
+// the cell span and committed through the very same `change` emit the drag uses
+// (see `onCommit` above), so the result equals a mouse drag by the same number
+// of cells. The resize handles stay pointer-only: they keep `aria-hidden`.
 
 /** Cells in one keyboard step: the timeline unit itself, overridable by prop */
 const moveStepCells = computed(() => {
@@ -199,12 +200,33 @@ function moveBy(deltaCells: number) {
   emit('change', payload)
 }
 
+/** Keyboard fine-step: shifts the whole span by a single calendar day (any unit) */
+function moveByDays(deltaDays: number) {
+  const s = span.value
+  if (!s) return
+  const from = toDate(props.startDate)
+  const to = toDate(props.endDate)
+  const payload = clampSpanDates(
+    fmtDate(new Date(from.getFullYear(), from.getMonth(), from.getDate() + deltaDays)),
+    fmtDate(new Date(to.getFullYear(), to.getMonth(), to.getDate() + deltaDays)),
+    props.groupStartDate,
+    props.groupEndDate,
+  )
+  emit('keyboardmove', payload)
+  emit('change', payload)
+}
+
 function onKeydown(e: KeyboardEvent) {
   if (!props.draggable || e.ctrlKey || e.metaKey) return
   if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return
   e.preventDefault()
+  if (e.altKey) {
+    // Fine-grained step: exactly one day in decade mode too.
+    moveByDays(e.key === 'ArrowLeft' ? -1 : 1)
+    return
+  }
   const base = moveStepCells.value
-  const step = e.shiftKey ? base * 5 : e.altKey ? 1 : base
+  const step = e.shiftKey ? base * 5 : base
   moveBy(e.key === 'ArrowLeft' ? -step : step)
 }
 

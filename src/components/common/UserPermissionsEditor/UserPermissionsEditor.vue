@@ -18,7 +18,7 @@
  * Эмиты: update:overrides (полный набор переопределений), update:dirty,
  * update:preset (смена пресета).
  */
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRbacStore } from '../../../store'
 import type { PermissionCell, PermissionOverride, UserPermissionsModel } from './types'
 import { GROUPS, ACTIONS, RESOURCE_LABELS, ACTION_LABELS, SCOPE_OPTIONS, scopeLabel, DEFAULT_GRANT_ZONE } from './labels'
@@ -187,10 +187,18 @@ function resetAll() { for (const k of Object.keys(staged)) delete staged[k] }
 /* ── управление открытым dropdown (только один открыт) ─── */
 const openDD = ref<string | null>(null)   // key(resource/action) или null
 function toggleDD(k: string) { openDD.value = openDD.value === k ? null : k }
-document.addEventListener('click', (e: Event) => {
+// A click outside any dropdown closes this instance's dropdown. The listener is
+// per-instance (multiple editors live on UserFormPage): it must be attached on
+// mount and removed on unmount, and must only act when THIS instance has an
+// open dropdown — otherwise a stale document listener leaks on every
+// navigation and the closure keeps acting on a dead instance.
+function onDocClick(e: Event) {
+  if (openDD.value === null) return
   const t = e.target as HTMLElement
   if (!t.closest('.dd-wrap')) openDD.value = null
-})
+}
+onMounted(() => document.addEventListener('click', onDocClick))
+onBeforeUnmount(() => document.removeEventListener('click', onDocClick))
 </script>
 
 <template>

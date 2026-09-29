@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed, watch, onScopeDispose } from 'vue'
 import axios, { type AxiosError, type Method } from 'axios'
 import { AuthApi, ProjectsApi, ProcessesApi, TasksApi, TimesheetResourcesApi, TimesheetCalendarApi, TimesheetStatesApi, PlanningApi, MilestonesApi, UsersApi, AssignmentsApi, AutoCreateApi, RBACApi, PermissionsApi, AuditApi, Configuration } from '@/api'
-import type { DtoUserInfo, DtoProject, DtoResourceResponse, DtoResourceCalendar, DtoResourceMemberResponse, DtoResourceAbsenceResponse, DtoUserResponse, DtoUserStateResponse, DtoStateResponse, DtoCreateResourceRequest, DtoUpdateResourceRequest, DtoCreateUserRequest, DtoUpdateUserRequest, DtoSetDaysRequest, DtoAdminUserResponse, DtoCreateUserResult, DtoResetPasswordResponse, DtoAutoCreateConfig, DtoAutoCreatedCounts, DtoCommentResponse, DomainPreset, DtoPresetRuleInput, DtoPresetRuleView, DtoMatrixCell, DtoRoutePolicyView, PoliciesKindInfo, DtoPermission, DtoUserPermissionsView, DtoUserPermissionsInput, DtoAuditEventView } from '@/api'
+import type { DtoUserInfo, DtoProject, DtoResourceResponse, DtoResourceCalendar, DtoResourceMemberResponse, DtoResourceAbsenceResponse, DtoUserResponse, DtoUserStateResponse, DtoStateResponse, DtoCreateResourceRequest, DtoUpdateResourceRequest, DtoCreateUserRequest, DtoUpdateUserRequest, DtoSetDaysRequest, DtoAdminUserResponse, DtoCreateUserResult, DtoAutoCreateConfig, DtoAutoCreatedCounts, DtoCommentResponse, DtoPresetView, DtoPresetRuleInput, DtoPresetRuleView, DtoMatrixCell, DtoRoutePolicyView, EngineKindInfo, DtoPermission, DtoUserPermissionsView, DtoUserPermissionsInput, DtoAuditEventView } from '@/api'
 import { apiErrorMessage } from '@/utils'
 import { getApiUrl } from '@/config'
 import { isOffline } from '@/offline/state'
@@ -24,8 +24,16 @@ import { hydrateFromCache, apiPath } from '@/offline/hydrate'
 import { cacheGetAllByPath } from '@/offline/cache'
 
 const USER_KEY = 'mvs_erp_user'
-/** Cache of my RBAC permissions for offline mode. */
-const PERMS_KEY = 'mvs_erp_perms'
+/**
+ * Cache of my RBAC permissions for offline mode — PER-USER: permissions are a
+ * user-specific matrix (preset + ACL grants/revokes + admin bypass), so the
+ * cache key carries the user id and a logout removes the whole key. Another
+ * account must never pick up a previous login's cached rights.
+ */
+const PERMS_KEY_PREFIX = 'mvs_erp_perms'
+function permsKey(uid: number | null | undefined): string {
+  return uid != null ? `${PERMS_KEY_PREFIX}_${uid}` : PERMS_KEY_PREFIX
+}
 
 /** How long before the token expires that proactive refresh kicks in */
 const REFRESH_MARGIN_MS = 120 * 1000
@@ -64,7 +72,13 @@ interface MutationOptions {
 async function runMutation(opts: MutationOptions): Promise<boolean> {
   try {
     const resp = await opts.call()
-    await opts.apply((resp as { data?: { data?: unknown } })?.data?.data ?? null)
+    // Unwrap the unified envelope exactly TWO levels: `resp.data` is the body
+    // ({ data: <payload>, error }), `resp.data.data` is the payload DTO the
+    // apply callback expects (the created/updated entity). Going one level
+    // deeper (resp.data.data.data = payload.data) yields undefined for every
+    // create/update DTO and would silently drop online mutations from the UI
+    // (the offline/optimistic path is unaffected — it never reads the payload).
+    await opts.apply((resp as { data?: { data?: unknown } } | undefined)?.data?.data ?? null)
     return true
   } catch (e: any) {
     const err = e as AxiosError
@@ -227,6 +241,7 @@ export const useAuthStore = defineStore('auth', () => {
     data: { access_token?: string; user?: DtoUserInfo } | undefined,
     warm = false,
   ) {
+    const prevUid = user.value?.id
     const token = data?.access_token
     setAccessToken(token ?? null)
     if (data?.user) {
@@ -236,6 +251,16 @@ export const useAuthStore = defineStore('auth', () => {
     isAuthenticated.value = Boolean(token)
     sessionMode.value = 'online'
     scheduleProactiveRefresh()
+    // Permission isolation: when a different user id arrives (a login or an
+    // account switch) drop the stale in-memory permission snapshot and fetch
+    // the new account's real rights immediately — the UI must never show the
+    // previous account's matrix. A token rotation keeps the same user, so
+    // nothing to do (the TTL pull cycle owns refreshes).
+    if (prevUid !== user.value?.id) {
+      const rbac = useRbacStore()
+      rbac.resetPermissions()
+      if (!isOffline.value) void rbac.refreshPermissions()
+    }
     // Background warm-up of the offline cache with data for the user's role
     if (warm) scheduleWarmup()
   }
@@ -248,6 +273,7 @@ export const useAuthStore = defineStore('auth', () => {
    */
   function enterOffline(username: string | null): boolean {
     const stored = readStoredUser()
+    const prevUid = user.value?.id
     if (stored?.username && (!username || stored.username === username)) {
       user.value = stored
     } else {
@@ -257,6 +283,8 @@ export const useAuthStore = defineStore('auth', () => {
     stopProactiveRefresh()
     isAuthenticated.value = true
     sessionMode.value = 'offline'
+    // Offline account switch — never keep another profile's permissions.
+    if (prevUid !== user.value?.id) useRbacStore().resetPermissions()
     return true
   }
 
@@ -472,6 +500,12 @@ export const useAuthStore = defineStore('auth', () => {
       }
     })()
     setAccessToken(null)
+    // The permission cache is per-user: drop the logged-out account's key and
+    // the in-memory snapshot so a later login (the same or another account)
+    // starts from its real /permissions/me, never from these rights.
+    const wasUid = user.value?.id
+    if (wasUid != null) localStorage.removeItem(permsKey(wasUid))
+    useRbacStore().resetPermissions()
     localStorage.removeItem(USER_KEY)
     user.value = null
     isAuthenticated.value = false
@@ -626,12 +660,34 @@ export const useAppStore = defineStore('app', () => {
   /** Whether another resources page can be requested */
   const resourcesHasMore = computed(() => resourcesTotal.value > resources.value.length)
 
+  /** Merges a resources page into the current list (dedup by id, fresh wins) — pure */
+  function mergeResourceLists(
+    current: DtoResourceResponse[],
+    items: DtoResourceResponse[],
+  ): DtoResourceResponse[] {
+    const byId = new Map<number, DtoResourceResponse>()
+    for (const r of current) if (r.id != null) byId.set(r.id, r)
+    for (const r of items) if (r.id != null) byId.set(r.id, r)
+    return [...byId.values()]
+  }
+
   /** Merges a resources page into the current list (dedup by id, fresh wins) */
   function mergeResources(items: DtoResourceResponse[]): void {
-    const byId = new Map<number, DtoResourceResponse>()
-    for (const r of resources.value) if (r.id != null) byId.set(r.id, r)
-    for (const r of items) if (r.id != null) byId.set(r.id, r)
-    resources.value = [...byId.values()]
+    resources.value = mergeResourceLists(resources.value, items)
+  }
+
+  /** Whether two resource snapshots are equal field-by-field (same order, same
+   *  ids, same visible fields) — keeps the array reference stable on a
+   *  background refresh so dependent computeds/views do not re-render. */
+  function sameResources(a: DtoResourceResponse[], b: DtoResourceResponse[]): boolean {
+    if (a.length !== b.length) return false
+    for (let i = 0; i < a.length; i++) {
+      if (a[i]?.id !== b[i]?.id) return false
+      for (const key of Object.keys(a[i] ?? {}) as Array<keyof DtoResourceResponse>) {
+        if (a[i][key] !== b[i]?.[key]) return false
+      }
+    }
+    return true
   }
 
   async function loadResources(): Promise<void> {
@@ -656,7 +712,15 @@ export const useAppStore = defineStore('app', () => {
       const api = new TimesheetResourcesApi(apiConfig())
       const resp = await api.resourcesGet(PAGE_SIZE, undefined, 0)
       const data = resp.data?.data
-      resources.value = data?.items ?? []
+      const items = data?.items ?? []
+      // The background PULL must not truncate pages already loaded via
+      // "load more": merge the fresh first page into the existing list (dedup
+      // by id, fresh page wins, extra pages kept) — the same policy the
+      // offline path uses (mergeResources). The array identity is preserved
+      // when the merged roster equals the current one, so dependent views do
+      // not re-render on every quiet refresh cycle.
+      const merged = mergeResourceLists(resources.value, items)
+      if (!sameResources(merged, resources.value)) resources.value = merged
       resourcesTotal.value = data?.total ?? 0
     } catch (e: any) {
       resourcesError.value = e.message || String(e)
@@ -1081,15 +1145,15 @@ export const useAppStore = defineStore('app', () => {
     }
   }
 
-  /** Resets a user's password; returns the new password (shown once) */
-  async function resetPassword(id: number): Promise<string | null> {
+  /** Resets a user's password (admin-only). The password itself is not exposed by the API. */
+  async function resetPassword(id: number): Promise<boolean> {
     try {
       const api = new UsersApi(apiConfig())
-      const resp = await api.userIdResetPasswordPost(id)
-      return resp.data?.data?.password ?? null
+      await api.userIdResetPasswordPost(id)
+      return true
     } catch (e: any) {
       adminUsersError.value = apiErrorMessage(e)
-      return null
+      return false
     }
   }
 
@@ -1370,11 +1434,11 @@ export const useTimesheetStore = defineStore('timesheet', () => {
    * (unexpected payload shape or a request error), falls back to the
    * per-employee path so the timesheet renders even against an older backend.
    */
-  async function refreshPeriodsBatch(start: string, end: string): Promise<void> {
+  async function refreshPeriodsBatch(start: string, end: string): Promise<boolean> {
     const ids = timesheetRows.value
       .map((e) => e.id)
       .filter((id): id is number => id != null)
-    if (ids.length === 0) return
+    if (ids.length === 0) return true
     const api = new UsersApi(apiConfig())
     try {
       const chunks: number[][] = []
@@ -1394,18 +1458,20 @@ export const useTimesheetStore = defineStore('timesheet', () => {
       }
       // Unsync guard: if the backend omitted some requested ids, their current
       // cached data is intentionally kept untouched instead of being wiped.
+      return true
     } catch (e: any) {
       // The batch endpoint may be missing on an older backend — fall back to
       // the per-employee path; surface an error only when the fallback fails too.
       const ok = await refreshPeriodsOneByOne(start, end)
       if (!ok) setError(e)
       else console.warn('[timesheet] batch days unavailable, fell back to per-employee:', e?.message ?? e)
+      return ok
     }
   }
 
   /** Network refresh (PULL) entry point: keeps the (start, end) signature used by warmup/sync/ensureRange */
-  async function refreshPeriods(start: string, end: string): Promise<void> {
-    await refreshPeriodsBatch(start, end)
+  async function refreshPeriods(start: string, end: string): Promise<boolean> {
+    return refreshPeriodsBatch(start, end)
   }
 
   /** An employee's period covering a day (binary search over the sorted periods) */
@@ -1432,12 +1498,17 @@ export const useTimesheetStore = defineStore('timesheet', () => {
     data?: { items?: DtoUserResponse[]; limit?: number; offset?: number; total?: number }
   }
 
+  /** Merges an employees page into the current list (dedup by id, fresh wins) — pure */
+  function mergeEmployeeLists(current: DtoUserResponse[], items: DtoUserResponse[]): DtoUserResponse[] {
+    const byId = new Map<number, DtoUserResponse>()
+    for (const e of current) if (e.id != null) byId.set(e.id, e)
+    for (const e of items) if (e.id != null) byId.set(e.id, e)
+    return [...byId.values()]
+  }
+
   /** Merges an employees page into the current list (dedup by id, fresh wins) */
   function mergeEmployees(items: DtoUserResponse[]): void {
-    const byId = new Map<number, DtoUserResponse>()
-    for (const e of employees.value) if (e.id != null) byId.set(e.id, e)
-    for (const e of items) if (e.id != null) byId.set(e.id, e)
-    employees.value = [...byId.values()]
+    employees.value = mergeEmployeeLists(employees.value, items)
   }
 
   /**
@@ -1488,12 +1559,17 @@ export const useTimesheetStore = defineStore('timesheet', () => {
       const data = resp.data?.data
       // Sorting is added by the computed employeesWithTitles.
       //
-      // The array identity is preserved when the roster did not change: it feeds
-      // timesheetRows → the whole grid. Replacing it with an equal-but-new array
-      // re-renders every row and flickers the "Табель" page on each background
-      // refresh (the same roster is now pulled on a timer).
-      const items = data?.items ?? []
-      if (!sameEmployees(items, employees.value)) employees.value = items
+      // The background PULL must not silently drop pages the user already
+      // opened via "Показать ещё" (PAGE_SIZE=50): instead of wholesale
+      // replacing the array with page 0, merge the fresh first page into the
+      // existing list — dedup by id, fresh page wins, already-loaded extra
+      // pages are kept (the same identity-preserving merge the offline path
+      // uses). The array reference stays stable when the merged roster equals
+      // the current one: it feeds timesheetRows → the whole grid, and
+      // replacing an equal-but-new array re-renders every row and flickers the
+      // "Табель" page on each background refresh.
+      const merged = mergeEmployeeLists(employees.value, data?.items ?? [])
+      if (!sameEmployees(merged, employees.value)) employees.value = merged
       employeesTotal.value = data?.total ?? 0
     } catch (e: any) {
       if (!silent) setError(e)
@@ -1672,14 +1748,18 @@ export const useTimesheetStore = defineStore('timesheet', () => {
     if (startISO < windowStart.value) {
       const from = startISO
       const to = shiftDate(windowStart.value, -1)
-      windowStart.value = startISO
-      await refreshPeriods(from, to)
+      // Fetch first, commit the widened window only on success: advancing the
+      // window before the network round-trip would claim coverage for a range
+      // whose periods never loaded (a failed fetch leaves a silently data-less
+      // band until the next load).
+      const ok = await refreshPeriods(from, to)
+      if (ok) windowStart.value = startISO
     }
     if (endISO > windowEnd.value) {
       const from = shiftDate(windowEnd.value, 1)
       const to = endISO
-      windowEnd.value = endISO
-      await refreshPeriods(from, to)
+      const ok = await refreshPeriods(from, to)
+      if (ok) windowEnd.value = endISO
     }
   }
 
@@ -2880,7 +2960,7 @@ export const usePlanningStore = defineStore('planning', () => {
 // All operations are online-only (no outbox/offline support needed).
 // =============================================================
 export const useRbacStore = defineStore('rbac', () => {
-  const presets = ref<DomainPreset[]>([])
+  const presets = ref<DtoPresetView[]>([])
   /** Active preset matrix rules (with id — needed to delete "no access" entries). */
   const presetRules = ref<DtoPresetRuleView[]>([])
   /** Effective matrix (with the admin bypass) — the display source. */
@@ -2888,7 +2968,7 @@ export const useRbacStore = defineStore('rbac', () => {
   /** Route checks (read-only reference). */
   const routePolicies = ref<DtoRoutePolicyView[]>([])
   /** Reference of route check kinds. */
-  const kinds = ref<PoliciesKindInfo[]>([])
+  const kinds = ref<EngineKindInfo[]>([])
   const loading = ref(false)
   const saving = ref(false)
   const error = ref<string | null>(null)
@@ -2934,7 +3014,17 @@ export const useRbacStore = defineStore('rbac', () => {
   const myPermissions = ref<DtoPermission[]>([])
   const permsLoaded = ref(false)
 
-  /** Scope ownership by resource — mirrors policies.go (own/parent/ancestor). */
+  /**
+   * Ownership (ABAC) satisfaction by scope — the client-side mirror of the
+   * backend owner-chain evaluation in internal/authz/engine (decision.go:
+   * ownField/parentField/ancestorMatch). Owners come from the card data
+   * (planning/app stores), not from the permission list:
+   *   own      — project → projectOwner, process → processOwner,
+   *              task/resource/worker → owner (worker: manager_id);
+   *   parent   — process → projectOwner, task/milestone/assignment → processOwner;
+   *   ancestor — any of owner/processOwner/projectOwner (task/milestone/assignment/process).
+   * Scopes themselves come from /permissions/me (the Casbin snapshot).
+   */
   function scopeSatisfied(scope: string, resource: string, uid: number, o: { owner?: number | null; projectOwner?: number | null; processOwner?: number | null }): boolean {
     if (scope === 'all') return true
     if (uid <= 0) return false
@@ -3005,7 +3095,7 @@ export const useRbacStore = defineStore('rbac', () => {
   async function loadMyPermissions(): Promise<boolean> {
     if (permsLoaded.value) return true
     try {
-      const cached = localStorage.getItem(PERMS_KEY)
+      const cached = localStorage.getItem(permsKey(useAuthStore().user?.id))
       if (cached) {
         const parsed = JSON.parse(cached)
         // Defensive: a valid-JSON non-array payload must not overwrite the ref
@@ -3030,7 +3120,10 @@ export const useRbacStore = defineStore('rbac', () => {
       myPermissions.value = resp.data?.data ?? []
       permsLoaded.value = true
       try {
-        localStorage.setItem(PERMS_KEY, JSON.stringify(myPermissions.value))
+        localStorage.setItem(
+          permsKey(useAuthStore().user?.id),
+          JSON.stringify(myPermissions.value),
+        )
       } catch {
         /* localStorage may be unavailable */
       }
@@ -3038,6 +3131,16 @@ export const useRbacStore = defineStore('rbac', () => {
     } catch {
       return false
     }
+  }
+
+  /**
+   * Drops the in-memory permission snapshot (called on account switch and
+   * logout): the UI must never keep rights of another user. The next
+   * /permissions/me (login refresh / router-guard load / TTL pull) fills it.
+   */
+  function resetPermissions() {
+    myPermissions.value = []
+    permsLoaded.value = false
   }
 
   /** Periodic permissions sync (TTL polling following the backend). */
@@ -3207,6 +3310,7 @@ export const useRbacStore = defineStore('rbac', () => {
     deletePreset,
     myPermissions,
     permsLoaded,
+    resetPermissions,
     can,
     perm,
     canOwn,
