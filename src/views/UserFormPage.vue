@@ -2,9 +2,10 @@
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
-import { HintButton, PasswordDialog, UserPermissionsEditor } from '../components/common'
+import { HintButton, ConfirmDialog, PasswordDialog, UserPermissionsEditor } from '../components/common'
 import { useAppStore, useAuthStore, useRbacStore } from '../store'
 import { compareByName, translitPhio } from '../utils'
+import { useConfirm } from '../composables/useConfirm'
 import type { DtoAdminUserResponse, DtoCreateUserRequest, DtoUpdateUserRequest } from '@/api'
 import type { PermissionOverride } from '../components/common/UserPermissionsEditor/types'
 
@@ -228,6 +229,44 @@ function onPasswordClose() {
   void router.push('/users')
 }
 
+// === Сброс пароля (только редактирование, admin-only — как редактор прав) ===
+const { confirm: confirmDialog, ask, proceed, cancel } = useConfirm()
+const resetBusy = ref(false)
+/** Generated password shown once after a reset (edit mode; stays on the page) */
+const resetPasswordModal = ref<{ password: string; caption: string } | null>(null)
+
+/** Display name of the edited user (from the form — the list may not contain them on a direct URL) */
+const editedUserName = computed(() => {
+  const fromList = adminUsers.value.find((x) => x.id === editingUserId.value)?.name
+  if (fromList) return fromList
+  return [form.lastName, form.firstName].filter(Boolean).join(' ').trim() || 'пользователь'
+})
+
+function askResetPassword() {
+  ask('Сбросить пароль? Новый пароль будет показан один раз после сброса.', () => {
+    void onResetPassword()
+  })
+}
+
+async function onResetPassword() {
+  const id = editingUserId.value
+  if (id == null) return
+  resetBusy.value = true
+  try {
+    const password = await app.resetPassword(id)
+    // The generated password comes back from the backend once — show it.
+    if (password) {
+      resetPasswordModal.value = {
+        password,
+        caption: `Пароль для «${editedUserName.value}» сброшен`,
+      }
+    }
+    // A failed reset is reported by the global toast (http.ts) — no inline banner.
+  } finally {
+    resetBusy.value = false
+  }
+}
+
 async function onSubmit() {
   if (!canSubmit.value) {
     submitAttempted.value = true
@@ -385,6 +424,16 @@ async function onSubmit() {
 
           <div class="ufp-actions">
             <button type="button" class="ufp-btn" @click="router.push('/users')">Назад</button>
+            <button
+              v-if="isEdit && canManageUserRights"
+              type="button"
+              class="ufp-btn ufp-reset"
+              :disabled="resetBusy"
+              :title="'Сбросить пароль пользователя'"
+              @click="askResetPassword"
+            >
+              {{ resetBusy ? 'Сброс…' : 'Сбросить пароль' }}
+            </button>
             <button type="button" class="ufp-add" :disabled="!canSubmit" @click="onSubmit">
               {{
                 busy
@@ -424,6 +473,23 @@ async function onSubmit() {
       :password="passwordModal?.password ?? ''"
       :caption="passwordModal?.caption ?? ''"
       @close="onPasswordClose"
+    />
+
+    <!-- Reset-password confirmation (edit mode, admin) -->
+    <ConfirmDialog
+      :open="!!confirmDialog"
+      :message="confirmDialog?.message ?? ''"
+      :confirm-label="confirmDialog?.confirmLabel"
+      @confirm="proceed"
+      @close="cancel"
+    />
+
+    <!-- Generated password shown once (after a reset in the user editor) -->
+    <PasswordDialog
+      :open="resetPasswordModal !== null"
+      :password="resetPasswordModal?.password ?? ''"
+      :caption="resetPasswordModal?.caption ?? ''"
+      @close="resetPasswordModal = null"
     />
   </section>
 </template>
@@ -602,6 +668,14 @@ async function onSubmit() {
 }
 .ufp-btn:hover {
   background: var(--ui-accent-soft);
+}
+/* Reset-password action: secondary button with the danger tint */
+.ufp-reset {
+  border-color: color-mix(in srgb, var(--ui-danger) 35%, transparent);
+  color: var(--ui-danger);
+}
+.ufp-reset:hover:not(:disabled) {
+  background: var(--ui-danger-soft);
 }
 .ufp-add {
   border: none;

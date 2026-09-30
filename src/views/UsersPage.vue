@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useRouter } from 'vue-router'
-import { HintButton, ContextMenu, ConfirmDialog, PasswordDialog } from '../components/common'
+import { HintButton, ContextMenu, ConfirmDialog } from '../components/common'
 import type { ContextMenuItem } from '../components/common/ContextMenu'
 import { useConfirm } from '../composables/useConfirm'
 import { useContextMenu } from '../composables/useContextMenu'
@@ -93,7 +93,6 @@ const menuItems = computed<ContextMenuItem[]>(() => {
   const items: ContextMenuItem[] = []
   if (rbac.can('user_admin', 'update')) {
     items.push({ id: 'edit-user', label: 'Редактировать' })
-    items.push({ id: 'reset-password', label: 'Сбросить пароль' })
   }
   if (rbac.can('user_admin', 'delete')) {
     items.push({ id: 'delete-user', label: 'Удалить пользователя' })
@@ -114,8 +113,7 @@ function handleSelect(id: string) {
   if (!u) return
   if (id === 'edit-user') {
     goToEdit(u)
-  } else if (id === 'reset-password') onResetPassword(u)
-  else if (id === 'delete-user') askDelete(u)
+  } else if (id === 'delete-user') askDelete(u)
 }
 
 // === Deleting a user (soft delete; lifecycle lives in this admin section) ===
@@ -150,26 +148,6 @@ function onRowKeydown(e: KeyboardEvent, u: DtoAdminUserResponse) {
     e.preventDefault()
     goToEdit(u)
   }
-}
-
-// === Showing the generated password (once) ===
-const passwordModal = ref<{ password?: string; notice?: string; caption: string } | null>(null)
-
-function showPassword(password: string | undefined, caption: string) {
-  if (!password) return
-  passwordModal.value = { password, caption }
-}
-
-async function onResetPassword(user: DtoAdminUserResponse) {
-  if (user.id == null) return
-  const ok = await app.resetPassword(user.id)
-  if (ok) {
-    passwordModal.value = {
-      caption: `Пароль для «${user.name}» сброшен`,
-      notice: 'Новый пароль не передаётся по сети; сообщите пользователю о сбросе.',
-    }
-  }
-  // Failed resets are surfaced by the global error notification (http.ts).
 }
 
 onMounted(() => {
@@ -273,14 +251,6 @@ async function refreshAfterMutation() {
       :confirm-label="confirmDialog?.confirmLabel"
       @confirm="proceed"
       @close="cancel"
-    />
-
-    <!-- Generated password shown once (after reset) -->
-    <PasswordDialog
-      :open="passwordModal !== null"
-      :password="passwordModal?.password ?? ''"
-      :caption="passwordModal?.caption ?? ''"
-      @close="passwordModal = null"
     />
   </section>
 </template>

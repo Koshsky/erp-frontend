@@ -1175,15 +1175,16 @@ export const useAppStore = defineStore('app', () => {
     }
   }
 
-  /** Resets a user's password (admin-only). The password itself is not exposed by the API. */
-  async function resetPassword(id: number): Promise<boolean> {
+  /** Resets a user's password (admin-only); returns the generated password (shown once) or null. */
+  async function resetPassword(id: number): Promise<string | null> {
     try {
       const api = new UsersApi(apiConfig())
-      await api.userIdResetPasswordPost(id)
-      return true
+      const resp = await api.userIdResetPasswordPost(id)
+      // The backend now returns the generated password once in the body.
+      return resp.data?.data?.password ?? null
     } catch (e: any) {
       adminUsersError.value = apiErrorMessage(e)
-      return false
+      return null
     }
   }
 
