@@ -10,6 +10,10 @@ The web app and the desktop wrapper (`desktop/`) are versioned together.
 
 ### Added
 
+- Sidebar icons are sourced from a bundled Lucide catalog (one glyph per section).
+- Sidebar icons can be overridden at runtime by dropping custom SVG files into the mounted `assets/custom/icons` directory (no rebuild).
+- States support a custom color: shown in the statuses list, the timesheet legend, the assignment panel and the day cells.
+- User editor: resetting a password shows the newly generated password once.
 - Audit page: when the backend journal is disabled, a help card explains how to enable it instead of a raw 404 error.
 - Users page: sortable "Preset" column with Russian preset labels.
 - Profile page: connection status and app/version cards.
