@@ -15,6 +15,12 @@ export const timesheetGridArgTypes: ArgTypes<TimesheetGridProps> = {
     control: 'object',
     table: { type: { summary: 'DtoStateResponse[]' }, category: 'Data' },
   },
+  colorMap: {
+    name: 'Карта цветов',
+    description: 'Состояние id → пользовательский цвет (свотчи и ячейки)',
+    control: 'object',
+    table: { type: { summary: 'Record<number, string>' }, category: 'Data' },
+  },
   stateForDay: {
     name: 'Состояние на день',
     description: 'Функция: состояние сотрудника на конкретный день',

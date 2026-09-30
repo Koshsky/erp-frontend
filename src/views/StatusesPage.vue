@@ -37,7 +37,7 @@ const { confirm: confirmDialog, ask, proceed, cancel } = useConfirm()
 
 type ModalMode =
   | { type: 'create' }
-  | { type: 'edit'; id: number; code: string; name: string; isAvailable: boolean }
+  | { type: 'edit'; id: number; code: string; name: string; isAvailable: boolean; color: string }
 
 /** Status availability (ModalField does not support boolean — we use '1'/'0') */
 const availabilityOptions: ModalField['options'] = [
@@ -49,6 +49,12 @@ const { open: openModal, close: closeModal, submit: submitModal, bind: modalBind
   (state) => [
     { key: 'code', label: 'Код', type: 'text', value: state.type === 'edit' ? state.code : '', required: true },
     { key: 'name', label: 'Название', type: 'text', value: state.type === 'edit' ? state.name : '', required: true },
+    {
+      key: 'color',
+      label: 'Цвет',
+      type: 'color',
+      value: state.type === 'edit' ? state.color ?? '' : '',
+    },
     {
       key: 'isAvailable',
       label: 'Доступность',
@@ -62,6 +68,8 @@ const { open: openModal, close: closeModal, submit: submitModal, bind: modalBind
       code: String(values.code ?? '').trim(),
       name: String(values.name ?? '').trim(),
       is_available: values.isAvailable === '1',
+      // '' means "no custom color" — the backend stores NULL (palette fallback).
+      color: String(values.color ?? ''),
     }
     const ok =
       state.type === 'create'
@@ -93,6 +101,7 @@ function openEdit(id: number) {
       code: st.code ?? '',
       name: st.name ?? '',
       isAvailable: st.is_available ?? true,
+      color: st.color ?? '',
     })
   }
 }
@@ -143,6 +152,7 @@ onMounted(() => {
           @contextmenu.prevent.stop="onRowContextMenu($event, st)"
         >
           <div class="code">
+            <span v-if="st.color" class="swatch" :style="{ background: st.color }" aria-hidden="true"></span>
             {{ st.code }}
             <PendingMark entity="state" :id="st.id" />
           </div>
@@ -232,8 +242,19 @@ onMounted(() => {
   color: var(--ui-text-muted);
 }
 .code {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-weight: 700;
   color: var(--ui-accent);
+}
+/* Borderless custom-color swatch next to the state code (only when a color is set) */
+.swatch {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  display: inline-block;
 }
 .avail {
   display: inline-block;

@@ -355,6 +355,7 @@ const labelsH = computed(() => props.employees.length * ROW_H)
             :selection-range="selectionRangeFor(emp.id ?? 0, i)"
             :tooltip-disabled="dragging"
             :show-text="t.cellPx >= 40"
+            :color-map="props.colorMap"
           />
         </div>
       </div>
@@ -398,7 +399,7 @@ const labelsH = computed(() => props.employees.length * ROW_H)
             >
               <span
                 class="ts-state-swatch"
-                :style="{ background: stateBackground(st.code, st.is_available, st.id) }"
+                :style="{ background: st.color ?? stateBackground(st.code, st.is_available, st.id) }"
               />
               {{ st.name }}
             </button>

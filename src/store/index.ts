@@ -1713,6 +1713,8 @@ export const useTimesheetStore = defineStore('timesheet', () => {
     code: string
     name: string
     is_available: boolean
+    /** Custom state color (hex); empty/absent — palette fallback */
+    color?: string
   }
 
   /** Creates a status and updates the reference */

@@ -100,6 +100,16 @@ async function onLoadMoreEmployees() {
   const ok = await ts.loadMoreEmployees()
   if (ok) await ts.refreshPeriods(ts.windowStart, ts.windowEnd)
 }
+
+/** state_id → user-defined color (custom overrides the palette fallback in
+ *  the legend, the assignment swatches and every day cell). */
+const stateColorMap = computed<Record<number, string>>(() => {
+  const map: Record<number, string> = {}
+  for (const st of states.value) {
+    if (st.id != null && st.color) map[st.id] = st.color
+  }
+  return map
+})
 </script>
 
 <template>
@@ -110,7 +120,7 @@ async function onLoadMoreEmployees() {
         <span v-for="st in states" :key="'lg' + st.id" class="tp-legend-item">
           <span
             class="tp-swatch"
-            :style="{ background: stateBackground(st.code, st.is_available, st.id) }"
+            :style="{ background: st.color ?? stateBackground(st.code, st.is_available, st.id) }"
           />
           {{ st.name }}
         </span>
@@ -154,6 +164,7 @@ async function onLoadMoreEmployees() {
             :t="t"
             :employees="visibleRows"
             :states="states"
+            :color-map="stateColorMap"
             :state-for-day="(id, iso) => ts.periodFor(id, iso)"
             :busy="busy"
             :can-assign="(id) => canAssignEmployeeDays(employeeById(id)?.manager_id)"
