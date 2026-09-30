@@ -1,6 +1,6 @@
 # CI for erp-frontend.
 # The "CI / Branch policy" check is the required status check for main/staging/dev
-# (see scripts/branch-protection/ in erp-infra).
+# (see scripts/branch-protection/ in the workspace).
 name: CI
 
 on:
