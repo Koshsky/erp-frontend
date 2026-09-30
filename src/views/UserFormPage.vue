@@ -13,7 +13,7 @@ const router = useRouter()
 const app = useAppStore()
 const auth = useAuthStore()
 const rbac = useRbacStore()
-const { adminUsers, adminUsersError, users } = storeToRefs(app)
+const { adminUsers, users } = storeToRefs(app)
 
 /**
  * Assigning a preset and per-user permissions is an admin-only business rule
@@ -59,7 +59,8 @@ const form = reactive({
 /** Логин редактировался вручную — автозаполнение из ФИО выключается */
 const loginTouched = ref(false)
 
-/** Ошибка последней отправки (для пользователя) */
+/** Ошибка загрузки/редактирования: пользователь не найден (см. missing);
+ *  ошибки сохранения показывает глобальный тост (http.ts). */
 const error = ref<string | null>(null)
 const busy = ref(false)
 /** Режим редактирования: список пользователей грузится перед показом формы */
@@ -233,7 +234,6 @@ async function onSubmit() {
     return
   }
   busy.value = true
-  error.value = null
   try {
     const common = {
       last_name: form.lastName.trim(),
@@ -255,16 +255,14 @@ async function onSubmit() {
       if (form.terminationDate) patch.termination_date = form.terminationDate
       const ok = await app.updateUser(id, patch)
       const nextManager = form.managerId === '' ? null : Number(form.managerId)
+      // A failed save is reported by the global toast (http.ts); the page
+      // stays open with the entered values for a retry.
       if (ok && nextManager !== savedManagerId.value) await app.updateManager(id, nextManager)
-      if (!ok) {
-        error.value = adminUsersError.value
-        return
-      }
+      if (!ok) return
       // Сохранение профиля НЕ закрывает страницу (права доступа — на отдельной
       // странице /edit/access); при повторном сохранении менеджер считается
       // «сохранённым».
       savedManagerId.value = nextManager
-      error.value = null
       profileSaved.value = true
       return
     }
@@ -299,9 +297,9 @@ async function onSubmit() {
       } else {
         void router.push('/users')
       }
-    } else {
-      error.value = adminUsersError.value
     }
+    // A failed creation is reported by the global toast (http.ts); the form
+    // stays on the page for a retry.
   } finally {
     busy.value = false
   }
@@ -381,11 +379,12 @@ async function onSubmit() {
             </div>
           </div>
 
-          <p v-if="error" class="ufp-error" role="alert">{{ error }}</p>
+          <!-- Mutation failures are surfaced by the global toast (http.ts);
+               inline errors here are only the load/not-found message above. -->
           <p v-if="validationMessage" class="ufp-error" role="alert">{{ validationMessage }}</p>
 
           <div class="ufp-actions">
-            <button type="button" class="ufp-btn" @click="router.push('/users')">Отмена</button>
+            <button type="button" class="ufp-btn" @click="router.push('/users')">Назад</button>
             <button type="button" class="ufp-add" :disabled="!canSubmit" @click="onSubmit">
               {{
                 busy
