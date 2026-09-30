@@ -25,6 +25,7 @@ The web app and the desktop wrapper (`desktop/`) are versioned together.
 - Access editor highlights a row only while the frontend draft differs from the backend state.
 - Settings page: per-domain warm-up toggles removed, tiles spaced tighter.
 - User create/edit form: the cancel button is now "Back".
+- Failed mutations are no longer rendered inline on pages — the toast stack is the single notification channel.
 
 ## [1.0.1] - 2026-09-30
 
