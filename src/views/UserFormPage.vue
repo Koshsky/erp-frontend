@@ -245,7 +245,7 @@ const editedUserName = computed(() => {
 function askResetPassword() {
   ask('Сбросить пароль? Новый пароль будет показан один раз после сброса.', () => {
     void onResetPassword()
-  })
+  }, 'Сбросить')
 }
 
 async function onResetPassword() {
