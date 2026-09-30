@@ -24,8 +24,8 @@ Frontend service of the MVS ERP monorepo (repo root is `../..`, sibling `service
   `dist/` into the release as `resources/web` (`extraResources` in
   `desktop/package.json`).
 - Versioning: web and desktop share ONE version — the single source of truth
-  is this service's `package.json`; `build-portable.sh` builds that version
-  as is (bump only via `--bump`) and syncs `desktop/package.json` (+ its
+  is this service's `package.json`; `build-portable.sh` always builds that
+  version as is (it never bumps) and syncs `desktop/package.json` (+ its
   lockfile) to the same value automatically.
 - **Never** run `electron-builder` / `npm run dist*` by hand against a
   pre-existing `dist/`: a stale `dist/` gets embedded into a newly versioned
