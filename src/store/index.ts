@@ -9,6 +9,7 @@ import { isOffline } from '@/offline/state'
 import { offlineFailFastAdapter } from '@/offline/failFast'
 import { scheduleWarmup } from '@/offline/warmup'
 import { enqueueMutation, isNetworkError, pruneForeignOutbox, type MutationEntity } from '@/offline/outbox'
+import { scheduleDomainRefresh } from '@/offline/sync'
 import { applyRangeSplit } from '@/offline/periodSplit'
 import { getAccessToken, setAccessToken } from '@/token'
 import {
@@ -76,7 +77,10 @@ interface MutationOptions {
  * Runs a mutation with offline support:
  *  - network unavailable (or a network error) → the request is saved to the
  *    outbox queue and the optimistic change is applied, returns true;
- *  - online success → the regular apply;
+ *  - online success → the regular apply, then a coalesced background refresh
+ *    of the mutated domains (scheduleDomainRefresh): related pages (the other
+ *    planning aggregates) become server-fresh immediately instead of waiting
+ *    for the slow PULL cycle — the "backend > cache" rule while online;
  *  - server error → false + onError (as before offline support).
  *  Auth/passwords (/auth/*, changePassword) do not go through this path.
  */
@@ -90,6 +94,11 @@ async function runMutation(opts: MutationOptions): Promise<boolean> {
     // create/update DTO and would silently drop online mutations from the UI
     // (the offline/optimistic path is unaffected — it never reads the payload).
     await opts.apply((resp as { data?: { data?: unknown } } | undefined)?.data?.data ?? null)
+    // Post-mutation consistency (online only): the outbox flush path owns the
+    // refresh of queued changes (reconcile), so here the refresh is skipped
+    // while isOffline — an optimistic entry would otherwise be reconciled
+    // against the pre-mutation server state.
+    if (!isOffline.value) scheduleDomainRefresh([opts.entity])
     return true
   } catch (e: any) {
     const err = e as AxiosError
@@ -1156,6 +1165,9 @@ export const useAppStore = defineStore('app', () => {
       const api = new UsersApi(apiConfig())
       const resp = await api.userPost(payload)
       await loadAdminUsers()
+      // The new account must appear in the roster/name catalog immediately
+      // (coalesced silent refresh of the user domains).
+      if (!isOffline.value) scheduleDomainRefresh(['user'])
       return resp.data?.data ?? null
     } catch (e: any) {
       adminUsersError.value = apiErrorMessage(e)
@@ -1181,6 +1193,7 @@ export const useAppStore = defineStore('app', () => {
       const api = new UsersApi(apiConfig())
       await api.userIdPut(id, patch)
       await loadAdminUsers()
+      if (!isOffline.value) scheduleDomainRefresh(['user'])
       return true
     } catch (e: any) {
       adminUsersError.value = apiErrorMessage(e)
@@ -1194,6 +1207,9 @@ export const useAppStore = defineStore('app', () => {
       const api = new UsersApi(apiConfig())
       await api.userIdManagerPut(id, { manager_id: managerId ?? undefined })
       await loadAdminUsers()
+      // The structure change must refresh the "Руководитель" column on the
+      // Employees page and the roster immediately.
+      if (!isOffline.value) scheduleDomainRefresh(['user'])
       return true
     } catch (e: any) {
       adminUsersError.value = apiErrorMessage(e)
@@ -1207,6 +1223,8 @@ export const useAppStore = defineStore('app', () => {
       const api = new UsersApi(apiConfig())
       await api.userIdDelete(id)
       await loadAdminUsers()
+      // The deleted account must leave the roster/name catalog immediately.
+      if (!isOffline.value) scheduleDomainRefresh(['user'])
       return true
     } catch (e: any) {
       adminUsersError.value = apiErrorMessage(e)
@@ -2458,6 +2476,17 @@ export const usePlanningStore = defineStore('planning', () => {
         const app = useAppStore()
         insertAt(projectPlanning.value?.projects, undefined, item)
         insertAt(app.projects, undefined, item)
+        // Immediate visibility in the processes aggregate too (the coalesced
+        // post-mutation refresh confirms the group and extends it with the
+        // auto-created processes/tasks).
+        insertAt(processPlanning.value?.projects, undefined, {
+          id: item.id,
+          project_code: item.project_code,
+          start_date: item.start_date,
+          end_date: item.end_date,
+          priority: item.priority,
+          processes: [],
+        })
       },
       optimistic: () => {
         const item = {
@@ -2472,6 +2501,14 @@ export const usePlanningStore = defineStore('planning', () => {
         const app = useAppStore()
         insertAt(projectPlanning.value?.projects, undefined, item)
         insertAt(app.projects, undefined, item)
+        insertAt(processPlanning.value?.projects, undefined, {
+          id: tempId,
+          project_code: payload.code,
+          start_date: payload.start_date,
+          end_date: payload.end_date,
+          priority: payload.priority ?? 100,
+          processes: [],
+        })
       },
       onError: (m) => {
         error.value = m
@@ -2735,6 +2772,16 @@ export const usePlanningStore = defineStore('planning', () => {
     const remove = () => {
       removeById(projectPlanning.value?.projects, id)
       removeById(useAppStore().projects, id)
+      // Cascade into the sibling aggregates so the deleted project's processes
+      // (and their task groups) vanish from the Process/Task Gantts immediately —
+      // the coalesced refetch confirms the server-side cascade afterwards.
+      removeById(processPlanning.value?.projects, id)
+      if (Array.isArray(taskPlanning.value?.processes)) {
+        const kept = taskPlanning.value.processes.filter((p: any) => p.project_id !== id)
+        if (kept.length !== taskPlanning.value.processes.length) {
+          taskPlanning.value.processes = kept
+        }
+      }
     }
     return runMutation({
       entity: 'project',

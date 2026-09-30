@@ -11,6 +11,8 @@ import type { PlanningUnit } from '../components/planner/calendar'
 import { useEmployeeFilters } from '../composables/useEmployeeFilters'
 import { useRoleAccess } from '../composables/useRoleAccess'
 import { useAppStore, useAuthStore, useRbacStore, useTimesheetStore } from '../store'
+import { isOffline } from '../offline/state'
+import { scheduleNamedRefresh } from '../offline/sync'
 
 const ts = useTimesheetStore()
 const auth = useAuthStore()
@@ -65,6 +67,10 @@ onMounted(async () => {
   // ranges until the user made an edit (periods were excluded from the
   // background cycle). refreshPeriods never toggles loading/warmup UI.
   if (ts.windowStart) void ts.refreshPeriods(ts.windowStart, ts.windowEnd)
+  // Page-entry SWR (online): cache-first render, then re-read the roster (and
+  // name catalogs) so user mutations done elsewhere show up immediately —
+  // period refresh above only covers the already-visible rows.
+  if (!isOffline.value) void scheduleNamedRefresh(['employees', 'users', 'myStaff'])
 })
 
 /** Lazy-load states on scroll/zoom (debounced) */

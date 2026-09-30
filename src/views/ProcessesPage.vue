@@ -16,6 +16,8 @@ import { compareByName } from '../utils'
 import { useRoleAccess } from '../composables/useRoleAccess'
 import { useFindPlanningItem } from '../composables/useFindPlanningItem'
 import { usePlanningStore, useAppStore } from '../store'
+import { isOffline } from '../offline/state'
+import { scheduleNamedRefresh } from '../offline/sync'
 import { addMonthsISO, shiftSpanDates } from '../components/planner/calendar'
 import { CELL_WIDTH } from '../components/planner/layout'
 
@@ -211,6 +213,10 @@ async function handleSelect(id: string) {
 onMounted(() => {
   store.loadProcessPlanning()
   if (!app.users.length) void app.loadUsers()
+  // Page-entry SWR (online): cache-first render, then re-read the process
+  // aggregate and its parent project bars so recent mutations show up
+  // immediately.
+  if (!isOffline.value) void scheduleNamedRefresh(['process-plan', 'project-plan'])
 })
 </script>
 
