@@ -205,14 +205,53 @@ function isPresetZone(r: string, a: string, value: string): boolean {
   return rowSource(r, a) === 'preset' && isChipOn(r, a, value)
 }
 
+/**
+ * Server snapshot of the user's effective permissions — what the BACKEND holds
+ * right now: the loaded rbac.userPermissions preset rules (preset_scope) merged
+ * with the saved overrides, using the same effectiveOf logic as the model but
+ * built ONLY from the server snapshot (never from the live matrix). It drives
+ * the "changed" rows in user mode: a row must be highlighted only while the
+ * frontend staged value differs from this snapshot, not from the preset
+ * baseline — so after a successful save (and a reload of the snapshot) the
+ * highlight clears.
+ */
+const serverSnapshot = computed<Record<string, string>>(() => {
+  const v = rbac.userPermissions
+  if (!v) return {}
+  const presetScope = (v.preset_scope ?? []).map((p) => ({
+    resource: p.resource ?? '',
+    action: p.action ?? '',
+    scope: p.scope ?? '',
+  }))
+  const overrides = (v.overrides ?? []).map((o) => ({
+    resource: o.resource,
+    action: o.action,
+    scope: o.scope ?? '',
+    granted: o.granted ?? false,
+  }))
+  const m: Record<string, string> = {}
+  for (const c of effectiveOf(presetScope, overrides)) m[key(c.resource, c.action)] = c.scope
+  return m
+})
+
 /** Реальное изменение строки относительно базиса: запрет — всегда; override
  *  — только если его зона канонически отличается от зоны пресета (override,
  *  совпадающий с пресетом, изменением не является). */
 function isChangedCell(r: string, a: string): boolean {
-  const s = rowSource(r, a)
-  if (s === 'revoked') return true
-  if (s !== 'override') return false
-  return canonicalScope(effectiveZone(r, a)) !== canonicalScope(presetMap.value[key(r, a)] ?? '')
+  if (isDraft.value) {
+    // Draft mode (create): no server exists — compare against the preset baseline.
+    const s = rowSource(r, a)
+    if (s === 'revoked') return true
+    if (s !== 'override') return false
+    return canonicalScope(effectiveZone(r, a)) !== canonicalScope(presetMap.value[key(r, a)] ?? '')
+  }
+  // User mode: yellow only when the staged row differs from what the backend
+  // holds (the server snapshot); a saved row matches the snapshot → not yellow.
+  const ov = overrideOf(r, a)
+  let stagedScope: string
+  if (ov) stagedScope = ov.granted ? ov.scope ?? '' : ''
+  else stagedScope = presetMap.value[key(r, a)] ?? ''
+  return canonicalScope(stagedScope) !== canonicalScope(serverSnapshot.value[key(r, a)] ?? '')
 }
 
 /* ── сводка карточки ресурса ───────────────────────────── */

@@ -17,7 +17,7 @@ const router = useRouter()
 const app = useAppStore()
 const auth = useAuthStore()
 const rbac = useRbacStore()
-const { adminUsers, adminUsersError } = storeToRefs(app)
+const { adminUsers } = storeToRefs(app)
 
 const PRESET_LABELS: Record<string, string> = {
   admin: 'Администратор',
@@ -70,35 +70,29 @@ onMounted(async () => {
 /* ── переопределения (staged) + сохранение ─────────────── */
 const permissionOverrides = ref<PermissionOverride[]>([])
 const permissionDirty = ref(false)
-const permissionError = ref<string | null>(null)
 const permissionSaved = ref(false)
-/** Ошибка сохранения пресета (свойство профиля). */
-const presetError = ref<string | null>(null)
 
 async function savePermissions(): Promise<boolean> {
   const id = userId.value
   if (id == null) return false
-  permissionError.value = null
+  // A failed save is reported by the global toast (http.ts), not inline.
   const ok = await rbac.saveUserPermissions(id, permissionOverrides.value)
-  if (!ok) {
-    permissionError.value = rbac.userPermissionsError ?? 'Не удалось сохранить права'
-    return false
-  }
+  if (!ok) return false
   permissionDirty.value = false
   permissionSaved.value = true
+  // Refresh the server snapshot so the yellow "changed" rows clear — a row is
+  // highlighted only while the frontend staged value differs from the backend.
+  void rbac.loadUserPermissions(id)
   return true
 }
 
-/** Смена пресета на странице прав сохраняется сразу (это свойство профиля). */
+/** Смена пресета на странице прав сохраняется сразу (это свойство профиля).
+ *  Ошибка сохранения — в глобальный тост (http.ts). */
 function onChangePreset(preset: string) {
   const id = userId.value
   if (id == null || user.value == null || user.value.preset === preset) return
   user.value.preset = preset
-  void (async () => {
-    presetError.value = null
-    const ok = await app.updateUser(id, { preset })
-    if (!ok) presetError.value = adminUsersError.value ?? 'Не удалось сохранить пресет'
-  })()
+  void app.updateUser(id, { preset })
 }
 
 watch(permissionDirty, (dirty) => {
@@ -134,9 +128,6 @@ watch(permissionDirty, (dirty) => {
         @update:overrides="permissionOverrides = $event"
         @update:dirty="permissionDirty = $event"
       />
-
-      <p v-if="presetError" class="ua-error" role="alert">{{ presetError }}</p>
-      <p v-if="permissionError" class="ua-error" role="alert">{{ permissionError }}</p>
 
       <div class="ua-actions">
         <p v-if="permissionSaved" class="ua-ok" role="status">Права сохранены ✓</p>
