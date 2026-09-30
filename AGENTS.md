@@ -6,12 +6,16 @@ Frontend service of the MVS ERP monorepo (repo root is `../..`, sibling `service
 
 - Code comments, documentation, and commit messages are written in **English only**.
 - UI strings and user-facing messages stay in Russian (the product language) — never translate them (they are displayed to the user, not documentation).
+- **Deliberate exception — CHANGELOG entries are bilingual** (English first, then Russian), see the Changelog section below; never strip the Russian half.
 
 ## Commands
 - `npm run dev` runs **Storybook** (port 6006) — not the app. `npm start` runs the Vite dev server (port 5173); `npm run stop` kills it.
 - There is **no `npm test`**. Vitest tests run through Storybook's `@storybook/addon-vitest` (`.stories.ts` files).
 - `npm run check` (alias `typecheck`) = `vue-tsc --noEmit` — the only type/lint gate, run after edits.
 - `npm run build` = `vite build` → `dist/`.
+
+## Changelog
+- When a user-facing change lands, add a brief **bilingual (EN, then RU)** entry to `CHANGELOG.md` `## [Unreleased]` in the same commit (see root `AGENTS.md` → Changelog (between releases)); keep it short and laconic.
 
 ## Desktop releases — always via `desktop/build-portable.sh`
 - Produce desktop artifacts **only** through `desktop/build-portable.sh` from

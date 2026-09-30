@@ -1,5 +1,5 @@
 import { ref } from 'vue'
-import axios, { type AxiosError, type Method } from 'axios'
+import axios, { type AxiosError, type AxiosRequestConfig, type Method } from 'axios'
 import { idbAll, idbCount, idbDel, idbPut, IDMAP_STORE_NAME, type IdMapEntry } from './db'
 import { applyToCache } from './cacheApply'
 import { probeBackend } from './state'
@@ -573,7 +573,10 @@ export async function flushOutbox(): Promise<FlushResult> {
             ...(needsIdempotencyKey(entry.method) ? { 'Idempotency-Key': entry.id } : {}),
           },
           timeout: 15000,
-        })
+          // The sync toast (SyncToast) is the feedback channel for queued
+          // mutations: the global error toast must not fire a duplicate.
+          silentError: true,
+        } as AxiosRequestConfig & { silentError: boolean })
 
         // The create returned a real entity → remember temp→real for later
         // queue entry rewrites. The mapping is written to IndexedDB BEFORE the

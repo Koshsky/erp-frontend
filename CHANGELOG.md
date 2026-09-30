@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 The web app and the desktop wrapper (`desktop/`) are versioned together.
 
+## [Unreleased]
+
+### Changed
+
+- Failed mutations (deletions, password resets, saves) now show a global floating error notification with the server message instead of failing silently. / При неудачных изменениях (удаления, сброс пароля, сохранения) теперь показывается общее всплывающее уведомление об ошибке с сообщением сервера вместо тихого сбоя.
+
 ## [1.0.0] - 2026-09-29
 
 ### Added
