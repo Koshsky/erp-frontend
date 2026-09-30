@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref, watch } from 'vue'
 import { getApiUrl, setApiUrl, hasApiUrlOverride, httpSchemeWarning } from '../config'
-import { autoSync, saveSyncSettings, getWarmupStep, toggleWarmupStep } from '../settings'
+import { autoSync, saveSyncSettings } from '../settings'
 import { viewSettings, SCALE_MIN, SCALE_MAX, SCALE_STEP, CELL_ZOOM_MIN, CELL_ZOOM_MAX, CELL_ZOOM_STEP } from '../settings'
 import { clearLocalData } from '../offline/reset'
 
@@ -10,28 +10,6 @@ const apiUrlWarn = ref<string | null>(null)
 const statusMsg = ref<string | null>(null)
 const statusOk = ref(false)
 const clearing = ref(false)
-
-/**
- * Per-domain warm-up steps the user can switch on/off. Names mirror the steps
- * built in warmup.ts (buildPullSteps); labels are Russian for the UI.
- */
-const warmupSteps: Array<{ name: string; label: string }> = [
-  { name: 'permissions', label: 'Права доступа' },
-  { name: 'profile', label: 'Профиль' },
-  { name: 'projects', label: 'Проекты' },
-  { name: 'resources', label: 'Ресурсы' },
-  { name: 'members', label: 'Члены ресурсов' },
-  { name: 'users', label: 'Пользователи' },
-  { name: 'myStaff', label: 'Ответственные (кандидаты)' },
-  { name: 'project-plan', label: 'План проектов' },
-  { name: 'process-plan', label: 'План процессов' },
-  { name: 'task-plan', label: 'План задач' },
-  { name: 'assignments', label: 'Назначения' },
-  { name: 'states', label: 'Состояния табеля' },
-  { name: 'employees', label: 'Сотрудники' },
-  { name: 'periods', label: 'Периоды табеля' },
-  { name: 'calendar', label: 'Календарь доступности' },
-]
 
 function okMsg(msg: string) {
   statusMsg.value = msg
@@ -58,11 +36,6 @@ function onSaveApiUrl() {
   statusMsg.value = null
   if (!applyApiUrl()) return
   okMsg('API_URL сохранён')
-}
-
-/** Switches a warm-up domain on/off and persists */
-function onToggleWarmup(name: string) {
-  toggleWarmupStep(name)
 }
 
 /** Clears all local (offline) data and reloads; reports a blocked deletion
@@ -94,7 +67,7 @@ onMounted(() => {
   <section class="st">
     <h2 class="st-title">Настройки</h2>
     <p class="st-hint st-hint--top">
-      Слева — офлайн-синхронизация и прогресс; справа — отображение диаграмм. Настройки вида хранятся в этом браузере и применяются при открытии диаграмм.
+      Слева — офлайн-синхронизация; справа — отображение диаграмм. Настройки вида хранятся в этом браузере и применяются при открытии диаграмм.
     </p>
 
     <div class="st-layout">
@@ -105,23 +78,6 @@ onMounted(() => {
             <input v-model="autoSync" type="checkbox" />
             <span>Автосинхронизация при запуске и возврате сети</span>
           </label>
-        </div>
-
-        <div class="st-card">
-          <h3 class="st-card-title">Какие данные прогревать</h3>
-          <p class="st-hint">
-            Отключайте домены, которые не нужны офлайну, чтобы ускорить прогревку.
-          </p>
-          <div class="st-grid">
-            <label v-for="step in warmupSteps" :key="step.name" class="st-option">
-              <input
-                type="checkbox"
-                :checked="getWarmupStep(step.name)"
-                @change="onToggleWarmup(step.name)"
-              />
-              <span>{{ step.label }}</span>
-            </label>
-          </div>
         </div>
 
         <div class="st-card">
@@ -255,7 +211,7 @@ onMounted(() => {
   border-radius: var(--ui-radius-md);
   box-shadow: var(--ui-shadow-md);
   padding: 20px;
-  margin-bottom: 24px;
+  margin-bottom: 12px;
 }
 
 .st-card-title {
@@ -279,12 +235,6 @@ onMounted(() => {
   font-size: 13px;
   color: var(--ui-text-2);
   cursor: pointer;
-}
-
-.st-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 2px 24px;
 }
 
 .st-field {
@@ -382,13 +332,13 @@ onMounted(() => {
 .st-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 24px;
+  gap: 12px;
   align-items: start;
 }
 .st-pane {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 12px;
   min-width: 0;
 }
 .st-hint--top {
