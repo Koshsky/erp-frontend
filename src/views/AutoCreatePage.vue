@@ -331,7 +331,9 @@ async function onSave() {
     })),
   })
   saving.value = false
-  saveMsg.value = { ok, text: ok ? 'Сохранено' : (autoCreateError.value ?? 'Ошибка сохранения') }
+  // Summary only: the raw API error on failure is surfaced by the global
+  // toast (http.ts), so the inline message stays a generic custom summary.
+  saveMsg.value = { ok, text: ok ? 'Сохранено' : 'Ошибка сохранения' }
   if (ok) dirty.value = false
 }
 </script>

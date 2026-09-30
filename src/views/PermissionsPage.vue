@@ -337,6 +337,8 @@ function validatePresetNameInput(name: string): string | null {
 /* — create modal — */
 const createOpen = ref(false)
 const createForm = reactive({ name: '', description: '' })
+/** Local validation message (empty/invalid/duplicate name); mutation errors
+ *  are surfaced by the global toast (http.ts) instead. */
 const createError = ref<string | null>(null)
 const createBusy = ref(false)
 
@@ -347,14 +349,10 @@ async function onCreatePreset() {
     createError.value = localError
     return
   }
-  createError.value = null
   createBusy.value = true
   const ok = await rbac.createPreset({ name, description: createForm.description.trim() })
   createBusy.value = false
-  if (!ok) {
-    createError.value = error.value ?? 'Не удалось создать пресет'
-    return
-  }
+  if (!ok) return
   presetMsg.value = { ok: true, text: `Пресет «${name}» создан` }
   createOpen.value = false
   selected.value = name
@@ -365,6 +363,7 @@ async function onCreatePreset() {
 const renameOpen = ref(false)
 const renameTarget = ref<string>('')
 const renameForm = reactive({ name: '', description: '' })
+/** Local validation message; mutation errors — to the toast. */
 const renameError = ref<string | null>(null)
 const renameBusy = ref(false)
 
@@ -384,14 +383,10 @@ async function onRenamePreset() {
     renameError.value = localError
     return
   }
-  renameError.value = null
   renameBusy.value = true
   const ok = await rbac.updatePreset(renameTarget.value, { name, description: renameForm.description.trim() })
   renameBusy.value = false
-  if (!ok) {
-    renameError.value = error.value ?? 'Не удалось переименовать пресет'
-    return
-  }
+  if (!ok) return
   presetMsg.value = ok ? { ok: true, text: `Пресет переименован в «${name}»` } : null
   renameOpen.value = false
   if (selected.value === renameTarget.value) selected.value = name
@@ -402,27 +397,21 @@ async function onRenamePreset() {
 const deleteOpen = ref(false)
 const deleteTarget = ref<string>('')
 const deleteConfirm = ref('')
-const deleteError = ref<string | null>(null)
 const deleteBusy = ref(false)
 
 function openDelete(presetName: string) {
   if (BUILTIN_PRESETS.has(presetName)) return
   deleteTarget.value = presetName
   deleteConfirm.value = ''
-  deleteError.value = null
   deleteOpen.value = true
 }
 
 async function onDeletePreset() {
   if (deleteConfirm.value !== deleteTarget.value) return
-  deleteError.value = null
   deleteBusy.value = true
   const ok = await rbac.deletePreset(deleteTarget.value)
   deleteBusy.value = false
-  if (!ok) {
-    deleteError.value = 'Не удалось удалить пресет'
-    return
-  }
+  if (!ok) return
   presetMsg.value = { ok: true, text: `Пресет «${deleteTarget.value}» удалён` }
   deleteOpen.value = false
   if (selected.value === deleteTarget.value) {
@@ -574,13 +563,14 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- Preset management modals: create / rename / delete (type the name) -->
+    <!-- Preset management modals: create / rename / delete (type the name).
+         Mutation failures are surfaced by the global toast (http.ts), so the
+         modals no longer render inline error paragraphs. -->
     <ModalForm
       :open="createOpen"
       title="Создать пресет"
       submit-label="Создать пресет"
       :busy="createBusy"
-      :error="createError"
       :fields="[
         { key: 'name', label: 'Имя пресета', type: 'text', required: true, placeholder: 'имя пресета, напр. auditor' },
         { key: 'description', label: 'Описание', type: 'textarea', placeholder: 'описание' },
@@ -594,7 +584,6 @@ onMounted(() => {
       title="Переименовать пресет"
       submit-label="Переименовать"
       :busy="renameBusy"
-      :error="renameError"
       :fields="[
         { key: 'name', label: 'Имя пресета', type: 'text', required: true, value: renameForm.name, placeholder: 'имя пресета' },
         { key: 'description', label: 'Описание', type: 'textarea', value: renameForm.description, placeholder: 'описание' },
@@ -618,7 +607,6 @@ onMounted(() => {
           :aria-invalid="deleteConfirm !== '' && deleteConfirm !== deleteTarget"
           :placeholder="deleteTarget"
         />
-        <p v-if="deleteError" class="pm-del-error" role="alert">{{ deleteError }}</p>
         <div class="pm-del-actions">
           <button type="button" class="pm-btn" @click="deleteOpen = false">Отмена</button>
           <button
@@ -1071,11 +1059,6 @@ onMounted(() => {
 .pm-del-input.invalid {
   border-color: var(--ui-danger);
   outline: 1px solid var(--ui-danger);
-}
-.pm-del-error {
-  margin: 0;
-  font-size: 13px;
-  color: var(--ui-danger);
 }
 .pm-del-actions {
   display: flex;

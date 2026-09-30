@@ -93,7 +93,6 @@ function descendantsOf(id: number): Set<number> {
 }
 
 const saving = ref(false)
-const saveError = ref<string | null>(null)
 
 /** Manager options: all users except the user itself and its descendants, sorted by name */
 function managerOptions(user: DtoAdminUserResponse) {
@@ -114,10 +113,9 @@ async function onChangeManager(user: DtoAdminUserResponse, event: Event) {
   const managerId = raw === '' ? null : Number(raw)
   if ((managerId ?? null) === user.manager_id) return
   saving.value = true
-  saveError.value = null
-  const ok = await app.updateManager(user.id, managerId)
+  // A failed change is reported by the global toast (http.ts).
+  await app.updateManager(user.id, managerId)
   saving.value = false
-  if (!ok) saveError.value = adminUsersError.value
 }
 
 onMounted(() => {
@@ -133,7 +131,6 @@ onMounted(() => {
       <HintButton hint="structure" />
     </div>
 
-    <p v-if="saveError" class="cs-st er cs-save-error">{{ saveError }}</p>
     <p v-if="adminUsersLoading && !tree.length" class="cs-st">Загрузка...</p>
     <p v-if="adminUsersError && !tree.length" class="cs-st er">{{ adminUsersError }}</p>
 
@@ -199,12 +196,6 @@ onMounted(() => {
   text-align: center;
 }
 .er { color: var(--ui-danger); }
-.cs-save-error {
-  background: var(--ui-danger-soft);
-  border: 1px solid var(--ui-danger-soft);
-  border-radius: var(--ui-radius-sm);
-  margin-bottom: 12px;
-}
 .mono {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 12px;

@@ -13,7 +13,6 @@ const meta: Meta<typeof ModalForm> = {
     title: 'Редактировать проект',
     submitLabel: 'Сохранить',
     busy: false,
-    error: null,
   },
 }
 
@@ -94,13 +93,6 @@ export const WithDates: Story = {
 export const Busy: Story = {
   args: {
     busy: true,
-    fields: [textField('title', 'Название', 'Новый процесс')],
-  },
-}
-
-export const WithError: Story = {
-  args: {
-    error: 'Не удалось сохранить: сервер недоступен',
     fields: [textField('title', 'Название', 'Новый процесс')],
   },
 }

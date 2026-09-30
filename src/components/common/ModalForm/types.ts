@@ -27,8 +27,6 @@ export interface ModalFormProps {
   submitLabel?: string
   /** Saving in progress: the button is disabled and a spinner is shown */
   busy?: boolean
-  /** Error text inside the modal */
-  error?: string | null
   /** Modal max width; default 420px (CSS), e.g. '960px' for wide editors */
   maxWidth?: string
 }

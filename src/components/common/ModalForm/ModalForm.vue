@@ -7,7 +7,6 @@ import { useModalFocus } from '../../../composables/useModalFocus'
 const props = withDefaults(defineProps<ModalFormProps>(), {
   submitLabel: 'Сохранить',
   busy: false,
-  error: null,
   fields: () => [],
   maxWidth: undefined,
 })
@@ -132,8 +131,6 @@ function onOverlayClick(e: MouseEvent) {
             />
           </component>
 
-          <p v-if="error" class="mf-error">{{ error }}</p>
-
           <div class="mf-actions">
             <button type="button" class="mf-btn mf-cancel" @click="emit('close')">Отмена</button>
             <button type="submit" class="mf-btn mf-save" :disabled="!canSubmit">
@@ -234,11 +231,6 @@ function onOverlayClick(e: MouseEvent) {
 .mf-textarea {
   resize: vertical;
   min-height: 70px;
-}
-.mf-error {
-  margin: 0;
-  font-size: 13px;
-  color: var(--ui-danger);
 }
 .mf-actions {
   display: flex;
