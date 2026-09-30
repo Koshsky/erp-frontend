@@ -80,9 +80,9 @@ export const NAV_CATEGORIES: NavCategory[] = [
     label: 'Система',
     roles: null,
     items: [
-      { label: 'Пульт', to: '/system/console', name: 'system-console' },
+      // «Пульт» (/system/console) and «Статус» (/system/status) stay
+      // URL-accessible diagnostics pages but are no longer in the sidebar.
       { label: 'Очередь изменений', to: '/system/queue', name: 'system-queue' },
-      { label: 'Статус', to: '/system/status', name: 'system-status' },
       { label: 'Настройки', to: '/system/settings', name: 'system-settings' },
     ],
   },

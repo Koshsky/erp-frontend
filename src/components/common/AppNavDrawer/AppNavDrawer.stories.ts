@@ -38,9 +38,7 @@ const testCategories: NavCategory[] = [
     label: 'Система',
     roles: null,
     items: [
-      { label: 'Пульт', to: '/system/console', name: 'system-console' },
       { label: 'Очередь изменений', to: '/system/queue', name: 'system-queue' },
-      { label: 'Статус', to: '/system/status', name: 'system-status' },
       { label: 'Настройки', to: '/system/settings', name: 'system-settings' },
     ],
   },
@@ -66,6 +64,6 @@ export const Open: Story = {}
 /** The "Система" group collapsed; other sections render as usual */
 export const SystemGroupCollapsed: Story = {
   args: {
-    activeName: 'system-console',
+    activeName: 'system-queue',
   },
 }
