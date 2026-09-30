@@ -6,11 +6,12 @@ const BASE_LEFT = 20
 </script>
 
 <template>
-  <!-- Generic notification stack, bottom-left corner above the offline toasts
-       (reconnect = 20px, sync = 110px). The navigation drawer is a real
-       layout column: when it opens (pinned or peeked) the app content shifts
-       right by NAV_WIDTH — the stack follows with the same easing so it never
-       overlaps the panel. -->
+  <!-- Generic notification stack, pinned to the bottom-left edge of the
+       viewport. The navigation drawer is a real layout column: when it opens
+       (pinned or peeked) the app content shifts right by NAV_WIDTH — the
+       stack follows with the same easing so it never overlaps the panel.
+       The column grows upward from the bottom edge: the newest notification
+       sits closest to the corner, older ones above it. -->
   <div
     class="nhost"
     :style="{ left: (isNavOpen ? NAV_WIDTH : 0) + BASE_LEFT + 'px' }"
@@ -40,7 +41,9 @@ const BASE_LEFT = 20
 
 .nhost {
   position: fixed;
-  bottom: 196px;
+  /* Pinned to the bottom edge (same margin as the reconnect toast); the
+     column grows upward from here. */
+  bottom: 20px;
   left: 20px;
   z-index: 1002;
   display: flex;
