@@ -17,16 +17,28 @@
  * unconditionally. The hints registry (src/hints/registry.ts) is the
  * reference consumer: it passes a `parseHintPage`-based validator, so a
  * broken custom hint falls back to the built-in page.
+ *
+ * Two custom-catalog sources coexist:
+ * - hints: bundled at build time via the Vite glob (small JSON pages);
+ * - icons: NOT bundled — the custom icons are mounted into the container
+ *   at runtime (deploy mounts ./assets/custom into
+ *   /usr/share/nginx/html/assets/custom, no rebuild). They are resolved
+ *   asynchronously by `resolveAssetWithCustom`, which fetches the file,
+ *   validates it as an inert inline SVG and falls back to the bundled
+ *   default on any fetch/validation failure.
  */
 
-export type AssetKind = 'hints'
+export type AssetKind = 'hints' | 'icons'
 
 export type AssetValidator = (raw: unknown) => boolean
 
-// Vite asset globs keyed by file path (per kind, both catalogs).
+// Vite asset globs keyed by file path (per kind, both catalogs). The icons
+// catalog is intentionally DEFAULT-ONLY: custom icons are runtime-mounted
+// (task 14) and must never enter the build.
 
 const defaultGlobs: Record<string, Record<string, unknown>> = {
   hints: import.meta.glob('./default/hints/*.json', { eager: true, import: 'default' }) as Record<string, unknown>,
+  icons: import.meta.glob('./default/icons/*.svg', { eager: true, query: '?raw', import: 'default' }) as Record<string, unknown>,
 }
 const customGlobs: Record<string, Record<string, unknown>> = {
   hints: import.meta.glob('./custom/hints/*.json', { eager: true, import: 'default' }) as Record<string, unknown>,
@@ -79,4 +91,66 @@ export function resolveAssets(kind: AssetKind, isValid?: AssetValidator): Map<st
 /** A single asset of a kind by file name (null — nowhere to be found). */
 export function resolveAsset(kind: AssetKind, name: string, isValid?: AssetValidator): unknown | null {
   return resolveAssets(kind, isValid).get(name) ?? null
+}
+
+/**
+ * Validates a raw string as an inert, well-formed inline SVG: exactly one
+ * root `<svg>` element, no <script>, no inline `on…=` handlers and no
+ * `javascript:` URLs. Used for fetched custom icons (and safely reusable
+ * for any other SVG consumer).
+ */
+export function isValidSvg(raw: unknown): boolean {
+  if (typeof raw !== 'string') return false
+  if ((raw.match(/<svg[\s>]/g) ?? []).length !== 1) return false
+  if (/<script/i.test(raw)) return false
+  if (/on[a-z]+\s*=/i.test(raw)) return false
+  if (/javascript:/i.test(raw)) return false
+  return true
+}
+
+export interface ResolveAssetWithCustomOptions {
+  /** Validator applied to the fetched payload. Defaults to `isValidSvg` for the 'icons' kind. */
+  isValid?: AssetValidator
+  /** Base URL override for the custom-asset prefix (tests / non-browser environments). */
+  baseURL?: string
+}
+
+/**
+ * Module-level memo of resolved runtime assets, keyed by `kind:name` — the
+ * final outcome (the custom override, the bundled default, or null) so a
+ * repeated lookup performs no second fetch.
+ */
+const runtimeCustomCache = new Map<string, unknown>()
+
+/**
+ * Runtime asset resolution with a custom override. First tries the mounted
+ * custom dir at `{BASE_URL}assets/custom/<kind>/<name>` (icons are overlaid
+ * onto the container without a rebuild); when the fetch fails (404/network)
+ * or the payload fails validation, falls back to the bundled default via
+ * `resolveAsset`; null when the asset exists nowhere.
+ */
+export async function resolveAssetWithCustom(
+  kind: AssetKind,
+  name: string,
+  opts?: ResolveAssetWithCustomOptions,
+): Promise<unknown | null> {
+  const cacheKey = `${kind}:${name}`
+  if (runtimeCustomCache.has(cacheKey)) {
+    return runtimeCustomCache.get(cacheKey) as unknown | null
+  }
+  const isValid = opts?.isValid ?? (kind === 'icons' ? isValidSvg : undefined)
+  const baseURL = opts?.baseURL ?? import.meta.env.BASE_URL
+  let resolved: unknown | null = null
+  try {
+    const res = await fetch(`${baseURL}assets/custom/${kind}/${name}`)
+    if (!res.ok) throw new Error(`custom asset unavailable (HTTP ${res.status})`)
+    const raw = await res.text()
+    if (isValid && !isValid(raw)) throw new Error('custom asset failed validation')
+    resolved = raw
+  } catch {
+    // 404 / network error / invalid payload — fall back to the bundled default below.
+  }
+  if (resolved === null) resolved = resolveAsset(kind, name, isValid)
+  runtimeCustomCache.set(cacheKey, resolved)
+  return resolved
 }
