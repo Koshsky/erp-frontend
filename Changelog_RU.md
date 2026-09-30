@@ -6,7 +6,7 @@
 проект придерживается [Semantic Versioning](https://semver.org/lang/ru/).
 Веб-приложение и десктопная обёртка (`desktop/`) версионируются вместе.
 
-## [Unreleased]
+## [1.0.2] - 2026-09-30
 
 ### Added
 
