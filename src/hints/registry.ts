@@ -49,10 +49,12 @@ export function mergeHintPages(defaults: HintPage[], custom: HintPage[]): Map<st
 }
 
 function loadAssets(): Map<string, HintPage> {
-  // resolveAssets('hints') already merges the catalogs custom-first (the rule
-  // for every asset kind); validation still guards against broken files.
+  // resolveAssets('hints') keeps the custom-first rule per file name, but a
+  // custom entry is merged only when it passes the validator: an invalid
+  // override of a built-in file name falls back to the built-in page instead
+  // of dropping the entry (the documented asset rule for every kind).
   const pages: HintPage[] = []
-  for (const raw of resolveAssets('hints').values()) {
+  for (const raw of resolveAssets('hints', (r) => parseHintPage(r) !== null).values()) {
     const page = parseHintPage(raw)
     if (page) pages.push(page)
   }

@@ -15,6 +15,10 @@ The web app and the desktop wrapper (`desktop/`) are versioned together.
 - Default login preview in the "Create user" form uses the `surname.initials` format.
 - Failed mutations surface through the bottom-left notification stack with a countdown timer.
 
+### Fixed
+
+- A broken custom hint no longer shadows the built-in hint with the same file name — the built-in page is kept.
+
 ## [1.0.0] - 2026-09-29
 
 ### Added
