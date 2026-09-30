@@ -16,6 +16,7 @@ The web app and the desktop wrapper (`desktop/`) are versioned together.
 - User editor: resetting a password shows the newly generated password once.
 - Audit page: when the backend journal is disabled, a help card explains how to enable it instead of a raw 404 error.
 - Users page: sortable "Preset" column with Russian preset labels.
+- Preset names accept letters of any script (cyrillic included); preset create/rename modals show local validation errors again.
 - Profile page: connection status and app/version cards.
 
 ### Changed

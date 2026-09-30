@@ -322,14 +322,15 @@ const { confirm: confirmDialog, ask, proceed, cancel } = useConfirm()
  *  deleted or renamed by an administrator. */
 const BUILTIN_PRESETS = new Set(['admin'])
 
-/** Preset name pattern: latin letters, digits, «-», «_» (mirrors the backend codec). */
-const PRESET_NAME_RE = /^[a-zA-Z0-9_-]+$/
+/** Preset name pattern: letters of any script (latin/cyrillic), digits, «-», «_»
+ *  (mirrors the backend codec). */
+const PRESET_NAME_RE = /^[\p{L}\p{N}_-]+$/u
 const presetMsg = ref<{ ok: boolean; text: string } | null>(null)
 
 function validatePresetNameInput(name: string): string | null {
   const trimmed = name.trim()
-  if (!trimmed) return 'Укажите имя пресета (латиница, цифры, «-», «_»), описание можно не заполнять'
-  if (!PRESET_NAME_RE.test(trimmed)) return 'Имя пресета: только латиница, цифры, «-», «_»'
+  if (!trimmed) return 'Укажите имя пресета (буквы, цифры, «-», «_»), описание можно не заполнять'
+  if (!PRESET_NAME_RE.test(trimmed)) return 'Имя пресета: буквы (латиница/кириллица), цифры, «-», «_»'
   if (rbac.presets.some((r) => r.name === trimmed)) return 'Пресет с таким именем уже существует'
   return null
 }
@@ -501,7 +502,7 @@ onMounted(() => {
             @keydown.enter.stop.prevent="openDelete(preset)"
           >✕</span>
         </button>
-        <button type="button" class="pm-preset-add" @click="createOpen = true">
+        <button type="button" class="pm-preset-add" @click="createError = null; createOpen = true">
           + Добавить
         </button>
         <ContextMenu
@@ -564,13 +565,15 @@ onMounted(() => {
     </div>
 
     <!-- Preset management modals: create / rename / delete (type the name).
-         Mutation failures are surfaced by the global toast (http.ts), so the
-         modals no longer render inline error paragraphs. -->
+         Mutation failures are surfaced by the global toast (http.ts); the
+         modal error line shows LOCAL validation only (empty/invalid/duplicate
+         name) — e.g. a cyrillic preset name is valid and must be sent. -->
     <ModalForm
       :open="createOpen"
       title="Создать пресет"
       submit-label="Создать пресет"
       :busy="createBusy"
+      :error="createError"
       :fields="[
         { key: 'name', label: 'Имя пресета', type: 'text', required: true, placeholder: 'имя пресета, напр. auditor' },
         { key: 'description', label: 'Описание', type: 'textarea', placeholder: 'описание' },
@@ -584,6 +587,7 @@ onMounted(() => {
       title="Переименовать пресет"
       submit-label="Переименовать"
       :busy="renameBusy"
+      :error="renameError"
       :fields="[
         { key: 'name', label: 'Имя пресета', type: 'text', required: true, value: renameForm.name, placeholder: 'имя пресета' },
         { key: 'description', label: 'Описание', type: 'textarea', value: renameForm.description, placeholder: 'описание' },

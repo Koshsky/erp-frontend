@@ -131,6 +131,8 @@ function onOverlayClick(e: MouseEvent) {
             />
           </component>
 
+          <p v-if="error" class="mf-error" role="alert">{{ error }}</p>
+
           <div class="mf-actions">
             <button type="button" class="mf-btn mf-cancel" @click="emit('close')">Отмена</button>
             <button type="submit" class="mf-btn mf-save" :disabled="!canSubmit">
@@ -237,6 +239,12 @@ function onOverlayClick(e: MouseEvent) {
   justify-content: flex-end;
   gap: 10px;
   margin-top: 2px;
+}
+.mf-error {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ui-danger);
 }
 .mf-btn {
   border: none;
