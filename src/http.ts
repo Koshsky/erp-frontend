@@ -1,6 +1,7 @@
 import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios'
 import router from './router'
 import { apiErrorMessage } from './utils'
+import { notifyError } from './notify/state'
 import { cacheGet, cacheGetByPath, cachePut, userCachePrefix } from './offline/cache'
 import { replayOutboxToCache, scheduleReplayOutboxToCache } from './offline/outbox'
 import { isOffline } from './offline/state'
@@ -13,6 +14,12 @@ const AUTH_PATHS = ['/auth/login', '/auth/refresh', '/auth/logout']
 
 interface RetryableConfig extends InternalAxiosRequestConfig {
   _retried?: boolean
+}
+
+/** Per-request opt-out from the global error notification: the caller owns the
+ *  error UX itself (e.g. the outbox flush, whose SyncToast is its channel). */
+interface SilentConfig extends InternalAxiosRequestConfig {
+  silentError?: boolean
 }
 
 /** Full request URL prefixed by the current user (`u<id>:`+url) — the single
@@ -147,6 +154,22 @@ export function setupHttp() {
         if (body?.error) {
           ;(error as AxiosError & { message: string }).message = apiErrorMessage(body.error)
         }
+      }
+
+      // Global error notification for FAILED MUTATIONS (non-GET). Reads keep
+      // their inline/empty-state rendering — no toast — so background refreshes
+      // stay silent; the auth machinery owns the 401 UX (refresh, redirect to
+      // login) and silent-flagged requests (outbox flush) handle their own
+      // feedback. The message priority: backend body → axios text.
+      if (
+        response.status >= 400 &&
+        response.status !== 401 &&
+        (config.method ?? 'get').toLowerCase() !== 'get' &&
+        !(config as SilentConfig).silentError &&
+        !AUTH_PATHS.some((path) => (config.url ?? '').includes(path))
+      ) {
+        const body = response.data as { error?: { message?: string; code?: string | number } } | undefined
+        notifyError(apiErrorMessage(body?.error, error.message))
       }
 
       if (response.status !== 401) {

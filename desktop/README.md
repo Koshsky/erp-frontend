@@ -93,25 +93,34 @@ default:
 
 Shorthands: `--win` = `--win-portable --win-exe`; `--linux` = both Linux flags.
 
-The **version** is taken from `desktop/package.json` (semver) and by default
-is **incremented** on each build (patch):
+The **version is shared by the web frontend and the desktop wrapper**: the
+single source of truth is `services/frontend/package.json` (semver).
+`desktop/package.json` is synced to the same version automatically on every
+build, so the wrapper package and the artifacts can never drift from the web
+version. The build always uses the **current version as is** — the script
+never bumps it (there is no `--bump`); change `package.json` yourself when
+releasing:
 
 ```bash
-./build-portable.sh                 # Linux (both parts), version = patch bump
+./build-portable.sh                 # Linux (both parts), version = current from package.json
 ./build-portable.sh --win           # Linux + both Windows parts
 ./build-portable.sh --win-portable  # Linux + Windows portable (zip + folder)
 ./build-portable.sh --win-exe       # Linux + single-file Windows .exe
-./build-portable.sh --version 2.1.0 # build exactly 2.1.0
-./build-portable.sh --bump minor    # increment minor
-./build-portable.sh --no-bump       # current version unchanged
+./build-portable.sh --version 2.1.0 # build exactly 2.1.0 (no source change)
 ./build-portable.sh --clean         # clean release/ before building
 ./build-portable.sh --build-web     # deprecated no-op: web is always rebuilt
 ```
 
+`--version` builds an exact version without writing it into the source
+(`services/frontend/package.json` stays untouched; `desktop/package.json` is
+still synced so the wrapper matches the artifacts). The next default build
+continues from the source version.
+
 The version is passed into the web build (`APP_VERSION` → `__APP_VERSION__` and
-`precache-manifest.json`), so "App/build version" on the "Synchronization"
+`precache-manifest.json`) and into electron-builder
+(`-c.extraMetadata.version`), so "App/build version" on the "Synchronization"
 screen matches the artifact version. The script does not commit the version —
-commit the increment separately (`chore(desktop): release vX.Y.Z`).
+commit the increment separately (e.g. `chore: release vX.Y.Z`).
 
 Portable targets do not need wine: `zip`/`dir`/portable/AppImage are built on
 a Linux host. The single-file Windows `.exe` (the `portable` target) is built

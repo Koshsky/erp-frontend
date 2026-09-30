@@ -71,10 +71,18 @@ function reload(name: string, run: () => Promise<unknown>): Reloader {
   return { name, run }
 }
 
-/** Reload set per role (heavy ones — on demand). Network refreshes only
- *  (refreshX): rendering is local-first, so reconcile must NOT re-fetch via
- *  the local loaders. */
-function reloadersFor(entity: MutationEntity): Reloader[] {
+/**
+ * Reload set per entity — the single source of truth for "which domains a
+ * mutation invalidates". Used by BOTH consistency paths:
+ *  - the offline queue flush (reconcile below),
+ *  - the online post-mutation refresh (scheduleDomainRefresh): after an
+ *    online success the same domains are re-read so related pages (the other
+ *    Gantt aggregates) become server-fresh immediately instead of waiting for
+ *    the slow PULL cycle.
+ * Network refreshes only (refreshX): rendering is local-first, so reconcile
+ * must NOT re-fetch via the local loaders.
+ */
+export function reloadDomainsFor(entity: MutationEntity): Reloader[] {
   const app = useAppStore()
   const planning = usePlanningStore()
   const ts = useTimesheetStore()
@@ -92,7 +100,15 @@ function reloadersFor(entity: MutationEntity): Reloader[] {
     case 'resource':
       return [reload('resources', () => app.refreshResources()), reload('calendar', () => app.refreshCalendar())]
     case 'user':
-      return seesRoster ? [reload('employees', () => ts.refreshEmployees(undefined, true))] : []
+      // A user CRUD (create/update/delete/manager change) alters the roster
+      // (timesheet + employees page), the name catalog (/user/all) and the
+      // assignee pool (/user?limit=500) — refresh all of them. The roster
+      // reload stays gated by "sees the roster" (backend scoping).
+      return [
+        ...(seesRoster ? [reload('employees', () => ts.refreshEmployees(undefined, true))] : []),
+        reload('users', () => app.refreshUsers()),
+        reload('myStaff', () => app.refreshMyStaff()),
+      ]
     case 'member':
       return seesRoster ? [reload('resources', () => app.refreshResources())] : []
     case 'state':
@@ -107,12 +123,23 @@ function reloadersFor(entity: MutationEntity): Reloader[] {
           ]
         : []
     case 'project':
+      // Creating a project auto-creates processes/tasks/assignments server-side
+      // (the template trigger); deleting cascades them away — every planning
+      // aggregate that renders the project or its children must be re-read.
       return [
         reload('project-plan', () => planning.refreshProjectPlanning(true)),
         reload('projects', () => app.refreshProjects()),
+        reload('process-plan', () => planning.refreshProcessPlanning(true)),
+        reload('task-plan', () => planning.refreshTaskPlanning(true)),
       ]
     case 'process':
-      return [reload('process-plan', () => planning.refreshProcessPlanning(true))]
+      // Deleting/editing a process changes the project's span and removes its
+      // tasks — refresh the processes aggregate plus both neighbors.
+      return [
+        reload('process-plan', () => planning.refreshProcessPlanning(true)),
+        reload('task-plan', () => planning.refreshTaskPlanning(true)),
+        reload('project-plan', () => planning.refreshProjectPlanning(true)),
+      ]
     case 'task':
     case 'milestone':
     case 'assignment':
@@ -127,10 +154,93 @@ function reloadersFor(entity: MutationEntity): Reloader[] {
   }
 }
 
+const DOMAIN_REFRESH_DEBOUNCE_MS = 400
+
+/** Pending domain names (reloader names) waiting for the coalesced flush */
+const pendingDomains = new Set<string>()
+let domainRefreshTimer: number | null = null
+
+function armDomainRefresh(): void {
+  if (domainRefreshTimer != null) return
+  domainRefreshTimer = window.setTimeout(() => void flushDomainRefresh(), DOMAIN_REFRESH_DEBOUNCE_MS)
+}
+
+/** Collects every domain reloader by name (rebuilt per flush — stores are cheap). */
+function collectReloaders(): Map<string, () => Promise<unknown>> {
+  const map = new Map<string, () => Promise<unknown>>()
+  const entities: MutationEntity[] = [
+    'resource',
+    'user',
+    'member',
+    'state',
+    'period',
+    'project',
+    'process',
+    'task',
+    'milestone',
+    'assignment',
+    'reorder',
+  ]
+  for (const e of entities) {
+    for (const r of reloadDomainsFor(e)) {
+      if (!map.has(r.name)) map.set(r.name, r.run)
+    }
+  }
+  return map
+}
+
+/**
+ * Coalesced background refresh of the named domains: a burst of mutations
+ * (e.g. a dragged task bar cascading PUTs) collapses into ONE re-read per
+ * domain. Silent (refreshX(true)) and error-tolerant — a refresh failure must
+ * never fail the mutation that scheduled it. Skipped entirely while offline:
+ * the outbox flush owns reconciliation there (reconcile).
+ */
+async function flushDomainRefresh(): Promise<void> {
+  domainRefreshTimer = null
+  const names = [...pendingDomains]
+  pendingDomains.clear()
+  if (names.length === 0 || isOffline.value) return
+  const runs = collectReloaders()
+  for (const name of names) {
+    const run = runs.get(name)
+    if (!run) continue
+    try {
+      await run()
+    } catch {
+      // silent — the next PULL cycle covers a failed domain
+    }
+  }
+}
+
+/**
+ * Schedules the coalesced refresh of the domains a mutation invalidates
+ * (online path — called after a successful apply in runMutation). No-op while
+ * offline: queued mutations are reconciled by the outbox flush (reconcile).
+ */
+export function scheduleDomainRefresh(entities: MutationEntity[]): void {
+  if (isOffline.value) return
+  for (const e of entities) {
+    for (const r of reloadDomainsFor(e)) pendingDomains.add(r.name)
+  }
+  armDomainRefresh()
+}
+
+/**
+ * Schedules the coalesced refresh of named domains directly — the page-entry
+ * SWR path: views render instantly from the cache (local-first) and then
+ * re-read the domains they display while online.
+ */
+export function scheduleNamedRefresh(names: string[]): void {
+  if (isOffline.value) return
+  for (const n of names) pendingDomains.add(n)
+  armDomainRefresh()
+}
+
 async function reconcile(entities: Set<MutationEntity>): Promise<void> {
   const runs = new Map<string, () => Promise<unknown>>()
   for (const entity of entities) {
-    for (const r of reloadersFor(entity)) {
+    for (const r of reloadDomainsFor(entity)) {
       if (!runs.has(r.name)) runs.set(r.name, r.run)
     }
   }

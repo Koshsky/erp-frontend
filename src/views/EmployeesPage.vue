@@ -9,6 +9,8 @@ import { useEditModal } from '../composables/useEditModal'
 import { useRoleAccess } from '../composables/useRoleAccess'
 import { useEmployeeFilters } from '../composables/useEmployeeFilters'
 import { useAppStore, useTimesheetStore, useRbacStore } from '../store'
+import { isOffline } from '../offline/state'
+import { scheduleNamedRefresh } from '../offline/sync'
 import type { DtoResourceResponse, DtoUserResponse } from '@/api'
 
 const ts = useTimesheetStore()
@@ -180,6 +182,9 @@ onMounted(async () => {
   // a gate on resources.length would leave everyone "without a resource" without badges.
   // Local-first: hydrate from the cache (no network from the render path).
   await app.ensureResourceMembers(false)
+  // Page-entry SWR (online): cache-first render, then re-read the roster and
+  // name catalogs so recent user mutations show up immediately.
+  if (!isOffline.value) void scheduleNamedRefresh(['employees', 'users', 'myStaff'])
 })
 
 /** "Load more": appends the next page of the server-scoped roster */

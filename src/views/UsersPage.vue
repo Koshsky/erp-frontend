@@ -107,25 +107,8 @@ function handleSelect(id: string) {
 const { confirm: confirmDialog, ask, proceed, cancel } = useConfirm()
 const deleteTarget = ref<string | null>(null)
 
-/**
- * Mutation feedback (delete / reset-password). The list-level adminUsersError
- * is rendered only while the list is empty, so failed mutations would stay
- * silent — surface them here, auto-dismissed after a few seconds.
- */
-const mutationError = ref<string | null>(null)
-let mutationErrorTimer: ReturnType<typeof setTimeout> | null = null
-function showMutationError() {
-  mutationError.value = app.adminUsersError
-  if (mutationErrorTimer) clearTimeout(mutationErrorTimer)
-  mutationErrorTimer = setTimeout(() => {
-    mutationError.value = null
-    mutationErrorTimer = null
-  }, 8000)
-}
-
 function askDelete(u: DtoAdminUserResponse) {
   deleteTarget.value = u.id != null ? String(u.id) : null
-  mutationError.value = null
   ask(`Удалить пользователя «${u.name ?? u.username ?? ''}»?`, async () => {
     const id = Number(deleteTarget.value)
     if (!Number.isFinite(id) || id <= 0) return
@@ -133,9 +116,9 @@ function askDelete(u: DtoAdminUserResponse) {
     const ok = await app.deleteUser(id)
     if (ok) {
       await refreshAfterMutation()
-    } else {
-      showMutationError()
     }
+    // Failed deletions (e.g. blocked by referencing records) are surfaced by
+    // the global error notification (http.ts interceptor) — no local banner.
   })
 }
 
@@ -164,16 +147,14 @@ function showPassword(password: string | undefined, caption: string) {
 
 async function onResetPassword(user: DtoAdminUserResponse) {
   if (user.id == null) return
-  mutationError.value = null
   const ok = await app.resetPassword(user.id)
   if (ok) {
     passwordModal.value = {
       caption: `Пароль для «${user.name}» сброшен`,
       notice: 'Новый пароль не передаётся по сети; сообщите пользователю о сбросе.',
     }
-  } else {
-    showMutationError()
   }
+  // Failed resets are surfaced by the global error notification (http.ts).
 }
 
 onMounted(() => {
@@ -198,7 +179,6 @@ watch(search, () => {
 
 onBeforeUnmount(() => {
   if (searchTimer) clearTimeout(searchTimer)
-  if (mutationErrorTimer) clearTimeout(mutationErrorTimer)
 })
 
 /** Refreshes the list keeping the active search after a mutation (delete) */
@@ -222,10 +202,6 @@ async function refreshAfterMutation() {
 
     <p v-if="adminUsersLoading && !adminUsers.length" class="up-st">Загрузка...</p>
     <p v-if="adminUsersError && !adminUsers.length" class="up-st er">{{ adminUsersError }}</p>
-
-    <!-- Failed mutations (e.g. deletion blocked by referenced records) stay
-         visible even while the list is populated. -->
-    <p v-if="mutationError" class="up-mut" role="alert">{{ mutationError }}</p>
 
     <!--
       The table frame (header and the filter row) stays visible even when the
@@ -355,17 +331,6 @@ async function refreshAfterMutation() {
   text-align: center;
 }
 .er { color: var(--ui-danger); }
-.up-mut {
-  margin: 0 0 16px;
-  padding: 12px 16px;
-  border: 1px solid color-mix(in srgb, var(--ui-danger) 40%, transparent);
-  border-radius: var(--ui-radius-sm);
-  background: color-mix(in srgb, var(--ui-danger) 8%, transparent);
-  color: var(--ui-danger);
-  font-size: 14px;
-  line-height: 1.45;
-  white-space: pre-line;
-}
 .mono {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 12px;

@@ -17,6 +17,8 @@ import { useUnitMenu } from '../composables/useUnitMenu'
 import { useRoleAccess } from '../composables/useRoleAccess'
 import { useFindPlanningItem } from '../composables/useFindPlanningItem'
 import { usePlanningStore, useAppStore, useRbacStore } from '../store'
+import { isOffline } from '../offline/state'
+import { scheduleNamedRefresh } from '../offline/sync'
 import { addMonthsISO, fmtDate } from '../components/planner/calendar'
 import { CELL_WIDTH } from '../components/planner/layout'
 
@@ -239,6 +241,10 @@ function goToProcesses(projectId: number) {
 onMounted(() => {
   store.loadProjectPlanning()
   if (!app.users.length) void app.loadUsers()
+  // Page-entry SWR: render from cache instantly, then re-read the domains the
+  // page displays while online (backend > cache) — own mutations and foreign
+  // changes both land within one network round-trip.
+  if (!isOffline.value) void scheduleNamedRefresh(['project-plan', 'projects', 'process-plan'])
 })
 </script>
 

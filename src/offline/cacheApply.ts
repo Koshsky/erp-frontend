@@ -231,6 +231,13 @@ async function applyPlanningProcesses(entry: OutboxEntry): Promise<void> {
       }
     } else if (method === 'DELETE') {
       if (id == null) return
+      // A project deletion cascades its processes server-side: drop the whole
+      // project group (processes included) from the cached processes aggregate.
+      if (/^\/api\/v1\/project\/\d+$/.test(pathnameOf(entry.url))) {
+        const i = projects.findIndex((p: any) => p.id === id)
+        if (i >= 0) projects.splice(i, 1)
+        return
+      }
       for (const pr of projects) {
         const i = (pr.processes ?? []).findIndex((x: any) => x.id === id)
         if (i >= 0) {
@@ -320,6 +327,13 @@ async function applyPlanningTasks(
         }
       } else if (method === 'DELETE') {
         if (id == null) return
+        // A project deletion cascades its processes (and their tasks) on the
+        // server: drop every process of the project from the cached aggregate.
+        if (/^\/api\/v1\/project\/\d+$/.test(pathnameOf(entry.url))) {
+          const i = processes.findIndex((p: any) => p.project_id === id)
+          if (i >= 0) processes.splice(i, 1)
+          return
+        }
         for (const pr of processes) {
           const i = (pr.tasks ?? []).findIndex((x: any) => x.id === id)
           if (i >= 0) {
@@ -600,6 +614,13 @@ export async function applyToCache(entry: OutboxEntry): Promise<void> {
       case 'project':
         await listApplier('/api/v1/project', makeProject)(entry)
         await applyPlanningProjects(entry)
+        // A project DELETE cascades its processes/tasks server-side — clean
+        // them from the cached planning aggregates too (POST/PUT find nothing
+        // there and are no-ops).
+        await applyPlanningProcesses(entry)
+        await applyPlanningTasks(entry, 'task')
+        await applyPlanningTasks(entry, 'milestone')
+        await applyPlanningTasks(entry, 'assignment')
         break
       case 'process':
         await listApplier('/api/v1/process', makeProcess)(entry)

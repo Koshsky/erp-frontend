@@ -25,6 +25,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { useAppStore, useTimesheetStore, useAuthStore } from './index'
+import { reloadDomainsFor } from '../offline/sync'
 import { getAccessToken, setAccessToken } from '@/token'
 
 /** Mutable per-test method implementations for the mocked API classes. */
@@ -303,5 +304,56 @@ describe('auth access-expiry decoding (a token-margin contract)', () => {
     expect(getAccessToken()).toBe('')
     setAccessToken('abc.def.ghi')
     expect(getAccessToken()).toBe('abc.def.ghi')
+  })
+})
+
+describe('reloadDomainsFor — the entity → affected-domains map (online post-mutation refresh)', () => {
+  // reloadDomainsFor instantiates the stores at call time; the auth store
+  // touches window/document on creation (cross-tab session channel).
+  beforeAll(() => {
+    vi.stubGlobal('window', { addEventListener: vi.fn(), removeEventListener: vi.fn() })
+    vi.stubGlobal('document', { addEventListener: vi.fn(), removeEventListener: vi.fn() })
+  })
+  afterAll(() => {
+    vi.unstubAllGlobals()
+  })
+
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    // The roster-family reloads are gated by "sees the roster" — give the
+    // auth store an admin preset so the fallback path admits them.
+    useAuthStore().user = { preset: 'admin' } as any
+  })
+
+  it('maps a project mutation to every planning aggregate + the CRUD project list', () => {
+    const names = reloadDomainsFor('project').map((r) => r.name).sort()
+    expect(names).toEqual(['process-plan', 'project-plan', 'projects', 'task-plan'])
+  })
+
+  it('maps a process mutation to the process/task/project aggregates', () => {
+    const names = reloadDomainsFor('process').map((r) => r.name).sort()
+    expect(names).toEqual(['process-plan', 'project-plan', 'task-plan'])
+  })
+
+  it('maps task/milestone/assignment mutations to task-plan only', () => {
+    for (const e of ['task', 'milestone', 'assignment'] as const) {
+      expect(reloadDomainsFor(e).map((r) => r.name)).toEqual(['task-plan'])
+    }
+  })
+
+  it('maps user mutations to the roster + name catalogs', () => {
+    const names = reloadDomainsFor('user').map((r) => r.name).sort()
+    expect(names).toEqual(['employees', 'myStaff', 'users'])
+  })
+
+  it('keeps the roster-family reloads for timesheet entities', () => {
+    // The periods reloader is only emitted once a window is initialized
+    // (ts.windowStart) — simulate a timesheet page that has been opened.
+    const tsStore = useTimesheetStore()
+    tsStore.windowStart = '2025-01-01'
+    tsStore.windowEnd = '2025-12-31'
+    const names = reloadDomainsFor('period').map((r) => r.name)
+    expect(names).toContain('employees')
+    expect(names).toContain('periods')
   })
 })

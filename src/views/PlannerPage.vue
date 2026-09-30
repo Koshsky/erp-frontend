@@ -18,6 +18,7 @@ import { ContextMenu, ModalForm, ConfirmDialog } from '../components/common'
 import type { ContextMenuItem } from '../components/common/ContextMenu'
 import type { ModalField } from '../components/common/ModalForm'
 import { isOffline } from '../offline/state'
+import { scheduleNamedRefresh } from '../offline/sync'
 import { useConfirm } from '../composables/useConfirm'
 import { useContextMenu } from '../composables/useContextMenu'
 import { useEditModal } from '../composables/useEditModal'
@@ -549,6 +550,10 @@ onMounted(async () => {
   // have changed, and ResourceHeader must immediately show fresh availability.
   await app.loadCalendar()
   await planning.loadTaskPlanning()
+  // Page-entry SWR (online): cache-first render, then re-read the planning
+  // aggregates this page displays so recent mutations (own or foreign) land
+  // within one network round-trip — not only on the slow PULL cycle.
+  if (!isOffline.value) void scheduleNamedRefresh(['project-plan', 'process-plan', 'task-plan'])
 })
 
 /**

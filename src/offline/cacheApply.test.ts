@@ -278,3 +278,55 @@ describe('applyToCache — basic list mutations', () => {
     expect(resources.data.data.total).toBe(0)
   })
 })
+
+describe('applyToCache — project deletion cascades the planning aggregates', () => {
+  it('removes the project group, its processes and their task groups from all cached aggregates', async () => {
+    fake.put('http://api.test/api/v1/planning/projects', {
+      ts: 1,
+      data: env({
+        projects: [{ id: 42, project_code: 'P1', priority: 1 }, { id: 99, project_code: 'P2', priority: 2 }],
+      }),
+    })
+    fake.put('http://api.test/api/v1/planning/processes', {
+      ts: 2,
+      data: env({
+        projects: [
+          { id: 42, processes: [{ id: 7, project_id: 42 }, { id: 8, project_id: 42 }] },
+          { id: 99, processes: [{ id: 9, project_id: 99 }] },
+        ],
+      }),
+    })
+    fake.put('http://api.test/api/v1/planning/tasks', {
+      ts: 3,
+      data: env({
+        processes: [
+          { id: 7, project_id: 42, tasks: [{ id: 100, title: 'Задача 1' }] },
+          { id: 9, project_id: 99, tasks: [{ id: 200, title: 'Задача 2' }] },
+        ],
+      }),
+    })
+
+    await applyToCache(
+      entry({
+        entity: 'project',
+        method: 'DELETE',
+        url: 'http://api.test/api/v1/project/42',
+      }),
+    )
+
+    const projects = fake.find('/api/v1/planning/projects') as {
+      data: { data: { projects: Array<Record<string, unknown>> } }
+    }
+    expect(projects.data.data.projects.map((p) => p.id)).toEqual([99])
+
+    const processes = fake.find('/api/v1/planning/processes') as {
+      data: { data: { projects: Array<Record<string, unknown>> } }
+    }
+    expect(processes.data.data.projects.map((p) => p.id)).toEqual([99])
+
+    const tasks = fake.find('/api/v1/planning/tasks') as {
+      data: { data: { processes: Array<Record<string, unknown>> } }
+    }
+    expect(tasks.data.data.processes.map((p) => p.id)).toEqual([9])
+  })
+})

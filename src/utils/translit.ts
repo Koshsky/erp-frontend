@@ -23,12 +23,17 @@ function translitWord(word: string): string {
 }
 
 /**
- * Default login built from the full name: translit(last).translit(first)[.translit(middle)].
- * Returns '' when there is nothing to transliterate (e.g. a Latin surname) — the
- * backend then generates the username itself.
+ * Default login built from the full name as `last.initials`: the transliterated
+ * surname plus the first letters of the given/middle names —
+ * e.g. «Шмонов Матвей Васильевич» → `shmonov.mv`, «Иванов Пётр» → `ivanov.p`.
+ * Returns '' when there is nothing to transliterate (e.g. a Latin surname) —
+ * the backend then generates the username itself.
  */
 export function translitPhio(lastName: string, firstName: string, middleName = ''): string {
-  const parts = [translitWord(lastName), translitWord(firstName)]
-  if (middleName) parts.push(translitWord(middleName))
-  return parts.filter(Boolean).join('.')
+  const last = translitWord(lastName)
+  const firstInitial = translitWord(firstName).slice(0, 1)
+  const middleInitial = middleName ? translitWord(middleName).slice(0, 1) : ''
+  const initials = [firstInitial, middleInitial].filter(Boolean).join('')
+  if (!last || !initials) return last ? last : ''
+  return `${last}.${initials}`
 }

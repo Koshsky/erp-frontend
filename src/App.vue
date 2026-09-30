@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import ReconnectToast from './offline/ReconnectToast.vue'
 import SyncToast from './offline/SyncToast.vue'
+import NotificationHost from './notify/NotificationHost.vue'
 import { HintPanel } from './components/common'
 
 const router = useRouter()
@@ -30,6 +31,8 @@ void Promise.race([
   </div>
   <ReconnectToast />
   <SyncToast />
+  <!-- Global error/success notifications (failed mutations, …) -->
+  <NotificationHost />
   <!-- Global right-side hint panel: any "?" button opens its page here -->
   <HintPanel />
   <RouterView />

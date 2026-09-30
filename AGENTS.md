@@ -6,6 +6,7 @@ Frontend service of the MVS ERP monorepo (repo root is `../..`, sibling `service
 
 - Code comments, documentation, and commit messages are written in **English only**.
 - UI strings and user-facing messages stay in Russian (the product language) — never translate them (they are displayed to the user, not documentation).
+- **Deliberate exception — changelogs are split per language**: `Changelog_ENG.md` (English) and `Changelog_RU.md` (Russian), see the Changelog section below.
 
 ## Commands
 - `npm run dev` runs **Storybook** (port 6006) — not the app. `npm start` runs the Vite dev server (port 5173); `npm run stop` kills it.
@@ -13,12 +14,19 @@ Frontend service of the MVS ERP monorepo (repo root is `../..`, sibling `service
 - `npm run check` (alias `typecheck`) = `vue-tsc --noEmit` — the only type/lint gate, run after edits.
 - `npm run build` = `vite build` → `dist/`.
 
+## Changelog
+- When a user-facing change lands, add a **brief, laconic, one-line bullet** (no long descriptions, no examples) under `## [Unreleased]` in BOTH `Changelog_ENG.md` (English) and `Changelog_RU.md` (Russian) in the same commit (see root `AGENTS.md` → Changelog (between releases)).
+
 ## Desktop releases — always via `desktop/build-portable.sh`
 - Produce desktop artifacts **only** through `desktop/build-portable.sh` from
   `desktop/`. It always rebuilds `dist/` from sources (deletes `dist/`, purges
   the vite caches) and verifies the result, because the Electron wrapper embeds
   `dist/` into the release as `resources/web` (`extraResources` in
   `desktop/package.json`).
+- Versioning: web and desktop share ONE version — the single source of truth
+  is this service's `package.json`; `build-portable.sh` always builds that
+  version as is (it never bumps) and syncs `desktop/package.json` (+ its
+  lockfile) to the same value automatically.
 - **Never** run `electron-builder` / `npm run dist*` by hand against a
   pre-existing `dist/`: a stale `dist/` gets embedded into a newly versioned
   release, so the app shows old UI (removed pages still visible) while its
