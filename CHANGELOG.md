@@ -10,7 +10,7 @@ The web app and the desktop wrapper (`desktop/`) are versioned together.
 
 ### Changed
 
-- Failed mutations (deletions, password resets, saves) now show a global floating error notification with the server message instead of failing silently. / При неудачных изменениях (удаления, сброс пароля, сохранения) теперь показывается общее всплывающее уведомление об ошибке с сообщением сервера вместо тихого сбоя.
+- Failed mutations (deletions, password resets, saves) now surface through a generic notification stack in the bottom-left corner: each banner has a colored countdown bar on its top edge (red for errors) shrinking 100% → 0% over 5 seconds, then the banner disappears; the stack shifts right together with the navigation drawer. / При неудачных изменениях (удаления, сброс пароля, сохранения) теперь показывается общий стек уведомлений в левом нижнем углу: у каждого баннера цветная полоска-таймер по верхней кромке (красная — для ошибок) убывает 100% → 0% за 5 секунд, и баннер исчезает; стек сдвигается вместе с боковым меню.
 
 ## [1.0.0] - 2026-09-29
 

@@ -1,23 +1,35 @@
 <script setup lang="ts">
 import { notifications, dismissNotification } from './state'
+import { isNavOpen, NAV_WIDTH } from '../composables/useNavDrawer'
+
+const BASE_LEFT = 20
 </script>
 
 <template>
-  <!-- Global floating error/success notifications (bottom-left corner, above
-       the offline toast stack). Mounted once in App.vue. -->
-  <div class="nhost" aria-live="polite">
-    <TransitionGroup name="toast-fade">
+  <!-- Generic notification stack, bottom-left corner above the offline toasts
+       (reconnect = 20px, sync = 110px). The navigation drawer is a real
+       layout column: when it opens (pinned or peeked) the app content shifts
+       right by NAV_WIDTH — the stack follows with the same easing so it never
+       overlaps the panel. -->
+  <div
+    class="nhost"
+    :style="{ left: (isNavOpen ? NAV_WIDTH : 0) + BASE_LEFT + 'px' }"
+    aria-live="polite"
+  >
+    <TransitionGroup name="nt-fade">
       <div v-for="n in notifications" :key="n.id" class="nt" :class="`nt--${n.kind}`" role="alert">
+        <div class="nt-timer" :style="{ animationDuration: `${n.durationMs}ms` }" aria-hidden="true"></div>
+        <span class="nt-ic" aria-hidden="true">{{ n.kind === 'success' ? '✓' : n.kind === 'info' ? 'i' : '!' }}</span>
+        <span class="nt-text">{{ n.text }}</span>
         <button
           type="button"
-          class="nt__close"
+          class="nt-close"
           aria-label="Закрыть"
           title="Закрыть"
           @click="dismissNotification(n.id)"
         >
           ×
         </button>
-        <span class="nt__text">{{ n.text }}</span>
       </div>
     </TransitionGroup>
   </div>
@@ -28,51 +40,104 @@ import { notifications, dismissNotification } from './state'
 
 .nhost {
   position: fixed;
-  /* Bottom-left corner, above the offline toasts (reconnect = 20px,
-     sync = 110px): app notifications get the topmost fixed slot. */
   bottom: 196px;
   left: 20px;
   z-index: 1002;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  max-width: 90vw;
+  width: min(420px, 92vw);
   pointer-events: none;
+  /* The drawer animates width 0.33 s cubic-bezier(0.16,1,0.3,1); the stack
+     follows the content column with the same curve. */
+  transition: left 0.33s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .nt {
   position: relative;
   display: flex;
   align-items: flex-start;
-  gap: 10px;
-  padding: 10px 30px 10px 14px;
+  gap: 9px;
+  padding: 12px 30px 11px 12px;
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border-strong);
   border-radius: var(--ui-radius-sm);
   box-shadow: var(--ui-shadow-md);
   font-size: 14px;
   line-height: 1.45;
-  min-width: min(320px, 90vw);
-  max-width: min(420px, 90vw);
+  color: var(--ui-text);
   white-space: pre-line;
   pointer-events: auto;
+  overflow: hidden;
 }
 
-.nt--error {
+/* Countdown bar on the top edge: shrinks 100% → 0% over the item's durationMs. */
+.nt-timer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 3px;
+  border-radius: 0 3px 0 0;
+  animation: nt-shrink linear forwards;
+}
+
+.nt--error .nt-timer {
   background: var(--ui-danger);
-  color: var(--ui-accent-on);
 }
 
-.nt--success {
+.nt--success .nt-timer {
   background: var(--ui-success);
-  color: var(--ui-accent-on);
 }
 
-.nt__close {
+.nt--info .nt-timer {
+  background: var(--ui-accent);
+}
+
+@keyframes nt-shrink {
+  from { width: 100%; }
+  to { width: 0%; }
+}
+
+.nt-ic {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  margin-top: 1px;
+}
+
+.nt--error .nt-ic {
+  background: color-mix(in srgb, var(--ui-danger) 14%, transparent);
+  color: var(--ui-danger);
+}
+
+.nt--success .nt-ic {
+  background: color-mix(in srgb, var(--ui-success) 14%, transparent);
+  color: var(--ui-success);
+}
+
+.nt--info .nt-ic {
+  background: color-mix(in srgb, var(--ui-accent) 14%, transparent);
+  color: var(--ui-accent);
+}
+
+.nt-text {
+  min-width: 0;
+  word-break: break-word;
+}
+
+.nt-close {
   position: absolute;
   top: 4px;
   right: 8px;
   background: transparent;
   border: none;
-  color: color-mix(in srgb, var(--ui-accent-on) 85%, transparent);
+  color: var(--ui-text-2);
   font-size: 18px;
   line-height: 1;
   cursor: pointer;
@@ -80,19 +145,26 @@ import { notifications, dismissNotification } from './state'
   border-radius: 4px;
 }
 
-.nt__close:hover {
-  background: color-mix(in srgb, var(--ui-accent-on) 15%, transparent);
-  color: var(--ui-accent-on);
+.nt-close:hover {
+  background: var(--ui-surface-3);
+  color: var(--ui-text);
 }
 
-.toast-fade-enter-active,
-.toast-fade-leave-active {
+.nt-fade-enter-active,
+.nt-fade-leave-active {
   transition: opacity 0.25s ease, transform 0.25s ease;
 }
 
-.toast-fade-enter-from,
-.toast-fade-leave-to {
+.nt-fade-enter-from,
+.nt-fade-leave-to {
   opacity: 0;
   transform: translateY(10px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nt-fade-enter-active,
+  .nt-fade-leave-active {
+    transition: none;
+  }
 }
 </style>
