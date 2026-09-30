@@ -13,7 +13,7 @@ import { useAuditStore } from '../store'
 import type { DtoAuditEventView } from '@/api'
 
 const audit = useAuditStore()
-const { items, loading, error } = storeToRefs(audit)
+const { items, loading, error, disabled } = storeToRefs(audit)
 
 /** Russian labels for entities (used in the filter and the table). */
 const ENTITY_LABELS: Record<string, string> = {
@@ -319,12 +319,23 @@ onMounted(() => {
     <p v-if="loading && items.length" class="al-refreshing">Обновление…</p>
     <p v-if="error" class="al-st er">{{ error }}</p>
 
+    <!-- The backend does not expose /audit/events (audit.enabled=false):
+         a distinct help card instead of the table / a raw 404 error. -->
+    <div v-if="disabled" class="al-disabled" role="note">
+      <h3 class="al-disabled-title">Журнал действий отключён на сервере</h3>
+      <ol class="al-disabled-steps">
+        <li>в config.yaml бэкенда установите <code>audit.enabled: true</code>;</li>
+        <li>перезапустите backend (<code>docker restart erp</code> или <code>docker compose up -d</code>);</li>
+        <li>обновите страницу.</li>
+      </ol>
+    </div>
+
     <!-- Table: header (titles + sort), embedded filter row, data rows.
          Never unmounts while data is present: during a filter-triggered reload
          the previous rows stay visible (dimmed) until the new ones arrive,
          so the table does not blink/disappear. -->
     <div
-      v-if="items.length > 0 || (!loading && !error)"
+      v-if="!disabled && (items.length > 0 || (!loading && !error))"
       class="al-table"
       :class="{ 'al-table--loading': loading && items.length > 0 }"
     >
@@ -545,6 +556,43 @@ onMounted(() => {
 
 .al-st.er {
   color: var(--ui-danger);
+}
+
+/* Help card when the backend does not expose the audit journal
+   (audit.enabled=false): muted/neutral, tokens only. */
+.al-disabled {
+  border: 1px solid var(--ui-border);
+  border-radius: 10px;
+  background: var(--ui-surface-2);
+  padding: 20px 24px;
+  max-width: 560px;
+  color: var(--ui-text-2);
+}
+
+.al-disabled-title {
+  margin: 0 0 10px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ui-text);
+}
+
+.al-disabled-steps {
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.al-disabled-steps code {
+  font-family: var(--ui-font-mono, monospace);
+  font-size: 12px;
+  background: var(--ui-surface-3);
+  border-radius: 5px;
+  padding: 1px 6px;
+  color: var(--ui-text-2);
 }
 
 /* In-place refresh indicator (shown while the old rows stay visible). */

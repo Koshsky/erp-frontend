@@ -3618,6 +3618,9 @@ export const useAuditStore = defineStore('audit', () => {
   const total = ref(0)
   const loading = ref(false)
   const error = ref<string | null>(null)
+  /** The backend has no /audit/events route (audit.enabled=false in config):
+   *  the page shows a help card instead of a raw 404 error. */
+  const disabled = ref(false)
 
   async function load(filters: AuditQueryFilters = {}): Promise<boolean> {
     loading.value = true
@@ -3640,14 +3643,25 @@ export const useAuditStore = defineStore('audit', () => {
       const data = resp.data?.data
       items.value = data?.items ?? []
       total.value = data?.total ?? 0
+      // A successful load means the journal is reachable again (e.g. the
+      // backend was restarted with audit.enabled=true) — drop the disabled state.
+      disabled.value = false
       return true
     } catch (e: any) {
-      error.value = apiErrorMessage(e)
+      if ((e as any)?.response?.status === 404) {
+        // The backend does not register the audit route: treat it as "the
+        // journal is disabled" rather than a real load error (raw "404" text).
+        disabled.value = true
+        error.value = null
+      } else {
+        disabled.value = false
+        error.value = apiErrorMessage(e)
+      }
       return false
     } finally {
       loading.value = false
     }
   }
 
-  return { items, total, loading, error, load }
+  return { items, total, loading, error, disabled, load }
 })
