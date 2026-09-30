@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 The web app and the desktop wrapper (`desktop/`) are versioned together.
 
+## [Unreleased]
+
+### Added
+
+- Audit page: when the backend journal is disabled, a help card explains how to enable it instead of a raw 404 error.
+- Users page: sortable "Preset" column with Russian preset labels.
+- Profile page: connection status and app/version cards.
+
+### Changed
+
+- "Console" and "Status" tabs removed from the sidebar (the pages stay reachable by URL).
+- Access editor highlights a row only while the frontend draft differs from the backend state.
+- Settings page: per-domain warm-up toggles removed, tiles spaced tighter.
+- User create/edit form: the cancel button is now "Back".
+
 ## [1.0.1] - 2026-09-30
 
 ### Changed
