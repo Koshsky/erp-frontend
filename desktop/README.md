@@ -97,18 +97,19 @@ The **version is shared by the web frontend and the desktop wrapper**: the
 single source of truth is `services/frontend/package.json` (semver).
 `desktop/package.json` is synced to the same version automatically on every
 build, so the wrapper package and the artifacts can never drift from the web
-version. By default the version is **incremented** on each build (patch):
+version. By default the build uses the **current version as is** — no
+auto-increment; bump it only explicitly:
 
 ```bash
-./build-portable.sh                 # Linux (both parts), version = patch bump
+./build-portable.sh                 # Linux (both parts), version = current (no bump)
 ./build-portable.sh --win           # Linux + both Windows parts
 ./build-portable.sh --win-portable  # Linux + Windows portable (zip + folder)
 ./build-portable.sh --win-exe       # Linux + single-file Windows .exe
-./build-portable.sh --version 2.1.0 # build exactly 2.1.0
-./build-portable.sh --bump minor    # increment minor
-./build-portable.sh --no-bump       # current version unchanged
+./build-portable.sh --version 2.1.0 # build exactly 2.1.0 (no source change)
+./build-portable.sh --bump minor    # increment minor explicitly
 ./build-portable.sh --clean         # clean release/ before building
 ./build-portable.sh --build-web     # deprecated no-op: web is always rebuilt
+./build-portable.sh --no-bump       # deprecated no-op: this is the default now
 ```
 
 `--version` builds an exact version without writing it into the source

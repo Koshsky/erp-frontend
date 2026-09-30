@@ -47,21 +47,22 @@
 #      the wrapper package can never drift from the web version;
 #    - artifacts and the UI get the same version (dist via env APP_VERSION,
 #      electron-builder via -c.extraMetadata.version below);
-#    - by default every build increments patch (1.0.0 -> 1.0.1);
-#    - --version X.Y.Z — exact version (no increment);
-#    - --bump minor|major|patch — explicit increment type; --no-bump — unchanged.
+#    - by default the build uses the CURRENT version from
+#      services/frontend/package.json as is — never auto-incremented;
+#    - --bump minor|major|patch — explicit increment of the source version;
+#    - --version X.Y.Z — build exactly this version (no source change);
+#    - --no-bump — deprecated no-op (this is the default now).
 #    The script does not commit the version: commit the bump separately
 #    (e.g. chore: release v1.0.1).
 #
 #  Usage:
-#    ./build-portable.sh --linux             # Linux (dir + AppImage); version = patch bump
+#    ./build-portable.sh --linux             # Linux (dir + AppImage); version = current (no bump)
 #    ./build-portable.sh --win-portable      # Windows portable (zip+folder)
 #    ./build-portable.sh --win-exe           # Windows single .exe (best-effort)
 #    ./build-portable.sh --win               # Windows portable + .exe
 #    ./build-portable.sh --linux --win       # Linux + Windows
 #    ./build-portable.sh --version 2.1.0     # build exactly 2.1.0
-#    ./build-portable.sh --no-bump           # current version as is
-#    ./build-portable.sh --bump minor        # increment minor
+#    ./build-portable.sh --bump minor        # increment minor explicitly
 #    ./build-portable.sh --build-web         # deprecated no-op (web is always rebuilt)
 #    ./build-portable.sh --clean             # clean release/ before building
 #
@@ -107,7 +108,9 @@ WIN_EXE=0
 BUILD_WEB=0
 CLEAN=0
 BUMP_TYPE="patch"
-BUMP=1
+# No auto-increment: the build always uses the current version from the
+# frontend package.json as is; an increment happens only on --bump.
+BUMP=0
 OVERRIDE_VERSION=""
 
 for arg in "$@"; do
@@ -120,7 +123,7 @@ for arg in "$@"; do
     --linux)           LINUX_PORTABLE=1; LINUX_APPIMAGE=1 ;;
     --build-web)  BUILD_WEB=1 ;;
     --clean)      CLEAN=1 ;;
-    --no-bump)    BUMP=0 ;;
+    --no-bump)    : ;;  # deprecated no-op: the current version is already the default
     --bump)       echo "--bump требует аргумент: patch|minor|major" >&2; exit 1 ;;
     --bump=*)     BUMP_TYPE="${arg#--bump=}"; BUMP=1 ;;
     --version)    echo "--version требует аргумент X.Y.Z" >&2; exit 1 ;;
@@ -157,10 +160,11 @@ fi
 
 # ---------- Version ----------
 # Single source of truth — services/frontend/package.json: the web frontend
-# and the desktop wrapper ALWAYS share ONE version. Default bumps patch;
-# --version disables the increment and sets the exact one; --no-bump simply
-# keeps the current one. desktop/package.json is synced below, so the wrapper
-# package (and plain `npm run dist*`) never drifts from the web version.
+# and the desktop wrapper ALWAYS share ONE version. The build uses that
+# version AS IS (never auto-incremented); --bump increments it explicitly;
+# --version builds an exact version without touching the source.
+# desktop/package.json is synced below, so the wrapper package (and plain
+# `npm run dist*`) never drifts from the web version.
 CURRENT_VERSION="$(node -p "require('$FRONTEND_DIR/package.json').version" 2>/dev/null || echo '0.0.0')"
 
 if [ -n "$OVERRIDE_VERSION" ]; then
