@@ -14,13 +14,27 @@ const app = useAppStore()
 const rbac = useRbacStore()
 const { adminUsers, adminUsersLoading, adminUsersError } = storeToRefs(app)
 
-type ColumnKey = 'name' | 'username'
+type ColumnKey = 'name' | 'username' | 'preset'
 
 /** Table columns: header labels and sortable keys */
 const COLUMNS: { key: ColumnKey; label: string }[] = [
   { key: 'name', label: 'ФИО' },
   { key: 'username', label: 'Логин' },
+  { key: 'preset', label: 'Пресет' },
 ]
+
+/** Russian preset labels for the column (unknown values fall back to the raw code). */
+const PRESET_LABELS: Record<string, string> = {
+  admin: 'Администратор',
+  dp: 'Директор проектов',
+  rp: 'Руководитель проекта',
+  vp: 'Владелец процесса',
+  worker: 'Работник',
+}
+
+function presetLabel(preset?: string): string {
+  return preset ? (PRESET_LABELS[preset] ?? preset) : '—'
+}
 
 /** Per-column filters, rendered under the table header */
 const fName = ref('')
@@ -47,6 +61,7 @@ function sortValue(u: DtoAdminUserResponse, key: ColumnKey): string {
   switch (key) {
     case 'name': return u.name ?? ''
     case 'username': return u.username ?? ''
+    case 'preset': return presetLabel(u.preset)
   }
 }
 
@@ -226,6 +241,9 @@ async function refreshAfterMutation() {
       <div class="tr th th-filters">
         <input v-model="fName" type="search" class="th-filter" placeholder="по ФИО" />
         <input v-model="fLogin" type="search" class="th-filter" placeholder="по логину" />
+        <!-- No per-preset filter (display + sort only); an empty cell keeps the
+             grid aligned with the three header columns. -->
+        <div></div>
       </div>
       <template v-if="filteredUsers.length">
         <div
@@ -241,6 +259,7 @@ async function refreshAfterMutation() {
         >
           <div class="name">{{ u.name }}</div>
           <div class="mono">{{ u.username }}</div>
+          <div class="preset">{{ presetLabel(u.preset) }}</div>
         </div>
       </template>
       <p v-else class="up-st">{{ adminUsers.length ? 'Ничего не найдено' : 'Нет данных' }}</p>
@@ -343,7 +362,7 @@ async function refreshAfterMutation() {
 }
 .tr {
   display: grid;
-  grid-template-columns: 1.3fr 1fr;
+  grid-template-columns: 1.3fr 1fr 1fr;
   gap: 8px;
   padding: 12px 20px;
   border-bottom: 1px solid var(--ui-border);
@@ -410,5 +429,9 @@ async function refreshAfterMutation() {
 .name {
   font-weight: 700;
   color: var(--ui-text);
+}
+.preset {
+  color: var(--ui-text-2);
+  font-size: 13px;
 }
 </style>
