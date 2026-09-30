@@ -251,32 +251,32 @@ async function onSaveTaskEditor(patch: TaskEditorPatch) {
   if (taskEditorId.value == null) return
   taskEditorBusy.value = true
   taskEditorError.value = null
-  const ok = await planning.updateTaskMeta(taskEditorId.value, patch)
+  // Mutation failures are reported by the global toast (http.ts) — no inline banner.
+  await planning.updateTaskMeta(taskEditorId.value, patch)
   taskEditorBusy.value = false
-  if (!ok) taskEditorError.value = planning.error
 }
 
 async function onAddSubtask(payload: NewSubtaskPayload) {
   if (taskEditorId.value == null) return
   taskEditorBusy.value = true
   taskEditorError.value = null
-  const ok = await planning.createSubtask(taskEditorId.value, payload)
+  // Mutation failures are reported by the global toast (http.ts) — no inline banner.
+  await planning.createSubtask(taskEditorId.value, payload)
   taskEditorBusy.value = false
-  if (!ok) taskEditorError.value = planning.error
 }
 
 async function onUpdateSubtask(payload: UpdateSubtaskPayload) {
   taskEditorBusy.value = true
   taskEditorError.value = null
-  const ok = await planning.updateSubtask(payload.id, payload.patch)
+  // Mutation failures are reported by the global toast (http.ts) — no inline banner.
+  await planning.updateSubtask(payload.id, payload.patch)
   taskEditorBusy.value = false
-  if (!ok) taskEditorError.value = planning.error
 }
 
 async function onDeleteSubtask(id: number) {
   if (taskEditorId.value == null) return
-  const ok = await planning.deleteSubtask(id)
-  if (!ok) taskEditorError.value = planning.error
+  // Mutation failures are reported by the global toast (http.ts) — no inline banner.
+  await planning.deleteSubtask(id)
 }
 
 // === Task dependencies (scheduling links) ===
@@ -321,25 +321,25 @@ async function onAddDependency(payload: { depends_on_task_id: number; type: Depe
   if (taskEditorId.value == null) return
   taskEditorBusy.value = true
   taskEditorError.value = null
-  const ok = await planning.addTaskDependency(taskEditorId.value, payload.depends_on_task_id, payload.type)
+  // Mutation failures are reported by the global toast (http.ts) — no inline banner.
+  await planning.addTaskDependency(taskEditorId.value, payload.depends_on_task_id, payload.type)
   taskEditorBusy.value = false
-  if (!ok) taskEditorError.value = planning.error
 }
 
 async function onChangeDependency(payload: { id: number; type: DependencyType }) {
   if (taskEditorId.value == null) return
   taskEditorBusy.value = true
   taskEditorError.value = null
-  const ok = await planning.changeTaskDependencyType(payload.id, taskEditorId.value, payload.type)
+  // Mutation failures are reported by the global toast (http.ts) — no inline banner.
+  await planning.changeTaskDependencyType(payload.id, taskEditorId.value, payload.type)
   taskEditorBusy.value = false
-  if (!ok) taskEditorError.value = planning.error
 }
 
 async function onDeleteDependency(id: number) {
   if (taskEditorId.value == null) return
   taskEditorError.value = null
-  const ok = await planning.deleteTaskDependency(id, taskEditorId.value)
-  if (!ok) taskEditorError.value = planning.error
+  // Mutation failures are reported by the global toast (http.ts) — no inline banner.
+  await planning.deleteTaskDependency(id, taskEditorId.value)
 }
 
 function onContextMenu(p: { clientX: number; clientY: number; date: string | null; rowIndex: number; processId?: number; taskId?: number; milestoneId?: number }) {
@@ -478,25 +478,25 @@ async function onAddResource(payload: AddResourcePayload) {
   if (resourcesModalTaskId.value == null) return
   resourcesBusy.value = true
   resourcesError.value = null
-  const ok = await planning.assignResource(
+  // Mutation failures are reported by the global toast (http.ts) — no inline banner.
+  await planning.assignResource(
     resourcesModalTaskId.value,
     payload.resource_id,
     payload.quantity,
   )
   resourcesBusy.value = false
-  if (!ok) resourcesError.value = planning.error
 }
 
 async function onRemoveResource(payload: { resource_id: number }) {
   if (resourcesModalTaskId.value == null) return
   resourcesBusy.value = true
   resourcesError.value = null
-  const ok = await planning.removeResource(
+  // Mutation failures are reported by the global toast (http.ts) — no inline banner.
+  await planning.removeResource(
     resourcesModalTaskId.value,
     payload.resource_id,
   )
   resourcesBusy.value = false
-  if (!ok) resourcesError.value = planning.error
 }
 
 // Task "Comments" modal: opens by clicking the bar or from the right-click menu

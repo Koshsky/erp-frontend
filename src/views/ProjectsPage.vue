@@ -199,9 +199,8 @@ async function createProjectAt(date: string) {
     start_date: date,
     end_date: addMonthsISO(date, 6),
   })
-  if (!res.ok) {
-    error.value = store.error
-  } else if (res.autoCreated) {
+  // A failed creation is reported by the global toast (http.ts) — no inline banner.
+  if (res.ok && res.autoCreated) {
     const a = res.autoCreated
     showFeedback(
       'Проект создан. По шаблону автосоздания добавлено: процессов — ' +
@@ -229,8 +228,8 @@ async function handleSelect(id: string) {
 }
 
 async function onReorder(e: { from: number; to: number }) {
-  const ok = await store.reorderProjects(e.from, e.to)
-  if (!ok) error.value = store.error
+  // A failed reorder is reported by the global toast (http.ts) — no inline banner.
+  await store.reorderProjects(e.from, e.to)
 }
 
 /** Click on a project bar — navigate to the processes tab anchored at the project start */

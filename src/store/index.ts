@@ -3140,7 +3140,6 @@ export const usePlanningStore = defineStore('planning', () => {
     content: string,
     parentId?: number,
   ): Promise<boolean> {
-    commentsError.value = null
     try {
       const resp = await new TasksApi(apiConfig()).taskIdCommentsPost(taskId, {
         content,
@@ -3158,15 +3157,15 @@ export const usePlanningStore = defineStore('planning', () => {
       const task = findTaskRow(taskId)
       if (task) task.comments_count = (task.comments_count ?? 0) + 1
       return true
-    } catch (e: any) {
-      commentsError.value = e?.message || String(e)
+    } catch {
+      // A failed comment mutation is reported by the global toast (http.ts) —
+      // the inline modal error stays for load failures only (loadTaskComments).
       return false
     }
   }
 
   /** Deletes a comment (softly; replies stay — they become "orphaned" in the tree). */
   async function deleteTaskComment(taskId: number, commentId: number): Promise<boolean> {
-    commentsError.value = null
     try {
       await new TasksApi(apiConfig()).taskIdCommentsCommentIdDelete(taskId, commentId)
       const list = commentsByTask.value[taskId]
@@ -3175,8 +3174,9 @@ export const usePlanningStore = defineStore('planning', () => {
       const task = findTaskRow(taskId)
       if (task) task.comments_count = Math.max(0, (task.comments_count ?? 0) - 1)
       return true
-    } catch (e: any) {
-      commentsError.value = e?.message || String(e)
+    } catch {
+      // A failed comment mutation is reported by the global toast (http.ts) —
+      // the inline modal error stays for load failures only (loadTaskComments).
       return false
     }
   }

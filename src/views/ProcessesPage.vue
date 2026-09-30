@@ -194,13 +194,13 @@ async function handleSelect(id: string) {
       project?.start_date,
       project?.end_date,
     )
-    const ok = await store.createProcess({
+    await store.createProcess({
       title: 'Новый процесс',
       project_id: projectId,
       start_date,
       end_date,
     }, rowIndex)
-    if (!ok) error.value = store.error
+    // A failed creation is reported by the global toast (http.ts) — no inline banner.
   } else if (id === 'edit-process' && processId != null) {
     openProcessEdit(processId)
   } else if (id === 'delete-process' && processId != null) {
