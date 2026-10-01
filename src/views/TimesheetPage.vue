@@ -10,12 +10,11 @@ import { toDate } from '../components/planner/calendar'
 import type { PlanningUnit } from '../components/planner/calendar'
 import { useEmployeeFilters } from '../composables/useEmployeeFilters'
 import { useRoleAccess } from '../composables/useRoleAccess'
-import { useAppStore, useAuthStore, useRbacStore, useTimesheetStore } from '../store'
+import { useAppStore, useRbacStore, useTimesheetStore } from '../store'
 import { isOffline } from '../offline/state'
 import { scheduleNamedRefresh } from '../offline/sync'
 
 const ts = useTimesheetStore()
-const auth = useAuthStore()
 const { timesheetRows, states, loading, busy, error } = storeToRefs(ts)
 
 const unit = ref<PlanningUnit>('day')

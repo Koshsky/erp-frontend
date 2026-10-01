@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/vue3-vite'
 import ProcessBar from './ProcessBar.vue'
+import type { ProcessBarProps } from './types'
 import { makeDemoTimeline } from '@/components/planner/plannerStoryHelpers'
 
 const now = new Date()
@@ -17,7 +18,7 @@ const meta: Meta<typeof ProcessBar> = {
 export default meta
 type Story = StoryObj<typeof meta>
 
-function withProcess(props: Record<string, any>): Story['render'] {
+function withProcess(props: Partial<ProcessBarProps>): Story['render'] {
   return () => ({
     components: { ProcessBar },
     data: () => ({ timeline: makeDemoTimeline(iso(day(1, 1)), 'day'), ...props }),

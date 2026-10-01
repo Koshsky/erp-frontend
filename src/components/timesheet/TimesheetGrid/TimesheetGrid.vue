@@ -273,10 +273,6 @@ function onDblClick() {
   dragging.value = false
 }
 
-function onKeydown(e: KeyboardEvent) {
-  if (e.key === 'Escape') closePanel()
-}
-
 onBeforeUnmount(() => {
   if (openTimer) {
     clearTimeout(openTimer)

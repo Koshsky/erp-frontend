@@ -7,7 +7,6 @@ import { useAppStore } from '../store'
 import { ColorField, ConfirmDialog } from '../components/common'
 import { randomPaletteColor } from '../components/common/ColorField/palette'
 import { useConfirm } from '../composables/useConfirm'
-import type { DtoAutoCreateConfig } from '@/api'
 
 interface LocalResource {
   resource_id: number
@@ -85,7 +84,7 @@ const ownerOptions = computed(() =>
 
 /** Task resource candidates */
 const resourceOptions = computed(() =>
-  resources.value
+  [...resources.value]
     .sort((a, b) => (a.title ?? '').localeCompare(b.title ?? '', 'ru'))
     .map((r) => ({ value: r.id as number, label: `${r.title}${r.code ? ` (${r.code})` : ''}` })),
 )
@@ -104,7 +103,7 @@ const preview = computed(() => {
     tasks += p.tasks.length
     for (const t of p.tasks) {
       operations += t.operations.length
-      for (const r of t.resources) assignments += 1
+      assignments += t.resources.length
     }
   }
   return { processes: form.processes.length, tasks, operations, assignments }

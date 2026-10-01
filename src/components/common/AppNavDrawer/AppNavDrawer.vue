@@ -227,7 +227,7 @@ function startItemDrag(p: { row: HTMLElement; catLabel: string }) {
   clearPending()
 }
 
-function onDragUp(e: PointerEvent) {
+function onDragUp(_e: PointerEvent) {
   const d = drag.value
   const from = d?.from
   const b = d?.to

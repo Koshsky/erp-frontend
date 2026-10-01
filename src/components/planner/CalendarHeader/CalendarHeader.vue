@@ -67,11 +67,13 @@ const showWdRow = computed(() => props.t.unit === 'day' && props.t.cellPx >= CEL
       {{ m.label }}
     </div>
 
-    <div v-if="showNumRow" v-for="i in t.visibleIndices" :key="'n' + i"
-      class="th-num"
-      :style="{ left: t.cellLeft(i) + 'px', width: t.cellPx + 'px' }">
-      {{ numLabel(i) }}
-    </div>
+    <template v-if="showNumRow">
+      <div v-for="i in t.visibleIndices" :key="'n' + i"
+        class="th-num"
+        :style="{ left: t.cellLeft(i) + 'px', width: t.cellPx + 'px' }">
+        {{ numLabel(i) }}
+      </div>
+    </template>
 
     <template v-if="showWdRow">
       <div v-for="i in t.visibleIndices" :key="'w' + i"

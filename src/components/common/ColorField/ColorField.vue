@@ -53,7 +53,11 @@ function clampPanel() {
 }
 
 function toggle() {
-  open.value ? close() : (open.value = true)
+  if (open.value) {
+    close()
+  } else {
+    open.value = true
+  }
 }
 
 watch(open, (isOpen) => {

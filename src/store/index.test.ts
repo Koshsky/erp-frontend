@@ -27,6 +27,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { useAppStore, useTimesheetStore, useAuthStore } from './index'
 import { reloadDomainsFor } from '../offline/sync'
 import { getAccessToken, setAccessToken } from '@/token'
+import type { DtoUserInfo } from '@/api'
 
 /** Mutable per-test method implementations for the mocked API classes. */
 const api = vi.hoisted(() => ({
@@ -322,7 +323,7 @@ describe('reloadDomainsFor — the entity → affected-domains map (online post-
     setActivePinia(createPinia())
     // The roster-family reloads are gated by "sees the roster" — give the
     // auth store an admin preset so the fallback path admits them.
-    useAuthStore().user = { preset: 'admin' } as any
+    useAuthStore().user = { preset: 'admin' } satisfies DtoUserInfo
   })
 
   it('maps a project mutation to every planning aggregate + the CRUD project list', () => {

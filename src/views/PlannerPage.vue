@@ -33,6 +33,7 @@ import type { DependencyType } from '../components/planner/dependencies'
 import { CELL_WIDTH } from '../components/planner/layout'
 import { randomPaletteColor } from '../components/common/ColorField/palette'
 import type { PdfGanttGroup } from '../components/planner/PdfExport/pdfRenderer'
+import type { DtoDetailedProcess, DtoDetailedTask, DtoTaskDependency, DtoResource, DtoMilestone } from '@/api'
 
 const planning = usePlanningStore()
 const app = useAppStore()
@@ -77,7 +78,7 @@ const { open: openUnitMenu, close: closeUnitMenu, select: selectUnit, bind: unit
 const focusDate = computed(() => {
   const id = Number(route.query.process)
   if (!id) return null
-  const proc = taskPlanning.value?.processes?.find((p: any) => p.id === id)
+  const proc = taskPlanning.value?.processes?.find((p: DtoDetailedProcess) => p.id === id)
   return proc?.start_date ?? null
 })
 
@@ -114,7 +115,7 @@ const seesAllResources = computed(() =>
 
 /** Drag/resize/reorder/assign are enabled when the user can manage at least one visible process */
 const anyManageableTask = computed(() =>
-  (taskPlanning.value?.processes ?? []).some((p: any) => canManageTask(p.id)),
+  (taskPlanning.value?.processes ?? []).some((p: DtoDetailedProcess) => canManageTask(p.id)),
 )
 
 const { findTask, findMilestone } = useFindPlanningItem()
@@ -214,20 +215,20 @@ const taskEditorTask = computed<TaskEditorTask | null>(() => {
   const t = findTask(taskEditorId.value)
   if (!t) return null
   return {
-    id: t.id,
+    id: t.id ?? 0,
     title: t.title ?? '',
     color: t.color ?? '',
     status: t.status ?? 'not_started',
     owner_id: t.owner_id ?? null,
-    process_id: t.process_id,
+    process_id: t.process_id ?? 0,
   }
 })
 
 /** Subtask rows for the right panel (from the planning cache) */
 const taskEditorSubtasks = computed(() => {
   if (taskEditorId.value == null) return []
-  return (findTask(taskEditorId.value)?.subtasks ?? []).map((s: any) => ({
-    id: s.id,
+  return (findTask(taskEditorId.value)?.subtasks ?? []).map((s: DtoDetailedTask) => ({
+    id: s.id ?? 0,
     title: s.title ?? '',
     color: s.color ?? '',
     status: s.status ?? 'not_started',
@@ -286,16 +287,16 @@ async function onDeleteSubtask(id: number) {
 const taskEditorDependencies = computed(() => {
   if (taskEditorId.value == null) return []
   const proc = taskPlanning.value?.processes?.find(
-    (p: any) => p.id === findTask(taskEditorId.value!)?.process_id,
+    (p: DtoDetailedProcess) => p.id === findTask(taskEditorId.value!)?.process_id,
   )
-  return ((proc?.dependencies ?? []) as any[])
-    .filter((e: any) => e.task_id === taskEditorId.value)
-    .map((e: any) => ({
-      id: e.id,
-      task_id: e.task_id,
-      depends_on_task_id: e.depends_on_task_id,
+  return ((proc?.dependencies ?? []) as DtoTaskDependency[])
+    .filter((e: DtoTaskDependency) => e.task_id === taskEditorId.value)
+    .map((e: DtoTaskDependency) => ({
+      id: e.id ?? 0,
+      task_id: e.task_id ?? 0,
+      depends_on_task_id: e.depends_on_task_id ?? 0,
       type: e.type as DependencyType,
-      title: findTask(e.depends_on_task_id)?.title ?? `#${e.depends_on_task_id}`,
+      title: findTask(e.depends_on_task_id ?? 0)?.title ?? `#${e.depends_on_task_id}`,
     }))
 })
 
@@ -304,17 +305,17 @@ const taskEditorDependencies = computed(() => {
 const taskEditorDependencyOptions = computed(() => {
   if (taskEditorId.value == null) return []
   const proc = taskPlanning.value?.processes?.find(
-    (p: any) => p.id === findTask(taskEditorId.value!)?.process_id,
+    (p: DtoDetailedProcess) => p.id === findTask(taskEditorId.value!)?.process_id,
   )
   const taken = new Set(
-    ((proc?.dependencies ?? []) as any[])
-      .filter((e: any) => e.task_id === taskEditorId.value)
-      .map((e: any) => e.depends_on_task_id),
+    ((proc?.dependencies ?? []) as DtoTaskDependency[])
+      .filter((e: DtoTaskDependency) => e.task_id === taskEditorId.value)
+      .map((e: DtoTaskDependency) => e.depends_on_task_id),
   )
-  taken.add(taskEditorId.value)
-  return ((proc?.tasks ?? []) as any[])
-    .filter((t: any) => t.parent_id == null && !taken.has(t.id))
-    .map((t: any) => ({ value: t.id, label: t.title ?? `#${t.id}` }))
+  taken.add(taskEditorId.value ?? 0)
+  return ((proc?.tasks ?? []) as DtoDetailedTask[])
+    .filter((t: DtoDetailedTask) => t.parent_id == null && !taken.has(t.id))
+    .map((t: DtoDetailedTask) => ({ value: t.id ?? 0, label: t.title ?? `#${t.id}` }))
 })
 
 async function onAddDependency(payload: { depends_on_task_id: number; type: DependencyType }) {
@@ -385,7 +386,7 @@ async function handleSelect(id: string) {
   const { date, rowIndex, processId, taskId, milestoneId } = menu.value
   if (id === 'create-task') {
     if (processId == null || date == null) return
-    const proc = planning.taskPlanning?.processes?.find((p: any) => p.id === processId)
+    const proc = planning.taskPlanning?.processes?.find((p: DtoDetailedProcess) => p.id === processId)
     // A task is created within the bounds of the parent process keeping the default length:
     // a click outside the bounds clamps the span to the parent start/end but does not shrink it.
     const { start_date, end_date } = shiftSpanDates(
@@ -394,7 +395,7 @@ async function handleSelect(id: string) {
       proc?.start_date,
       proc?.end_date,
     )
-    const ok = await planning.createTask({
+    const _ok = await planning.createTask({
       title: 'Новая задача',
       process_id: processId,
       start_date,
@@ -402,7 +403,7 @@ async function handleSelect(id: string) {
     }, rowIndex)
   } else if (id === 'create-milestone') {
     if (processId == null || date == null) return
-    const proc = planning.taskPlanning?.processes?.find((p: any) => p.id === processId)
+    const proc = planning.taskPlanning?.processes?.find((p: DtoDetailedProcess) => p.id === processId)
     await planning.createMilestone({
       title: 'Новая веха',
       content: 'Новая веха',
@@ -445,7 +446,7 @@ const resourcesTaskTitle = computed(() => {
 const assignedResources = computed<AssignedResource[]>(() => {
   if (resourcesModalTaskId.value == null) return []
   const task = findTask(resourcesModalTaskId.value)
-  return (task?.resources ?? []).map((r: any) => ({
+  return (task?.resources ?? []).map((r: DtoResource) => ({
     assignment_id: r.assignment_id,
     resource_id: r.id ?? 0,
     quantity: r.quantity ?? 0,
@@ -577,9 +578,9 @@ const processesByPriority = computed(() => {
   // backend already scopes that list).
   if ((permsReady.value ? ['parent', 'up1'].includes(rbac.perm('task', 'view')) : role.value === 'vp') && userId.value != null) {
     const myProjects = new Set(
-      list.filter((p: any) => p.owner_id === userId.value).map((p: any) => p.project_id),
+      list.filter((p: DtoDetailedProcess) => p.owner_id === userId.value).map((p: DtoDetailedProcess) => p.project_id),
     )
-    list = list.filter((p: any) => myProjects.has(p.project_id))
+    list = list.filter((p: DtoDetailedProcess) => myProjects.has(p.project_id))
   }
   return [...list].sort((a, b) => {
     const pa = prio.get(a.project_id ?? -1) ?? Number.MAX_SAFE_INTEGER
@@ -591,7 +592,7 @@ const processesByPriority = computed(() => {
 
 /** Print model for PdfExport: a process = a group, tasks = rows */
 const taskGroups = computed<PdfGanttGroup[]>(() =>
-  processesByPriority.value.map((p: any) => ({
+  processesByPriority.value.map((p: DtoDetailedProcess) => ({
     id: p.id,
     code: p.project_code,
     title: p.title ?? '',
@@ -599,14 +600,14 @@ const taskGroups = computed<PdfGanttGroup[]>(() =>
     end_date: p.end_date ?? '',
     project_id: p.project_id,
     owner_id: p.owner_id ?? undefined,
-    rows: (p.tasks ?? []).map((t: any) => ({
+    rows: (p.tasks ?? []).map((t: DtoDetailedTask) => ({
       id: t.id,
       title: t.title ?? '',
       start_date: t.start_date ?? '',
       end_date: t.end_date ?? '',
-      resources: (t.resources ?? []).map((r: any) => ({ id: r.id, code: r.code, title: r.title, quantity: r.quantity })),
+      resources: (t.resources ?? []).map((r: DtoResource) => ({ id: r.id, code: r.code, title: r.title, quantity: r.quantity })),
     })),
-    milestones: (p.milestones ?? []).map((m: any) => ({ id: m.id, title: m.title ?? '', date: m.date ?? '' })),
+    milestones: (p.milestones ?? []).map((m: DtoMilestone) => ({ id: m.id, title: m.title ?? '', date: m.date ?? '' })),
   })),
 )
 </script>

@@ -58,11 +58,6 @@ function okMsg(msg: string) {
   statusOk.value = true
 }
 
-function failMsg(msg: string) {
-  statusMsg.value = msg
-  statusOk.value = false
-}
-
 async function refreshStatus() {
   await refreshPendingCount().catch(() => {})
   failedEntries.value = (await getFailedEntries().catch(() => [])).map((e) => ({

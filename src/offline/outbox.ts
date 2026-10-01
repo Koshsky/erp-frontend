@@ -480,7 +480,6 @@ function logOutboxError(entry: OutboxEntry, url: string, e: unknown): void {
         timeout_ms: err.timeout,
         message: err.message,
       }
-  // eslint-disable-next-line no-console
   console.error('[outbox] не удалось отправить запись:', base, detail, {
     config: err.config ? { method: err.config.method, url: err.config.url, data: err.config.data } : undefined,
   })

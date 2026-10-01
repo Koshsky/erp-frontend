@@ -21,6 +21,7 @@ import { isOffline } from '../offline/state'
 import { scheduleNamedRefresh } from '../offline/sync'
 import { addMonthsISO, fmtDate } from '../components/planner/calendar'
 import { CELL_WIDTH } from '../components/planner/layout'
+import type { DtoProject } from '@/api'
 
 const store = usePlanningStore()
 const app = useAppStore()
@@ -42,7 +43,7 @@ function onVisibleRange(v: { from: string; to: string; cellWidthPx: number; scal
 
 /** Print model for PdfExport: one "Projects" group, rows = projects */
 const projectGroups = computed<PdfGanttGroup[]>(() => {
-  const rows = (projectPlanning.value?.projects ?? []).map((p: any) => ({
+  const rows = (projectPlanning.value?.projects ?? []).map((p: DtoProject) => ({
     id: p.id,
     title: p.project_code ?? '',
     start_date: p.start_date ?? '',

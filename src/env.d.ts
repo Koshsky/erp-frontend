@@ -14,7 +14,8 @@ interface ImportMeta {
 
 declare module '*.vue' {
   import type { DefineComponent } from 'vue'
-  const component: DefineComponent<{}, {}, any>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- vue shim: component instances are opaque here
+  const component: DefineComponent<object, object, any>
   export default component
 }
 

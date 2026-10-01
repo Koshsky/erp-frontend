@@ -332,9 +332,9 @@ async function generateOnce(force: boolean) {
       previewHandle = handle
       pageCount.value = handle.pageCount
     }
-  } catch (e: any) {
+  } catch (e: unknown) {
     if (token === genToken) {
-      previewError.value = e?.message || String(e)
+      previewError.value = e instanceof Error ? e.message : String(e)
       truncatedWarning.value = false
       pageCount.value = 0
       currentBytes.value = null

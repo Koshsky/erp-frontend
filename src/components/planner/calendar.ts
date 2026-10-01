@@ -126,7 +126,7 @@ function dateAtMonth(month: number, day: number): Date {
 
 /** Calendar decade (0/1/2) of cell i under the anchor layout. */
 function decadeOfCell(o: Date, i: number): number {
-  const { anchorDec, split, base, cells } = decadeLayout(o)
+  const { anchorDec, base, cells } = decadeLayout(o)
   if (i >= base + cells) {
     const rel = i - (base + cells)
     return rel % 3
@@ -173,7 +173,7 @@ export function cellIndexForDate(
 export function cellStartDate(origin: Date | string | number, unit: PlanningUnit, i: number): Date {
   const o = toDayStart(origin)
   if (unit === 'day') return new Date(o.getFullYear(), o.getMonth(), o.getDate() + i)
-  const { month, anchorDec, split, base, cells } = decadeLayout(o)
+  const { month, anchorDec, base, cells } = decadeLayout(o)
   if (i >= base + cells) {
     const rel = i - (base + cells)
     return dateAtMonth(month + 1 + Math.floor(rel / 3), 1 + (rel % 3) * 10)

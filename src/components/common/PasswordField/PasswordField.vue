@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 
-const props = withDefaults(
+withDefaults(
   defineProps<{
     modelValue?: string
     label?: string
@@ -32,7 +32,7 @@ function onInput(e: Event) {
   emit('update:modelValue', (e.target as HTMLInputElement).value)
 }
 
-function toggle() {
+function toggleVisibility() {
   visible.value = !visible.value
 }
 </script>
@@ -50,7 +50,7 @@ function toggle() {
         class="pwf-input"
         @input="onInput"
       />
-      <button v-if="toggle" type="button" class="pwf-eye" :aria-label="visible ? 'Скрыть пароль' : 'Показать пароль'" @click="toggle">
+      <button v-if="toggle" type="button" class="pwf-eye" :aria-label="visible ? 'Скрыть пароль' : 'Показать пароль'" @click="toggleVisibility">
         <svg
           v-if="visible"
           viewBox="0 0 24 24"

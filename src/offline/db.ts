@@ -27,8 +27,9 @@ const DB_NAME = 'erp-offline'
 // directly: an existing database (created by an older bundle or bumped by our
 // own store repair) may already be above it, and requesting a lower version
 // fails with a VersionError. openDb() opens at the current version and only
-// bumps when an object store is missing.
-const DB_VERSION = 4
+// bumps when an object store is missing. Kept as documentation of the schema
+// generation (unused otherwise).
+const _DB_VERSION = 4
 const CACHE_STORE = 'cache'
 const OUTBOX_STORE = 'outbox'
 const IDMAP_STORE = 'idmap'

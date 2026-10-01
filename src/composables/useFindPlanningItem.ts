@@ -1,4 +1,5 @@
 import { usePlanningStore } from '../store'
+import type { DtoDetailedProcess, DtoDetailedProject, DtoDetailedTask, DtoMilestone, DtoProcess, DtoProject } from '@/api'
 
 /** Find tasks/milestones/processes/projects in the /planning/* tree (instead of scattered flatMap().find()) */
 export function useFindPlanningItem() {
@@ -6,11 +7,11 @@ export function useFindPlanningItem() {
 
   function findTask(id: number) {
     for (const p of planning.taskPlanning?.processes ?? []) {
-      const t = (p.tasks ?? []).find((x: any) => x.id === id)
+      const t = (p.tasks ?? []).find((x: DtoDetailedTask) => x.id === id)
       if (t) return t
       const s = (p.tasks ?? [])
-        .flatMap((x: any) => x.subtasks ?? [])
-        .find((x: any) => x.id === id)
+        .flatMap((x: DtoDetailedTask) => x.subtasks ?? [])
+        .find((x: DtoDetailedTask) => x.id === id)
       if (s) return s
     }
     return undefined
@@ -18,18 +19,18 @@ export function useFindPlanningItem() {
 
   function findMilestone(id: number) {
     return planning.taskPlanning?.processes
-      ?.flatMap((p: any) => p.milestones ?? [])
-      .find((x: any) => x.id === id)
+      ?.flatMap((p: DtoDetailedProcess) => p.milestones ?? [])
+      .find((x: DtoMilestone) => x.id === id)
   }
 
   function findProcess(id: number) {
     return planning.processPlanning?.projects
-      ?.flatMap((p: any) => p.processes ?? [])
-      .find((x: any) => x.id === id)
+      ?.flatMap((p: DtoDetailedProject) => p.processes ?? [])
+      .find((x: DtoProcess) => x.id === id)
   }
 
   function findProject(id: number) {
-    return planning.projectPlanning?.projects?.find((x: any) => x.id === id)
+    return planning.projectPlanning?.projects?.find((x: DtoProject) => x.id === id)
   }
 
   return { findTask, findMilestone, findProcess, findProject }

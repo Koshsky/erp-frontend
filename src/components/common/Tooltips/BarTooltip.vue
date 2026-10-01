@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { BarTooltipComment, BarTooltipProps } from './types'
+import type { BarTooltipProps } from './types'
 
 const props = withDefaults(defineProps<BarTooltipProps>(), {
   rows: () => [],

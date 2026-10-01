@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { reactive, watch, computed } from 'vue'
-import type { ModalFormProps, ModalField } from './types'
+import type { ModalFormProps } from './types'
 import ColorField from '../ColorField/ColorField.vue'
 import { useModalFocus } from '../../../composables/useModalFocus'
 
@@ -17,7 +17,7 @@ const emit = defineEmits<{
 }>()
 
 /** Local form state; initialized from fields on open */
-const values = reactive<Record<string, any>>({})
+const values = reactive<Record<string, string | number>>({})
 
 /**
  * Focus management: initial focus, Tab trap, Escape from anywhere and focus
@@ -84,8 +84,9 @@ function onOverlayClick(e: MouseEvent) {
             </span>
             <ColorField
               v-if="f.type === 'color'"
-              v-model="values[f.key]"
+              :model-value="values[f.key] as string"
               :label="f.label"
+              @update:model-value="values[f.key] = $event"
             />
             <textarea
               v-else-if="f.type === 'textarea'"
