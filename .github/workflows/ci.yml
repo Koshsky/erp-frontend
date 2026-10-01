@@ -47,7 +47,7 @@ jobs:
           esac
 
   check:
-    name: Typecheck & build
+    name: Lint, typecheck & build
     runs-on: ubuntu-latest
     env:
       # Do not download Playwright browsers during npm ci — e2e tests are not
@@ -62,4 +62,5 @@ jobs:
           cache-dependency-path: package-lock.json
       - run: npm ci
       - run: npm run check
+      - run: npm run lint
       - run: npm run build
