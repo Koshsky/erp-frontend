@@ -154,7 +154,7 @@ const showWdRow = computed(() => props.t.unit === 'day' && props.t.cellPx >= CEL
 }
 .th-wd {
   position: absolute;
-  top: 38px;
+  top: 36px;
   height: 18px;
   font-size: calc(var(--ui-font-scale, 1) * 10px);
   color: var(--ui-text-muted);

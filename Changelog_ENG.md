@@ -12,6 +12,7 @@ The web app and the desktop wrapper (`desktop/`) are versioned together.
 
 - Navigation of planner tables, the timesheet and DataTable tables now uses middle mouse button drag instead of the left one; the drag starts from any point of the table — bars, milestones and headers never block moving it.
 - Tables with drag navigation keep the plain arrow cursor at rest (headers, rows, empty space); Gantt bars show a clickable pointer; while the middle button is held, the cursor globally turns into the grabbing fist.
+- Weekday labels in the calendar header raised by a couple of pixels.
 
 ## [1.1.0] - 2026-10-01
 
