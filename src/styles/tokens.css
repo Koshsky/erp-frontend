@@ -13,6 +13,10 @@
  * ========================================================================== */
 
 :root {
+  /* Multiplies every `font-size: Npx` in the app (see the calc() pattern).
+     The "UI font size" setting toggles `data-ui-size` on <html>. */
+  --ui-font-scale: 1;
+
   color-scheme: light;
 
   /* Surfaces */
@@ -311,4 +315,17 @@ textarea {
     transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;
   }
+}
+/* ==========================================================================
+ * UI font scale (the "Размер шрифта интерфейса" setting).
+ * Applied via `data-ui-size` on <html>; multiplies all calc()-wrapped
+ * font-size declarations through --ui-font-scale.
+ * ========================================================================== */
+
+html[data-ui-size='small'] {
+  --ui-font-scale: 0.9;
+}
+
+html[data-ui-size='large'] {
+  --ui-font-scale: 1.1;
 }

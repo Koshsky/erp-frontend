@@ -14,12 +14,18 @@ const props = withDefaults(defineProps<TimesheetCellProps>(), {
   tooltipDisabled: false,
 })
 
+/** The state's own color from the catalog (when set), else null — the caller
+ *  falls back to the palette via stateBackground. */
+function stateColor(stateId: number | undefined): string | null {
+  return stateId != null ? (props.colorMap?.[stateId] ?? null) : null
+}
+
 const bg = computed<string>(() => {
   const s = props.state
   if (!s) {
     return props.isWeekend ? 'var(--ui-usage-weekend)' : 'transparent'
   }
-  return stateBackground(s.state_code, s.is_available, s.state_id)
+  return stateColor(s.state_id) ?? stateBackground(s.state_code, s.is_available, s.state_id)
 })
 
 function fmtDM(iso?: string): string {
@@ -37,7 +43,7 @@ function fmtFull(iso: string): string {
 const marker = computed<string | null>(() => {
   const s = props.state
   if (!s) return null
-  return stateBackground(s.state_code, s.is_available, s.state_id)
+  return stateColor(s.state_id) ?? stateBackground(s.state_code, s.is_available, s.state_id)
 })
 
 const period = computed(() => {
@@ -99,7 +105,7 @@ const emptyLabel = computed(() => (props.isWeekend ? 'Выходной' : 'Ра�
   z-index: 2;
 }
 .tsc-code {
-  font-size: 10px;
+  font-size: calc(var(--ui-font-scale, 1) * 10px);
   font-weight: 700;
   color: rgba(0, 0, 0, 0.55);
   pointer-events: none;

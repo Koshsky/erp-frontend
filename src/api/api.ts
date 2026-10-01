@@ -216,6 +216,7 @@ export interface DtoCreateResourceRequest {
 }
 export interface DtoCreateStateRequest {
     'code'?: string;
+    'color'?: string;
     'is_available'?: boolean;
     'name'?: string;
 }
@@ -467,6 +468,9 @@ export interface DtoReorderTaskRequest {
     'ids'?: Array<number>;
     'process_id'?: number;
 }
+export interface DtoResetPasswordResult {
+    'password'?: string;
+}
 export interface DtoResource {
     'assignment_id'?: number;
     'code'?: string;
@@ -532,6 +536,7 @@ export interface DtoSetDaysRequest {
 }
 export interface DtoStateResponse {
     'code'?: string;
+    'color'?: string;
     'id'?: number;
     'is_available'?: boolean;
     'name'?: string;
@@ -627,6 +632,7 @@ export interface DtoUpdateResourceRequest {
 }
 export interface DtoUpdateStateRequest {
     'code'?: string;
+    'color'?: string;
     'is_available'?: boolean;
     'name'?: string;
 }
@@ -937,6 +943,10 @@ export interface UserIdDaysGet200Response {
 }
 export interface UserIdGet200Response {
     'data'?: DtoUserResponse;
+    'error'?: object;
+}
+export interface UserIdResetPasswordPost200Response {
+    'data'?: DtoResetPasswordResult;
     'error'?: object;
 }
 export interface UserPost201Response {
@@ -7558,7 +7568,7 @@ export const UsersApiAxiosParamCreator = function (configuration?: Configuration
             };
         },
         /**
-         * Generate a new random password for a user (admin only; the new password is never returned)
+         * Generate a new random password for a user (admin only) and return it once
          * @summary Reset user password
          * @param {number} id User ID
          * @param {*} [options] Override http request option.
@@ -7799,13 +7809,13 @@ export const UsersApiFp = function(configuration?: Configuration) {
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
-         * Generate a new random password for a user (admin only; the new password is never returned)
+         * Generate a new random password for a user (admin only) and return it once
          * @summary Reset user password
          * @param {number} id User ID
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async userIdResetPasswordPost(id: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<void>> {
+        async userIdResetPasswordPost(id: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<UserIdResetPasswordPost200Response>> {
             const localVarAxiosArgs = await localVarAxiosParamCreator.userIdResetPasswordPost(id, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
             const localVarOperationServerBasePath = operationServerMap['UsersApi.userIdResetPasswordPost']?.[localVarOperationServerIndex]?.url;
@@ -7958,13 +7968,13 @@ export const UsersApiFactory = function (configuration?: Configuration, basePath
             return localVarFp.userIdPut(id, body, options).then((request) => request(axios, basePath));
         },
         /**
-         * Generate a new random password for a user (admin only; the new password is never returned)
+         * Generate a new random password for a user (admin only) and return it once
          * @summary Reset user password
          * @param {number} id User ID
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        userIdResetPasswordPost(id: number, options?: RawAxiosRequestConfig): AxiosPromise<void> {
+        userIdResetPasswordPost(id: number, options?: RawAxiosRequestConfig): AxiosPromise<UserIdResetPasswordPost200Response> {
             return localVarFp.userIdResetPasswordPost(id, options).then((request) => request(axios, basePath));
         },
         /**
@@ -8120,7 +8130,7 @@ export class UsersApi extends BaseAPI {
     }
 
     /**
-     * Generate a new random password for a user (admin only; the new password is never returned)
+     * Generate a new random password for a user (admin only) and return it once
      * @summary Reset user password
      * @param {number} id User ID
      * @param {*} [options] Override http request option.

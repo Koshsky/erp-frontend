@@ -355,7 +355,7 @@ function onDeleteDependency(id: number) {
   gap: 6px;
 }
 .te-label {
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   color: var(--ui-text-2);
   font-weight: 500;
 }
@@ -365,7 +365,7 @@ function onDeleteDependency(id: number) {
   border: 1px solid var(--ui-border-strong);
   border-radius: var(--ui-radius-sm);
   padding: 9px 12px;
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   font-family: inherit;
   color: var(--ui-text);
   background: var(--ui-surface);
@@ -392,7 +392,7 @@ function onDeleteDependency(id: number) {
   border: none;
   border-radius: var(--ui-radius-sm);
   padding: 9px 18px;
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   font-weight: 600;
   cursor: pointer;
   background: var(--ui-surface-2);
@@ -406,7 +406,7 @@ function onDeleteDependency(id: number) {
   border: none;
   border-radius: var(--ui-radius-sm);
   padding: 9px 18px;
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   font-weight: 600;
   cursor: pointer;
   background: var(--ui-accent);
@@ -439,18 +439,18 @@ function onDeleteDependency(id: number) {
 }
 .te-subtitle {
   margin: 0;
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   font-weight: 700;
   color: var(--ui-text);
 }
 .te-error {
   margin: 0;
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   color: var(--ui-danger);
 }
 .te-note {
   margin: 0;
-  font-size: 12px;
+  font-size: calc(var(--ui-font-scale, 1) * 12px);
   color: var(--ui-text-muted);
 }
 .te-list {
@@ -466,7 +466,7 @@ function onDeleteDependency(id: number) {
   background: var(--ui-surface-2);
   border: 1px solid var(--ui-border);
   border-radius: var(--ui-radius-sm);
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   color: var(--ui-text);
 }
 .te-status {
@@ -504,7 +504,7 @@ function onDeleteDependency(id: number) {
 .te-remove {
   border: none;
   background: transparent;
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   line-height: 1;
   color: var(--ui-text-muted);
   cursor: pointer;
@@ -522,7 +522,7 @@ function onDeleteDependency(id: number) {
 .te-empty {
   padding: 14px 0;
   text-align: center;
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   color: var(--ui-text-muted);
   border: 1px dashed var(--ui-border-strong);
   border-radius: var(--ui-radius-sm);
@@ -538,7 +538,7 @@ function onDeleteDependency(id: number) {
   border: none;
   border-radius: var(--ui-radius-sm);
   padding: 9px 14px;
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   font-weight: 600;
   cursor: pointer;
   background: var(--ui-accent);
@@ -560,7 +560,7 @@ function onDeleteDependency(id: number) {
   max-width: 170px;
   height: 30px;
   padding: 3px 8px;
-  font-size: 12px;
+  font-size: calc(var(--ui-font-scale, 1) * 12px);
 }
 .te-dep-add {
   display: flex;

@@ -3,6 +3,8 @@ import type { DtoUserStateResponse } from '@/api'
 export interface TimesheetCellProps {
   /** State covering the day; null — a workday without a record */
   state?: DtoUserStateResponse | null
+  /** state_id → user-defined color (custom color of the state) */
+  colorMap?: Record<number, string>
   /** Whether the day is a day off (when there is no state) */
   isWeekend?: boolean
   /** Cell is selected (drag range selection) */

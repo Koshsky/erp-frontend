@@ -4,7 +4,7 @@ import { BarTooltip } from '@/components/common'
 import { viewSettings } from '@/settings'
 import type { ProjectBarProps } from './types'
 
-const props = withDefaults(defineProps<ProjectBarProps>(), {
+withDefaults(defineProps<ProjectBarProps>(), {
   color: 'var(--ui-gantt-project)',
   opacity: 0.85,
   draggable: true,

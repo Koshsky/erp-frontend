@@ -71,7 +71,7 @@ export const OutsideClickEscapeAndSelect: Story = {
       <div>
         <button type="button" class="cm-open" @click="open = true">Открыть меню</button>
         <ContextMenu :open="open" :x="120" :y="80" :items="items" @select="selected = $event; open = false" @close="open = false" />
-        <div data-testid="cm-selected" style="font-size:12px;">{{ selected }}</div>
+        <div data-testid="cm-selected" style="font-size: calc(var(--ui-font-scale, 1) * 12px);">{{ selected }}</div>
       </div>
     `,
   }),

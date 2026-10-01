@@ -34,11 +34,11 @@ withDefaults(defineProps<PlannerStatesProps>(), {
   text-align: center;
   padding: 30px;
   color: var(--ui-text-2);
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
 }
 .pg-error {
   color: var(--ui-danger);
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   padding: 8px 4px;
 }
 .er {

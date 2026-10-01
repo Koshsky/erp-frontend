@@ -8,6 +8,12 @@ export const timesheetCellArgTypes: ArgTypes<TimesheetCellProps> = {
     control: 'object',
     table: { type: { summary: 'DtoUserStateResponse | null' }, category: 'Data' },
   },
+  colorMap: {
+    name: 'Карта цветов',
+    description: 'Состояние id → пользовательский цвет (заливка ячейки и маркер)',
+    control: 'object',
+    table: { type: { summary: 'Record<number, string>' }, category: 'Data' },
+  },
   isWeekend: {
     name: 'Выходной',
     description: 'Выходной день (светло-серая заливка, если нет состояния)',

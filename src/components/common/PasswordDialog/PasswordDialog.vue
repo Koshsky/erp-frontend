@@ -59,12 +59,12 @@ const { dialogEl, onKeydown } = useModalFocus({
   gap: 12px;
 }
 .pd-caption {
-  font-size: 16px;
+  font-size: calc(var(--ui-font-scale, 1) * 16px);
   font-weight: 700;
   color: var(--ui-text);
 }
 .pd-note {
-  font-size: 12px;
+  font-size: calc(var(--ui-font-scale, 1) * 12px);
   color: var(--ui-text-muted);
   margin: 0;
 }
@@ -72,7 +72,7 @@ const { dialogEl, onKeydown } = useModalFocus({
   border: none;
   border-radius: var(--ui-radius-sm);
   padding: 9px;
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   font-weight: 600;
   cursor: pointer;
   background: var(--ui-accent);

@@ -21,7 +21,7 @@ export const Default: Story = {
     setup: () => ({ args }),
     template: `
       <div style="display:flex;align-items:center;gap:10px;font-family:sans-serif;">
-        <span style="font-size:13px;color:var(--muted-foreground);">Выражение области</span>
+        <span style="font-size: calc(var(--ui-font-scale, 1) * 13px);color:var(--muted-foreground);">Выражение области</span>
         <HintButton v-bind="args" />
         <HintPanel />
       </div>

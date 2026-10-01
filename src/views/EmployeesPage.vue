@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { storeToRefs } from 'pinia'
-import { ContextMenu, ModalForm, PendingMark } from '../components/common'
+import { ContextMenu, ModalForm, PendingMark, DataTable } from '../components/common'
+import type { DataTableColumn } from '../components/common'
 import type { ContextMenuItem } from '../components/common/ContextMenu'
 import type { ModalField } from '../components/common/ModalForm'
 import { useContextMenu } from '../composables/useContextMenu'
@@ -11,6 +12,8 @@ import { useEmployeeFilters } from '../composables/useEmployeeFilters'
 import { useAppStore, useTimesheetStore, useRbacStore } from '../store'
 import { isOffline } from '../offline/state'
 import { scheduleNamedRefresh } from '../offline/sync'
+import { useColumnWidths } from '../composables/useColumnWidths'
+import { compareByName } from '../utils'
 import type { DtoResourceResponse, DtoUserResponse } from '@/api'
 
 const ts = useTimesheetStore()
@@ -41,6 +44,32 @@ function resourceOf(employeeId: number | undefined): DtoResourceResponse | null 
   if (employeeId == null) return null
   return app.resourceByUser[employeeId] ?? null
 }
+
+/**
+ * The DataTable cell slot gives the row as `unknown` (generic inference does
+ * not reach through the store's refs) — cast to the page's row type here.
+ */
+const asEmp = (row: unknown): DtoUserResponse => row as DtoUserResponse
+
+/**
+ * Column config for the DataTable. Non-admins (see only own employees) do not
+ * get the "Руководитель" column at all — the grid tracks follow the columns.
+ */
+const columns = computed<DataTableColumn[]>(() => {
+  const cols: DataTableColumn[] = [
+    { key: 'name', label: 'ФИО', width: 'fit-content(380px)' },
+    { key: 'position', label: 'Должность', width: 'fit-content(280px)' },
+    { key: 'resource', label: 'Ресурс', width: 'fit-content(200px)' },
+    { key: 'resource_owner', label: 'Владелец ресурса', width: 'fit-content(260px)' },
+    { key: 'hire_date', label: 'Дата приёма', width: '110px' },
+    { key: 'termination_date', label: 'Дата увольнения', width: '140px' },
+  ]
+  if (seesAllEmployees.value) cols.push({ key: 'manager_id', label: 'Руководитель', width: 'fit-content(300px)' })
+  return cols
+})
+
+/** Per-user persisted column widths (drag-resize on the header edges). */
+const { columnWidths } = useColumnWidths('employees')
 
 /** Sort resources by code/title (resources have no name field) */
 const byResourceLabel = (a: DtoResourceResponse, b: DtoResourceResponse): number =>
@@ -83,12 +112,30 @@ function managerLabel(managerId?: number | null): string {
   return u?.name ?? `#${managerId}`
 }
 
+/** Label of the resource owner (a name from the user catalog) */
+function ownerLabel(ownerId?: number | null): string {
+  if (ownerId == null) return '—'
+  if (ownerId === userId.value) return 'Я'
+  const u = users.value.find((x) => x.id === ownerId)
+  return u?.name ?? `#${ownerId}`
+}
+
+/**
+ * Sort values for derived columns: `resource` / `resource_owner` are not raw
+ * row fields (they come from resourceOf), everything else falls back to the
+ * row field itself.
+ */
+function empSortValue(emp: DtoUserResponse, key: string): string {
+  if (key === 'resource') return resourceOf(emp.id)?.code ?? ''
+  if (key === 'resource_owner') return ownerLabel(resourceOf(emp.id)?.owner_id)
+  return String((emp as unknown as Record<string, unknown>)[key] ?? '')
+}
+
 /**
  * Shared employee filters (search / manager / resource) — synchronized with the
  * "Timesheet" page: the state is a single module-level source of truth.
  */
 const {
-  search,
   managerFilter,
   resourceFilter,
   managerFilterOptions,
@@ -96,7 +143,38 @@ const {
   applyFilters,
 } = useEmployeeFilters()
 
-const filteredEmployees = computed(() => applyFilters(employeesWithTitles.value))
+// Per-column filters local to this page (the shared `search` remains the
+// timesheet page's combined ФИО+position filter).
+const fName = ref('')
+const fPosition = ref('')
+
+/** Owner filter value: '' — all, 'none' — resource without an owner, number — owner user id */
+const ownerFilter = ref<number | 'none' | ''>('')
+
+/** Owner options for the filter (non-worker users), like the owner select on Resources */
+const ownerFilterOptions = computed(() =>
+  [...users.value].filter((u) => u.preset !== 'worker').sort(compareByName),
+)
+
+const filteredEmployees = computed(() => {
+  const list = applyFilters(employeesWithTitles.value)
+  const qName = fName.value.trim().toLowerCase()
+  const qPos = fPosition.value.trim().toLowerCase()
+  const owner = ownerFilter.value
+  return list.filter((emp) => {
+    if (qName && !(emp.name ?? '').toLowerCase().includes(qName)) return false
+    if (qPos && !(emp.position ?? '').toLowerCase().includes(qPos)) return false
+    if (owner !== '') {
+      const res = resourceOf(emp.id)
+      if (owner === 'none') {
+        if (res?.owner_id != null) return false
+      } else if (res?.owner_id !== owner) {
+        return false
+      }
+    }
+    return true
+  })
+})
 
 // Right-click on a row: only the resource change. The employee's profile is a
 // system user — editing it happens solely on the admin "Пользователи" page.
@@ -195,23 +273,6 @@ function onLoadMore() {
 
 <template>
   <section class="ep">
-    <div class="ep-head">
-      <h2 class="ep-title">Сотрудники</h2>
-      <div class="ep-actions">
-        <input v-model="search" type="search" class="ep-search" placeholder="Поиск по ФИО или должности" />
-        <select v-if="seesAllEmployees" v-model="managerFilter" class="ep-filter">
-          <option value="">Все руководители</option>
-          <option value="none">Без руководителя</option>
-          <option v-for="u in managerFilterOptions" :key="u.id" :value="u.id">{{ u.name ?? `#${u.id}` }}</option>
-        </select>
-        <select v-if="resources.length" v-model="resourceFilter" class="ep-filter" title="Фильтр по ресурсу">
-          <option value="">Все ресурсы</option>
-          <option value="none">Без ресурса</option>
-          <option v-for="r in resourceFilterOptions" :key="r.id" :value="r.id">{{ r.code }} — {{ r.title }}</option>
-        </select>
-      </div>
-    </div>
-
     <p v-if="loading && !employees.length" class="ep-st">Загрузка...</p>
     <p v-if="error && !employees.length" class="ep-st er">{{ error }}</p>
     <p v-if="resourcesError" class="ep-st er">{{ resourcesError }}</p>
@@ -221,44 +282,82 @@ function onLoadMore() {
       leave no rows: the empty-state message is rendered inside the table
       instead of replacing it, so the header and filter controls remain usable.
     -->
-    <div v-if="employees.length || (!loading && !error)" class="table">
-      <div class="tr th" :class="{ 'tr--no-manager': !seesAllEmployees }">
-        <div>ФИО</div>
-        <div>Должность</div>
-        <div>Дата приёма</div>
-        <div>Дата увольнения</div>
-        <div v-if="seesAllEmployees">Руководитель</div>
-      </div>
-      <template v-if="filteredEmployees.length">
-        <div
-          v-for="emp in filteredEmployees"
-          :key="emp.id"
-          class="tr"
-          :class="{ 'tr--no-manager': !seesAllEmployees }"
-          @contextmenu.prevent.stop="onRowContextMenu($event, emp)"
+    <DataTable
+      v-if="employees.length || (!loading && !error)"
+      :columns="columns"
+      :rows="filteredEmployees"
+      title="Сотрудники"
+      :empty-text="employees.length ? 'Ничего не найдено' : 'Нет данных о сотрудниках'"
+      :sort-value="empSortValue"
+      resizable
+      v-model:column-widths="columnWidths"
+      @row-contextmenu="(e, row) => onRowContextMenu(e, asEmp(row))"
+    >
+      <!-- Filters live under their columns (maybe none in the toolbar) -->
+      <template #filter="{ column }">
+        <input
+          v-if="column.key === 'name'"
+          v-model="fName"
+          type="search"
+          placeholder="Иванов Иван Иванович"
+        />
+        <input
+          v-else-if="column.key === 'position'"
+          v-model="fPosition"
+          type="search"
+          placeholder="по должности"
+        />
+        <select
+          v-else-if="column.key === 'resource'"
+          v-model="resourceFilter"
+          class="ep-filter"
+          title="Фильтр по ресурсу"
         >
-          <div class="name">
-            {{ emp.name }}
-            <PendingMark entity="user" :id="emp.id" />
-          </div>
-          <div class="pos-cell">
-            <span
-              v-if="resourceOf(emp.id)"
-              class="ep-badge"
-              :style="resourceBadgeStyle(resourceOf(emp.id)) ?? undefined"
-              :title="resourceOf(emp.id)?.title"
-            >
-              {{ resourceOf(emp.id)?.code }}
-            </span>
-            <span class="pos-text">{{ emp.position || '—' }}</span>
-          </div>
-          <div>{{ fmtDate(emp.hire_date) }}</div>
-          <div>{{ fmtDate(emp.termination_date) }}</div>
-          <div v-if="seesAllEmployees">{{ managerLabel(emp.manager_id) }}</div>
-        </div>
+          <option value="">Все ресурсы</option>
+          <option value="none">Без ресурса</option>
+          <option v-for="r in resourceFilterOptions" :key="r.id" :value="r.id">{{ r.code }} — {{ r.title }}</option>
+        </select>
+        <select
+          v-else-if="column.key === 'resource_owner'"
+          v-model="ownerFilter"
+        >
+          <option value="">Все владельцы</option>
+          <option value="none">Без владельца</option>
+          <option v-for="u in ownerFilterOptions" :key="u.id" :value="u.id">{{ u.name ?? `#${u.id}` }}</option>
+        </select>
+        <select
+          v-else-if="column.key === 'manager_id' && seesAllEmployees"
+          v-model="managerFilter"
+          class="ep-filter"
+        >
+          <option value="">Все руководители</option>
+          <option value="none">Без руководителя</option>
+          <option v-for="u in managerFilterOptions" :key="u.id" :value="u.id">{{ u.name ?? `#${u.id}` }}</option>
+        </select>
       </template>
-      <p v-else class="ep-st">{{ employees.length ? 'Ничего не найдено' : 'Нет данных о сотрудниках' }}</p>
-    </div>
+      <template #cell="{ row, column }">
+        <span v-if="column.key === 'name'" class="name">
+          {{ asEmp(row).name }}
+          <PendingMark entity="user" :id="asEmp(row).id" />
+        </span>
+        <span v-else-if="column.key === 'position'" class="pos-text">{{ asEmp(row).position || '—' }}</span>
+        <span v-else-if="column.key === 'resource'">
+          <span
+            v-if="resourceOf(asEmp(row).id)"
+            class="ep-badge"
+            :style="resourceBadgeStyle(resourceOf(asEmp(row).id)) ?? undefined"
+            :title="resourceOf(asEmp(row).id)?.title"
+          >
+            {{ resourceOf(asEmp(row).id)?.code }}
+          </span>
+          <span v-else class="ep-none">—</span>
+        </span>
+        <template v-else-if="column.key === 'resource_owner'">{{ ownerLabel(resourceOf(asEmp(row).id)?.owner_id) }}</template>
+        <template v-else-if="column.key === 'hire_date'">{{ fmtDate(asEmp(row).hire_date) }}</template>
+        <template v-else-if="column.key === 'termination_date'">{{ fmtDate(asEmp(row).termination_date) }}</template>
+        <template v-else>{{ managerLabel(asEmp(row).manager_id) }}</template>
+      </template>
+    </DataTable>
 
     <!-- Roster pagination: the backend returns PAGE_SIZE (50) rows plus a total;
          the rest is appended on demand (dedup by id). -->
@@ -277,73 +376,10 @@ function onLoadMore() {
 <style scoped>
 @import '../styles/tokens.css';
 
-.ep-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 20px;
-}
-.ep-title {
-  font-size: 24px;
-  font-weight: 700;
-  color: var(--ui-text);
-}
-.ep-add {
-  border: none;
-  border-radius: var(--ui-radius-sm);
-  padding: 9px 18px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  background: var(--ui-accent);
-  color: var(--ui-accent-on);
-  transition: background var(--ui-duration);
-}
-.ep-add:hover {
-  background: color-mix(in srgb, var(--ui-accent) 88%, black);
-}
-.ep-actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.ep-search {
-  width: 240px;
-  box-sizing: border-box;
-  border: 1px solid var(--ui-border-strong);
-  border-radius: var(--ui-radius-sm);
-  padding: 9px 12px;
-  font-size: 14px;
-  font-family: inherit;
-  color: var(--ui-text);
-  background: var(--ui-surface);
-  outline: none;
-  transition: border-color var(--ui-duration), box-shadow var(--ui-duration);
-}
-.ep-search:focus {
-  border-color: var(--ui-accent);
-  box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.12);
-}
-.ep-filter {
-  box-sizing: border-box;
-  border: 1px solid var(--ui-border-strong);
-  border-radius: var(--ui-radius-sm);
-  padding: 9px 12px;
-  font-size: 14px;
-  font-family: inherit;
-  color: var(--ui-text);
-  background: var(--ui-surface);
-  outline: none;
-  transition: border-color var(--ui-duration), box-shadow var(--ui-duration);
-}
-.ep-filter:focus {
-  border-color: var(--ui-accent);
-  box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.12);
-}
+/* Loading / error placeholders outside the table */
 .ep-st {
   color: var(--ui-text-2);
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   padding: 30px;
   text-align: center;
 }
@@ -359,7 +395,7 @@ function onLoadMore() {
   border: 1px solid var(--ui-border-strong);
   border-radius: var(--ui-radius-sm);
   padding: 9px 18px;
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   font-weight: 600;
   font-family: inherit;
   cursor: pointer;
@@ -377,42 +413,13 @@ function onLoadMore() {
   cursor: not-allowed;
 }
 
-.table {
-  background: var(--ui-surface);
-  border-radius: var(--ui-radius-md);
-  box-shadow: var(--ui-shadow-sm);
-  overflow: hidden;
-}
-.tr {
-  display: grid;
-  grid-template-columns: 1.4fr 1.3fr 110px 140px 1fr;
-  gap: 8px;
-  padding: 12px 20px;
-  border-bottom: 1px solid var(--ui-border);
-  font-size: 14px;
-}
-.tr:last-child { border-bottom: none; }
-/* Non-admin (sees only own employees): the "Руководитель" column is hidden */
-.tr--no-manager {
-  grid-template-columns: 1.4fr 1.3fr 110px 140px;
-}
-.tr:not(.th):hover {
-  background: var(--ui-surface-3);
-}
-.th {
-  background: var(--ui-surface-2);
-  font-weight: 600;
-  color: var(--ui-text-2);
-}
+/* Cell renders */
 .name {
   font-weight: 700;
   color: var(--ui-text);
 }
-.pos-cell {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
+.ep-none {
+  color: var(--ui-text-muted);
 }
 .pos-text {
   overflow: hidden;
@@ -427,7 +434,7 @@ function onLoadMore() {
   text-align: center;
   border-radius: 999px;
   padding: 2px 10px;
-  font-size: 12px;
+  font-size: calc(var(--ui-font-scale, 1) * 12px);
   font-weight: 700;
   line-height: 1.5;
   background: var(--ui-accent-soft);

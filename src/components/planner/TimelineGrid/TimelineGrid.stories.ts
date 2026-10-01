@@ -42,14 +42,14 @@ function monthGroups(indices: number[], start: (i: number) => Date): { key: stri
 function baseTemplate(unit: PlanningUnit): string {
   return `
     <div style="font-family:sans-serif;max-width:1100px;">
-      <p style="font-size:12px;color:#555;margin:0 0 8px;">
+      <p style="font-size: calc(var(--ui-font-scale, 1) * 12px);color:#555;margin:0 0 8px;">
         origin = 2026-07-01 у левого края. Листай шкалу ${unit === 'day' ? 'влево/вправо' : ''} — ячейки и сетка
         пересобираются, диапазон расширяется бесконечно. ${unit === 'day' ? 'Задача Б начинается в июне — левее якоря.' : ''}
       </p>
       <TimelineGrid :origin="origin" unit="${unit}">
         <template #default="{ t }">
           <div style="position:sticky;top:0;z-index:30;background:#f8f9fa;border-bottom:2px solid #1a73e8;height:56px;">
-            <div style="position:sticky;left:0;width:${LABEL_WIDTH}px;height:100%;background:#f8f9fa;z-index:3;display:inline-flex;align-items:center;padding:0 10px;font-weight:700;font-size:12px;">Объект / процесс</div>
+            <div style="position:sticky;left:0;width:${LABEL_WIDTH}px;height:100%;background:#f8f9fa;z-index:3;display:inline-flex;align-items:center;padding:0 10px;font-weight:700;font-size: calc(var(--ui-font-scale, 1) * 12px);">Объект / процесс</div>
             <div v-for="m in monthGroups(t.visibleIndices, t.cellStart)" :key="'m'+m.from"
               :style="{ position:'absolute', top:2, left: t.cellLeft(m.from)+'px', width: (m.to-m.from+1)*t.cellPx+'px', height:18, fontSize:11, fontWeight:600, color:'#444', overflow:'hidden', whiteSpace:'nowrap', paddingLeft:4 }">
               {{ m.label }}
@@ -62,7 +62,7 @@ function baseTemplate(unit: PlanningUnit): string {
 
           <div v-for="row in rows" :key="row.id"
             style="position:relative;height:40px;border-bottom:1px solid #f0f0f0;">
-            <div style="position:sticky;left:0;width:${LABEL_WIDTH}px;height:100%;background:#fff;z-index:10;display:flex;align-items:center;padding:0 10px;font-size:12px;font-weight:600;">{{ row.name }}</div>
+            <div style="position:sticky;left:0;width:${LABEL_WIDTH}px;height:100%;background:#fff;z-index:10;display:flex;align-items:center;padding:0 10px;font-size: calc(var(--ui-font-scale, 1) * 12px);font-weight:600;">{{ row.name }}</div>
             <div v-if="span(t.unit, row)"
               :style="{ position:'absolute', left: t.cellLeft(span(t.unit,row).startCell)+'px', width: (span(t.unit,row).endCell-span(t.unit,row).startCell)*t.cellPx+'px', top:4, height:30, background: row.color, borderRadius:5, color:'#fff', display:'flex', alignItems:'center', padding:'0 8px', fontSize:11, fontWeight:600, whiteSpace:'nowrap', overflow:'hidden' }">
               {{ row.name }}
@@ -126,16 +126,16 @@ export const DragAutoscroll: Story = {
     },
     template: `
       <div style="font-family:sans-serif;max-width:1100px;">
-        <p style="font-size:12px;color:#555;margin:0 0 8px;">
+        <p style="font-size: calc(var(--ui-font-scale, 1) * 12px);color:#555;margin:0 0 8px;">
           Перетащи бар к правому/левому краю — шкала автопрокрутится. Ресайз за ручки тоже работает.
         </p>
         <TimelineGrid :origin="origin" unit="day">
           <template #default="{ t }">
             <div style="position:sticky;top:0;z-index:30;background:#f8f9fa;border-bottom:2px solid #1a73e8;height:20px;">
-              <div style="position:sticky;left:0;width:${LABEL_WIDTH}px;height:100%;background:#f8f9fa;z-index:3;display:flex;align-items:center;padding:0 10px;font-weight:700;font-size:12px;">Задачи</div>
+              <div style="position:sticky;left:0;width:${LABEL_WIDTH}px;height:100%;background:#f8f9fa;z-index:3;display:flex;align-items:center;padding:0 10px;font-weight:700;font-size: calc(var(--ui-font-scale, 1) * 12px);">Задачи</div>
             </div>
             <div v-for="row in rows" :key="row.id" style="position:relative;height:40px;border-bottom:1px solid #f0f0f0;">
-              <div style="position:sticky;left:0;width:${LABEL_WIDTH}px;height:100%;background:#fff;z-index:10;display:flex;align-items:center;padding:0 10px;font-size:12px;font-weight:600;">Задача {{ row.id }}</div>
+              <div style="position:sticky;left:0;width:${LABEL_WIDTH}px;height:100%;background:#fff;z-index:10;display:flex;align-items:center;padding:0 10px;font-size: calc(var(--ui-font-scale, 1) * 12px);font-weight:600;">Задача {{ row.id }}</div>
               <div style="position:absolute;inset:0;">
                 <Bar
                   :timeline="t"

@@ -2,9 +2,10 @@
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
-import { HintButton, PasswordDialog, UserPermissionsEditor } from '../components/common'
+import { HintButton, ConfirmDialog, PasswordDialog, UserPermissionsEditor } from '../components/common'
 import { useAppStore, useAuthStore, useRbacStore } from '../store'
 import { compareByName, translitPhio } from '../utils'
+import { useConfirm } from '../composables/useConfirm'
 import type { DtoAdminUserResponse, DtoCreateUserRequest, DtoUpdateUserRequest } from '@/api'
 import type { PermissionOverride } from '../components/common/UserPermissionsEditor/types'
 
@@ -13,7 +14,7 @@ const router = useRouter()
 const app = useAppStore()
 const auth = useAuthStore()
 const rbac = useRbacStore()
-const { adminUsers, adminUsersError, users } = storeToRefs(app)
+const { adminUsers, users } = storeToRefs(app)
 
 /**
  * Assigning a preset and per-user permissions is an admin-only business rule
@@ -59,7 +60,8 @@ const form = reactive({
 /** Логин редактировался вручную — автозаполнение из ФИО выключается */
 const loginTouched = ref(false)
 
-/** Ошибка последней отправки (для пользователя) */
+/** Ошибка загрузки/редактирования: пользователь не найден (см. missing);
+ *  ошибки сохранения показывает глобальный тост (http.ts). */
 const error = ref<string | null>(null)
 const busy = ref(false)
 /** Режим редактирования: список пользователей грузится перед показом формы */
@@ -227,13 +229,50 @@ function onPasswordClose() {
   void router.push('/users')
 }
 
+// === Сброс пароля (только редактирование, admin-only — как редактор прав) ===
+const { confirm: confirmDialog, ask, proceed, cancel } = useConfirm()
+const resetBusy = ref(false)
+/** Generated password shown once after a reset (edit mode; stays on the page) */
+const resetPasswordModal = ref<{ password: string; caption: string } | null>(null)
+
+/** Display name of the edited user (from the form — the list may not contain them on a direct URL) */
+const editedUserName = computed(() => {
+  const fromList = adminUsers.value.find((x) => x.id === editingUserId.value)?.name
+  if (fromList) return fromList
+  return [form.lastName, form.firstName].filter(Boolean).join(' ').trim() || 'пользователь'
+})
+
+function askResetPassword() {
+  ask('Сбросить пароль? Новый пароль будет показан один раз после сброса.', () => {
+    void onResetPassword()
+  }, 'Сбросить')
+}
+
+async function onResetPassword() {
+  const id = editingUserId.value
+  if (id == null) return
+  resetBusy.value = true
+  try {
+    const password = await app.resetPassword(id)
+    // The generated password comes back from the backend once — show it.
+    if (password) {
+      resetPasswordModal.value = {
+        password,
+        caption: `Пароль для «${editedUserName.value}» сброшен`,
+      }
+    }
+    // A failed reset is reported by the global toast (http.ts) — no inline banner.
+  } finally {
+    resetBusy.value = false
+  }
+}
+
 async function onSubmit() {
   if (!canSubmit.value) {
     submitAttempted.value = true
     return
   }
   busy.value = true
-  error.value = null
   try {
     const common = {
       last_name: form.lastName.trim(),
@@ -255,16 +294,14 @@ async function onSubmit() {
       if (form.terminationDate) patch.termination_date = form.terminationDate
       const ok = await app.updateUser(id, patch)
       const nextManager = form.managerId === '' ? null : Number(form.managerId)
+      // A failed save is reported by the global toast (http.ts); the page
+      // stays open with the entered values for a retry.
       if (ok && nextManager !== savedManagerId.value) await app.updateManager(id, nextManager)
-      if (!ok) {
-        error.value = adminUsersError.value
-        return
-      }
+      if (!ok) return
       // Сохранение профиля НЕ закрывает страницу (права доступа — на отдельной
       // странице /edit/access); при повторном сохранении менеджер считается
       // «сохранённым».
       savedManagerId.value = nextManager
-      error.value = null
       profileSaved.value = true
       return
     }
@@ -299,9 +336,9 @@ async function onSubmit() {
       } else {
         void router.push('/users')
       }
-    } else {
-      error.value = adminUsersError.value
     }
+    // A failed creation is reported by the global toast (http.ts); the form
+    // stays on the page for a retry.
   } finally {
     busy.value = false
   }
@@ -381,11 +418,22 @@ async function onSubmit() {
             </div>
           </div>
 
-          <p v-if="error" class="ufp-error" role="alert">{{ error }}</p>
+          <!-- Mutation failures are surfaced by the global toast (http.ts);
+               inline errors here are only the load/not-found message above. -->
           <p v-if="validationMessage" class="ufp-error" role="alert">{{ validationMessage }}</p>
 
           <div class="ufp-actions">
-            <button type="button" class="ufp-btn" @click="router.push('/users')">Отмена</button>
+            <button type="button" class="ufp-btn" @click="router.push('/users')">Назад</button>
+            <button
+              v-if="isEdit && canManageUserRights"
+              type="button"
+              class="ufp-btn ufp-reset"
+              :disabled="resetBusy"
+              :title="'Сбросить пароль пользователя'"
+              @click="askResetPassword"
+            >
+              {{ resetBusy ? 'Сброс…' : 'Сбросить пароль' }}
+            </button>
             <button type="button" class="ufp-add" :disabled="!canSubmit" @click="onSubmit">
               {{
                 busy
@@ -426,6 +474,23 @@ async function onSubmit() {
       :caption="passwordModal?.caption ?? ''"
       @close="onPasswordClose"
     />
+
+    <!-- Reset-password confirmation (edit mode, admin) -->
+    <ConfirmDialog
+      :open="!!confirmDialog"
+      :message="confirmDialog?.message ?? ''"
+      :confirm-label="confirmDialog?.confirmLabel"
+      @confirm="proceed"
+      @close="cancel"
+    />
+
+    <!-- Generated password shown once (after a reset in the user editor) -->
+    <PasswordDialog
+      :open="resetPasswordModal !== null"
+      :password="resetPasswordModal?.password ?? ''"
+      :caption="resetPasswordModal?.caption ?? ''"
+      @close="resetPasswordModal = null"
+    />
   </section>
 </template>
 
@@ -446,7 +511,7 @@ async function onSubmit() {
   flex-wrap: wrap;
 }
 .ufp-title {
-  font-size: 24px;
+  font-size: calc(var(--ui-font-scale, 1) * 24px);
   font-weight: 700;
   color: var(--ui-text);
   margin: 0;
@@ -517,7 +582,7 @@ async function onSubmit() {
   min-width: 0;
 }
 .ufp-label {
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   color: var(--ui-text-2);
   font-weight: 500;
 }
@@ -527,7 +592,7 @@ async function onSubmit() {
   border: 1px solid var(--ui-border-strong);
   border-radius: var(--ui-radius-sm);
   padding: 9px 12px;
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   font-family: inherit;
   color: var(--ui-text);
   background: var(--ui-surface);
@@ -541,7 +606,7 @@ async function onSubmit() {
   cursor: pointer;
 }
 .ufp-hint {
-  font-size: 12px;
+  font-size: calc(var(--ui-font-scale, 1) * 12px);
   color: var(--ui-text-muted);
 }
 .ufp-hint.er {
@@ -550,12 +615,12 @@ async function onSubmit() {
 }
 .ufp-error {
   margin: 0;
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   color: var(--ui-danger);
 }
 .ufp-ok {
   margin: 0;
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   font-weight: 600;
   color: var(--ui-success, #22c55e);
 }
@@ -566,7 +631,7 @@ async function onSubmit() {
   border-radius: var(--ui-radius-sm);
   background: var(--ui-surface);
   padding: 8px 16px;
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   font-weight: 600;
   color: var(--ui-accent);
   cursor: pointer;
@@ -581,7 +646,7 @@ async function onSubmit() {
 }
 .ufp-st {
   color: var(--ui-text-2);
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   padding: 30px;
   text-align: center;
 }
@@ -596,7 +661,7 @@ async function onSubmit() {
   border-radius: var(--ui-radius-sm);
   background: var(--ui-surface);
   padding: 9px 18px;
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   color: var(--ui-accent);
   cursor: pointer;
   white-space: nowrap;
@@ -604,11 +669,19 @@ async function onSubmit() {
 .ufp-btn:hover {
   background: var(--ui-accent-soft);
 }
+/* Reset-password action: secondary button with the danger tint */
+.ufp-reset {
+  border-color: color-mix(in srgb, var(--ui-danger) 35%, transparent);
+  color: var(--ui-danger);
+}
+.ufp-reset:hover:not(:disabled) {
+  background: var(--ui-danger-soft);
+}
 .ufp-add {
   border: none;
   border-radius: var(--ui-radius-sm);
   padding: 9px 18px;
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   font-weight: 600;
   cursor: pointer;
   background: var(--ui-accent);

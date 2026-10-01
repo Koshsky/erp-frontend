@@ -186,7 +186,7 @@ const burgerLabel = computed(() => (isNavOpen.value ? 'Закрыть меню' 
   background: transparent;
   color: var(--ui-text-2);
   text-decoration: none;
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   font-family: inherit;
   cursor: pointer;
   transition: background var(--ui-duration), color var(--ui-duration);

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../store'
 import { getApiUrl, setApiUrl, hasApiUrlOverride, httpSchemeWarning } from '../config'
@@ -213,7 +213,7 @@ onBeforeUnmount(() => {
 @import '../styles/tokens.css';
 
 .sp-title {
-  font-size: 24px;
+  font-size: calc(var(--ui-font-scale, 1) * 24px);
   font-weight: 700;
   color: var(--ui-text);
   margin-bottom: 20px;
@@ -227,7 +227,7 @@ onBeforeUnmount(() => {
 }
 
 .sp-card-title {
-  font-size: 18px;
+  font-size: calc(var(--ui-font-scale, 1) * 18px);
   font-weight: 700;
   color: var(--ui-text);
   margin: 0 0 16px;
@@ -242,7 +242,7 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   padding: 9px 0;
   border-bottom: 1px solid var(--ui-border);
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
 }
 
 .sp-row:last-child {
@@ -280,7 +280,7 @@ onBeforeUnmount(() => {
   border-radius: var(--ui-radius-sm);
   background: var(--ui-accent);
   color: var(--ui-accent-on);
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   font-weight: 600;
   cursor: pointer;
   transition: background var(--ui-duration), opacity var(--ui-duration);
@@ -333,13 +333,13 @@ onBeforeUnmount(() => {
 .warm-label {
   display: block;
   margin-top: 6px;
-  font-size: 12px;
+  font-size: calc(var(--ui-font-scale, 1) * 12px);
   color: var(--ui-text-2);
   text-align: right;
 }
 
 .sp-msg {
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   color: var(--ui-danger);
   margin: 10px 0 0;
 }

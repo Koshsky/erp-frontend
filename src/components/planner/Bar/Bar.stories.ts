@@ -78,7 +78,7 @@ function renderKeyboardFixture(unit: 'day' | 'decade') {
     template: `
       <div style="position:relative;width:3000px;height:40px;background:#f0f0f0;">
         <Bar :timeline="timeline" :start-date="start" :end-date="end" title="Задача" @change="start = $event.start_date; end = $event.end_date; change = $event.start_date + '/' + $event.end_date" />
-        <div data-testid="bar-change" style="font-size:12px;color:#666;">{{ change }}</div>
+        <div data-testid="bar-change" style="font-size: calc(var(--ui-font-scale, 1) * 12px);color:#666;">{{ change }}</div>
       </div>
     `,
   })

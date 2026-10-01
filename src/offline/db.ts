@@ -11,7 +11,7 @@
  *
  * NO-TTL INVARIANT: the local stores (cache/outbox/idmap/session) have no
  * TTL and are never cleaned up by time/age/timers. Data is removed only by:
- *  - explicit user actions (clearLocalData / clearOutbox, discardFailed /
+ *  - explicit user actions (clearOutbox, discardFailed /
  *    discardEntry for rejected queue entries);
  *  - an app-version change (ensureCacheVersion — clears ONLY the cache);
  *  - a verified online login pruning the queue entries of the logged-out
@@ -27,8 +27,9 @@ const DB_NAME = 'erp-offline'
 // directly: an existing database (created by an older bundle or bumped by our
 // own store repair) may already be above it, and requesting a lower version
 // fails with a VersionError. openDb() opens at the current version and only
-// bumps when an object store is missing.
-const DB_VERSION = 4
+// bumps when an object store is missing. Kept as documentation of the schema
+// generation (unused otherwise).
+const _DB_VERSION = 4
 const CACHE_STORE = 'cache'
 const OUTBOX_STORE = 'outbox'
 const IDMAP_STORE = 'idmap'
@@ -129,18 +130,6 @@ function getDb(): Promise<IDBDatabase> {
  *  call reopens the database. */
 function resetDb(): void {
   dbPromise = null
-}
-
-/**
- * Closes the cached IndexedDB connection so that indexedDB.deleteDatabase can
- * proceed — any open connection (including this tab's own) blocks the deletion
- * (H-OFF-2). Safe when nothing is open: resolves immediately. The cached
- * handle is dropped; the next idb* call reopens the database.
- */
-export async function closeDb(): Promise<void> {
-  const db = dbPromise ? await dbPromise.catch(() => undefined) : undefined
-  if (db) db.close()
-  resetDb()
 }
 
 function txAll(

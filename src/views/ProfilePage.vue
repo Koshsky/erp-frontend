@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useAuthStore } from '../store'
+import { isOffline } from '../offline/state'
 
 const auth = useAuthStore()
 
@@ -20,9 +21,30 @@ const profile = computed<ProfileField[]>(() => {
   ]
 })
 
+/** Connection status (mirrors the "Статус" diagnostics page colors). */
+const connectionLabel = computed(() => (isOffline.value ? 'офлайн' : 'онлайн'))
+
+/** Version of the running bundle (injected at build time). */
+const appBuildVersion = __APP_VERSION__
+/** Version of the deployed app bundle from the precache manifest (guarded). */
+const appVersion = ref('—')
+
+async function refreshAppInfo() {
+  try {
+    const res = await fetch('/precache-manifest.json')
+    if (res.ok) {
+      const data = (await res.json()) as { version?: string }
+      appVersion.value = data.version ?? '—'
+    }
+  } catch {
+    // the manifest is not critical — keep the fallback
+  }
+}
+
 onMounted(() => {
   const id = auth.user?.id
   if (id != null) auth.fetchProfile(id)
+  void refreshAppInfo()
 })
 </script>
 
@@ -61,6 +83,24 @@ onMounted(() => {
           <span class="pf-value">{{ field.value }}</span>
         </div>
       </div>
+
+      <div class="pf-card">
+        <div class="pf-row">
+          <span class="pf-label">Состояние</span>
+          <span class="pf-value" :class="isOffline ? 'off' : 'on'">{{ connectionLabel }}</span>
+        </div>
+      </div>
+
+      <div class="pf-card">
+        <div class="pf-row">
+          <span class="pf-label">Версия приложения</span>
+          <span class="pf-value">{{ appVersion }}</span>
+        </div>
+        <div class="pf-row">
+          <span class="pf-label">Версия сборки</span>
+          <span class="pf-value">{{ appBuildVersion }}</span>
+        </div>
+      </div>
     </div>
   </section>
 </template>
@@ -69,7 +109,7 @@ onMounted(() => {
 @import '../styles/tokens.css';
 
 .pf-title {
-  font-size: 24px;
+  font-size: calc(var(--ui-font-scale, 1) * 24px);
   font-weight: 700;
   color: var(--ui-text);
   margin-bottom: 20px;
@@ -106,7 +146,7 @@ onMounted(() => {
   justify-content: space-between;
   padding: 14px 20px;
   border-bottom: 1px solid var(--ui-border);
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
 }
 .pf-row:last-child { border-bottom: none; }
 
@@ -116,6 +156,14 @@ onMounted(() => {
 .pf-value {
   font-weight: 600;
   color: var(--ui-text);
+}
+
+/* Connection state colors (match the "Статус" diagnostics page). */
+.pf-value.on {
+  color: var(--ui-success);
+}
+.pf-value.off {
+  color: var(--ui-warning);
 }
 
 /* Square icon button → the edit page */

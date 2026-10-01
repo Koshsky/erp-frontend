@@ -79,11 +79,6 @@ export const modalFormArgTypes: ArgTypes<ModalFormProps> = {
     control: 'boolean',
     table: { type: { summary: 'boolean' } },
   },
-  error: {
-    name: 'Ошибка',
-    control: 'text',
-    table: { type: { summary: 'string | null' } },
-  },
 }
 
 export default modalFormArgTypes

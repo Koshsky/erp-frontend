@@ -75,7 +75,7 @@ export const OutsideClickEscapeAndSelect: Story = {
     template: `
       <div>
         <ColorField :model-value="color" label="Цвет проекта" @update:model-value="color = $event" />
-        <div data-testid="cf-value" style="font-size:12px;">{{ color }}</div>
+        <div data-testid="cf-value" style="font-size: calc(var(--ui-font-scale, 1) * 12px);">{{ color }}</div>
       </div>
     `,
   }),

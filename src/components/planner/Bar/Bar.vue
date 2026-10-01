@@ -386,7 +386,7 @@ function onContextMenu(e: MouseEvent) {
   background: rgba(255, 255, 255, 0.35);
 }
 .lb-title {
-  font-size: 12px;
+  font-size: calc(var(--ui-font-scale, 1) * 12px);
   font-weight: 700;
   color: var(--ui-accent-on);
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
@@ -394,7 +394,7 @@ function onContextMenu(e: MouseEvent) {
   pointer-events: none;
 }
 .lb-code {
-  font-size: 10px;
+  font-size: calc(var(--ui-font-scale, 1) * 10px);
   font-weight: 500;
   color: rgba(255, 255, 255, 0.85);
   background: rgba(0, 0, 0, 0.15);
@@ -405,12 +405,12 @@ function onContextMenu(e: MouseEvent) {
   pointer-events: none;
 }
 .lb-tt {
-  font-size: 12px;
+  font-size: calc(var(--ui-font-scale, 1) * 12px);
   line-height: 1.5;
 }
 .lb-tt-title {
   font-weight: 700;
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   margin-bottom: 2px;
 }
 .lb-tt-row {

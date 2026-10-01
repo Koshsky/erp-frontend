@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/vue3-vite'
 import ProjectBar from './ProjectBar.vue'
+import type { ProjectBarProps } from './types'
 import { makeDemoTimeline } from '@/components/planner/plannerStoryHelpers'
 
 const now = new Date()
@@ -17,7 +18,7 @@ const meta: Meta<typeof ProjectBar> = {
 export default meta
 type Story = StoryObj<typeof meta>
 
-function withProject(props: Record<string, any>): Story['render'] {
+function withProject(props: Partial<ProjectBarProps>): Story['render'] {
   return () => ({
     components: { ProjectBar },
     data: () => ({ timeline: makeDemoTimeline(iso(day(1, 1)), 'day'), ...props }),

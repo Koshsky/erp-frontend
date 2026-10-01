@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { BarTooltipComment, BarTooltipProps } from './types'
+import type { BarTooltipProps } from './types'
 
 const props = withDefaults(defineProps<BarTooltipProps>(), {
   rows: () => [],
@@ -47,12 +47,12 @@ const moreComments = computed(() => props.comments.length - shownComments.value.
 @import "../../../styles/tokens.css";
 
 .bt {
-  font-size: 12px;
+  font-size: calc(var(--ui-font-scale, 1) * 12px);
   line-height: 1.5;
 }
 .bt-title {
   font-weight: 700;
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   margin-bottom: 2px;
 }
 .bt-row {
@@ -89,7 +89,7 @@ const moreComments = computed(() => props.comments.length - shownComments.value.
   border-top: 1px solid var(--ui-border);
 }
 .bt-comments-title {
-  font-size: 11px;
+  font-size: calc(var(--ui-font-scale, 1) * 11px);
   font-weight: 700;
   color: var(--ui-text-2);
   text-transform: uppercase;
@@ -115,17 +115,17 @@ const moreComments = computed(() => props.comments.length - shownComments.value.
   gap: 8px;
 }
 .bt-c-author {
-  font-size: 11px;
+  font-size: calc(var(--ui-font-scale, 1) * 11px);
   font-weight: 700;
   color: var(--ui-accent);
 }
 .bt-c-date {
-  font-size: 10px;
+  font-size: calc(var(--ui-font-scale, 1) * 10px);
   color: var(--ui-text-muted);
 }
 .bt-c-text {
   margin-top: 1px;
-  font-size: 11px;
+  font-size: calc(var(--ui-font-scale, 1) * 11px);
   line-height: 1.4;
   color: var(--ui-text-2);
   white-space: normal;
@@ -136,7 +136,7 @@ const moreComments = computed(() => props.comments.length - shownComments.value.
   overflow: hidden;
 }
 .bt-c-more {
-  font-size: 11px;
+  font-size: calc(var(--ui-font-scale, 1) * 11px);
   color: var(--ui-text-muted);
   font-style: italic;
   padding-left: 2px;

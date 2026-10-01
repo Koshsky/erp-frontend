@@ -10,12 +10,11 @@ import { toDate } from '../components/planner/calendar'
 import type { PlanningUnit } from '../components/planner/calendar'
 import { useEmployeeFilters } from '../composables/useEmployeeFilters'
 import { useRoleAccess } from '../composables/useRoleAccess'
-import { useAppStore, useAuthStore, useRbacStore, useTimesheetStore } from '../store'
+import { useAppStore, useRbacStore, useTimesheetStore } from '../store'
 import { isOffline } from '../offline/state'
 import { scheduleNamedRefresh } from '../offline/sync'
 
 const ts = useTimesheetStore()
-const auth = useAuthStore()
 const { timesheetRows, states, loading, busy, error } = storeToRefs(ts)
 
 const unit = ref<PlanningUnit>('day')
@@ -100,6 +99,16 @@ async function onLoadMoreEmployees() {
   const ok = await ts.loadMoreEmployees()
   if (ok) await ts.refreshPeriods(ts.windowStart, ts.windowEnd)
 }
+
+/** state_id → user-defined color (custom overrides the palette fallback in
+ *  the legend, the assignment swatches and every day cell). */
+const stateColorMap = computed<Record<number, string>>(() => {
+  const map: Record<number, string> = {}
+  for (const st of states.value) {
+    if (st.id != null && st.color) map[st.id] = st.color
+  }
+  return map
+})
 </script>
 
 <template>
@@ -110,7 +119,7 @@ async function onLoadMoreEmployees() {
         <span v-for="st in states" :key="'lg' + st.id" class="tp-legend-item">
           <span
             class="tp-swatch"
-            :style="{ background: stateBackground(st.code, st.is_available, st.id) }"
+            :style="{ background: st.color ?? stateBackground(st.code, st.is_available, st.id) }"
           />
           {{ st.name }}
         </span>
@@ -154,6 +163,7 @@ async function onLoadMoreEmployees() {
             :t="t"
             :employees="visibleRows"
             :states="states"
+            :color-map="stateColorMap"
             :state-for-day="(id, iso) => ts.periodFor(id, iso)"
             :busy="busy"
             :can-assign="(id) => canAssignEmployeeDays(employeeById(id)?.manager_id)"
@@ -211,7 +221,7 @@ async function onLoadMoreEmployees() {
   border: 1px solid var(--ui-border-strong);
   border-radius: var(--ui-radius-sm);
   padding: 9px 12px;
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   font-family: inherit;
   color: var(--ui-text);
   background: var(--ui-surface);
@@ -227,7 +237,7 @@ async function onLoadMoreEmployees() {
   border: 1px solid var(--ui-border-strong);
   border-radius: var(--ui-radius-sm);
   padding: 9px 12px;
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   font-family: inherit;
   color: var(--ui-text);
   background: var(--ui-surface);
@@ -239,7 +249,7 @@ async function onLoadMoreEmployees() {
   box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.12);
 }
 .tp-title {
-  font-size: 24px;
+  font-size: calc(var(--ui-font-scale, 1) * 24px);
   font-weight: 700;
   color: var(--ui-text);
   margin: 0;
@@ -253,7 +263,7 @@ async function onLoadMoreEmployees() {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
+  font-size: calc(var(--ui-font-scale, 1) * 12px);
   color: var(--ui-text-muted);
 }
 .tp-swatch {
@@ -264,12 +274,12 @@ async function onLoadMoreEmployees() {
 }
 .tp-note {
   margin-left: auto;
-  font-size: 12px;
+  font-size: calc(var(--ui-font-scale, 1) * 12px);
   color: var(--ui-text-faint);
 }
 .tp-error {
   margin: 12px 0 0;
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   color: var(--ui-danger);
 }
 /* "Load more" rows: the roster is paged server-side (PAGE_SIZE per request) */
@@ -282,7 +292,7 @@ async function onLoadMoreEmployees() {
   border: 1px solid var(--ui-border-strong);
   border-radius: var(--ui-radius-sm);
   padding: 9px 18px;
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   font-weight: 600;
   font-family: inherit;
   cursor: pointer;
@@ -301,7 +311,7 @@ async function onLoadMoreEmployees() {
 }
 .tp-empty {
   color: var(--ui-text-2);
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   padding: 40px 12px;
   text-align: center;
   box-sizing: border-box;

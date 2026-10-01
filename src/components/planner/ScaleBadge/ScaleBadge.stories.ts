@@ -26,7 +26,7 @@ export const Default: Story = {
         <div style="position:relative;height:120px;margin-top:8px;border:1px solid #e8e8e8;border-radius:6px;overflow:auto;">
           <ScaleBadge :scale="scale" :bump="bump" />
         </div>
-        <div style="font-size:12px;color:#666;margin-top:6px;">Бейдж появляется на каждом зуме и гаснет через 900 мс.</div>
+        <div style="font-size: calc(var(--ui-font-scale, 1) * 12px);color:#666;margin-top:6px;">Бейдж появляется на каждом зуме и гаснет через 900 мс.</div>
       </div>
     `,
   }),

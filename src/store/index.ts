@@ -2,9 +2,10 @@ import { defineStore } from 'pinia'
 import { ref, computed, watch, onScopeDispose } from 'vue'
 import axios, { type AxiosError, type Method } from 'axios'
 import { AuthApi, ProjectsApi, ProcessesApi, TasksApi, TimesheetResourcesApi, TimesheetCalendarApi, TimesheetStatesApi, PlanningApi, MilestonesApi, UsersApi, AssignmentsApi, AutoCreateApi, RBACApi, PermissionsApi, AuditApi, Configuration } from '@/api'
-import type { DtoUserInfo, DtoProject, DtoResourceResponse, DtoResourceCalendar, DtoResourceMemberResponse, DtoResourceAbsenceResponse, DtoUserResponse, DtoUserStateResponse, DtoStateResponse, DtoCreateResourceRequest, DtoUpdateResourceRequest, DtoCreateUserRequest, DtoUpdateUserRequest, DtoSetDaysRequest, DtoAdminUserResponse, DtoCreateUserResult, DtoAutoCreateConfig, DtoAutoCreatedCounts, DtoCommentResponse, DtoPresetView, DtoPresetRuleInput, DtoPresetRuleView, DtoMatrixCell, DtoRoutePolicyView, EngineKindInfo, DtoPermission, DtoUserPermissionsView, DtoUserPermissionsInput, DtoAuditEventView } from '@/api'
+import type { DtoUserInfo, DtoProject, DtoResourceResponse, DtoResourceCalendar, DtoResourceMemberResponse, DtoResourceAbsenceResponse, DtoUserResponse, DtoUserStateResponse, DtoStateResponse, DtoCreateResourceRequest, DtoUpdateResourceRequest, DtoCreateUserRequest, DtoUpdateUserRequest, DtoSetDaysRequest, DtoAdminUserResponse, DtoCreateUserResult, DtoAutoCreateConfig, DtoAutoCreatedCounts, DtoCommentResponse, DtoPresetView, DtoPresetRuleInput, DtoPresetRuleView, DtoMatrixCell, DtoRoutePolicyView, EngineKindInfo, DtoPermission, DtoUserPermissionsView, DtoUserPermissionsInput, DtoAuditEventView, DtoAssignmentResponse, DtoDetailedProcess, DtoDetailedProject, DtoDetailedTask, DtoMilestone, DtoProcess, DtoProcessPlanning, DtoProjectPlanning, DtoResource, DtoTaskDependency, DtoTaskPlanning } from '@/api'
 import { apiErrorMessage } from '@/utils'
 import { getApiUrl } from '@/config'
+import { tablePageSize } from '@/settings'
 import { isOffline } from '@/offline/state'
 import { offlineFailFastAdapter } from '@/offline/failFast'
 import { scheduleWarmup } from '@/offline/warmup'
@@ -52,7 +53,7 @@ const REFRESH_MARGIN_MS = 120 * 1000
 const REFRESH_INTERVAL_MS = 30 * 1000
 
 /** Page size for listings (matches the backend default). */
-const PAGE_SIZE = 50
+// Paged lists use the live UI setting (tablePageSize) — see the API calls below.
 
 /** Max employee ids per batch days request (backend contract — see GET /user/days). */
 const BATCH_IDS_MAX = 200
@@ -62,12 +63,12 @@ function nextTempId(): number {
   return -Date.now()
 }
 
-interface MutationOptions {
+interface MutationOptions<T = unknown> {
   call: () => Promise<unknown>
   entity: MutationEntity
   tempId?: number
   /** Regular path after a successful server response (data — the useful part of the payload) */
-  apply: (data: any) => void | Promise<void>
+  apply: (data: T | null) => void | Promise<void>
   /** Optimistic path when offline (the request has already gone into the outbox queue) */
   optimistic: () => void
   onError: (message: string) => void
@@ -84,7 +85,7 @@ interface MutationOptions {
  *  - server error → false + onError (as before offline support).
  *  Auth/passwords (/auth/*, changePassword) do not go through this path.
  */
-async function runMutation(opts: MutationOptions): Promise<boolean> {
+async function runMutation<T = unknown>(opts: MutationOptions<T>): Promise<boolean> {
   try {
     const resp = await opts.call()
     // Unwrap the unified envelope exactly TWO levels: `resp.data` is the body
@@ -93,14 +94,14 @@ async function runMutation(opts: MutationOptions): Promise<boolean> {
     // deeper (resp.data.data.data = payload.data) yields undefined for every
     // create/update DTO and would silently drop online mutations from the UI
     // (the offline/optimistic path is unaffected — it never reads the payload).
-    await opts.apply((resp as { data?: { data?: unknown } } | undefined)?.data?.data ?? null)
+    await opts.apply(((resp as { data?: { data?: unknown } } | undefined)?.data?.data as T | null) ?? null)
     // Post-mutation consistency (online only): the outbox flush path owns the
     // refresh of queued changes (reconcile), so here the refresh is skipped
     // while isOffline — an optimistic entry would otherwise be reconciled
     // against the pre-mutation server state.
     if (!isOffline.value) scheduleDomainRefresh([opts.entity])
     return true
-  } catch (e: any) {
+  } catch (e: unknown) {
     const err = e as AxiosError
     if (err?.config && isNetworkError(e)) {
       // Mutation queue (outbox): on a network failure the request is stored in
@@ -115,13 +116,13 @@ async function runMutation(opts: MutationOptions): Promise<boolean> {
           body: err.config.data,
         })
       } catch {
-        opts.onError(e?.message ?? String(e))
+        opts.onError(e instanceof Error ? e.message ?? String(e) : String(e))
         return false
       }
       opts.optimistic()
       return true
     }
-    opts.onError(e?.message ?? String(e))
+    opts.onError(e instanceof Error ? e.message ?? String(e) : String(e))
     return false
   }
 }
@@ -215,7 +216,10 @@ function accessTokenExpiring(): boolean {
  */
 function waitForExternalToken(): Promise<boolean> {
   return new Promise((resolve) => {
-    let timer: number | undefined
+    const timer = window.setTimeout(() => {
+      unsub()
+      resolve(true)
+    }, 2000)
     const unsub = subscribeToken((token) => {
       if (!token) return
       const cur = decodeTokenExp(getAccessToken())
@@ -225,10 +229,6 @@ function waitForExternalToken(): Promise<boolean> {
       unsub()
       resolve(true)
     })
-    timer = window.setTimeout(() => {
-      unsub()
-      resolve(true)
-    }, 2000)
   })
 }
 
@@ -356,8 +356,8 @@ export const useAuthStore = defineStore('auth', () => {
       // tab — are kept. Non-fatal.
       void pruneForeignOutbox(user.value?.username ?? username.trim()).catch(() => {})
       return true
-    } catch (e: any) {
-      error.value = e.message || String(e)
+    } catch (e: unknown) {
+      error.value = e instanceof Error ? e.message || String(e) : String(e)
       return false
     } finally {
       loading.value = false
@@ -377,8 +377,12 @@ export const useAuthStore = defineStore('auth', () => {
       const errBody = body?.error as { code?: unknown; message?: string } | undefined
       if (errBody && errBody.code != null) throw new Error(apiErrorMessage(errBody))
       return true
-    } catch (e: any) {
-      error.value = apiErrorMessage(e?.response?.data?.error, e?.message ?? String(e))
+    } catch (e: unknown) {
+      error.value = apiErrorMessage(
+        (e as { response?: { data?: { error?: { message?: string; code?: unknown } | null | undefined } } } | undefined)
+          ?.response?.data?.error,
+        e instanceof Error ? e.message : String(e),
+      )
       return false
     } finally {
       loading.value = false
@@ -474,7 +478,7 @@ export const useAuthStore = defineStore('auth', () => {
         publishSession({ access: token, refresh: body?.data?.refresh_token })
       }
       return true
-    } catch (e: any) {
+    } catch (e: unknown) {
       // Network error (no HTTP response): the server is unreachable. We do not log out —
       // we switch to offline mode (the session and the change queue in IndexedDB live
       // until the network returns), in every environment. Logout happens only on a
@@ -483,7 +487,7 @@ export const useAuthStore = defineStore('auth', () => {
         isOffline.value = true
         return true
       }
-      error.value = e.message || String(e)
+      error.value = e instanceof Error ? e.message || String(e) : String(e)
       logout()
       return false
     } finally {
@@ -500,7 +504,7 @@ export const useAuthStore = defineStore('auth', () => {
     // the flush-time creator guard parks mismatched entries, and after a logout
     // auto-sync is disabled (isLoggedOut) until a manual login. Orphaned
     // entries of the logged-out account are pruned on the next verified login
-    // (pruneForeignOutbox). The explicit full wipe is clearLocalData()/clearOutbox().
+    // (pruneForeignOutbox). The explicit full wipe is clearOutbox().
     // Revoke the refresh session on the server: read the stored token and send it
     // in the body of /auth/logout (falling back to the cookie when none is stored),
     // then clear our local copy. Best-effort — the cookie is also cleared by the backend.
@@ -556,8 +560,8 @@ export const useAuthStore = defineStore('auth', () => {
         localStorage.setItem(USER_KEY, JSON.stringify(user.value))
       }
       return true
-    } catch (e: any) {
-      error.value = e.message || String(e)
+    } catch (e: unknown) {
+      error.value = e instanceof Error ? e.message || String(e) : String(e)
       return false
     }
   }
@@ -666,11 +670,11 @@ export const useAppStore = defineStore('app', () => {
     projectsError.value = null
     try {
       const api = new ProjectsApi(apiConfig())
-      const resp = await api.projectGet(PAGE_SIZE, undefined, 0)
+      const resp = await api.projectGet(tablePageSize.value, undefined, 0)
       const data = resp.data?.data
       projects.value = data?.items ?? []
-    } catch (e: any) {
-      projectsError.value = e.message || String(e)
+    } catch (e: unknown) {
+      projectsError.value = e instanceof Error ? e.message || String(e) : String(e)
     } finally {
       projectsLoading.value = false
     }
@@ -737,7 +741,7 @@ export const useAppStore = defineStore('app', () => {
     resourcesError.value = null
     try {
       const api = new TimesheetResourcesApi(apiConfig())
-      const resp = await api.resourcesGet(PAGE_SIZE, undefined, 0)
+      const resp = await api.resourcesGet(tablePageSize.value, undefined, 0)
       const data = resp.data?.data
       const items = data?.items ?? []
       // The background PULL must not truncate pages already loaded via
@@ -749,8 +753,8 @@ export const useAppStore = defineStore('app', () => {
       const merged = mergeResourceLists(resources.value, items)
       if (!sameResources(merged, resources.value)) resources.value = merged
       resourcesTotal.value = data?.total ?? 0
-    } catch (e: any) {
-      resourcesError.value = e.message || String(e)
+    } catch (e: unknown) {
+      resourcesError.value = e instanceof Error ? e.message || String(e) : String(e)
     } finally {
       resourcesLoading.value = false
     }
@@ -783,13 +787,13 @@ export const useAppStore = defineStore('app', () => {
         return merged
       }
       const api = new TimesheetResourcesApi(apiConfig())
-      const resp = await api.resourcesGet(PAGE_SIZE, undefined, resources.value.length)
+      const resp = await api.resourcesGet(tablePageSize.value, undefined, resources.value.length)
       const data = resp.data?.data
       mergeResources(data?.items ?? [])
       resourcesTotal.value = data?.total ?? resourcesTotal.value
       return true
-    } catch (e: any) {
-      resourcesError.value = e.message || String(e)
+    } catch (e: unknown) {
+      resourcesError.value = e instanceof Error ? e.message || String(e) : String(e)
       return false
     } finally {
       resourcesLoadingMore.value = false
@@ -885,8 +889,8 @@ export const useAppStore = defineStore('app', () => {
       const api = new TimesheetResourcesApi(apiConfig())
       const resp = await api.resourcesIdMembersGet(resourceId)
       resourceMembers.value[resourceId] = resp.data?.data ?? []
-    } catch (e: any) {
-      resourcesError.value = e.message || String(e)
+    } catch (e: unknown) {
+      resourcesError.value = e instanceof Error ? e.message || String(e) : String(e)
     }
   }
 
@@ -1041,8 +1045,8 @@ export const useAppStore = defineStore('app', () => {
         calendarDay(today, CALENDAR_FORWARD_DAYS),
       )
       calendar.value = resp.data?.data?.resources ?? []
-    } catch (e: any) {
-      calendarError.value = e.message || String(e)
+    } catch (e: unknown) {
+      calendarError.value = e instanceof Error ? e.message || String(e) : String(e)
     } finally {
       calendarLoading.value = false
     }
@@ -1093,8 +1097,8 @@ export const useAppStore = defineStore('app', () => {
       const api = new UsersApi(apiConfig())
       const resp = await api.userAllGet()
       users.value = resp.data?.data ?? []
-    } catch (e: any) {
-      usersError.value = e.message || String(e)
+    } catch (e: unknown) {
+      usersError.value = e instanceof Error ? e.message || String(e) : String(e)
     } finally {
       usersLoading.value = false
     }
@@ -1152,8 +1156,8 @@ export const useAppStore = defineStore('app', () => {
       const api = new UsersApi(apiConfig())
       const resp = await api.userGet(500, undefined, undefined, false, search || undefined, 0)
       adminUsers.value = resp.data?.data?.items ?? []
-    } catch (e: any) {
-      adminUsersError.value = apiErrorMessage(e)
+    } catch (e: unknown) {
+      adminUsersError.value = apiErrorMessage(e as { message?: string; code?: unknown })
     } finally {
       adminUsersLoading.value = false
     }
@@ -1169,21 +1173,22 @@ export const useAppStore = defineStore('app', () => {
       // (coalesced silent refresh of the user domains).
       if (!isOffline.value) scheduleDomainRefresh(['user'])
       return resp.data?.data ?? null
-    } catch (e: any) {
-      adminUsersError.value = apiErrorMessage(e)
+    } catch (e: unknown) {
+      adminUsersError.value = apiErrorMessage(e as { message?: string; code?: unknown })
       return null
     }
   }
 
-  /** Resets a user's password (admin-only). The password itself is not exposed by the API. */
-  async function resetPassword(id: number): Promise<boolean> {
+  /** Resets a user's password (admin-only); returns the generated password (shown once) or null. */
+  async function resetPassword(id: number): Promise<string | null> {
     try {
       const api = new UsersApi(apiConfig())
-      await api.userIdResetPasswordPost(id)
-      return true
-    } catch (e: any) {
-      adminUsersError.value = apiErrorMessage(e)
-      return false
+      const resp = await api.userIdResetPasswordPost(id)
+      // The backend now returns the generated password once in the body.
+      return resp.data?.data?.password ?? null
+    } catch (e: unknown) {
+      adminUsersError.value = apiErrorMessage(e as { message?: string; code?: unknown })
+      return null
     }
   }
 
@@ -1195,8 +1200,8 @@ export const useAppStore = defineStore('app', () => {
       await loadAdminUsers()
       if (!isOffline.value) scheduleDomainRefresh(['user'])
       return true
-    } catch (e: any) {
-      adminUsersError.value = apiErrorMessage(e)
+    } catch (e: unknown) {
+      adminUsersError.value = apiErrorMessage(e as { message?: string; code?: unknown })
       return false
     }
   }
@@ -1211,8 +1216,8 @@ export const useAppStore = defineStore('app', () => {
       // Employees page and the roster immediately.
       if (!isOffline.value) scheduleDomainRefresh(['user'])
       return true
-    } catch (e: any) {
-      adminUsersError.value = apiErrorMessage(e)
+    } catch (e: unknown) {
+      adminUsersError.value = apiErrorMessage(e as { message?: string; code?: unknown })
       return false
     }
   }
@@ -1226,8 +1231,8 @@ export const useAppStore = defineStore('app', () => {
       // The deleted account must leave the roster/name catalog immediately.
       if (!isOffline.value) scheduleDomainRefresh(['user'])
       return true
-    } catch (e: any) {
-      adminUsersError.value = apiErrorMessage(e)
+    } catch (e: unknown) {
+      adminUsersError.value = apiErrorMessage(e as { message?: string; code?: unknown })
       return false
     }
   }
@@ -1245,8 +1250,8 @@ export const useAppStore = defineStore('app', () => {
       const api = new AutoCreateApi(apiConfig())
       const resp = await api.autoCreateConfigGet()
       autoCreateConfig.value = resp.data?.data ?? null
-    } catch (e: any) {
-      autoCreateError.value = apiErrorMessage(e)
+    } catch (e: unknown) {
+      autoCreateError.value = apiErrorMessage(e as { message?: string; code?: unknown })
     } finally {
       autoCreateLoading.value = false
     }
@@ -1259,8 +1264,8 @@ export const useAppStore = defineStore('app', () => {
       await api.autoCreateConfigPut(cfg)
       autoCreateConfig.value = cfg
       return true
-    } catch (e: any) {
-      autoCreateError.value = apiErrorMessage(e)
+    } catch (e: unknown) {
+      autoCreateError.value = apiErrorMessage(e as { message?: string; code?: unknown })
       return false
     }
   }
@@ -1337,8 +1342,6 @@ export const useAppStore = defineStore('app', () => {
 
 // === Timesheet (employee states, page for vp/admin) ===
 export const useTimesheetStore = defineStore('timesheet', () => {
-  const app = useAppStore()
-
   // States load window: by default "180 days back / 360 days forward"; with
   // infinite scroll the timeline is extended via ensureRange (loading new ranges).
   const WINDOW_BACK_DAYS = 180
@@ -1391,8 +1394,8 @@ export const useTimesheetStore = defineStore('timesheet', () => {
     return `${d.getFullYear()}-${m}-${dd}`
   }
 
-  function setError(e: any) {
-    error.value = e?.message || String(e)
+  function setError(e: unknown) {
+    error.value = e instanceof Error ? e.message || String(e) : String(e)
   }
 
   /** Local-first: hydrate each employee's states from the cache (freshest window) */
@@ -1459,7 +1462,7 @@ export const useTimesheetStore = defineStore('timesheet', () => {
         api
           .userIdDaysGet(emp.id ?? 0, start, end)
           .then((r) => ({ id: emp.id, list: r.data?.data ?? [] }))
-          .catch((e: any) => {
+          .catch((e: unknown) => {
             failed = failed ?? e
             return { id: emp.id, list: [] }
           }),
@@ -1508,12 +1511,12 @@ export const useTimesheetStore = defineStore('timesheet', () => {
       // Unsync guard: if the backend omitted some requested ids, their current
       // cached data is intentionally kept untouched instead of being wiped.
       return true
-    } catch (e: any) {
+    } catch (e: unknown) {
       // The batch endpoint may be missing on an older backend — fall back to
       // the per-employee path; surface an error only when the fallback fails too.
       const ok = await refreshPeriodsOneByOne(start, end)
       if (!ok) setError(e)
-      else console.warn('[timesheet] batch days unavailable, fell back to per-employee:', e?.message ?? e)
+      else console.warn('[timesheet] batch days unavailable, fell back to per-employee:', e instanceof Error ? e.message : e)
       return ok
     }
   }
@@ -1608,12 +1611,12 @@ export const useTimesheetStore = defineStore('timesheet', () => {
     }
     try {
       const api = new UsersApi(apiConfig())
-      const resp = await api.userGet(PAGE_SIZE, undefined, managerId ?? undefined, undefined, undefined, 0)
+      const resp = await api.userGet(tablePageSize.value, undefined, managerId ?? undefined, undefined, undefined, 0)
       const data = resp.data?.data
       // Sorting is added by the computed employeesWithTitles.
       //
       // The background PULL must not silently drop pages the user already
-      // opened via "Показать ещё" (PAGE_SIZE=50): instead of wholesale
+      // opened via "Показать ещё" (page size from the UI setting): instead of wholesale
       // replacing the array with page 0, merge the fresh first page into the
       // existing list — dedup by id, fresh page wins, already-loaded extra
       // pages are kept (the same identity-preserving merge the offline path
@@ -1624,7 +1627,7 @@ export const useTimesheetStore = defineStore('timesheet', () => {
       const merged = mergeEmployeeLists(employees.value, data?.items ?? [])
       if (!sameEmployees(merged, employees.value)) employees.value = merged
       employeesTotal.value = data?.total ?? 0
-    } catch (e: any) {
+    } catch (e: unknown) {
       if (!silent) setError(e)
     } finally {
       if (!silent) loading.value = false
@@ -1664,12 +1667,12 @@ export const useTimesheetStore = defineStore('timesheet', () => {
         return merged
       }
       const api = new UsersApi(apiConfig())
-      const resp = await api.userGet(PAGE_SIZE, undefined, undefined, undefined, undefined, employees.value.length)
+      const resp = await api.userGet(tablePageSize.value, undefined, undefined, undefined, undefined, employees.value.length)
       const data = resp.data?.data
       mergeEmployees(data?.items ?? [])
       employeesTotal.value = data?.total ?? employeesTotal.value
       return true
-    } catch (e: any) {
+    } catch (e: unknown) {
       setError(e)
       return false
     } finally {
@@ -1703,7 +1706,7 @@ export const useTimesheetStore = defineStore('timesheet', () => {
       const api = new TimesheetStatesApi(apiConfig())
       const resp = await api.timesheetStatesGet()
       states.value = resp.data?.data ?? []
-    } catch (e: any) {
+    } catch (e: unknown) {
       setError(e)
     }
   }
@@ -1713,6 +1716,8 @@ export const useTimesheetStore = defineStore('timesheet', () => {
     code: string
     name: string
     is_available: boolean
+    /** Custom state color (hex); empty/absent — palette fallback */
+    color?: string
   }
 
   /** Creates a status and updates the reference */
@@ -1948,9 +1953,9 @@ export const useTimesheetStore = defineStore('timesheet', () => {
 
 // === Planning (data from /planning/* for the three charts) ===
 export const usePlanningStore = defineStore('planning', () => {
-  const projectPlanning = ref<any>(null)
-  const processPlanning = ref<any>(null)
-  const taskPlanning = ref<any>(null)
+  const projectPlanning = ref<DtoProjectPlanning | null>(null)
+  const processPlanning = ref<DtoProcessPlanning | null>(null)
+  const taskPlanning = ref<DtoTaskPlanning | null>(null)
   const loading = ref(false)
   const error = ref<string | null>(null)
 
@@ -1969,17 +1974,17 @@ export const usePlanningStore = defineStore('planning', () => {
     }
     try {
       await load()
-    } catch (e: any) {
-      if (!silent) error.value = e.message || String(e)
+    } catch (e: unknown) {
+      if (!silent) error.value = e instanceof Error ? e.message || String(e) : String(e)
     } finally {
       if (!silent) loading.value = false
     }
   }
 
   /** Local-first: hydrate a planning payload from the cache */
-  function hydratePlanning(
-    get: () => unknown | null | undefined,
-    set: (v: unknown) => void,
+  function hydratePlanning<T>(
+    get: () => T | null | undefined,
+    set: (v: T | null) => void,
     path: string,
   ): Promise<void> {
     return hydrateFromCache([
@@ -1987,7 +1992,7 @@ export const usePlanningStore = defineStore('planning', () => {
         path,
         filled: () => get() != null,
         apply: (body) => {
-          set((body as { data?: unknown } | undefined)?.data ?? null)
+          set((((body as { data?: unknown } | undefined)?.data ?? null) as T | null) ?? null)
         },
       },
     ])
@@ -2046,45 +2051,45 @@ export const usePlanningStore = defineStore('planning', () => {
 
   /** Saves the new bar dates, then silently reloads the data (no spinner).
    *  On a save error it shows a message and falls back to the server data. */
-  function findProjectRow(id: number): any {
-    return projectPlanning.value?.projects?.find((p: any) => p.id === id)
+  function findProjectRow(id: number): DtoProject | undefined {
+    return projectPlanning.value?.projects?.find((p: DtoProject) => p.id === id)
   }
 
-  function findProcessRow(id: number): any {
+  function findProcessRow(id: number): DtoProcess | undefined {
     for (const p of processPlanning.value?.projects ?? []) {
-      const pr = (p.processes ?? []).find((x: any) => x.id === id)
+      const pr = (p.processes ?? []).find((x: DtoProcess) => x.id === id)
       if (pr) return pr
     }
     return undefined
   }
 
   /** Finds a task (top-level or subtask) anywhere in the planning data. */
-  function findTaskRow(id: number): any {
+  function findTaskRow(id: number): DtoDetailedTask | undefined {
     for (const p of taskPlanning.value?.processes ?? []) {
-      const t = (p.tasks ?? []).find((x: any) => x.id === id)
+      const t = (p.tasks ?? []).find((x: DtoDetailedTask) => x.id === id)
       if (t) return t
       const s = (p.tasks ?? [])
-        .flatMap((x: any) => x.subtasks ?? [])
-        .find((x: any) => x.id === id)
+        .flatMap((x: DtoDetailedTask) => x.subtasks ?? [])
+        .find((x: DtoDetailedTask) => x.id === id)
       if (s) return s
     }
     return undefined
   }
 
   /** Locates the object holding a subtask list (a top-level task with subtasks). */
-  function findSubtaskOwner(id: number): any {
+  function findSubtaskOwner(id: number): DtoDetailedTask | undefined {
     for (const p of taskPlanning.value?.processes ?? []) {
-      const t = (p.tasks ?? []).find((x: any) =>
-        (x.subtasks ?? []).some((s: any) => s.id === id),
+      const t = (p.tasks ?? []).find((x: DtoDetailedTask) =>
+        (x.subtasks ?? []).some((s: DtoDetailedTask) => s.id === id),
       )
       if (t) return t
     }
     return undefined
   }
 
-  function findMilestoneRow(id: number): any {
+  function findMilestoneRow(id: number): DtoMilestone | undefined {
     for (const p of taskPlanning.value?.processes ?? []) {
-      const m = (p.milestones ?? []).find((x: any) => x.id === id)
+      const m = (p.milestones ?? []).find((x: DtoMilestone) => x.id === id)
       if (m) return m
     }
     return undefined
@@ -2111,10 +2116,10 @@ export const usePlanningStore = defineStore('planning', () => {
   // === Dependency constraints (scheduling links between top-level tasks) ===
 
   /** The process whose task list contains the given task (top-level or subtask). */
-  function findProcessOfTask(id: number): any {
+  function findProcessOfTask(id: number): DtoDetailedProcess | undefined {
     for (const p of taskPlanning.value?.processes ?? []) {
-      if ((p.tasks ?? []).some((x: any) => x.id === id)) return p
-      if ((p.tasks ?? []).some((x: any) => (x.subtasks ?? []).some((s: any) => s.id === id))) return p
+      if ((p.tasks ?? []).some((x: DtoDetailedTask) => x.id === id)) return p
+      if ((p.tasks ?? []).some((x: DtoDetailedTask) => (x.subtasks ?? []).some((s: DtoDetailedTask) => s.id === id))) return p
     }
     return undefined
   }
@@ -2122,10 +2127,10 @@ export const usePlanningStore = defineStore('planning', () => {
   /** Dependency edges of the process containing a task. */
   function dependencyEdgesOf(id: number): DependencyEdge[] {
     const p = findProcessOfTask(id)
-    return ((p?.dependencies ?? []) as any[]).map((e: any) => ({
-      id: e.id,
-      task_id: e.task_id,
-      depends_on_task_id: e.depends_on_task_id,
+    return (p?.dependencies ?? []).map((e: DtoTaskDependency) => ({
+      id: e.id as number,
+      task_id: e.task_id as number,
+      depends_on_task_id: e.depends_on_task_id as number,
       type: e.type as DependencyType,
     }))
   }
@@ -2134,10 +2139,10 @@ export const usePlanningStore = defineStore('planning', () => {
    *  links live on top-level tasks only). */
   function dateRowsOf(id: number): TaskDates[] {
     const p = findProcessOfTask(id)
-    return ((p?.tasks ?? []) as any[]).map((t: any) => ({
-      id: t.id,
-      start_date: t.start_date,
-      end_date: t.end_date,
+    return (p?.tasks ?? []).map((t: DtoDetailedTask) => ({
+      id: t.id as number,
+      start_date: t.start_date as string,
+      end_date: t.end_date as string,
     }))
   }
 
@@ -2257,7 +2262,7 @@ export const usePlanningStore = defineStore('planning', () => {
       },
       optimistic: () => {
         const proc = findProcessOfTask(taskId)
-        const e = (proc?.dependencies ?? []).find((x: any) => x.id === depId)
+        const e = (proc?.dependencies ?? []).find((x: DtoTaskDependency) => x.id === depId)
         if (e) e.type = type
       },
       onError: (m) => {
@@ -2277,7 +2282,7 @@ export const usePlanningStore = defineStore('planning', () => {
       optimistic: () => {
         const proc = findProcessOfTask(taskId)
         if (proc) {
-          proc.dependencies = (proc.dependencies ?? []).filter((x: any) => x.id !== depId)
+          proc.dependencies = (proc.dependencies ?? []).filter((x: DtoTaskDependency) => x.id !== depId)
         }
       },
       onError: (m) => {
@@ -2540,7 +2545,7 @@ export const usePlanningStore = defineStore('planning', () => {
       apply: (dto) => {
         if (!dto) return
         const d = dto as { id?: number; title?: string; start_date?: string; end_date?: string; color?: string }
-        const project = processPlanning.value?.projects?.find((p: any) => p.id === payload.project_id)
+        const project = processPlanning.value?.projects?.find((p: DtoDetailedProject) => p.id === payload.project_id)
         insertAt(project?.processes, index, {
           id: d.id ?? 0,
           title: d.title ?? payload.title,
@@ -2551,7 +2556,7 @@ export const usePlanningStore = defineStore('planning', () => {
         })
       },
       optimistic: () => {
-        const project = processPlanning.value?.projects?.find((p: any) => p.id === payload.project_id)
+        const project = processPlanning.value?.projects?.find((p: DtoDetailedProject) => p.id === payload.project_id)
         insertAt(project?.processes, index, {
           id: tempId,
           title: payload.title,
@@ -2591,7 +2596,7 @@ export const usePlanningStore = defineStore('planning', () => {
       apply: (dto) => {
         if (!dto) return
         const d = dto as { id?: number; title?: string; start_date?: string; end_date?: string; color?: string; status?: string }
-        const proc = taskPlanning.value?.processes?.find((p: any) => p.id === payload.process_id)
+        const proc = taskPlanning.value?.processes?.find((p: DtoDetailedProcess) => p.id === payload.process_id)
         insertAt(proc?.tasks, index, {
           id: d.id ?? 0,
           title: d.title ?? payload.title,
@@ -2603,7 +2608,7 @@ export const usePlanningStore = defineStore('planning', () => {
         })
       },
       optimistic: () => {
-        const proc = taskPlanning.value?.processes?.find((p: any) => p.id === payload.process_id)
+        const proc = taskPlanning.value?.processes?.find((p: DtoDetailedProcess) => p.id === payload.process_id)
         insertAt(proc?.tasks, index, {
           id: tempId,
           title: payload.title,
@@ -2736,7 +2741,7 @@ export const usePlanningStore = defineStore('planning', () => {
       apply: (dto) => {
         if (!dto) return
         const d = dto as { id?: number; title?: string; content?: string; date?: string; color?: string }
-        const proc = taskPlanning.value?.processes?.find((p: any) => p.id === payload.process_id)
+        const proc = taskPlanning.value?.processes?.find((p: DtoDetailedProcess) => p.id === payload.process_id)
         proc?.milestones?.push({
           id: d.id ?? 0,
           title: d.title ?? payload.title,
@@ -2746,7 +2751,7 @@ export const usePlanningStore = defineStore('planning', () => {
         })
       },
       optimistic: () => {
-        const proc = taskPlanning.value?.processes?.find((p: any) => p.id === payload.process_id)
+        const proc = taskPlanning.value?.processes?.find((p: DtoDetailedProcess) => p.id === payload.process_id)
         proc?.milestones?.push({
           id: tempId,
           title: payload.title,
@@ -2777,7 +2782,7 @@ export const usePlanningStore = defineStore('planning', () => {
       // the coalesced refetch confirms the server-side cascade afterwards.
       removeById(processPlanning.value?.projects, id)
       if (Array.isArray(taskPlanning.value?.processes)) {
-        const kept = taskPlanning.value.processes.filter((p: any) => p.project_id !== id)
+        const kept = taskPlanning.value.processes.filter((p: DtoDetailedProcess) => p.project_id !== id)
         if (kept.length !== taskPlanning.value.processes.length) {
           taskPlanning.value.processes = kept
         }
@@ -2845,7 +2850,7 @@ export const usePlanningStore = defineStore('planning', () => {
   function findAssigned(taskId: number, resourceId: number) {
     const t = findTaskRow(taskId)
     if (!t) return undefined
-    return (t.resources ?? []).find((r: any) => r.id === resourceId) as
+    return (t.resources ?? []).find((r: DtoResource) => r.id === resourceId) as
       | { id?: number; assignment_id?: number }
       | undefined
   }
@@ -2859,14 +2864,14 @@ export const usePlanningStore = defineStore('planning', () => {
     const owners: number[] = []
     // Subtasks share their parent's process (enforced by the backend).
     const process = (taskPlanning.value?.processes ?? []).find(
-      (p: any) =>
-        (p.tasks ?? []).some((t: any) => t.id === taskId || (t.subtasks ?? []).some((s: any) => s.id === taskId)),
+      (p: DtoDetailedProcess) =>
+        (p.tasks ?? []).some((t: DtoDetailedTask) => t.id === taskId || (t.subtasks ?? []).some((s: DtoDetailedTask) => s.id === taskId)),
     )
     if (!process) return owners
     if (process.owner_id != null) owners.push(process.owner_id)
     const project =
-      projectPlanning.value?.projects?.find((pr: any) => pr.id === process.project_id) ??
-      useAppStore().projects.find((pr: any) => pr.id === process.project_id)
+      projectPlanning.value?.projects?.find((pr: DtoProject) => pr.id === process.project_id) ??
+      useAppStore().projects.find((pr: DtoProject) => pr.id === process.project_id)
     if (project?.owner_id != null) owners.push(project.owner_id)
     return owners
   }
@@ -2889,7 +2894,7 @@ export const usePlanningStore = defineStore('planning', () => {
     const assignAll = permsReady ? rbac.perm('assignment', 'create') === 'all' : auth.user?.preset === 'admin'
     const owners = assignAll ? [] : taskOwnerIds(taskId)
     if (owners.length > 0) {
-      const res = useAppStore().resources.find((r: any) => r.id === resourceId)
+      const res = useAppStore().resources.find((r: DtoResourceResponse) => r.id === resourceId)
       if (res?.owner_id == null || !owners.includes(res.owner_id)) {
         error.value = 'Назначить можно только ресурс, принадлежащий владельцу задачи'
         return false
@@ -2912,9 +2917,9 @@ export const usePlanningStore = defineStore('planning', () => {
         const t = findTaskRow(taskId)
         if (!t) return
         const resources = t.resources ?? []
-        if (!resources.some((r: any) => r.id === resourceId)) {
+        if (!resources.some((r: DtoResource) => r.id === resourceId)) {
           // Code/title/color fields are needed for the resource badge offline (from the reference)
-          const meta = useAppStore().resources.find((r: any) => r.id === resourceId)
+          const meta = useAppStore().resources.find((r: DtoResourceResponse) => r.id === resourceId)
           resources.push({
             id: resourceId,
             assignment_id: tempId,
@@ -2944,14 +2949,14 @@ export const usePlanningStore = defineStore('planning', () => {
         const resp = await new AssignmentsApi(apiConfig()).assignmentGet(500, undefined, 0)
         const data = resp.data?.data
         const list = data?.items ?? []
-        const a = list.find((x: any) => x.task_id === taskId && x.resource_id === resourceId)
+        const a = list.find((x: DtoAssignmentResponse) => x.task_id === taskId && x.resource_id === resourceId)
         if (a?.id == null) {
           error.value = 'Назначение не найдено'
           return false
         }
         assignmentId = a.id
-      } catch (e: any) {
-        error.value = e.message || String(e)
+      } catch (e: unknown) {
+        error.value = e instanceof Error ? e.message || String(e) : String(e)
         return false
       }
     }
@@ -2963,7 +2968,7 @@ export const usePlanningStore = defineStore('planning', () => {
       },
       optimistic: () => {
         const t = findTaskRow(taskId)
-        if (t) t.resources = (t.resources ?? []).filter((r: any) => r.id !== resourceId)
+        if (t) t.resources = (t.resources ?? []).filter((r: DtoResource) => r.id !== resourceId)
       },
       onError: (m) => {
         error.value = m
@@ -2982,9 +2987,9 @@ export const usePlanningStore = defineStore('planning', () => {
     list.splice(to, 0, moved)
 
     const changes: { id: number; priority: number }[] = []
-    list.forEach((p: any, i: number) => {
+    list.forEach((p: DtoProject, i: number) => {
       const priority = i + 1
-      if (p.priority !== priority) changes.push({ id: p.id, priority })
+      if (p.priority !== priority) changes.push({ id: p.id as number, priority })
     })
     if (!changes.length) return true
 
@@ -2992,7 +2997,7 @@ export const usePlanningStore = defineStore('planning', () => {
       await Promise.all(
         changes.map((c) => new ProjectsApi(apiConfig()).projectIdPut(c.id, { priority: c.priority })),
       )
-    } catch (e: any) {
+    } catch (e: unknown) {
       const err = e as AxiosError
       if (err?.config && isNetworkError(e)) {
         // Offline: the local reorder is already applied; the PUTs go to the queue.
@@ -3007,14 +3012,14 @@ export const usePlanningStore = defineStore('planning', () => {
             })
           } catch {
             // queue unavailable — fall back to a regular error
-            error.value = e?.message ?? String(e)
+            error.value = e instanceof Error ? e.message : String(e)
             await refreshProjectPlanning(true)
             return false
           }
         }
         return true
       }
-      error.value = e.message || String(e)
+      error.value = e instanceof Error ? e.message || String(e) : String(e)
       await refreshProjectPlanning(true)
       return false
     }
@@ -3035,20 +3040,20 @@ export const usePlanningStore = defineStore('planning', () => {
    *  Offline (desktop) — the reorder is queued; on any other error the data is
    *  silently reloaded (server order wins). */
   async function reorderProcesses(projectId: number, from: number, to: number): Promise<boolean> {
-    const project = processPlanning.value?.projects?.find((p: any) => p.id === projectId)
+    const project = processPlanning.value?.projects?.find((p: DtoDetailedProject) => p.id === projectId)
     const list = project?.processes
     if (!Array.isArray(list) || from === to) return true
     if (from < 0 || from >= list.length || to < 0 || to >= list.length) return false
     const moved = list.splice(from, 1)[0]
     list.splice(to, 0, moved)
-    list.forEach((p: any, i: number) => {
+    list.forEach((p: DtoProcess, i: number) => {
       p.order = i + 1
     })
-    const ids = list.map((p: any) => p.id)
+    const ids = list.map((p: DtoProcess) => p.id as number)
 
     try {
       await new ProcessesApi(apiConfig()).processOrderPut({ project_id: projectId, ids })
-    } catch (e: any) {
+    } catch (e: unknown) {
       const err = e as AxiosError
       if (err?.config && isNetworkError(e)) {
         try {
@@ -3059,13 +3064,13 @@ export const usePlanningStore = defineStore('planning', () => {
             body: { project_id: projectId, ids },
           })
         } catch {
-          error.value = e?.message ?? String(e)
+          error.value = e instanceof Error ? e.message : String(e)
           await refreshProcessPlanning(true)
           return false
         }
         return true
       }
-      error.value = e.message || String(e)
+      error.value = e instanceof Error ? e.message || String(e) : String(e)
       await refreshProcessPlanning(true)
       return false
     }
@@ -3077,20 +3082,20 @@ export const usePlanningStore = defineStore('planning', () => {
    *  Offline (desktop) — the reorder is queued; on any other error the data is
    *  silently reloaded (server order wins). */
   async function reorderTasks(processId: number, from: number, to: number): Promise<boolean> {
-    const process = taskPlanning.value?.processes?.find((p: any) => p.id === processId)
+    const process = taskPlanning.value?.processes?.find((p: DtoDetailedProcess) => p.id === processId)
     const list = process?.tasks
     if (!Array.isArray(list) || from === to) return true
     if (from < 0 || from >= list.length || to < 0 || to >= list.length) return false
     const moved = list.splice(from, 1)[0]
     list.splice(to, 0, moved)
-    list.forEach((t: any, i: number) => {
+    list.forEach((t: DtoDetailedTask, i: number) => {
       t.order = i + 1
     })
-    const ids = list.map((t: any) => t.id)
+    const ids = list.map((t: DtoDetailedTask) => t.id as number)
 
     try {
       await new TasksApi(apiConfig()).taskOrderPut({ process_id: processId, ids })
-    } catch (e: any) {
+    } catch (e: unknown) {
       const err = e as AxiosError
       if (err?.config && isNetworkError(e)) {
         try {
@@ -3101,13 +3106,13 @@ export const usePlanningStore = defineStore('planning', () => {
             body: { process_id: processId, ids },
           })
         } catch {
-          error.value = e?.message ?? String(e)
+          error.value = e instanceof Error ? e.message : String(e)
           await refreshTaskPlanning(true)
           return false
         }
         return true
       }
-      error.value = e.message || String(e)
+      error.value = e instanceof Error ? e.message || String(e) : String(e)
       await refreshTaskPlanning(true)
       return false
     }
@@ -3127,8 +3132,8 @@ export const usePlanningStore = defineStore('planning', () => {
     try {
       const resp = await new TasksApi(apiConfig()).taskIdCommentsGet(taskId)
       commentsByTask.value[taskId] = (resp.data?.data as DtoCommentResponse[] | undefined) ?? []
-    } catch (e: any) {
-      commentsError.value = e?.message || String(e)
+    } catch (e: unknown) {
+      commentsError.value = e instanceof Error ? e.message || String(e) : String(e)
     } finally {
       commentsLoading.value = false
     }
@@ -3140,7 +3145,6 @@ export const usePlanningStore = defineStore('planning', () => {
     content: string,
     parentId?: number,
   ): Promise<boolean> {
-    commentsError.value = null
     try {
       const resp = await new TasksApi(apiConfig()).taskIdCommentsPost(taskId, {
         content,
@@ -3158,15 +3162,15 @@ export const usePlanningStore = defineStore('planning', () => {
       const task = findTaskRow(taskId)
       if (task) task.comments_count = (task.comments_count ?? 0) + 1
       return true
-    } catch (e: any) {
-      commentsError.value = e?.message || String(e)
+    } catch {
+      // A failed comment mutation is reported by the global toast (http.ts) —
+      // the inline modal error stays for load failures only (loadTaskComments).
       return false
     }
   }
 
   /** Deletes a comment (softly; replies stay — they become "orphaned" in the tree). */
   async function deleteTaskComment(taskId: number, commentId: number): Promise<boolean> {
-    commentsError.value = null
     try {
       await new TasksApi(apiConfig()).taskIdCommentsCommentIdDelete(taskId, commentId)
       const list = commentsByTask.value[taskId]
@@ -3175,8 +3179,9 @@ export const usePlanningStore = defineStore('planning', () => {
       const task = findTaskRow(taskId)
       if (task) task.comments_count = Math.max(0, (task.comments_count ?? 0) - 1)
       return true
-    } catch (e: any) {
-      commentsError.value = e?.message || String(e)
+    } catch {
+      // A failed comment mutation is reported by the global toast (http.ts) —
+      // the inline modal error stays for load failures only (loadTaskComments).
       return false
     }
   }
@@ -3394,7 +3399,7 @@ export const useRbacStore = defineStore('rbac', () => {
   /** Periodic permissions sync (TTL polling following the backend). */
   function startPermissionSync(ms = 30000): () => void {
     let timer: number | undefined
-    let stopVisibility: (() => void) | undefined
+    const stopVisibility = () => document.removeEventListener('visibilitychange', onVisibility)
     const tick = () => {
       if (!document.hidden) void refreshPermissions()
     }
@@ -3407,7 +3412,6 @@ export const useRbacStore = defineStore('rbac', () => {
         void loadMyPermissions()
       }
     }
-    stopVisibility = () => document.removeEventListener('visibilitychange', onVisibility)
     document.addEventListener('visibilitychange', onVisibility)
     onVisibility()
     return () => {
@@ -3521,8 +3525,8 @@ export const useRbacStore = defineStore('rbac', () => {
       const resp = await new RBACApi(apiConfig()).rbacUsersIdPermissionsGet(id)
       userPermissions.value = resp.data?.data ?? null
       return true
-    } catch (e: any) {
-      userPermissionsError.value = apiErrorMessage(e)
+    } catch (e: unknown) {
+      userPermissionsError.value = apiErrorMessage(e as { message?: string; code?: unknown })
       return false
     } finally {
       userPermissionsLoading.value = false
@@ -3535,8 +3539,8 @@ export const useRbacStore = defineStore('rbac', () => {
       const body: DtoUserPermissionsInput = { overrides }
       await new RBACApi(apiConfig()).rbacUsersIdPermissionsPut(id, body)
       return true
-    } catch (e: any) {
-      userPermissionsError.value = apiErrorMessage(e)
+    } catch (e: unknown) {
+      userPermissionsError.value = apiErrorMessage(e as { message?: string; code?: unknown })
       return false
     }
   }
@@ -3618,6 +3622,9 @@ export const useAuditStore = defineStore('audit', () => {
   const total = ref(0)
   const loading = ref(false)
   const error = ref<string | null>(null)
+  /** The backend has no /audit/events route (audit.enabled=false in config):
+   *  the page shows a help card instead of a raw 404 error. */
+  const disabled = ref(false)
 
   async function load(filters: AuditQueryFilters = {}): Promise<boolean> {
     loading.value = true
@@ -3640,14 +3647,25 @@ export const useAuditStore = defineStore('audit', () => {
       const data = resp.data?.data
       items.value = data?.items ?? []
       total.value = data?.total ?? 0
+      // A successful load means the journal is reachable again (e.g. the
+      // backend was restarted with audit.enabled=true) — drop the disabled state.
+      disabled.value = false
       return true
-    } catch (e: any) {
-      error.value = apiErrorMessage(e)
+    } catch (e: unknown) {
+      if ((e as AxiosError | undefined)?.response?.status === 404) {
+        // The backend does not register the audit route: treat it as "the
+        // journal is disabled" rather than a real load error (raw "404" text).
+        disabled.value = true
+        error.value = null
+      } else {
+        disabled.value = false
+        error.value = apiErrorMessage(e as { message?: string; code?: unknown })
+      }
       return false
     } finally {
       loading.value = false
     }
   }
 
-  return { items, total, loading, error, load }
+  return { items, total, loading, error, disabled, load }
 })

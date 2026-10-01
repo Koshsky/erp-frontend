@@ -7,6 +7,26 @@ export interface GroupGanttItem {
   end_date: string
 }
 
+/**
+ * Item type exposed to the row/bar slots. The default GroupGanttItem covers
+ * the group's own rendering; consumers (TaskGantt/ProjectGantt/ProcessGantt)
+ * render richer row objects through these slots, so the slot item is a
+ * superset of the fields they read (project priority/name, task resources).
+ */
+export interface GroupGanttSlotItem extends GroupGanttItem {
+  color?: string
+  priority?: number
+  owner_name?: string
+  resources: Array<{
+    resource_id: number
+    assignment_id: number
+    quantity: number
+    code: string
+    title?: string
+    color?: string
+  }>
+}
+
 export interface GroupGanttProps {
   /** Infinite timeline context */
   timeline: TimelineCtx

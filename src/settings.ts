@@ -38,6 +38,46 @@ export function shouldAutoSync(): boolean {
 }
 
 // ---------------------------------------------------------------------------
+// Notification stack settings (the "Notifications" card on the Settings page).
+// Per-device, localStorage, applied by notify/state.ts and the host.
+// ---------------------------------------------------------------------------
+
+const NOTIFY_ENABLED_KEY = 'mvs_erp_notifications_enabled'
+const NOTIFY_DURATION_KEY = 'mvs_erp_notification_duration'
+
+/** Show the global notification stack at all (default: yes). */
+export const notificationsEnabled = ref(readBool(NOTIFY_ENABLED_KEY, true))
+
+/** Auto-hide duration options (ms); 0 = never auto-hide. */
+export const NOTIFY_DURATION_OPTIONS = [3000, 5000, 8000, 10000] as const
+
+export type NotifyDuration = (typeof NOTIFY_DURATION_OPTIONS)[number] | 0
+
+function readDuration(key: string): NotifyDuration {
+  try {
+    const n = Number(localStorage.getItem(key))
+    return NOTIFY_DURATION_OPTIONS.includes(n as (typeof NOTIFY_DURATION_OPTIONS)[number]) || n === 0
+      ? (n as NotifyDuration)
+      : 5000
+  } catch {
+    return 5000
+  }
+}
+
+/** Default auto-dismiss time for notifications (default: 5 s). */
+export const notifyDurationMs = ref<NotifyDuration>(readDuration(NOTIFY_DURATION_KEY))
+
+/** Persists the notification settings to localStorage. */
+export function saveNotifySettings(): void {
+  try {
+    localStorage.setItem(NOTIFY_ENABLED_KEY, notificationsEnabled.value ? '1' : '0')
+    localStorage.setItem(NOTIFY_DURATION_KEY, String(notifyDurationMs.value))
+  } catch {
+    // settings are not critical
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Per-domain warm-up toggles ("Какие данные прогревать").
 // Each warm-up domain defaults to enabled; a domain the user switched off is
 // persisted under mvs_erp_warmup_<name> as '0'. The warm-up loop (warmup.ts)
@@ -178,3 +218,59 @@ export const CELL_ZOOM_STEP = 5
 
 /** Hard upper bound of the physical cell width in px (mirrors ZOOM_MAX in useTimelineZoom). */
 export const MAX_CELL_PX = 100
+
+// ---------------------------------------------------------------------------
+// Interface preferences (theme is in theme.ts; font scale and table page size
+// live here). Per-device, localStorage, applied live.
+// ---------------------------------------------------------------------------
+
+/** UI font scale options; applied via `data-ui-size` on <html> -> --ui-font-scale. */
+export type UiFontSize = 'small' | 'default' | 'large'
+
+const FONT_SIZE_KEY = 'mvs_erp_ui_font_size'
+
+function readUiFontSize(): UiFontSize {
+  try {
+    const raw = localStorage.getItem(FONT_SIZE_KEY)
+    if (raw === 'small' || raw === 'default' || raw === 'large') return raw
+  } catch {
+    // fall through
+  }
+  return 'default'
+}
+
+/** Global interface font scale (small 0.9 / default 1 / large 1.1). */
+export const uiFontSize = ref<UiFontSize>(readUiFontSize())
+
+/** Applies the font scale to the document (called on boot and on change). */
+export function applyUiSize(): void {
+  document.documentElement.dataset.uiSize = uiFontSize.value
+}
+
+/** Table page-size options (list pages and the audit log). */
+export const TABLE_PAGE_SIZE_OPTIONS = [25, 50, 100] as const
+export type TablePageSize = (typeof TABLE_PAGE_SIZE_OPTIONS)[number]
+
+const TABLE_PAGE_SIZE_KEY = 'mvs_erp_table_page_size'
+
+function readTablePageSize(): TablePageSize {
+  try {
+    const n = Number(localStorage.getItem(TABLE_PAGE_SIZE_KEY))
+    return (TABLE_PAGE_SIZE_OPTIONS as readonly number[]).includes(n) ? (n as TablePageSize) : 50
+  } catch {
+    return 50
+  }
+}
+
+/** Records per page for paged tables (resources, employees, audit log). */
+export const tablePageSize = ref<TablePageSize>(readTablePageSize())
+
+/** Persists the interface preferences to localStorage. */
+export function saveUiSettings(): void {
+  try {
+    localStorage.setItem(FONT_SIZE_KEY, uiFontSize.value)
+    localStorage.setItem(TABLE_PAGE_SIZE_KEY, String(tablePageSize.value))
+  } catch {
+    // settings are not critical
+  }
+}

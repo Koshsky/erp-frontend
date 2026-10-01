@@ -30,7 +30,7 @@ withDefaults(defineProps<InfoTooltipProps>(), {
 @import "../../../styles/tokens.css";
 
 .it {
-  font-size: 12px;
+  font-size: calc(var(--ui-font-scale, 1) * 12px);
   line-height: 1.5;
   display: flex;
   flex-direction: column;
@@ -44,7 +44,7 @@ withDefaults(defineProps<InfoTooltipProps>(), {
 }
 .it-title {
   font-weight: 700;
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   white-space: nowrap;
 }
 .it-line {

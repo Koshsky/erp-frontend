@@ -4,7 +4,7 @@ import { BarTooltip } from '@/components/common'
 import { viewSettings } from '@/settings'
 import type { ProcessBarProps } from './types'
 
-const props = withDefaults(defineProps<ProcessBarProps>(), {
+withDefaults(defineProps<ProcessBarProps>(), {
   projectCode: '',
   ownerName: '',
   color: 'var(--ui-gantt-process)',

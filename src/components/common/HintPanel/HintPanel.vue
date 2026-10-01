@@ -3,6 +3,7 @@ import { onBeforeUnmount, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { closeHints, hintOpen, hintPageContent } from '@/composables/useHints'
 import { useModalFocus } from '@/composables/useModalFocus'
+import MarkdownView from '../MarkdownView/MarkdownView.vue'
 
 defineOptions({ name: 'HintPanel' })
 
@@ -45,17 +46,7 @@ onBeforeUnmount(() => stopRouteWatch?.())
           </div>
 
           <div class="hp-body">
-            <template v-for="(block, i) in hintPageContent.blocks" :key="i">
-              <p v-if="block.kind === 'p'" class="hp-p">{{ block.text }}</p>
-              <code v-else-if="block.kind === 'code'" class="hp-code">{{ block.text }}</code>
-              <component
-                :is="block.kind === 'ul' ? 'ul' : 'ol'"
-                v-else-if="block.kind === 'ul' || block.kind === 'ol'"
-                class="hp-list"
-              >
-                <li v-for="(item, j) in block.items" :key="j">{{ item }}</li>
-              </component>
-            </template>
+            <MarkdownView :source="hintPageContent.body" />
           </div>
         </div>
       </div>
@@ -117,14 +108,14 @@ onBeforeUnmount(() => stopRouteWatch?.())
 }
 .hp-title {
   margin: 0;
-  font-size: 19px;
+  font-size: calc(var(--ui-font-scale, 1) * 19px);
   font-weight: 700;
   color: var(--ui-text);
 }
 .hp-close {
   border: none;
   background: transparent;
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   line-height: 1;
   color: var(--ui-text-muted);
   cursor: pointer;
@@ -139,36 +130,6 @@ onBeforeUnmount(() => stopRouteWatch?.())
   flex: 1;
   overflow-y: auto;
   padding: 14px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.hp-p {
-  margin: 0;
-  font-size: 17px;
-  line-height: 1.6;
-  color: var(--ui-text);
-}
-.hp-code {
-  display: block;
-  font-family: ui-monospace, Menlo, Consolas, monospace;
-  font-size: 15px;
-  background: var(--ui-surface-2);
-  border: 1px solid var(--ui-border);
-  border-radius: 8px;
-  padding: 8px 10px;
-  color: var(--ui-accent);
-  white-space: pre-wrap;
-}
-.hp-list {
-  margin: 0;
-  padding-left: 20px;
-  font-size: 17px;
-  line-height: 1.6;
-  color: var(--ui-text);
-}
-.hp-list li {
-  margin-bottom: 4px;
 }
 .hp-done:hover {
   background: color-mix(in srgb, var(--ui-accent) 88%, black);
