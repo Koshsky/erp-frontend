@@ -11,6 +11,7 @@ The web app and the desktop wrapper (`desktop/`) are versioned together.
 ### Changed
 
 - Settings: the "Clear local data" option removed.
+- Hints are now Markdown files (`*.md` assets); the hint panel renders them through a dedicated safe Markdown view with a new `MarkdownView` component.
 
 ### Fixed
 

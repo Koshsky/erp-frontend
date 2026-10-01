@@ -16,66 +16,76 @@ import {
 } from './index'
 
 // Synthetic catalogs stand in for the Vite glob inputs: the real custom
-// catalog is empty by construction (src/assets/custom/hints ships no JSON).
+// catalog is empty by construction (src/assets/custom/hints ships no Markdown).
 const defaults = new Map<string, unknown>([
-  ['permissions-editor.json', { id: 'permissions-editor', title: 'built-in', blocks: [{ kind: 'p', text: 'default' }] }],
-  ['planner.json', { id: 'planner', title: 'built-in planner', blocks: [] }],
+  ['permissions-editor.md', '# Права доступа пользователя\n\nТекст.'],
+  ['planner.md', '# Планировщик\n\nТекст.'],
 ])
 const customs = new Map<string, unknown>([
-  ['permissions-editor.json', { id: 'permissions-editor', title: 'custom', blocks: [{ kind: 'p', text: 'override' }] }],
+  ['permissions-editor.md', '# Права (кастом)\n\nПерекрытие.'],
 ])
 
 describe('assets entry point', () => {
   it('loads the built-in hint assets by name', () => {
     const all = resolveAssets('hints')
     expect(all.size).toBeGreaterThan(0)
-    expect(all.has('permissions-editor.json')).toBe(true)
-    const page = resolveAsset('hints', 'permissions-editor.json')
-    expect(typeof page).toBe('object')
-    expect((page as { id?: string })?.id).toBe('permissions-editor')
+    expect(all.has('permissions-editor.md')).toBe(true)
+    const page = resolveAsset('hints', 'permissions-editor.md')
+    expect(typeof page).toBe('string')
+    expect((page as string).startsWith('# Права доступа пользователя')).toBe(true)
   })
 
   it('resolves an unknown name to null', () => {
-    expect(resolveAsset('hints', 'nope.json')).toBeNull()
+    expect(resolveAsset('hints', 'nope.md')).toBeNull()
   })
 
   it('exposes the real catalogs as filename-keyed maps', () => {
     const byName = (m: Map<string, unknown>) => [...m.keys()]
-    expect(byName(defaultAssets('hints'))).toEqual(expect.arrayContaining(['planner.json', 'permissions-editor.json']))
+    expect(byName(defaultAssets('hints'))).toEqual(expect.arrayContaining(['planner.md', 'permissions-editor.md']))
     expect(customAssets('hints').size).toBe(0)
+  })
+
+  it('excludes documentation files (README*) from the catalogs', () => {
+    expect(defaultAssets('hints').has('README.md')).toBe(false)
+    expect(customAssets('hints').has('README.md')).toBe(false)
   })
 })
 
 describe('catalog merge: custom overrides default for the same file name', () => {
-  const accepts = (raw: unknown): boolean => (raw as { title?: string })?.title === 'custom'
+  const accepts = (raw: unknown): boolean => typeof raw === 'string' && raw.includes('Перекрытие')
 
   it('a valid custom entry replaces the default of the same file name', () => {
     const merged = mergeCatalogs(defaults, customs, accepts)
-    expect((merged.get('permissions-editor.json') as { title?: string })?.title).toBe('custom')
-    expect(merged.get('planner.json')).toEqual(defaults.get('planner.json'))
+    expect(merged.get('permissions-editor.md')).toEqual(customs.get('permissions-editor.md'))
+    expect(merged.get('planner.md')).toEqual(defaults.get('planner.md'))
     expect(merged.size).toBe(2)
   })
 
   it('an invalid custom entry falls back to the default of the same file name', () => {
     const merged = mergeCatalogs(defaults, customs, () => false)
-    expect(merged.get('permissions-editor.json')).toEqual(defaults.get('permissions-editor.json'))
+    expect(merged.get('permissions-editor.md')).toEqual(defaults.get('permissions-editor.md'))
     expect(merged.size).toBe(2)
   })
 
   it('an invalid custom file without a default counterpart is dropped entirely', () => {
-    const merged = mergeCatalogs(defaults, new Map([['private.json', { id: 'x' }]]), () => false)
-    expect(merged.has('private.json')).toBe(false)
+    const merged = mergeCatalogs(defaults, new Map([['private.md', 'мусор']]), () => false)
+    expect(merged.has('private.md')).toBe(false)
     expect(merged.size).toBe(2)
   })
 
   it('without a validator the custom entry wins unconditionally (backward compatible)', () => {
     const merged = mergeCatalogs(defaults, customs)
-    expect((merged.get('permissions-editor.json') as { title?: string })?.title).toBe('custom')
+    expect(merged.get('permissions-editor.md')).toEqual(customs.get('permissions-editor.md'))
+  })
+
+  it('the validator is format-agnostic (works for raw Markdown strings)', () => {
+    expect(accepts('# Права (кастом)\n\nПерекрытие.')).toBe(true)
+    expect(accepts('# Права доступа пользователя\n\nТекст.')).toBe(false)
   })
 
   it('resolveAsset forwards the validator to the merge (empty real custom catalog — default stays)', () => {
-    const raw = resolveAsset('hints', 'permissions-editor.json', () => false)
-    expect(raw).toEqual(defaultAssets('hints').get('permissions-editor.json'))
+    const raw = resolveAsset('hints', 'permissions-editor.md', () => false)
+    expect(raw).toEqual(defaultAssets('hints').get('permissions-editor.md'))
   })
 })
 
