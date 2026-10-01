@@ -18,6 +18,18 @@ export type DrawerMode = 'closed' | 'peek' | 'pinned'
 /** Drawer width in px; the only source of truth for the panel and the layout */
 export const NAV_WIDTH = 280
 
+/**
+ * Narrow-screen breakpoint (px): below it the drawer becomes a fixed overlay
+ * instead of a layout column (see the media queries in AppNavDrawer.vue).
+ * Keep in sync with those CSS `max-width: 720px` media queries.
+ */
+export const NAV_NARROW_MAX = 720
+
+/** True on narrow screens (overlay drawer mode); evaluated at call time. */
+export function isNarrowScreen(): boolean {
+  return window.matchMedia(`(max-width: ${NAV_NARROW_MAX}px)`).matches
+}
+
 const mode = ref<DrawerMode>('closed')
 
 /** Drawer is visible in every state except 'closed' */
