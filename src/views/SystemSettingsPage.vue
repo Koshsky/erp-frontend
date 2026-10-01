@@ -3,13 +3,11 @@ import { onMounted, ref, watch } from 'vue'
 import { getApiUrl, setApiUrl, hasApiUrlOverride, httpSchemeWarning } from '../config'
 import { autoSync, saveSyncSettings } from '../settings'
 import { viewSettings, SCALE_MIN, SCALE_MAX, SCALE_STEP, CELL_ZOOM_MIN, CELL_ZOOM_MAX, CELL_ZOOM_STEP } from '../settings'
-import { clearLocalData } from '../offline/reset'
 
 const apiUrl = ref('')
 const apiUrlWarn = ref<string | null>(null)
 const statusMsg = ref<string | null>(null)
 const statusOk = ref(false)
-const clearing = ref(false)
 
 function okMsg(msg: string) {
   statusMsg.value = msg
@@ -36,24 +34,6 @@ function onSaveApiUrl() {
   statusMsg.value = null
   if (!applyApiUrl()) return
   okMsg('API_URL сохранён')
-}
-
-/** Clears all local (offline) data and reloads; reports a blocked deletion
- *  (another window/tab holds the local database) instead of pretending success */
-async function onClearLocalData() {
-  if (clearing.value) return
-  clearing.value = true
-  statusMsg.value = null
-  try {
-    const ok = await clearLocalData()
-    // On success the page reloads; reaching here means the database was NOT
-    // deleted (e.g. another window still holds a connection).
-    if (!ok) {
-      failMsg('Не удалось сбросить локальные данные: их удерживает другое окно приложения — закройте его и повторите')
-    }
-  } finally {
-    clearing.value = false
-  }
 }
 
 watch(autoSync, saveSyncSettings)
@@ -95,17 +75,6 @@ onMounted(() => {
           <p class="st-hint">
             Источник: {{ hasApiUrlOverride() ? 'задан вручную' : 'по умолчанию' }}.
           </p>
-        </div>
-
-        <div class="st-card">
-          <h3 class="st-card-title">Очистить локальные данные</h3>
-          <p class="st-hint">
-            Удаляет очередь изменений, кэш и выход из аккаунта, затем перезагружает
-            приложение.
-          </p>
-          <button type="button" class="st-btn danger" :disabled="clearing" @click="onClearLocalData">
-            Очистить локальные данные
-          </button>
         </div>
       </div>
 

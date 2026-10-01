@@ -745,7 +745,9 @@ const taskGroups = computed<PdfGanttGroup[]>(() =>
 }
 .pp-toolbar {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
+  gap: 8px;
   margin-bottom: 12px;
   flex: none;
 }

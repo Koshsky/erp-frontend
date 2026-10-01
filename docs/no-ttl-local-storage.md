@@ -25,8 +25,8 @@ does not silently introduce age- or timer-driven cleanup.
 Local stores (`cache` / `outbox` / `idmap`) have **no TTL** and are **not
 cleaned up by time**. Data is only every removed by:
 
-1. explicit user actions — `clearLocalData()` / `clearOutbox()`
-   (queue), `discardFailed()` / `discardEntry()` (rejected entries);
+1. explicit user actions — `clearOutbox()` (queue), `discardFailed()` /
+   `discardEntry()` (rejected entries);
 2. app-version change — `ensureCacheVersion()` clears **only** the cache
    (payload schema may differ between releases). This is version invalidation,
    **not** a TTL;
@@ -83,10 +83,8 @@ All other timer/`Date.now()` uses are **not** data cleanup:
 
 ## Reusable cleanup module
 
-`src/offline/reset.ts` exports `clearLocalData()` (full local reset: mutation
-queue + cache + idmap via `deleteDatabase`, in-memory access token via logout,
-session + `mvs_erp_*` keys via `useAuthStore().logout()`, then reload). A "Clear
-local data" button in the sync/settings UI must call this one function, so the
-invariant has a single, explicit route. `src/offline/outbox.ts` additionally
-exports `clearOutbox`, `discardFailed`, `discardEntry`, `resetFailedRetries` for
-targeted, user-initiated removals.
+`src/offline/outbox.ts` exports `clearOutbox`, `discardFailed`, `discardEntry`,
+`resetFailedRetries` for targeted, user-initiated removals. The full local
+reset (`clearLocalData`, `src/offline/reset.ts`) was removed along with its
+"Clear local data" settings button; the mutation queue is now cleared only by
+the targeted outbox functions or by the login/version paths enumerated above.

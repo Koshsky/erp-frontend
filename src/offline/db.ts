@@ -11,7 +11,7 @@
  *
  * NO-TTL INVARIANT: the local stores (cache/outbox/idmap/session) have no
  * TTL and are never cleaned up by time/age/timers. Data is removed only by:
- *  - explicit user actions (clearLocalData / clearOutbox, discardFailed /
+ *  - explicit user actions (clearOutbox, discardFailed /
  *    discardEntry for rejected queue entries);
  *  - an app-version change (ensureCacheVersion — clears ONLY the cache);
  *  - a verified online login pruning the queue entries of the logged-out
@@ -129,18 +129,6 @@ function getDb(): Promise<IDBDatabase> {
  *  call reopens the database. */
 function resetDb(): void {
   dbPromise = null
-}
-
-/**
- * Closes the cached IndexedDB connection so that indexedDB.deleteDatabase can
- * proceed — any open connection (including this tab's own) blocks the deletion
- * (H-OFF-2). Safe when nothing is open: resolves immediately. The cached
- * handle is dropped; the next idb* call reopens the database.
- */
-export async function closeDb(): Promise<void> {
-  const db = dbPromise ? await dbPromise.catch(() => undefined) : undefined
-  if (db) db.close()
-  resetDb()
 }
 
 function txAll(

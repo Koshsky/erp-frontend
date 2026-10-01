@@ -500,7 +500,7 @@ export const useAuthStore = defineStore('auth', () => {
     // the flush-time creator guard parks mismatched entries, and after a logout
     // auto-sync is disabled (isLoggedOut) until a manual login. Orphaned
     // entries of the logged-out account are pruned on the next verified login
-    // (pruneForeignOutbox). The explicit full wipe is clearLocalData()/clearOutbox().
+    // (pruneForeignOutbox). The explicit full wipe is clearOutbox().
     // Revoke the refresh session on the server: read the stored token and send it
     // in the body of /auth/logout (falling back to the cookie when none is stored),
     // then clear our local copy. Best-effort — the cookie is also cleared by the backend.

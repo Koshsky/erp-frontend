@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 The web app and the desktop wrapper (`desktop/`) are versioned together.
 
+## [Unreleased]
+
+### Changed
+
+- Settings: the "Clear local data" option removed.
+
+### Fixed
+
+- Tasks page: the "Save to PDF" and help buttons are vertically centered in the toolbar with a small gap between them; the help button is now a rounded square.
+- Mobile: the navigation drawer can now be closed again (scrim tap, menu item tap, browser back).
+
 ## [1.0.2] - 2026-09-30
 
 ### Added
