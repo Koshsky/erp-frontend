@@ -12,6 +12,7 @@ The web app and the desktop wrapper (`desktop/`) are versioned together.
 
 - Tables (statuses, users, employees, resources, audit log, company structure) now use a shared table component: full-width card with an actions toolbar, sortable column headers, per-column filters sitting right under each header (underline style), expandable rows, horizontal scrolling for wide tables, and user-adjustable column widths (drag the header edge; widths are remembered per user; double-click resets a column to auto width).
 - Interface settings on the Settings page: notification stack on/off and auto-hide time (3–10 s or never), light/dark/system theme, UI font size (small/default/large), and table page size (25/50/100); the employees roster gained separate "Position", "Resource" and "Resource owner" columns with their own filters.
+- The Settings page is organized into switchable sections (Interface, Tables, Diagrams, Sync, Connection) with a segmented control; setting cards are width-capped.
 - Settings: the "Clear local data" option removed.
 - Hints are now Markdown files (`*.md` assets); the hint panel renders them through a dedicated safe Markdown view with a new `MarkdownView` component.
 

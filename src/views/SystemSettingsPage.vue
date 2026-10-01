@@ -18,6 +18,18 @@ import {
 } from '../settings'
 import { viewSettings, SCALE_MIN, SCALE_MAX, SCALE_STEP, CELL_ZOOM_MIN, CELL_ZOOM_MAX, CELL_ZOOM_STEP } from '../settings'
 
+type SettingsSection = 'interface' | 'tables' | 'diagrams' | 'sync' | 'connection'
+
+const activeSection = ref<SettingsSection>('interface')
+
+const SECTIONS: { id: SettingsSection; label: string }[] = [
+  { id: 'interface', label: 'Интерфейс' },
+  { id: 'tables', label: 'Таблицы' },
+  { id: 'diagrams', label: 'Диаграммы' },
+  { id: 'sync', label: 'Синхронизация' },
+  { id: 'connection', label: 'Подключение' },
+]
+
 const apiUrl = ref('')
 const apiUrlWarn = ref<string | null>(null)
 const statusMsg = ref<string | null>(null)
@@ -66,170 +78,192 @@ onMounted(() => {
 <template>
   <section class="st">
     <h2 class="st-title">Настройки</h2>
-    <p class="st-hint st-hint--top">
-      Слева — офлайн-синхронизация; справа — отображение диаграмм. Настройки вида хранятся в этом браузере и применяются при открытии диаграмм.
-    </p>
 
-    <div class="st-layout">
-      <div class="st-pane">
-        <div class="st-card">
-          <h3 class="st-card-title">Синхронизация</h3>
-          <label class="st-option">
-            <input v-model="autoSync" type="checkbox" />
-            <span>Автосинхронизация при запуске и возврате сети</span>
-          </label>
+    <!-- Section switcher: segmented control -->
+    <div class="st-seg" role="tablist" aria-label="Разделы настроек">
+      <button
+        v-for="sec in SECTIONS"
+        :key="sec.id"
+        type="button"
+        role="tab"
+        class="st-seg-tab"
+        :class="{ on: activeSection === sec.id }"
+        :aria-selected="activeSection === sec.id"
+        @click="activeSection = sec.id"
+      >
+        {{ sec.label }}
+      </button>
+    </div>
+
+    <!-- Интерфейс -->
+    <template v-if="activeSection === 'interface'">
+      <div class="st-card">
+        <h3 class="st-card-title">Интерфейс</h3>
+        <div class="st-field">
+          <span>Цветовая тема</span>
+          <select v-model="scheme" class="st-select">
+            <option value="system">Как в системе</option>
+            <option value="light">Светлая</option>
+            <option value="dark">Тёмная</option>
+          </select>
         </div>
-
-        <div class="st-card">
-          <h3 class="st-card-title">Уведомления</h3>
-          <label class="st-option">
-            <input v-model="notificationsEnabled" type="checkbox" />
-            <span>Показывать стек уведомлений</span>
-          </label>
-          <div class="st-field">
-            <span>Время показа сообщений</span>
-            <select v-model.number="notifyDurationMs" class="st-select">
-              <option v-for="ms in NOTIFY_DURATION_OPTIONS" :key="ms" :value="ms">{{ ms / 1000 }} сек</option>
-              <option :value="0">Не скрывать</option>
-            </select>
-            <p class="st-hint">«Не скрывать» — сообщение остаётся, пока его не закроют вручную.</p>
-          </div>
+        <div class="st-field">
+          <span>Размер шрифта интерфейса</span>
+          <select v-model="uiFontSize" class="st-select">
+            <option value="small">Мелкий</option>
+            <option value="default">Средний</option>
+            <option value="large">Крупный</option>
+          </select>
+          <p class="st-hint">Применяется сразу, без перезагрузки.</p>
         </div>
+      </div>
 
-        <div class="st-card">
-          <h3 class="st-card-title">Подключение</h3>
-          <label class="st-field">
-            <span>API_URL бэкенда</span>
-            <input v-model="apiUrl" type="text" spellcheck="false" placeholder="https://host/api/v1" />
-          </label>
-          <p v-if="apiUrlWarn" class="st-msg warn">{{ apiUrlWarn }}</p>
-          <div class="st-actions st-actions--tight">
-            <button type="button" class="st-btn st-btn--sm" @click="onSaveApiUrl">
-              Сохранить
-            </button>
-          </div>
+      <div class="st-card">
+        <h3 class="st-card-title">Уведомления</h3>
+        <label class="st-option">
+          <input v-model="notificationsEnabled" type="checkbox" />
+          <span>Показывать стек уведомлений</span>
+        </label>
+        <div class="st-field">
+          <span>Время показа сообщений</span>
+          <select v-model.number="notifyDurationMs" class="st-select">
+            <option v-for="ms in NOTIFY_DURATION_OPTIONS" :key="ms" :value="ms">{{ ms / 1000 }} сек</option>
+            <option :value="0">Не скрывать</option>
+          </select>
+          <p class="st-hint">«Не скрывать» — сообщение остаётся, пока его не закроют вручную.</p>
+        </div>
+      </div>
+    </template>
+
+    <!-- Таблицы -->
+    <template v-if="activeSection === 'tables'">
+      <div class="st-card">
+        <h3 class="st-card-title">Таблицы</h3>
+        <div class="st-field">
+          <span>Записей на странице</span>
+          <select v-model.number="tablePageSize" class="st-select">
+            <option v-for="n in TABLE_PAGE_SIZE_OPTIONS" :key="n" :value="n">{{ n }}</option>
+          </select>
           <p class="st-hint">
-            Источник: {{ hasApiUrlOverride() ? 'задан вручную' : 'по умолчанию' }}.
+            Для списков с «Показать ещё» (ресурсы, сотрудники) и журнала действий. Применяется со следующей загрузки списка.
           </p>
         </div>
       </div>
+    </template>
 
-      <div class="st-pane">
-        <div class="st-card">
-          <h3 class="st-card-title">Бейджи на диаграммах</h3>
-          <p class="st-hint">Какие видимые отметки рисовать на барах задач, процессов и проектов.</p>
-          <label class="st-option">
-            <input v-model="viewSettings.badgeResource" type="checkbox" />
-            <span>Ресурсы (специализации) на задачах</span>
-          </label>
-          <label class="st-option">
-            <input v-model="viewSettings.badgeProjectCode" type="checkbox" />
-            <span>Код проекта на барах</span>
-          </label>
-          <label class="st-option">
-            <input v-model="viewSettings.badgeProgress" type="checkbox" />
-            <span>Процент выполнения операций на задачах</span>
-          </label>
-          <label class="st-option">
-            <input v-model="viewSettings.badgeOwner" type="checkbox" />
-            <span>Ответственный (задачи) / владелец (процессы и проекты)</span>
-          </label>
+    <!-- Диаграммы -->
+    <template v-if="activeSection === 'diagrams'">
+      <div class="st-card">
+        <h3 class="st-card-title">Бейджи на диаграммах</h3>
+        <p class="st-hint">Какие видимые отметки рисовать на барах задач, процессов и проектов.</p>
+        <label class="st-option">
+          <input v-model="viewSettings.badgeResource" type="checkbox" />
+          <span>Ресурсы (специализации) на задачах</span>
+        </label>
+        <label class="st-option">
+          <input v-model="viewSettings.badgeProjectCode" type="checkbox" />
+          <span>Код проекта на барах</span>
+        </label>
+        <label class="st-option">
+          <input v-model="viewSettings.badgeProgress" type="checkbox" />
+          <span>Процент выполнения операций на задачах</span>
+        </label>
+        <label class="st-option">
+          <input v-model="viewSettings.badgeOwner" type="checkbox" />
+          <span>Ответственный (задачи) / владелец (процессы и проекты)</span>
+        </label>
+      </div>
+
+      <div class="st-card">
+        <h3 class="st-card-title">Масштаб и календарь при открытии</h3>
+        <div class="st-field">
+          <span>Стандартный масштаб диаграммы</span>
+          <div class="st-scale-row">
+            <input
+              v-model.number="viewSettings.defaultScale"
+              type="range"
+              :min="SCALE_MIN"
+              :max="SCALE_MAX"
+              :step="SCALE_STEP"
+              class="st-scale"
+            />
+            <span class="st-scale-value">{{ viewSettings.defaultScale }}%</span>
+          </div>
+          <p class="st-hint">От {{ SCALE_MIN }}% до {{ SCALE_MAX }}% — применяется при открытии диаграммы</p>
         </div>
-
-        <div class="st-card">
-          <h3 class="st-card-title">Масштаб и календарь при открытии</h3>
-          <div class="st-field">
-            <span>Стандартный масштаб диаграммы</span>
-            <div class="st-scale-row">
-              <input
-                v-model.number="viewSettings.defaultScale"
-                type="range"
-                :min="SCALE_MIN"
-                :max="SCALE_MAX"
-                :step="SCALE_STEP"
-                class="st-scale"
-              />
-              <span class="st-scale-value">{{ viewSettings.defaultScale }}%</span>
-            </div>
-            <p class="st-hint">От {{ SCALE_MIN }}% до {{ SCALE_MAX }}% — применяется при открытии диаграммы</p>
+        <div class="st-field">
+          <span>Ширина ячейки при открытии</span>
+          <div class="st-scale-row">
+            <input
+              v-model.number="viewSettings.defaultCellZoom"
+              type="range"
+              :min="CELL_ZOOM_MIN"
+              :max="CELL_ZOOM_MAX"
+              :step="CELL_ZOOM_STEP"
+              class="st-scale"
+            />
+            <span class="st-scale-value">{{ viewSettings.defaultCellZoom }}%</span>
           </div>
-          <div class="st-field">
-            <span>Ширина ячейки при открытии</span>
-            <div class="st-scale-row">
-              <input
-                v-model.number="viewSettings.defaultCellZoom"
-                type="range"
-                :min="CELL_ZOOM_MIN"
-                :max="CELL_ZOOM_MAX"
-                :step="CELL_ZOOM_STEP"
-                class="st-scale"
-              />
-              <span class="st-scale-value">{{ viewSettings.defaultCellZoom }}%</span>
-            </div>
-            <p class="st-hint">
-              От {{ CELL_ZOOM_MIN }}% до {{ CELL_ZOOM_MAX }}% ширины колонки этого окна — как после
-              Ctrl+Shift+колесо. 100% = автоматически по ширине окна.
-            </p>
-          </div>
-          <div class="st-field">
-            <span>Единица календаря по умолчанию</span>
-            <div class="st-actions">
-              <label class="st-radio">
-                <input v-model="viewSettings.defaultUnit" type="radio" value="day" />
-                <span>Дни</span>
-              </label>
-              <label class="st-radio">
-                <input v-model="viewSettings.defaultUnit" type="radio" value="decade" />
-                <span>Декады</span>
-              </label>
-            </div>
-          </div>
+          <p class="st-hint">
+            От {{ CELL_ZOOM_MIN }}% до {{ CELL_ZOOM_MAX }}% ширины колонки этого окна — как после
+            Ctrl+Shift+колесо. 100% = автоматически по ширине окна.
+          </p>
         </div>
-
-        <div class="st-card">
-          <h3 class="st-card-title">Экспорт диаграмм</h3>
-          <label class="st-option">
-            <input v-model="viewSettings.showPdfButtons" type="checkbox" />
-            <span>Показывать кнопки «Сохранить в PDF» и «Печать» над диаграммой</span>
-          </label>
-          <p class="st-hint">Сочетание Ctrl/Cmd+P работает всегда.</p>
-        </div>
-
-        <div class="st-card">
-          <h3 class="st-card-title">Интерфейс</h3>
-          <div class="st-field">
-            <span>Цветовая тема</span>
-            <select v-model="scheme" class="st-select">
-              <option value="system">Как в системе</option>
-              <option value="light">Светлая</option>
-              <option value="dark">Тёмная</option>
-            </select>
-          </div>
-          <div class="st-field">
-            <span>Размер шрифта интерфейса</span>
-            <select v-model="uiFontSize" class="st-select">
-              <option value="small">Мелкий</option>
-              <option value="default">Средний</option>
-              <option value="large">Крупный</option>
-            </select>
-            <p class="st-hint">Применяется сразу, без перезагрузки.</p>
-          </div>
-        </div>
-
-        <div class="st-card">
-          <h3 class="st-card-title">Таблицы</h3>
-          <div class="st-field">
-            <span>Записей на странице</span>
-            <select v-model.number="tablePageSize" class="st-select">
-              <option v-for="n in TABLE_PAGE_SIZE_OPTIONS" :key="n" :value="n">{{ n }}</option>
-            </select>
-            <p class="st-hint">
-              Для списков с «Показать ещё» (ресурсы, сотрудники) и журнала действий. Применяется со следующей загрузки списка.
-            </p>
+        <div class="st-field">
+          <span>Единица календаря по умолчанию</span>
+          <div class="st-actions">
+            <label class="st-radio">
+              <input v-model="viewSettings.defaultUnit" type="radio" value="day" />
+              <span>Дни</span>
+            </label>
+            <label class="st-radio">
+              <input v-model="viewSettings.defaultUnit" type="radio" value="decade" />
+              <span>Декады</span>
+            </label>
           </div>
         </div>
       </div>
-    </div>
+
+      <div class="st-card">
+        <h3 class="st-card-title">Экспорт диаграмм</h3>
+        <label class="st-option">
+          <input v-model="viewSettings.showPdfButtons" type="checkbox" />
+          <span>Показывать кнопки «Сохранить в PDF» и «Печать» над диаграммой</span>
+        </label>
+        <p class="st-hint">Сочетание Ctrl/Cmd+P работает всегда.</p>
+      </div>
+    </template>
+
+    <!-- Синхронизация -->
+    <template v-if="activeSection === 'sync'">
+      <div class="st-card">
+        <h3 class="st-card-title">Синхронизация</h3>
+        <label class="st-option">
+          <input v-model="autoSync" type="checkbox" />
+          <span>Автосинхронизация при запуске и возврате сети</span>
+        </label>
+      </div>
+    </template>
+
+    <!-- Подключение -->
+    <template v-if="activeSection === 'connection'">
+      <div class="st-card">
+        <h3 class="st-card-title">Подключение</h3>
+        <label class="st-field">
+          <span>API_URL бэкенда</span>
+          <input v-model="apiUrl" type="text" spellcheck="false" placeholder="https://host/api/v1" />
+        </label>
+        <p v-if="apiUrlWarn" class="st-msg warn">{{ apiUrlWarn }}</p>
+        <div class="st-actions st-actions--tight">
+          <button type="button" class="st-btn st-btn--sm" @click="onSaveApiUrl">
+            Сохранить
+          </button>
+        </div>
+        <p class="st-hint">
+          Источник: {{ hasApiUrlOverride() ? 'задан вручную' : 'по умолчанию' }}.
+        </p>
+      </div>
+    </template>
 
     <p v-if="statusMsg" class="st-status-msg" :class="{ ok: statusOk }">{{ statusMsg }}</p>
   </section>
@@ -245,12 +279,48 @@ onMounted(() => {
   margin-bottom: 20px;
 }
 
+/* Section switcher — segmented control */
+.st-seg {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  width: fit-content;
+  background: var(--ui-surface-2);
+  border: 1px solid var(--ui-border);
+  border-radius: 10px;
+  padding: 3px;
+  margin-bottom: 18px;
+}
+.st-seg-tab {
+  border: none;
+  background: transparent;
+  color: var(--ui-text-2);
+  font: inherit;
+  font-size: calc(var(--ui-font-scale, 1) * 13.5px);
+  font-weight: 600;
+  padding: 7px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background var(--ui-duration), color var(--ui-duration);
+}
+.st-seg-tab:hover {
+  color: var(--ui-text);
+}
+.st-seg-tab.on {
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  box-shadow: var(--ui-shadow-sm);
+}
+
 .st-card {
   background: var(--ui-surface);
   border-radius: var(--ui-radius-md);
   box-shadow: var(--ui-shadow-md);
   padding: 20px;
   margin-bottom: 12px;
+  /* Settings read best as neat, bounded cards — not full-width slabs */
+  width: 100%;
+  max-width: 640px;
 }
 
 .st-card-title {
@@ -385,22 +455,6 @@ onMounted(() => {
   color: var(--ui-success);
 }
 
-/* Two-column settings layout: left = sync/offline, right = diagram appearance */
-.st-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 12px;
-  align-items: start;
-}
-.st-pane {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  min-width: 0;
-}
-.st-hint--top {
-  margin: -8px 0 20px;
-}
 .st-radio {
   display: flex;
   align-items: center;
@@ -430,11 +484,5 @@ onMounted(() => {
   font-variant-numeric: tabular-nums;
   min-width: 48px;
   text-align: right;
-}
-
-@media (max-width: 900px) {
-  .st-layout {
-    grid-template-columns: 1fr;
-  }
 }
 </style>
