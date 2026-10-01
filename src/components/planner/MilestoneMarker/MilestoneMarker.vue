@@ -68,7 +68,7 @@ const markerStyle = computed<Record<string, string | number> | null>(() => {
   return {
     background: props.color || 'var(--ui-milestone)',
     height: Math.max(props.stripHeight - 4, 8) + 'px',
-    ...(props.draggable ? { cursor: cursor.value ?? 'grab', touchAction: 'none' } : {}),
+    ...(props.draggable ? { cursor: cursor.value ?? 'pointer', touchAction: 'none' } : {}),
   }
 })
 

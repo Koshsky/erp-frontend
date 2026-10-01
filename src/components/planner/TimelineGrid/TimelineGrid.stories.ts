@@ -153,3 +153,77 @@ export const DragAutoscroll: Story = {
     `,
   }),
 }
+
+/** Panning is bound to the middle mouse button and starts from ANY point of the
+ *  table — including the Gantt bars themselves (content never blocks moving it). */
+export const MiddleButtonPan: Story = {
+  tags: ['vitest'],
+  render: () => ({
+    components: { TimelineGrid, Bar },
+    setup() {
+      const rows = ref([
+        { id: 1, start: '2026-07-03', end: '2026-07-18', color: '#1a73e8' },
+        { id: 2, start: '2026-06-20', end: '2026-07-25', color: '#34a853' },
+        { id: 3, start: '2026-08-01', end: '2026-08-20', color: '#e8710a' },
+      ])
+      return {
+        origin,
+        rows,
+        span: (unit: PlanningUnit, r: { start: string; end: string }) =>
+          cellRangeForSpan(origin, unit, r.start, r.end),
+      }
+    },
+    template: `
+      <div style="font-family:sans-serif;max-width:1100px;">
+        <TimelineGrid :origin="origin" unit="day">
+          <template #default="{ t }">
+            <div style="position:sticky;top:0;z-index:30;background:#f8f9fa;border-bottom:2px solid #1a73e8;height:20px;">
+              <div style="position:sticky;left:0;width:${LABEL_WIDTH}px;height:100%;background:#f8f9fa;z-index:3;display:flex;align-items:center;padding:0 10px;font-weight:700;font-size: calc(var(--ui-font-scale, 1) * 12px);">Задачи</div>
+            </div>
+            <div v-for="row in rows" :key="row.id" style="position:relative;height:40px;border-bottom:1px solid #f0f0f0;">
+              <div style="position:absolute;inset:0;">
+                <Bar
+                  :timeline="t"
+                  :startDate="row.start"
+                  :endDate="row.end"
+                  :color="row.color"
+                  draggable
+                  @change="(d) => (row.start = d.start_date, row.end = d.end_date)"
+                />
+              </div>
+            </div>
+          </template>
+        </TimelineGrid>
+      </div>
+    `,
+  }),
+  play: async ({ canvasElement, step }) => {
+    const { expect } = await import('vitest')
+    const sc = () => canvasElement.querySelector<HTMLElement>('.tg-scroll')!
+    const bar = () => canvasElement.querySelector<HTMLElement>('.gantt-bar')!
+    const fire = (type: string, init: PointerEventInit) =>
+      window.dispatchEvent(new PointerEvent(type, init))
+
+    await step('MMB drag starting ON a bar pans the table', async () => {
+      bar().dispatchEvent(
+        new PointerEvent('pointerdown', { button: 1, buttons: 4, pointerType: 'mouse', clientX: 400, clientY: 60, bubbles: true }),
+      )
+      fire('pointermove', { button: 1, buttons: 4, pointerType: 'mouse', clientX: 340, clientY: 60 })
+      expect(sc().classList.contains('tg-panning')).toBe(true)
+      // global grabbing cursor while MMB is held
+      expect(document.body.classList.contains('pan-grabbing')).toBe(true)
+      fire('pointerup', { button: 1, buttons: 0, pointerType: 'mouse', clientX: 340, clientY: 60 })
+      expect(sc().classList.contains('tg-panning')).toBe(false)
+      expect(document.body.classList.contains('pan-grabbing')).toBe(false)
+    })
+
+    await step('LMB drag on a bar stays a bar drag — no panning', async () => {
+      bar().dispatchEvent(
+        new PointerEvent('pointerdown', { button: 0, buttons: 1, pointerType: 'mouse', clientX: 400, clientY: 60, bubbles: true }),
+      )
+      fire('pointermove', { button: 0, buttons: 1, pointerType: 'mouse', clientX: 340, clientY: 60 })
+      expect(sc().classList.contains('tg-panning')).toBe(false)
+      fire('pointerup', { button: 0, buttons: 0, pointerType: 'mouse', clientX: 340, clientY: 60 })
+    })
+  },
+}

@@ -1,5 +1,5 @@
 <script setup lang="ts" generic="Row = unknown">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import type { DataTableColumn, DataTableCellScope, DataTableProps, SortDir } from './types'
 
 const props = withDefaults(defineProps<DataTableProps<Row>>(), {
@@ -145,6 +145,124 @@ function resetResize(col: DataTableColumn) {
   clearColumnWidth(col.key)
 }
 
+// --- Middle-mouse drag panning (MMB press + drag moves the table) -----------
+// Navigation by dragging with the middle mouse button: pressing MMB anywhere
+// in the table and dragging scrolls the container in both axes. LMB keeps its
+// own interactions (sort, resize, row click/expand) untouched.
+
+/** Interactive elements inside the table from which MMB panning must not start */
+const PAN_START_IGNORE = 'a, button, input, select, textarea, .dt-resizer, [contenteditable]'
+/** Movement needed to turn an MMB press into a drag (a plain click still works) */
+const PAN_THRESHOLD_PX = 4
+
+const scrollEl = ref<HTMLElement | null>(null)
+/** MMB press origin (before the drag threshold is crossed) */
+let panStart: { x: number; y: number; pointerId: number } | null = null
+/** True once the MMB press became a real drag (past the threshold) */
+let panMoved = false
+let lastX = 0
+let lastY = 0
+/** Swallow the click that directly follows a committed MMB drag (it would otherwise toggle expand / fire row-click) */
+let suppressClick = false
+
+/**
+ * Blocks the browser's native middle-click autoscroll: cancelling the
+ * pointerdown alone is not enough in all browsers, the autoscroll is a
+ * default action of the derived mousedown.
+ */
+function onScrollMousedown(e: MouseEvent) {
+  if (e.button === 1) e.preventDefault()
+}
+
+function onScrollPointerDown(e: PointerEvent) {
+  // A fresh press is by definition not a lingering drag-release click.
+  suppressClick = false
+  if (e.button !== 1 || e.pointerType !== 'mouse' || panStart) return
+  const el = scrollEl.value
+  if (!el) return
+  if ((e.target as HTMLElement).closest(PAN_START_IGNORE)) return
+  panStart = { x: e.clientX, y: e.clientY, pointerId: e.pointerId }
+  lastX = e.clientX
+  lastY = e.clientY
+  // Global "grabbing fist" (body.pan-grabbing) while MMB is held — applies to
+  // the whole page, not only the table area.
+  document.body.classList.add('pan-grabbing')
+  window.addEventListener('pointermove', onScrollPointerMove)
+  window.addEventListener('pointerup', onScrollPointerUp)
+  window.addEventListener('pointercancel', onScrollPointerCancel)
+}
+
+function onScrollPointerMove(e: PointerEvent) {
+  if (!panStart) return
+  const el = scrollEl.value
+  if (!el) return
+  if (!panMoved) {
+    if (
+      Math.abs(e.clientX - panStart.x) < PAN_THRESHOLD_PX &&
+      Math.abs(e.clientY - panStart.y) < PAN_THRESHOLD_PX
+    ) {
+      return
+    }
+    // Threshold crossed — this is a real drag, not a plain middle click.
+    panMoved = true
+    suppressClick = true
+    e.preventDefault()
+    el.classList.add('dt-panning')
+    document.body.style.userSelect = 'none'
+    // Capture the pointer so the drag survives leaving the browser window.
+    // Synthetic pointer events (tests) have no active pointer — capture is optional.
+    try {
+      el.setPointerCapture(panStart.pointerId)
+    } catch {
+      /* no active pointer — nothing to capture */
+    }
+  }
+  // Incremental deltas (scrollLeft/scrollTop clamp natively)
+  el.scrollLeft -= e.clientX - lastX
+  el.scrollTop -= e.clientY - lastY
+  lastX = e.clientX
+  lastY = e.clientY
+}
+
+function endPan(e?: PointerEvent) {
+  const el = scrollEl.value
+  // The browser coalesces fast pointermove events — flush the remaining delta
+  // from the release event coords.
+  if (el && e && panMoved) {
+    el.scrollLeft -= e.clientX - lastX
+    el.scrollTop -= e.clientY - lastY
+  }
+  panStart = null
+  panMoved = false
+  el?.classList.remove('dt-panning')
+  document.body.classList.remove('pan-grabbing')
+  document.body.style.userSelect = ''
+  window.removeEventListener('pointermove', onScrollPointerMove)
+  window.removeEventListener('pointerup', onScrollPointerUp)
+  window.removeEventListener('pointercancel', onScrollPointerCancel)
+}
+
+function onScrollPointerUp(e: PointerEvent) {
+  endPan(e)
+}
+
+function onScrollPointerCancel() {
+  // No release click follows a cancel — drop the suppression flag so it
+  // cannot eat a later unrelated click.
+  suppressClick = false
+  endPan()
+}
+
+/** Swallow the click that directly follows a real MMB drag. */
+function onPanClickCapture(e: MouseEvent) {
+  if (!suppressClick) return
+  suppressClick = false
+  e.preventDefault()
+  e.stopImmediatePropagation()
+}
+
+onBeforeUnmount(endPan)
+
 /** Default cell text: '—' for empty values. */
 function formatValue(value: unknown): string {
   if (value === null || value === undefined || value === '') return '—'
@@ -179,7 +297,13 @@ function onRowClick(event: MouseEvent, row: Row, index: number) {
          horizontally instead of letting the grid squeeze the tracks
          (squeezing with overflow-wrap: anywhere would collapse tracks to
          one-character width — "vertical text"). -->
-    <div class="dt-scroll">
+    <div
+      ref="scrollEl"
+      class="dt-scroll"
+      @mousedown="onScrollMousedown"
+      @pointerdown="onScrollPointerDown"
+      @click.capture="onPanClickCapture"
+    >
       <div class="dt-table" :style="{ gridTemplateColumns: columnsCss }">
         <!-- Row 2: column headers — one row. The optional per-column filter
              control sits inside its own header cell, right under the label. -->
@@ -275,9 +399,19 @@ function onRowClick(event: MouseEvent, row: Row, index: number) {
 
 /* Scroll wrapper: when the columns are wider than the card, the grid is
    allowed to grow (width: max-content) and this area scrolls — tracks never
-   squeeze below their caps. */
+   squeeze below their caps. The table moves by middle-mouse drag; the resting
+   state keeps the plain arrow cursor, the drag hand appears only while
+   dragging. */
 .dt-scroll {
   overflow-x: auto;
+}
+/* While an MMB drag is moving the table: grabbing cursor, no text selection */
+.dt-scroll.dt-panning {
+  cursor: grabbing;
+}
+.dt-scroll.dt-panning * {
+  user-select: none;
+  -webkit-user-select: none;
 }
 /* min-width: 100% keeps the table full-width when there are few columns
    (header/hover bands still span edge-to-edge via the 1fr spacer). */

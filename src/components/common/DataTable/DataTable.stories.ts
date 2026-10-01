@@ -70,6 +70,19 @@ const stateColumns: DataTableColumn[] = [
   { key: 'available', label: 'Доступность', width: '160px' },
 ]
 
+// Wide table for the MMB pan story: 14 fixed 200px columns (~2800px) guarantee
+// horizontal overflow of the scroll wrapper even in a wide browser window.
+const panColumns: DataTableColumn[] = Array.from({ length: 14 }, (_, i) => ({
+  key: `c${i}`,
+  label: `Колонка ${i + 1}`,
+  width: '200px',
+}))
+const panRows: Record<string, string>[] = Array.from({ length: 3 }, (_, r) => {
+  const row: Record<string, string> = { id: String(r + 1) }
+  for (let c = 0; c < 14; c++) row[`c${c}`] = `Ячейка ${r + 1}.${c + 1}`
+  return row
+})
+
 const stateTemplate = `
   <DataTable :columns="args.columns" :rows="args.rows" :title="args.title" :empty-text="args.emptyText" :resizable="args.resizable">
     <template #actions>
@@ -351,6 +364,77 @@ export const ResizableColumns: StoryObj<{
       await new Promise((r) => setTimeout(r, 50))
       const grid = canvasElement.querySelector<HTMLElement>('.dt-table')!.style.gridTemplateColumns
       expect(grid).toBe('140px fit-content(420px) 160px 1fr') // back to the configured tracks
+    })
+  },
+}
+
+/** Средняя кнопка мыши (СКМ): зажатие и перетаскивание двигает таблицу. */
+export const MiddleButtonPan: StoryObj<{
+  columns: DataTableColumn[]
+  rows: Record<string, string>[]
+}> = {
+  name: 'Перемещение средней кнопкой мыши',
+  tags: ['vitest'],
+  args: { columns: panColumns, rows: panRows },
+  render: (args: DataTableProps<Record<string, string>>) => ({
+    components: { DataTable },
+    setup: () => ({ args }),
+    template: `
+      <DataTable :columns="args.columns" :rows="args.rows" title="Широкая таблица" expandable>
+        <template #expanded="{ row }">
+          <div style="font-size: calc(var(--ui-font-scale, 1) * 13px); color: var(--ui-text-2);">
+            Детали строки {{ row.id }}.
+          </div>
+        </template>
+      </DataTable>
+    `,
+  }),
+  play: async ({ canvasElement, step }) => {
+    const { expect } = await import('vitest')
+    const sc = () => canvasElement.querySelector<HTMLElement>('.dt-scroll')!
+    const fire = (type: string, init: PointerEventInit) =>
+      window.dispatchEvent(new PointerEvent(type, init))
+
+    await step('MMB press + drag scrolls the table, LMB does not', async () => {
+      // Dragging LEFT (content follows the pointer) scrolls the table rightward
+      // — scrollLeft grows from the edge.
+      sc().dispatchEvent(
+        new PointerEvent('pointerdown', { button: 1, buttons: 4, pointerType: 'mouse', clientX: 400, clientY: 80, bubbles: true }),
+      )
+      fire('pointermove', { button: 1, buttons: 4, pointerType: 'mouse', clientX: 340, clientY: 80 })
+      expect(sc().classList.contains('dt-panning')).toBe(true)
+      expect(sc().scrollLeft).toBeGreaterThan(0)
+      // global grabbing cursor while MMB is held
+      expect(document.body.classList.contains('pan-grabbing')).toBe(true)
+      fire('pointerup', { button: 1, buttons: 0, pointerType: 'mouse', clientX: 340, clientY: 80 })
+      expect(sc().classList.contains('dt-panning')).toBe(false)
+      expect(document.body.classList.contains('pan-grabbing')).toBe(false)
+
+      // LMB drag must not pan — it keeps its own interactions (sort/expand)
+      const before = sc().scrollLeft
+      sc().dispatchEvent(
+        new PointerEvent('pointerdown', { button: 0, buttons: 1, pointerType: 'mouse', clientX: 400, clientY: 120, bubbles: true }),
+      )
+      fire('pointermove', { button: 0, buttons: 1, pointerType: 'mouse', clientX: 340, clientY: 120 })
+      fire('pointerup', { button: 0, buttons: 0, pointerType: 'mouse', clientX: 340, clientY: 120 })
+      expect(sc().classList.contains('dt-panning')).toBe(false)
+      expect(sc().scrollLeft).toBe(before)
+    })
+
+    await step('a click that follows an MMB drag does not expand the row; a normal click does', async () => {
+      const firstRow = () => canvasElement.querySelector<HTMLElement>('.dt-tr:not(.dt-th):not(.dt-detail)')!
+      firstRow().dispatchEvent(
+        new PointerEvent('pointerdown', { button: 1, buttons: 4, pointerType: 'mouse', clientX: 400, clientY: 140, bubbles: true }),
+      )
+      fire('pointermove', { button: 1, buttons: 4, pointerType: 'mouse', clientX: 340, clientY: 140 })
+      fire('pointerup', { button: 1, buttons: 0, pointerType: 'mouse', clientX: 340, clientY: 140 })
+      firstRow().dispatchEvent(new MouseEvent('click', { bubbles: true, button: 1 }))
+      await new Promise((r) => setTimeout(r, 30))
+      expect(canvasElement.querySelector('.dt-detail')).toBeNull()
+
+      firstRow().click()
+      await new Promise((r) => setTimeout(r, 30))
+      expect(canvasElement.querySelector('.dt-detail')).toBeTruthy()
     })
   },
 }

@@ -248,7 +248,9 @@ const barStyle = computed<Record<string, string | number> | null>(() => {
 
 const cursorStyle = computed<Record<string, string>>(() => {
   if (cursor.value) return { cursor: cursor.value }
-  if (props.draggable) return { cursor: 'grab' }
+  // Resting state: the bar "can be clicked" (navigation/editor) — a pointer,
+  // not a drag hand; the drag hand appears only while dragging.
+  if (props.draggable) return { cursor: 'pointer' }
   return { cursor: 'default' }
 })
 

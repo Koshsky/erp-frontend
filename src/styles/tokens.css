@@ -329,3 +329,15 @@ html[data-ui-size='small'] {
 html[data-ui-size='large'] {
   --ui-font-scale: 1.1;
 }
+
+/* ==========================================================================
+ * MMB drag panning cursor: while the middle mouse button is held, the whole
+ * page shows the "grabbing fist" — regardless of what is under the pointer
+ * (bars, headers, empty space). The class lives on <body> and is toggled by
+ * useTimelinePan (planner/timesheet) and DataTable.
+ * ========================================================================== */
+
+body.pan-grabbing,
+body.pan-grabbing * {
+  cursor: grabbing !important;
+}
