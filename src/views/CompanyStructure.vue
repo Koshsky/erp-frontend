@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { storeToRefs } from 'pinia'
+import { DataTable, HintButton } from '../components/common'
+import type { DataTableColumn } from '../components/common'
 import { useAppStore } from '../store'
 import { compareByName } from '../utils'
+import { useColumnWidths } from '../composables/useColumnWidths'
 import type { DtoAdminUserResponse } from '@/api'
 
 const app = useAppStore()
@@ -79,6 +82,23 @@ const tree = computed<TreeNode[]>(() => {
   return out
 })
 
+/**
+ * The DataTable cell slot gives the row as `unknown` — cast to the page's
+ * node type here.
+ */
+const asNode = (row: unknown): TreeNode => row as TreeNode
+
+/** Column config; sorting is intentionally off — the tree keeps its order. */
+const columns: DataTableColumn[] = [
+  { key: 'name', label: 'Сотрудник', width: 'fit-content(420px)', sortable: false },
+  { key: 'role', label: 'Роль', width: 'fit-content(240px)', sortable: false },
+  { key: 'manager', label: 'Руководитель', width: 'fit-content(280px)', sortable: false },
+  { key: 'children', label: 'Подчинённых', width: '120px', sortable: false },
+]
+
+/** Per-user persisted column widths (drag-resize on the header edges). */
+const { columnWidths } = useColumnWidths('structure')
+
 /** All direct and indirect descendants of a user (cycle-safe) */
 function descendantsOf(id: number): Set<number> {
   const out = new Set<number>()
@@ -126,11 +146,6 @@ onMounted(() => {
 
 <template>
   <section class="cs">
-    <div class="cs-head">
-      <h2 class="cs-title">Структура компании</h2>
-      <HintButton hint="structure" />
-    </div>
-
     <p v-if="adminUsersLoading && !tree.length" class="cs-st">Загрузка...</p>
     <p v-if="adminUsersError && !tree.length" class="cs-st er">{{ adminUsersError }}</p>
 
@@ -139,94 +154,64 @@ onMounted(() => {
       data: the empty-state message is rendered inside the table instead of
       replacing it.
     -->
-    <div v-if="tree.length || (!adminUsersLoading && !adminUsersError)" class="table">
-      <div class="tr th">
-        <div class="col-name">Сотрудник</div>
-        <div>Роль</div>
-        <div class="col-mgr">Руководитель</div>
-        <div>Подчинённых</div>
-      </div>
-      <template v-if="tree.length">
-        <div v-for="node in tree" :key="node.user.id" class="tr">
-          <div class="col-name" :style="{ paddingLeft: node.depth * 22 + 'px' }">
-            <span class="depth-tick" v-if="node.depth > 0">↳</span>
-            <span class="name">{{ node.user.name }}</span>
-            <span class="mono">{{ node.user.username }}</span>
-          </div>
-          <div>{{ presetLabel(node.user.preset) }}</div>
-          <div class="col-mgr">
-            <select
-              class="cs-mgr"
-              :value="node.user.manager_id ?? ''"
-              :disabled="saving"
-              @change="onChangeManager(node.user, $event)"
-            >
-              <option v-for="opt in managerOptions(node.user)" :key="String(opt.value)" :value="opt.value">{{ opt.label }}</option>
-            </select>
-          </div>
-          <div>{{ node.childrenCount }}</div>
-        </div>
+    <DataTable
+      v-if="tree.length || (!adminUsersLoading && !adminUsersError)"
+      :columns="columns"
+      :rows="tree"
+      title="Структура компании"
+      empty-text="Нет данных"
+      resizable
+      v-model:column-widths="columnWidths"
+    >
+      <template #actions>
+        <HintButton hint="structure" />
       </template>
-      <p v-else class="cs-st">Нет данных</p>
-    </div>
+      <template #cell="{ row, column }">
+        <span v-if="column.key === 'name'" class="cs-name" :style="{ paddingLeft: asNode(row).depth * 22 + 'px' }">
+          <span class="depth-tick" v-if="asNode(row).depth > 0">↳</span>
+          <span class="name">{{ asNode(row).user.name }}</span>
+          <span class="mono">{{ asNode(row).user.username }}</span>
+        </span>
+        <template v-else-if="column.key === 'role'">{{ presetLabel(asNode(row).user.preset) }}</template>
+        <span v-else-if="column.key === 'manager'" class="cs-mgr-wrap">
+          <select
+            class="cs-mgr"
+            :value="asNode(row).user.manager_id ?? ''"
+            :disabled="saving"
+            @change="onChangeManager(asNode(row).user, $event)"
+          >
+            <option v-for="opt in managerOptions(asNode(row).user)" :key="String(opt.value)" :value="opt.value">{{ opt.label }}</option>
+          </select>
+        </span>
+        <template v-else>{{ asNode(row).childrenCount }}</template>
+      </template>
+    </DataTable>
   </section>
 </template>
 
 <style scoped>
 @import '../styles/tokens.css';
 
-.cs-head {
-  margin-bottom: 20px;
-
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-.cs-title {
-  font-size: 24px;
-  font-weight: 700;
-  color: var(--ui-text);
-  margin: 0 0 6px;
-}
+/* Loading / error placeholders outside the table */
 .cs-st {
   color: var(--ui-text-muted);
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   padding: 30px;
   text-align: center;
 }
 .er { color: var(--ui-danger); }
 .mono {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 12px;
+  font-size: calc(var(--ui-font-scale, 1) * 12px);
   color: var(--ui-text-faint);
   margin-left: 8px;
 }
-.table {
-  background: var(--ui-surface);
-  border-radius: var(--ui-radius-md);
-  box-shadow: var(--ui-shadow-md);
-  overflow: hidden;
-}
-.tr {
-  display: grid;
-  grid-template-columns: 2fr 1fr 1.6fr 120px;
-  gap: 8px;
-  padding: 12px 20px;
-  border-bottom: 1px solid var(--ui-border);
-  font-size: 14px;
+
+/* Cell renders */
+.cs-name {
+  display: inline-flex;
   align-items: center;
-}
-.tr:last-child { border-bottom: none; }
-.tr:not(.th):hover { background: var(--ui-surface-3); }
-.th {
-  background: var(--ui-surface-2);
-  font-weight: 600;
-  color: var(--ui-text-2);
-}
-.col-name {
-  display: flex;
-  align-items: center;
+  max-width: 100%;
   white-space: nowrap;
   overflow: hidden;
 }
@@ -238,13 +223,16 @@ onMounted(() => {
   color: var(--ui-text-faint);
   margin-right: 6px;
 }
+.cs-mgr-wrap {
+  display: block;
+}
 .cs-mgr {
   box-sizing: border-box;
   width: 100%;
   border: 1px solid var(--ui-border-strong);
   border-radius: var(--ui-radius-sm);
   padding: 6px 10px;
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   font-family: inherit;
   color: var(--ui-text);
   background: var(--ui-surface);

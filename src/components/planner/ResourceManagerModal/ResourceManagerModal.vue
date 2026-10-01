@@ -132,7 +132,7 @@ function resourceTitle(r: AssignedResource): string {
 }
 .rm-error {
   margin: 0;
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   color: var(--ui-danger);
 }
 .rm-list {
@@ -148,7 +148,7 @@ function resourceTitle(r: AssignedResource): string {
   background: var(--ui-surface-2);
   border: 1px solid var(--ui-border);
   border-radius: var(--ui-radius-sm);
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   color: var(--ui-text);
 }
 .rm-item-name {
@@ -165,7 +165,7 @@ function resourceTitle(r: AssignedResource): string {
 .rm-remove {
   border: none;
   background: transparent;
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   line-height: 1;
   color: var(--ui-text-muted);
   cursor: pointer;
@@ -183,7 +183,7 @@ function resourceTitle(r: AssignedResource): string {
 .rm-empty {
   padding: 18px 0;
   text-align: center;
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   color: var(--ui-text-muted);
   border: 1px dashed var(--ui-border-strong);
   border-radius: var(--ui-radius-sm);
@@ -202,7 +202,7 @@ function resourceTitle(r: AssignedResource): string {
   border: 1px solid var(--ui-border-strong);
   border-radius: var(--ui-radius-sm);
   padding: 9px 12px;
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   font-family: inherit;
   color: var(--ui-text);
   background: var(--ui-surface);
@@ -224,7 +224,7 @@ function resourceTitle(r: AssignedResource): string {
   border: none;
   border-radius: var(--ui-radius-sm);
   padding: 9px 18px;
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   font-weight: 600;
   cursor: pointer;
   background: var(--ui-accent);

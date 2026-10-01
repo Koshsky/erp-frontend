@@ -29,7 +29,7 @@ export const AllIcons: Story = {
         <div v-for="n in names" :key="n"
              style="display:flex;flex-direction:column;align-items:center;gap:8px;padding:10px 4px;border:1px solid var(--border);border-radius:8px;">
           <AppIcon :name="n" :size="20" />
-          <span style="font-size:11px;color:var(--muted-foreground);">{{ n }}</span>
+          <span style="font-size: calc(var(--ui-font-scale, 1) * 11px);color:var(--muted-foreground);">{{ n }}</span>
         </div>
       </div>
     `,

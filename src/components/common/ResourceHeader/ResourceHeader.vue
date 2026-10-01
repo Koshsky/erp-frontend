@@ -141,7 +141,7 @@ const labelsH = computed(() => resourceCells.value.length * rowH.value)
   align-items: center;
   padding: 0 6px;
   box-sizing: border-box;
-  font-size: 11px;
+  font-size: calc(var(--ui-font-scale, 1) * 11px);
   cursor: default;
   user-select: none;
   -webkit-user-select: none;
@@ -152,7 +152,7 @@ const labelsH = computed(() => resourceCells.value.length * rowH.value)
 }
 .rs-code {
   font-weight: 700;
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   letter-spacing: 0.5px;
 }
 /* Load-cell block "4/5": sticks right below the calendar header.

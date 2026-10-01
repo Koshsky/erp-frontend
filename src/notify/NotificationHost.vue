@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { notifications, dismissNotification } from './state'
+import { notificationsEnabled } from '../settings'
 import { isNavOpen, NAV_WIDTH } from '../composables/useNavDrawer'
 
 const BASE_LEFT = 20
@@ -11,15 +12,23 @@ const BASE_LEFT = 20
        (pinned or peeked) the app content shifts right by NAV_WIDTH — the
        stack follows with the same easing so it never overlaps the panel.
        The column grows upward from the bottom edge: the newest notification
-       sits closest to the corner, older ones above it. -->
+       sits closest to the corner, older ones above it. Unmounted entirely
+       while the user has the stack switched off in Settings. -->
   <div
+    v-if="notificationsEnabled"
     class="nhost"
     :style="{ left: (isNavOpen ? NAV_WIDTH : 0) + BASE_LEFT + 'px' }"
     aria-live="polite"
   >
     <TransitionGroup name="nt-fade">
       <div v-for="n in notifications" :key="n.id" class="nt" :class="`nt--${n.kind}`" role="alert">
-        <div class="nt-timer" :style="{ animationDuration: `${n.durationMs}ms` }" aria-hidden="true"></div>
+        <!-- No countdown bar for never-auto-hide notifications (durationMs = 0). -->
+        <div
+          v-if="n.durationMs > 0"
+          class="nt-timer"
+          :style="{ animationDuration: `${n.durationMs}ms` }"
+          aria-hidden="true"
+        ></div>
         <span class="nt-ic" aria-hidden="true">{{ n.kind === 'success' ? '✓' : n.kind === 'info' ? 'i' : '!' }}</span>
         <span class="nt-text">{{ n.text }}</span>
         <button
@@ -66,7 +75,7 @@ const BASE_LEFT = 20
   border: 1px solid var(--ui-border-strong);
   border-radius: var(--ui-radius-sm);
   box-shadow: var(--ui-shadow-md);
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   line-height: 1.45;
   color: var(--ui-text);
   white-space: pre-line;
@@ -105,7 +114,7 @@ const BASE_LEFT = 20
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  font-size: 12px;
+  font-size: calc(var(--ui-font-scale, 1) * 12px);
   font-weight: 800;
   display: flex;
   align-items: center;
@@ -141,7 +150,7 @@ const BASE_LEFT = 20
   background: transparent;
   border: none;
   color: var(--ui-text-2);
-  font-size: 18px;
+  font-size: calc(var(--ui-font-scale, 1) * 18px);
   line-height: 1;
   cursor: pointer;
   padding: 2px 6px;

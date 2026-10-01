@@ -142,7 +142,7 @@ function onMilestoneEdit(id: number) {
   -webkit-user-select: none;
 }
 .gl-code {
-  font-size: 16px;
+  font-size: calc(var(--ui-font-scale, 1) * 16px);
   font-weight: 800;
   line-height: 1.2;
   color: var(--ui-accent);
@@ -153,7 +153,7 @@ function onMilestoneEdit(id: number) {
   text-overflow: ellipsis;
 }
 .gl-title {
-  font-size: 12px;
+  font-size: calc(var(--ui-font-scale, 1) * 12px);
   font-weight: 600;
   color: var(--ui-text-2);
   white-space: nowrap;
@@ -162,7 +162,7 @@ function onMilestoneEdit(id: number) {
   text-overflow: ellipsis;
 }
 .gl-dates {
-  font-size: 10px;
+  font-size: calc(var(--ui-font-scale, 1) * 10px);
   font-weight: 400;
   color: var(--ui-text-muted);
   white-space: nowrap;

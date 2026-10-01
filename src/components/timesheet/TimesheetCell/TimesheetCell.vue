@@ -105,7 +105,7 @@ const emptyLabel = computed(() => (props.isWeekend ? 'Выходной' : 'Ра�
   z-index: 2;
 }
 .tsc-code {
-  font-size: 10px;
+  font-size: calc(var(--ui-font-scale, 1) * 10px);
   font-weight: 700;
   color: rgba(0, 0, 0, 0.55);
   pointer-events: none;

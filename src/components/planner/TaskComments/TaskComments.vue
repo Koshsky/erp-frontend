@@ -214,12 +214,12 @@ function sendReply(commentId: number) {
 }
 .tc-error {
   margin: 0;
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   color: var(--ui-danger);
 }
 .tc-offline {
   margin: 0;
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   color: var(--ui-warning);
 }
 .tc-list {
@@ -233,7 +233,7 @@ function sendReply(commentId: number) {
 .tc-state {
   padding: 18px 0;
   text-align: center;
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   color: var(--ui-text-muted);
   border: 1px dashed var(--ui-border-strong);
   border-radius: var(--ui-radius-sm);
@@ -251,24 +251,24 @@ function sendReply(commentId: number) {
   flex-wrap: wrap;
 }
 .tc-author {
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   font-weight: 700;
   color: var(--ui-accent);
 }
 .tc-orphan {
-  font-size: 11px;
+  font-size: calc(var(--ui-font-scale, 1) * 11px);
   color: var(--ui-text-muted);
   font-style: italic;
 }
 .tc-date {
   margin-left: auto;
-  font-size: 11px;
+  font-size: calc(var(--ui-font-scale, 1) * 11px);
   color: var(--ui-text-2);
   white-space: nowrap;
 }
 .tc-text {
   margin-top: 4px;
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   line-height: 1.45;
   color: var(--ui-text);
   white-space: pre-wrap;
@@ -303,7 +303,7 @@ function sendReply(commentId: number) {
   gap: 10px;
 }
 .tc-hint {
-  font-size: 12px;
+  font-size: calc(var(--ui-font-scale, 1) * 12px);
   color: var(--ui-warning);
 }
 .tc-input {
@@ -313,7 +313,7 @@ function sendReply(commentId: number) {
   border: 1px solid var(--ui-border-strong);
   border-radius: var(--ui-radius-sm);
   padding: 9px 12px;
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   font-family: inherit;
   color: var(--ui-text);
   background: var(--ui-surface);
@@ -333,7 +333,7 @@ function sendReply(commentId: number) {
   border: none;
   border-radius: var(--ui-radius-sm);
   padding: 6px 14px;
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   font-weight: 600;
   cursor: pointer;
   background: transparent;

@@ -112,7 +112,7 @@ function onGridCtx(p: { clientX: number; clientY: number; date: string | null; r
   color: var(--ui-accent-on);
   border: none;
   border-radius: 10px;
-  font-size: 16px;
+  font-size: calc(var(--ui-font-scale, 1) * 16px);
   cursor: pointer;
 }
 .pp-big:hover {

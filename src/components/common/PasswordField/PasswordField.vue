@@ -93,7 +93,7 @@ function toggleVisibility() {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   font-weight: 600;
   color: var(--ui-text-2);
 }
@@ -114,7 +114,7 @@ function toggleVisibility() {
   padding-right: 46px;
   border: 1px solid var(--ui-border);
   border-radius: var(--ui-radius-md);
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   font-weight: 400;
   color: var(--ui-text);
   background: var(--ui-surface);

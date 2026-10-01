@@ -108,14 +108,14 @@ onBeforeUnmount(() => stopRouteWatch?.())
 }
 .hp-title {
   margin: 0;
-  font-size: 19px;
+  font-size: calc(var(--ui-font-scale, 1) * 19px);
   font-weight: 700;
   color: var(--ui-text);
 }
 .hp-close {
   border: none;
   background: transparent;
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   line-height: 1;
   color: var(--ui-text-muted);
   cursor: pointer;

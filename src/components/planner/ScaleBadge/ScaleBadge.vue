@@ -48,7 +48,7 @@ onBeforeUnmount(() => {
   border-radius: 999px;
   background: rgba(32, 33, 36, 0.88);
   color: #fff;
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   font-weight: 600;
   box-shadow: var(--ui-shadow-md);
   pointer-events: none;

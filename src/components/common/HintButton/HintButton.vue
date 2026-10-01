@@ -41,7 +41,7 @@ const expanded = computed(() => hintOpen.value && hintPageRef.value === props.hi
   border: 2px solid var(--ui-accent);
   background: var(--ui-accent-soft);
   color: var(--ui-accent);
-  font-size: 17px;
+  font-size: calc(var(--ui-font-scale, 1) * 17px);
   font-weight: 800;
   line-height: 1;
   cursor: pointer;
@@ -65,6 +65,6 @@ const expanded = computed(() => hintOpen.value && hintPageRef.value === props.hi
 .hb.is-sm {
   width: 26px;
   height: 26px;
-  font-size: 15px;
+  font-size: calc(var(--ui-font-scale, 1) * 15px);
 }
 </style>

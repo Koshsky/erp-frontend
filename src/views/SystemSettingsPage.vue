@@ -1,7 +1,21 @@
 <script setup lang="ts">
 import { onMounted, ref, watch } from 'vue'
 import { getApiUrl, setApiUrl, hasApiUrlOverride, httpSchemeWarning } from '../config'
+import { scheme, setScheme } from '../theme'
 import { autoSync, saveSyncSettings } from '../settings'
+import {
+  notificationsEnabled,
+  notifyDurationMs,
+  NOTIFY_DURATION_OPTIONS,
+  saveNotifySettings,
+} from '../settings'
+import {
+  uiFontSize,
+  applyUiSize,
+  tablePageSize,
+  TABLE_PAGE_SIZE_OPTIONS,
+  saveUiSettings,
+} from '../settings'
 import { viewSettings, SCALE_MIN, SCALE_MAX, SCALE_STEP, CELL_ZOOM_MIN, CELL_ZOOM_MAX, CELL_ZOOM_STEP } from '../settings'
 
 const apiUrl = ref('')
@@ -37,6 +51,12 @@ function onSaveApiUrl() {
 }
 
 watch(autoSync, saveSyncSettings)
+watch([notificationsEnabled, notifyDurationMs], saveNotifySettings)
+watch([uiFontSize, tablePageSize], () => {
+  applyUiSize()
+  saveUiSettings()
+})
+watch(scheme, (value) => setScheme(value))
 
 onMounted(() => {
   apiUrl.value = getApiUrl() ?? ''
@@ -58,6 +78,22 @@ onMounted(() => {
             <input v-model="autoSync" type="checkbox" />
             <span>Автосинхронизация при запуске и возврате сети</span>
           </label>
+        </div>
+
+        <div class="st-card">
+          <h3 class="st-card-title">Уведомления</h3>
+          <label class="st-option">
+            <input v-model="notificationsEnabled" type="checkbox" />
+            <span>Показывать стек уведомлений</span>
+          </label>
+          <div class="st-field">
+            <span>Время показа сообщений</span>
+            <select v-model.number="notifyDurationMs" class="st-select">
+              <option v-for="ms in NOTIFY_DURATION_OPTIONS" :key="ms" :value="ms">{{ ms / 1000 }} сек</option>
+              <option :value="0">Не скрывать</option>
+            </select>
+            <p class="st-hint">«Не скрывать» — сообщение остаётся, пока его не закроют вручную.</p>
+          </div>
         </div>
 
         <div class="st-card">
@@ -158,6 +194,40 @@ onMounted(() => {
           </label>
           <p class="st-hint">Сочетание Ctrl/Cmd+P работает всегда.</p>
         </div>
+
+        <div class="st-card">
+          <h3 class="st-card-title">Интерфейс</h3>
+          <div class="st-field">
+            <span>Цветовая тема</span>
+            <select v-model="scheme" class="st-select">
+              <option value="system">Как в системе</option>
+              <option value="light">Светлая</option>
+              <option value="dark">Тёмная</option>
+            </select>
+          </div>
+          <div class="st-field">
+            <span>Размер шрифта интерфейса</span>
+            <select v-model="uiFontSize" class="st-select">
+              <option value="small">Мелкий</option>
+              <option value="default">Средний</option>
+              <option value="large">Крупный</option>
+            </select>
+            <p class="st-hint">Применяется сразу, без перезагрузки.</p>
+          </div>
+        </div>
+
+        <div class="st-card">
+          <h3 class="st-card-title">Таблицы</h3>
+          <div class="st-field">
+            <span>Записей на странице</span>
+            <select v-model.number="tablePageSize" class="st-select">
+              <option v-for="n in TABLE_PAGE_SIZE_OPTIONS" :key="n" :value="n">{{ n }}</option>
+            </select>
+            <p class="st-hint">
+              Для списков с «Показать ещё» (ресурсы, сотрудники) и журнала действий. Применяется со следующей загрузки списка.
+            </p>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -169,7 +239,7 @@ onMounted(() => {
 @import '../styles/tokens.css';
 
 .st-title {
-  font-size: 24px;
+  font-size: calc(var(--ui-font-scale, 1) * 24px);
   font-weight: 700;
   color: var(--ui-text);
   margin-bottom: 20px;
@@ -184,7 +254,7 @@ onMounted(() => {
 }
 
 .st-card-title {
-  font-size: 18px;
+  font-size: calc(var(--ui-font-scale, 1) * 18px);
   font-weight: 700;
   color: var(--ui-text);
   margin: 0 0 16px;
@@ -192,7 +262,7 @@ onMounted(() => {
 
 .st-hint {
   margin: 0 0 12px;
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   color: var(--ui-text-muted);
 }
 
@@ -201,7 +271,7 @@ onMounted(() => {
   align-items: center;
   gap: 8px;
   margin: 6px 0;
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   color: var(--ui-text-2);
   cursor: pointer;
 }
@@ -211,7 +281,7 @@ onMounted(() => {
   flex-direction: column;
   gap: 6px;
   margin-bottom: 14px;
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   font-weight: 600;
   color: var(--ui-text-2);
 }
@@ -222,9 +292,27 @@ onMounted(() => {
   padding: 11px 14px;
   border: 1px solid var(--ui-border-strong);
   border-radius: var(--ui-radius-sm);
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   font-weight: 400;
   transition: border-color var(--ui-duration), box-shadow var(--ui-duration);
+}
+
+/* Select in the Notifications card (same visual language as the fields) */
+.st-select {
+  padding: 9px 12px;
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius-sm);
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
+  font-family: inherit;
+  font-weight: 400;
+  color: var(--ui-text);
+  background: var(--ui-surface);
+  outline: none;
+  transition: border-color var(--ui-duration), box-shadow var(--ui-duration);
+}
+.st-select:focus {
+  border-color: var(--ui-accent);
+  box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.15);
 }
 
 .st-field input:focus {
@@ -241,7 +329,7 @@ onMounted(() => {
   border-radius: var(--ui-radius-sm);
   background: var(--ui-accent);
   color: var(--ui-accent-on);
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   font-weight: 600;
   cursor: pointer;
   transition: background var(--ui-duration), opacity var(--ui-duration);
@@ -268,7 +356,7 @@ onMounted(() => {
   width: auto;
   margin-top: 0;
   padding: 9px 16px;
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
 }
 
 .st-actions {
@@ -282,13 +370,13 @@ onMounted(() => {
 }
 
 .st-msg {
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   color: var(--ui-warning);
   margin: 0 0 10px;
 }
 
 .st-status-msg {
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   color: var(--ui-danger);
   margin: 14px 0 0;
 }
@@ -317,7 +405,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   font-weight: 500;
   color: var(--ui-text-2);
   cursor: pointer;
@@ -336,7 +424,7 @@ onMounted(() => {
   cursor: pointer;
 }
 .st-scale-value {
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   font-weight: 700;
   color: var(--ui-text);
   font-variant-numeric: tabular-nums;

@@ -103,7 +103,7 @@ onBeforeUnmount(() => {
   gap: 6px;
 }
 .cf-label {
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   font-weight: 600;
   color: var(--ui-text-2);
 }
@@ -124,11 +124,11 @@ onBeforeUnmount(() => {
   min-width: 0;
   overflow-wrap: anywhere;
   color: var(--ui-accent);
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
 }
 .cf-field--mono .cf-value {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
 }
 .cf-copy {
   flex-shrink: 0;

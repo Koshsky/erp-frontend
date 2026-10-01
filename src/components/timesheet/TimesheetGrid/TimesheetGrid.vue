@@ -449,14 +449,14 @@ const labelsH = computed(() => props.employees.length * ROW_H)
 .ts-label-name {
   font-weight: 700;
   color: var(--ui-text);
-  font-size: 12px;
+  font-size: calc(var(--ui-font-scale, 1) * 12px);
   line-height: 1.2;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .ts-label-pos {
-  font-size: 11px;
+  font-size: calc(var(--ui-font-scale, 1) * 11px);
   color: var(--ui-text-2);
   line-height: 1.2;
   overflow: hidden;
@@ -481,7 +481,7 @@ const labelsH = computed(() => props.employees.length * ROW_H)
 }
 .ts-error {
   margin: 10px 0 0;
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   color: var(--ui-danger);
 }
 
@@ -490,7 +490,7 @@ const labelsH = computed(() => props.employees.length * ROW_H)
   position: fixed;
   background: var(--ui-surface);
   color: var(--ui-text);
-  font-size: 12px;
+  font-size: calc(var(--ui-font-scale, 1) * 12px);
   line-height: 1.45;
   padding: 6px 10px;
   border-radius: var(--ui-radius-sm);
@@ -526,7 +526,7 @@ const labelsH = computed(() => props.employees.length * ROW_H)
   padding: 10px 12px;
   background: var(--ui-surface-2);
   border-bottom: 1px solid var(--ui-border);
-  font-size: 12px;
+  font-size: calc(var(--ui-font-scale, 1) * 12px);
 }
 .ts-panel-title {
   font-weight: 700;
@@ -543,7 +543,7 @@ const labelsH = computed(() => props.employees.length * ROW_H)
 .ts-panel-close {
   border: none;
   background: transparent;
-  font-size: 16px;
+  font-size: calc(var(--ui-font-scale, 1) * 16px);
   line-height: 1;
   color: var(--ui-text-muted);
   cursor: pointer;
@@ -568,7 +568,7 @@ const labelsH = computed(() => props.employees.length * ROW_H)
   background: var(--ui-surface-2);
   border-radius: var(--ui-radius-sm);
   padding: 8px 10px;
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   text-align: left;
   cursor: pointer;
   transition: background var(--ui-duration);
@@ -596,7 +596,7 @@ const labelsH = computed(() => props.employees.length * ROW_H)
   background: var(--ui-surface);
   border-radius: var(--ui-radius-sm);
   padding: 8px;
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   color: var(--ui-danger);
   cursor: pointer;
 }

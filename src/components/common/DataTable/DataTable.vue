@@ -25,8 +25,8 @@ defineSlots<{
   actions?: () => unknown
   /** Custom cell rendering; default renders `row[column.key]` text. */
   cell?: (scope: DataTableCellScope<Row>) => unknown
-  /** Filter row rendered right under the column headers (no row when empty). */
-  filters?: () => unknown
+  /** Per-column filter controls, rendered under the header row (slot per column). */
+  filter?: (scope: { column: DataTableColumn }) => unknown
   /** Expanded detail row below a row (only with expandable, keyed by row index). */
   expanded?: (scope: { row: Row; index: number }) => unknown
 }>()
@@ -181,30 +181,27 @@ function onRowClick(event: MouseEvent, row: Row, index: number) {
          one-character width — "vertical text"). -->
     <div class="dt-scroll">
       <div class="dt-table" :style="{ gridTemplateColumns: columnsCss }">
-        <!-- Row 2: column headers with sort indicators -->
+        <!-- Row 2: column headers — one row. The optional per-column filter
+             control sits inside its own header cell, right under the label. -->
         <div class="dt-tr dt-th">
           <template v-for="col in columns" :key="col.key">
-            <button
-              v-if="col.sortable !== false"
-              type="button"
-              class="dt-th-cell"
-              :aria-sort="ariaSort(col)"
-              @click="toggleSort(col)"
-            >
-              <span>{{ col.label }}</span>
-              <span class="dt-sort" aria-hidden="true">
-                <i :class="{ on: sortActive(col, 1) }">▲</i><i :class="{ on: sortActive(col, -1) }">▼</i>
-              </span>
-              <span
-                v-if="resizable"
-                class="dt-resizer"
-                title="Изменить ширину колонки"
-                @mousedown.prevent.stop="startResize($event, col)"
-                @dblclick.prevent.stop="resetResize(col)"
-              ></span>
-            </button>
-            <div v-else class="dt-th-cell">
-              {{ col.label }}
+            <div class="dt-th-cell">
+              <button
+                v-if="col.sortable !== false"
+                type="button"
+                class="dt-th-label"
+                :aria-sort="ariaSort(col)"
+                @click="toggleSort(col)"
+              >
+                <span>{{ col.label }}</span>
+                <span class="dt-sort" aria-hidden="true">
+                  <i :class="{ on: sortActive(col, 1) }">▲</i><i :class="{ on: sortActive(col, -1) }">▼</i>
+                </span>
+              </button>
+              <div v-else class="dt-th-label">{{ col.label }}</div>
+              <div v-if="$slots.filter" class="dt-th-filter">
+                <slot name="filter" :column="col"></slot>
+              </div>
               <span
                 v-if="resizable"
                 class="dt-resizer"
@@ -214,11 +211,6 @@ function onRowClick(event: MouseEvent, row: Row, index: number) {
               ></span>
             </div>
           </template>
-        </div>
-
-        <!-- Row 3: optional filter row (rendered only when the slot is used) -->
-        <div v-if="$slots.filters" class="dt-tr dt-filters">
-          <slot name="filters" />
         </div>
 
         <!-- Data rows -->
@@ -271,7 +263,7 @@ function onRowClick(event: MouseEvent, row: Row, index: number) {
 }
 .dt-tbar-title {
   margin: 0;
-  font-size: 18px;
+  font-size: calc(var(--ui-font-scale, 1) * 18px);
   font-weight: 700;
   color: var(--ui-text);
 }
@@ -310,51 +302,81 @@ function onRowClick(event: MouseEvent, row: Row, index: number) {
 }
 .dt-cell,
 .dt-th-cell {
+  /* Header cell wrapper: label on top, the per-column filter right under it
+     (tight), the resize handle on the right edge. Columns without a filter
+     keep the label vertically centered. */
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  gap: 3px;
   min-width: 0;
   overflow-wrap: anywhere;
-  padding: 12px 20px;
-  font-size: 14px;
+  padding: 6px 20px 7px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
+}
+.dt-th-cell:has(.dt-th-filter:not(:empty)) {
+  justify-content: flex-start;
 }
 .dt-tr:hover {
   background: var(--ui-surface-2);
 }
 
-/* Column headers — row 2: solid full-width band */
+/* Column headers — row 2: solid full-width band (one row, filters inside). */
 .dt-th {
   background: var(--ui-surface-2);
 }
-.dt-th-cell {
-  font-weight: 600;
-  color: var(--ui-text-muted);
-}
-button.dt-th-cell {
+.dt-th-label {
   border: none;
   /* Buttons get a UA buttonface background by default — make them
      transparent so header cells match the solid .dt-th band. */
   background: transparent;
   font: inherit;
   font-weight: 600;
-  color: inherit;
+  color: var(--ui-text-muted);
   text-align: left;
   display: inline-flex;
   align-items: center;
   gap: 6px;
   width: 100%;
+  padding: 0;
   cursor: pointer;
 }
-button.dt-th-cell:hover {
+button.dt-th-label:hover {
   color: var(--ui-text);
 }
-
-/* Filter row — directly under the headers; cells align with the columns
-   via the shared subgrid tracks. */
-.dt-filters {
-  background: var(--ui-surface-2);
-}
-.dt-filters > * {
+.dt-th-filter {
+  width: 100%;
   min-width: 0;
-  padding: 8px 20px;
-  font-size: 12px;
+}
+
+/* Filter controls inside the header cells: underline style — no box, no
+   background, only a bottom rule; the rule turns accent on focus. Applies
+   to any input/select placed into the #filter slot, regardless of the page. */
+.dt-th-filter :deep(input),
+.dt-th-filter :deep(select) {
+  width: 100%;
+  box-sizing: border-box;
+  border: none;
+  border-bottom: 1px solid var(--ui-border-strong);
+  border-radius: 0;
+  background: transparent;
+  color: var(--ui-text);
+  font: inherit;
+  font-size: calc(var(--ui-font-scale, 1) * 12px);
+  padding: 3px 0 4px;
+  outline: none;
+}
+.dt-th-filter :deep(input::placeholder) {
+  color: var(--ui-text-muted);
+}
+.dt-th-filter :deep(select) {
+  cursor: pointer;
+}
+.dt-th-filter :deep(input:focus),
+.dt-th-filter :deep(select:focus) {
+  border-bottom-color: var(--ui-accent);
 }
 
 /* Expanded/open row highlight + the detail row below it */
@@ -373,7 +395,7 @@ button.dt-th-cell:hover {
   display: inline-flex;
   flex-direction: column;
   gap: 2px;
-  font-size: 8px;
+  font-size: calc(var(--ui-font-scale, 1) * 8px);
   line-height: 1;
   color: var(--ui-text-faint);
   opacity: 0.6;
@@ -432,7 +454,7 @@ button.dt-th-cell:hover {
 .dt-empty {
   grid-column: 1 / -1;
   color: var(--ui-text-muted);
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   padding: 30px;
   text-align: center;
 }

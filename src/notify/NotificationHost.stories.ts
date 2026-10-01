@@ -49,7 +49,7 @@ export const Default: Story = {
     },
     template: `
       <div style="padding:24px;font-family:sans-serif;display:flex;flex-direction:column;gap:10px;align-items:flex-start;">
-        <p style="color:var(--muted-foreground);font-size:13px;">
+        <p style="color:var(--muted-foreground);font-size: calc(var(--ui-font-scale, 1) * 13px);">
           Демо общего стека уведомлений: низ-слева, полоска-таймер на верхней кромке
           (5 с для ошибок), стек сдвигается вместе с боковым меню.
         </p>

@@ -34,7 +34,7 @@ export const Default: Story = {
           <MilestoneMarker :timeline="timeline" :date="d2" title="Начало монтажа" color="#1a73e8" />
           <MilestoneMarker :timeline="timeline" :date="d3" title="Окончание работ" content="Финал монтажа" color="#188038" />
         </div>
-        <div style="font-size:12px;color:#666;margin-top:6px;">Флажки по центру своих ячеек (16 февраля, 20 февраля, 18 марта).</div>
+        <div style="font-size: calc(var(--ui-font-scale, 1) * 12px);color:#666;margin-top:6px;">Флажки по центру своих ячеек (16 февраля, 20 февраля, 18 марта).</div>
       </div>
     `,
   }),
@@ -75,7 +75,7 @@ export const DecadeUnit: Story = {
         <div style="position:relative;width:3000px;height:36px;background:#f0f0f0;border-radius:6px;overflow:hidden;">
           <MilestoneMarker :timeline="timeline" :date="md" title="Завершение этапа" content="Окончание закупочной кампании" color="#1a73e8" :draggable="false" />
         </div>
-        <div style="font-size:12px;color:#666;margin-top:6px;">Декада: маркер по центру ячейки-декады (март, 21–31).</div>
+        <div style="font-size: calc(var(--ui-font-scale, 1) * 12px);color:#666;margin-top:6px;">Декада: маркер по центру ячейки-декады (март, 21–31).</div>
       </div>
     `,
   }),

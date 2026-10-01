@@ -201,7 +201,7 @@ onMounted(() => {
   border: none;
   border-radius: var(--ui-radius-sm);
   padding: 9px 18px;
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   font-weight: 600;
   cursor: pointer;
   background: var(--ui-accent);
@@ -214,7 +214,7 @@ onMounted(() => {
 /* Loading / error placeholders outside the table */
 .sp-st {
   color: var(--ui-text-muted);
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   padding: 30px;
   text-align: center;
 }
@@ -243,7 +243,7 @@ onMounted(() => {
   border-radius: 10px;
   background: var(--ui-success-soft);
   color: var(--ui-success);
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   font-weight: 600;
 }
 .avail.off {

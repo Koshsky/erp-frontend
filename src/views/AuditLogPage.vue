@@ -12,6 +12,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useAuditStore } from '../store'
 import { useColumnWidths } from '../composables/useColumnWidths'
+import { tablePageSize } from '../settings'
 import type { DtoAuditEventView } from '@/api'
 
 const audit = useAuditStore()
@@ -153,13 +154,13 @@ const filters = reactive({
   ip: '',
 })
 
-const PAGE_SIZE = 50
+const pageSize = computed(() => tablePageSize.value)
 const offset = ref(0)
 
-const page = computed(() => Math.floor(offset.value / PAGE_SIZE) + 1)
+const page = computed(() => Math.floor(offset.value / pageSize.value) + 1)
 /** Loki has no exact total — "no more pages" is when the page is shorter than
  * a full page. */
-const hasMore = computed(() => items.value.length >= PAGE_SIZE)
+const hasMore = computed(() => items.value.length >= pageSize.value)
 
 /**
  * Sort values for the DataTable: ts is a timestamp, actor prefers the full
@@ -198,7 +199,7 @@ function toRFC3339(value: string): string {
 async function applyFilters(presetOffset = 0) {
   offset.value = presetOffset
   await audit.load({
-    limit: PAGE_SIZE,
+    limit: pageSize.value,
     offset: presetOffset,
     user: filters.user.trim() || undefined,
     entity: filters.entity || undefined,
@@ -225,11 +226,11 @@ function resetFilters() {
 }
 
 function nextPage() {
-  if (hasMore.value) applyFilters(offset.value + PAGE_SIZE)
+  if (hasMore.value) applyFilters(offset.value + pageSize.value)
 }
 
 function prevPage() {
-  if (page.value > 1) applyFilters(offset.value - PAGE_SIZE)
+  if (page.value > 1) applyFilters(offset.value - pageSize.value)
 }
 
 function entityLabel(e: string): string {
@@ -339,39 +340,38 @@ onMounted(() => {
         <button type="button" class="al-btn" @click="resetFilters">Сбросить</button>
       </template>
 
-      <!-- Per-column filters, aligned with the columns via shared tracks -->
-      <template #filters>
-        <div class="al-filter">
+      <!-- Per-column filters — every field renders under its column -->
+      <template #filter="{ column }">
+        <div v-if="column.key === 'ts'" class="al-filter">
           <input v-model="filters.when" type="datetime-local" title="Показывать с этого момента" @change="applyFilters(0)" />
         </div>
-        <div class="al-filter">
+        <div v-else-if="column.key === 'actor'" class="al-filter">
           <input v-model="filters.user" type="text" placeholder="Логин или ФИО" @keyup.enter="applyFilters(0)" />
         </div>
-        <div class="al-filter">
+        <div v-else-if="column.key === 'entity'" class="al-filter">
           <select v-model="filters.entity" @change="onEntityChange">
             <option value="">Все</option>
             <option v-for="(label, key) in ENTITY_LABELS" :key="key" :value="key">{{ label }}</option>
           </select>
         </div>
-        <div class="al-filter">
+        <div v-else-if="column.key === 'action'" class="al-filter">
           <select v-model="filters.action" @change="applyFilters(0)">
             <option value="">Все</option>
             <option v-for="opt in actionOptions" :key="opt.key" :value="opt.key">{{ opt.label }}</option>
           </select>
         </div>
-        <div class="al-filter">
+        <div v-else-if="column.key === 'id'" class="al-filter">
           <input v-model="filters.id" type="text" inputmode="numeric" placeholder="ID" title="ID сущности или пользователя" @keyup.enter="applyFilters(0)" />
         </div>
-        <div class="al-filter">
+        <div v-else-if="column.key === 'status'" class="al-filter">
           <select v-model="filters.status" @change="applyFilters(0)">
             <option value="">Все</option>
             <option v-for="g in STATUS_GROUPS" :key="g" :value="g">{{ g }}</option>
           </select>
         </div>
-        <div class="al-filter">
+        <div v-else-if="column.key === 'ip'" class="al-filter">
           <input v-model="filters.ip" type="text" placeholder="IP (точный)" title="Полный IP адрес актора" @keyup.enter="applyFilters(0)" />
         </div>
-        <div></div>
       </template>
 
       <template #cell="{ row, column }">
@@ -435,7 +435,7 @@ onMounted(() => {
   border: 1px solid var(--ui-border-strong);
   border-radius: 8px;
   padding: 7px 12px;
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   color: var(--ui-text);
   background: var(--ui-surface-2);
   min-width: 240px;
@@ -448,7 +448,7 @@ onMounted(() => {
   border-radius: 8px;
   padding: 7px 14px;
   cursor: pointer;
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   transition: background 0.15s ease;
   white-space: nowrap;
 }
@@ -464,7 +464,7 @@ onMounted(() => {
 
 .al-st {
   color: var(--ui-text-muted);
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   margin: 8px 0;
   padding: 12px 16px;
 }
@@ -486,7 +486,7 @@ onMounted(() => {
 
 .al-disabled-title {
   margin: 0 0 10px;
-  font-size: 15px;
+  font-size: calc(var(--ui-font-scale, 1) * 15px);
   font-weight: 600;
   color: var(--ui-text);
 }
@@ -497,13 +497,13 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   line-height: 1.5;
 }
 
 .al-disabled-steps code {
   font-family: var(--ui-font-mono, monospace);
-  font-size: 12px;
+  font-size: calc(var(--ui-font-scale, 1) * 12px);
   background: var(--ui-surface-3);
   border-radius: 5px;
   padding: 1px 6px;
@@ -513,7 +513,7 @@ onMounted(() => {
 /* In-place refresh indicator (shown while the old rows stay visible). */
 .al-refreshing {
   color: var(--ui-text-muted);
-  font-size: 12px;
+  font-size: calc(var(--ui-font-scale, 1) * 12px);
   margin: 6px 0;
   text-align: right;
   animation: al-pulse 1.2s ease-in-out infinite;
@@ -544,7 +544,7 @@ onMounted(() => {
   gap: 10px;
   align-items: center;
   padding: 10px 14px;
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   color: var(--ui-text);
   border-top: 1px solid var(--ui-border);
   cursor: pointer;
@@ -554,7 +554,7 @@ onMounted(() => {
   background: var(--ui-surface-3);
   font-weight: 600;
   color: var(--ui-text-2);
-  font-size: 12px;
+  font-size: calc(var(--ui-font-scale, 1) * 12px);
   cursor: default;
   border-top: none;
 }
@@ -577,7 +577,7 @@ onMounted(() => {
   border: none;
   background: transparent;
   color: var(--ui-text-faint);
-  font-size: 9px;
+  font-size: calc(var(--ui-font-scale, 1) * 9px);
   line-height: 1;
   padding: 1px 2px;
   cursor: pointer;
@@ -599,17 +599,7 @@ onMounted(() => {
   min-width: 0;
 }
 
-.al-filter input,
-.al-filter select {
-  width: 100%;
-  min-width: 0;
-  border: 1px solid var(--ui-border-strong);
-  border-radius: 6px;
-  padding: 5px 7px;
-  font-size: 12px;
-  color: var(--ui-text);
-  background: var(--ui-surface);
-}
+
 
 .al-ts {
   white-space: nowrap;
@@ -630,7 +620,7 @@ onMounted(() => {
 }
 
 .al-actor-login {
-  font-size: 11px;
+  font-size: calc(var(--ui-font-scale, 1) * 11px);
   color: var(--ui-text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -638,7 +628,7 @@ onMounted(() => {
 }
 
 .al-actor-role {
-  font-size: 11px;
+  font-size: calc(var(--ui-font-scale, 1) * 11px);
   color: var(--ui-text-faint);
 }
 
@@ -647,7 +637,7 @@ onMounted(() => {
   display: inline-block;
   border-radius: 6px;
   padding: 2px 8px;
-  font-size: 12px;
+  font-size: calc(var(--ui-font-scale, 1) * 12px);
   white-space: nowrap;
 }
 
@@ -677,7 +667,7 @@ onMounted(() => {
   text-align: center;
   border-radius: 6px;
   padding: 2px 6px;
-  font-size: 12px;
+  font-size: calc(var(--ui-font-scale, 1) * 12px);
   background: var(--ui-surface-3);
   color: var(--ui-text-2);
 }
@@ -705,7 +695,7 @@ onMounted(() => {
 
 .al-ip {
   font-family: var(--ui-font-mono, monospace);
-  font-size: 12px;
+  font-size: calc(var(--ui-font-scale, 1) * 12px);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -727,7 +717,7 @@ onMounted(() => {
 }
 
 .al-detail-meta code {
-  font-size: 12px;
+  font-size: calc(var(--ui-font-scale, 1) * 12px);
   color: var(--ui-text-2);
   background: var(--ui-surface-3);
   padding: 3px 8px;
@@ -738,7 +728,7 @@ onMounted(() => {
 }
 
 .al-method {
-  font-size: 12px;
+  font-size: calc(var(--ui-font-scale, 1) * 12px);
   font-weight: 700;
   border-radius: 6px;
   padding: 2px 8px;
@@ -770,7 +760,7 @@ onMounted(() => {
   border: 1px solid var(--ui-border);
   border-radius: 8px;
   padding: 10px;
-  font-size: 12px;
+  font-size: calc(var(--ui-font-scale, 1) * 12px);
   line-height: 1.45;
   overflow-x: auto;
   max-height: 260px;
@@ -780,7 +770,7 @@ onMounted(() => {
 }
 
 .al-detail-title {
-  font-size: 11px;
+  font-size: calc(var(--ui-font-scale, 1) * 11px);
   color: var(--ui-text-faint);
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -794,7 +784,7 @@ onMounted(() => {
   justify-content: flex-end;
   gap: 14px;
   margin-top: 14px;
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   color: var(--ui-text-2);
 }
 
@@ -805,7 +795,7 @@ onMounted(() => {
   border-radius: 8px;
   padding: 6px 12px;
   cursor: pointer;
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
 }
 
 .al-pager button:disabled {

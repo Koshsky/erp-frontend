@@ -176,7 +176,7 @@ function onOverlayClick(e: MouseEvent) {
   border-bottom: 1px solid var(--ui-border);
 }
 .mf-title {
-  font-size: 16px;
+  font-size: calc(var(--ui-font-scale, 1) * 16px);
   font-weight: 700;
   color: var(--ui-text);
   margin: 0;
@@ -184,7 +184,7 @@ function onOverlayClick(e: MouseEvent) {
 .mf-close {
   border: none;
   background: transparent;
-  font-size: 22px;
+  font-size: calc(var(--ui-font-scale, 1) * 22px);
   line-height: 1;
   color: var(--ui-text-muted);
   cursor: pointer;
@@ -207,7 +207,7 @@ function onOverlayClick(e: MouseEvent) {
   gap: 6px;
 }
 .mf-label {
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   color: var(--ui-text-2);
   font-weight: 500;
 }
@@ -220,7 +220,7 @@ function onOverlayClick(e: MouseEvent) {
   border: 1px solid var(--ui-border-strong);
   border-radius: var(--ui-radius-sm);
   padding: 9px 12px;
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   font-family: inherit;
   color: var(--ui-text);
   background: var(--ui-surface);
@@ -243,7 +243,7 @@ function onOverlayClick(e: MouseEvent) {
 }
 .mf-error {
   margin: 0;
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   font-weight: 500;
   color: var(--ui-danger);
 }
@@ -251,7 +251,7 @@ function onOverlayClick(e: MouseEvent) {
   border: none;
   border-radius: var(--ui-radius-sm);
   padding: 9px 18px;
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   font-weight: 600;
   cursor: pointer;
   transition: background var(--ui-duration), opacity var(--ui-duration);

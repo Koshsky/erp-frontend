@@ -262,11 +262,17 @@ function onLoadMore() {
       @row-contextmenu="(e, row) => onRowContextMenu(e, asRes(row))"
     >
       <template #actions>
-        <select v-if="seesAllResources" v-model="ownerFilter" class="rp-filter">
+        <button v-if="canCreateResource" type="button" class="rp-add" @click="openCreate">Создать ресурс</button>
+      </template>
+      <template #filter="{ column }">
+        <select
+          v-if="column.key === 'owner_id' && seesAllResources"
+          v-model="ownerFilter"
+          class="rp-filter"
+        >
           <option value="">Все владельцы</option>
           <option v-for="u in users.filter((u) => u.preset !== 'worker').sort(compareByName)" :key="u.id" :value="u.id">{{ u.name ?? `#${u.id}` }}</option>
         </select>
-        <button v-if="canCreateResource" type="button" class="rp-add" @click="openCreate">Создать ресурс</button>
       </template>
       <template #cell="{ row, column }">
         <span v-if="column.key === 'code'" class="code">
@@ -346,7 +352,7 @@ function onLoadMore() {
   border: none;
   border-radius: var(--ui-radius-sm);
   padding: 9px 18px;
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   font-weight: 600;
   cursor: pointer;
   background: var(--ui-accent);
@@ -366,7 +372,7 @@ function onLoadMore() {
   border: 1px solid var(--ui-border-strong);
   border-radius: var(--ui-radius-sm);
   padding: 9px 18px;
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   font-weight: 600;
   font-family: inherit;
   cursor: pointer;
@@ -388,7 +394,7 @@ function onLoadMore() {
   border: 1px solid var(--ui-border-strong);
   border-radius: var(--ui-radius-sm);
   padding: 9px 12px;
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   font-family: inherit;
   color: var(--ui-text);
   background: var(--ui-surface);
@@ -402,7 +408,7 @@ function onLoadMore() {
 /* Loading / error placeholders outside the table */
 .rp-st {
   color: var(--ui-text-muted);
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   padding: 30px;
   text-align: center;
 }
@@ -421,7 +427,7 @@ function onLoadMore() {
   margin-bottom: 10px;
 }
 .rp-members-title {
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   font-weight: 600;
   color: var(--ui-text-2);
 }
@@ -444,7 +450,7 @@ function onLoadMore() {
   border-radius: 6px;
   background: var(--ui-surface);
   border: 1px solid var(--ui-border);
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
 }
 .rp-member-name {
   font-weight: 600;
@@ -457,7 +463,7 @@ function onLoadMore() {
   border: none;
   border-radius: 6px;
   padding: 6px 12px;
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   font-weight: 600;
   cursor: pointer;
   background: var(--ui-accent);
@@ -482,7 +488,7 @@ function onLoadMore() {
 .rp-members-empty {
   margin: 0;
   padding: 8px 0;
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   color: var(--ui-text-muted);
   text-align: center;
 }

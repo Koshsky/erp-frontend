@@ -182,7 +182,7 @@ function goToRedirect() {
   border-radius: var(--ui-radius-md);
   background: var(--ui-surface-2);
   color: var(--ui-text-2);
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   font-weight: 600;
   cursor: pointer;
   transition: background var(--ui-duration), border-color var(--ui-duration);

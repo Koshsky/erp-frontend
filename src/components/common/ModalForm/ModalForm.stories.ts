@@ -119,7 +119,7 @@ export const FocusTrapEscapeAndDoubleSubmitGuard: Story = {
       <div>
         <button type="button" class="mf-open" @click="open = true">Открыть форму</button>
         <ModalForm :open="open" :busy="busy" title="Новый процесс" :fields="fields" :submit-label="'Сохранить'" @save="saves += 1; busy = true" @close="open = false" />
-        <div data-testid="mf-saves" style="font-size:12px;">{{ saves }}</div>
+        <div data-testid="mf-saves" style="font-size: calc(var(--ui-font-scale, 1) * 12px);">{{ saves }}</div>
       </div>
     `,
   }),

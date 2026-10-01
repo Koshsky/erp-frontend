@@ -663,14 +663,14 @@ onMounted(() => {
   flex-wrap: wrap;
 }
 .pm-title {
-  font-size: 24px;
+  font-size: calc(var(--ui-font-scale, 1) * 24px);
   font-weight: 700;
   color: var(--ui-text);
   margin: 0;
 }
 .pm-load {
   color: var(--ui-text-faint);
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
 }
 .pm-load.er {
   color: var(--ui-danger);
@@ -698,7 +698,7 @@ onMounted(() => {
   border-radius: 10px;
   background: var(--ui-surface);
   cursor: pointer;
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   color: var(--ui-text);
   transition: border-color var(--ui-duration), background var(--ui-duration);
 }
@@ -717,7 +717,7 @@ onMounted(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 12px;
+  font-size: calc(var(--ui-font-scale, 1) * 12px);
   line-height: 1;
   color: var(--ui-text-muted);
   opacity: 0.65;
@@ -743,7 +743,7 @@ onMounted(() => {
   border-radius: 10px;
   background: transparent;
   color: var(--ui-accent);
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   font-weight: 600;
   cursor: pointer;
   transition: background var(--ui-duration), border-color var(--ui-duration);
@@ -769,7 +769,7 @@ onMounted(() => {
   color: var(--ui-accent-on);
 }
 .pm-preset-code {
-  font-size: 11px;
+  font-size: calc(var(--ui-font-scale, 1) * 11px);
   font-weight: 700;
   background: var(--ui-accent-soft);
   color: var(--ui-accent);
@@ -791,7 +791,7 @@ onMounted(() => {
   margin-bottom: 26px;
 }
 .pm-group-title {
-  font-size: 12px;
+  font-size: calc(var(--ui-font-scale, 1) * 12px);
   font-weight: 700;
   color: var(--ui-text-faint);
   text-transform: uppercase;
@@ -816,12 +816,12 @@ onMounted(() => {
   border-bottom: 1px solid var(--ui-border);
 }
 .pm-block-title {
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   font-weight: 700;
   color: var(--ui-text);
 }
 .pm-block-summary {
-  font-size: 11px;
+  font-size: calc(var(--ui-font-scale, 1) * 11px);
   color: var(--ui-text-muted);
   white-space: nowrap;
   overflow: hidden;
@@ -835,7 +835,7 @@ onMounted(() => {
   gap: 10px;
   padding: 8px 14px;
   flex-wrap: wrap;
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   transition: background var(--ui-duration);
 }
 .pm-row + .pm-row { border-top: 1px solid var(--ui-border); }
@@ -858,7 +858,7 @@ onMounted(() => {
   border: 1px solid var(--ui-border-strong);
   border-radius: 999px;
   padding: 3px 10px;
-  font-size: 11px;
+  font-size: calc(var(--ui-font-scale, 1) * 11px);
   font-family: inherit;
   color: var(--ui-text-2);
   background: var(--ui-surface);
@@ -887,7 +887,7 @@ onMounted(() => {
   border: 1px solid var(--ui-border-strong);
   border-radius: 999px;
   padding: 3px 9px;
-  font-size: 11px;
+  font-size: calc(var(--ui-font-scale, 1) * 11px);
   color: var(--ui-text-muted);
   background: var(--ui-surface);
   cursor: pointer;
@@ -896,7 +896,7 @@ onMounted(() => {
 /* Собранное выражение множественного выбора — компактная подпись */
 .pm-zone-mini {
   font-family: ui-monospace, Menlo, Consolas, monospace;
-  font-size: 10px;
+  font-size: calc(var(--ui-font-scale, 1) * 10px);
   color: var(--ui-text-muted);
   background: var(--ui-surface-2);
   border-radius: 5px;
@@ -916,7 +916,7 @@ onMounted(() => {
   flex: 0 1 240px;
   min-width: 160px;
   font-family: ui-monospace, Menlo, Consolas, monospace;
-  font-size: 11px;
+  font-size: calc(var(--ui-font-scale, 1) * 11px);
   border: 1px solid var(--ui-border-strong);
   border-radius: 6px;
   padding: 4px 8px;
@@ -924,12 +924,12 @@ onMounted(() => {
   background: var(--ui-surface);
 }
 .pm-expr.bad { border-color: var(--ui-danger); outline: 1px solid var(--ui-danger); }
-.pm-expr-desc { font-size: 11px; color: var(--ui-text-2); }
+.pm-expr-desc { font-size: calc(var(--ui-font-scale, 1) * 11px); color: var(--ui-text-2); }
 .pm-expr-desc.bad { color: var(--ui-danger); }
 .pm-expr-close {
   border: none;
   background: transparent;
-  font-size: 11px;
+  font-size: calc(var(--ui-font-scale, 1) * 11px);
   color: var(--ui-text-muted);
   cursor: pointer;
   padding: 2px 5px;
@@ -958,7 +958,7 @@ onMounted(() => {
 }
 .pm-savebar-info {
   flex: 1;
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   color: var(--ui-text);
 }
 .pm-savebar-info ul {
@@ -975,7 +975,7 @@ onMounted(() => {
   flex-shrink: 0;
 }
 .pm-btn {
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   font-weight: 600;
   border: 1px solid var(--ui-border-strong);
   background: var(--ui-surface);
@@ -1009,7 +1009,7 @@ onMounted(() => {
   background: var(--ui-danger-soft);
 }
 .pm-save-msg {
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   color: var(--ui-success);
   margin: 12px 0;
 }
@@ -1041,19 +1041,19 @@ onMounted(() => {
 }
 .pm-del-title {
   margin: 0;
-  font-size: 16px;
+  font-size: calc(var(--ui-font-scale, 1) * 16px);
   font-weight: 700;
   color: var(--ui-text);
 }
 .pm-del-text {
   margin: 0;
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   line-height: 1.5;
   color: var(--ui-text-2);
 }
 .pm-del-input {
   font-family: inherit;
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   padding: 8px 10px;
   border: 1px solid var(--ui-border-strong);
   border-radius: 7px;

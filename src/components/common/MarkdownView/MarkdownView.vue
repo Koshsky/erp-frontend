@@ -21,7 +21,7 @@ const html = computed(() => renderMarkdown(props.source))
 /* Typography for Markdown-rendered content; element selectors via :deep
    because the HTML comes from v-html (no scope attributes on children). */
 .mdv {
-  font-size: 17px;
+  font-size: calc(var(--ui-font-scale, 1) * 17px);
   line-height: 1.6;
   color: var(--ui-text);
 }
@@ -38,7 +38,7 @@ const html = computed(() => renderMarkdown(props.source))
 .mdv :deep(h2),
 .mdv :deep(h3) {
   margin: 16px 0 8px;
-  font-size: 18px;
+  font-size: calc(var(--ui-font-scale, 1) * 18px);
   font-weight: 700;
   color: var(--ui-text);
 }
@@ -70,7 +70,7 @@ const html = computed(() => renderMarkdown(props.source))
 
 .mdv :deep(code) {
   font-family: ui-monospace, Menlo, Consolas, monospace;
-  font-size: 15px;
+  font-size: calc(var(--ui-font-scale, 1) * 15px);
   background: var(--ui-surface-2);
   border: 1px solid var(--ui-border);
   border-radius: 6px;
@@ -127,7 +127,7 @@ const html = computed(() => renderMarkdown(props.source))
 .mdv :deep(table) {
   border-collapse: collapse;
   margin: 0 0 10px;
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
 }
 
 .mdv :deep(table:last-child) {

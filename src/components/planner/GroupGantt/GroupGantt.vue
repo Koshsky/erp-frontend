@@ -177,7 +177,7 @@ function fmt(d: string | Date | number | null | undefined): string {
   flex-direction: column;
   align-items: flex-start;
   justify-content: center;
-  font-size: 12px;
+  font-size: calc(var(--ui-font-scale, 1) * 12px);
   font-weight: 500;
   color: var(--ui-text);
   padding: 1px 8px;
@@ -191,7 +191,7 @@ function fmt(d: string | Date | number | null | undefined): string {
 }
 .item-title {
   font-weight: 400;
-  font-size: 11px;
+  font-size: calc(var(--ui-font-scale, 1) * 11px);
   color: var(--ui-text-2);
   max-width: 100%;
   overflow: hidden;
@@ -199,7 +199,7 @@ function fmt(d: string | Date | number | null | undefined): string {
   white-space: nowrap;
 }
 .item-dates {
-  font-size: 9px;
+  font-size: calc(var(--ui-font-scale, 1) * 9px);
   color: var(--ui-text-muted);
   font-weight: 400;
   margin-top: 1px;

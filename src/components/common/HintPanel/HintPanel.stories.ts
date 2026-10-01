@@ -23,7 +23,7 @@ export const ScopeExpressions: Story = {
     data: () => ({}),
     template: `
       <div style="padding:24px;font-family:sans-serif;">
-        <p style="color:var(--muted-foreground);font-size:13px;margin-bottom:12px;">
+        <p style="color:var(--muted-foreground);font-size: calc(var(--ui-font-scale, 1) * 13px);margin-bottom:12px;">
           Демо глобальной панели подсказок: открывает страницу «Выражения области видимости» из центрального реестра.
         </p>
         <button type="button" @click="openHint"

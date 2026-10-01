@@ -109,7 +109,7 @@ onMounted(() => {
 @import '../styles/tokens.css';
 
 .pf-title {
-  font-size: 24px;
+  font-size: calc(var(--ui-font-scale, 1) * 24px);
   font-weight: 700;
   color: var(--ui-text);
   margin-bottom: 20px;
@@ -146,7 +146,7 @@ onMounted(() => {
   justify-content: space-between;
   padding: 14px 20px;
   border-bottom: 1px solid var(--ui-border);
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
 }
 .pf-row:last-child { border-bottom: none; }
 

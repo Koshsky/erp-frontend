@@ -51,7 +51,7 @@ function absenceLabel(a: DtoResourceAbsenceResponse): string {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 12px;
+  font-size: calc(var(--ui-font-scale, 1) * 12px);
   line-height: 1.4;
 }
 .ut-marker {
@@ -74,7 +74,7 @@ function absenceLabel(a: DtoResourceAbsenceResponse): string {
   color: var(--ui-text-muted);
 }
 .ut-label {
-  font-size: 11px;
+  font-size: calc(var(--ui-font-scale, 1) * 11px);
 }
 .ut-absences {
   display: flex;

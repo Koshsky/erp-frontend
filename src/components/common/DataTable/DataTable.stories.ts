@@ -244,7 +244,7 @@ export const Sortable: StateStory = {
   play: async ({ canvasElement, step }) => {
     // Lazily imported — see the comment in ManyColumnsScroll.play.
     const { expect } = await import('vitest')
-    const headerButtons = () => [...canvasElement.querySelectorAll<HTMLButtonElement>('button.dt-th-cell')]
+    const headerButtons = () => [...canvasElement.querySelectorAll<HTMLButtonElement>('button.dt-th-label')]
     const firstCodes = () =>
       [...canvasElement.querySelectorAll<HTMLElement>('.dt-tr:not(.dt-th) .dt-cell:first-child')].map(
         (c) => c.textContent?.trim() ?? '',
@@ -316,7 +316,7 @@ export const ResizableColumns: StoryObj<{
   }),
   play: async ({ canvasElement, step }) => {
     const { expect } = await import('vitest')
-    const firstHeader = () => canvasElement.querySelector<HTMLElement>('button.dt-th-cell')
+    const firstHeader = () => canvasElement.querySelector<HTMLElement>('.dt-th-cell')
     const widthOf = () => firstHeader()!.getBoundingClientRect().width
     const fire = (type: string, x: number) =>
       document.dispatchEvent(new MouseEvent(type, { clientX: x, bubbles: true }))
@@ -336,7 +336,7 @@ export const ResizableColumns: StoryObj<{
     })
 
     await step('the divider line is visible and the last header has no handle', async () => {
-      const firstHeader = () => canvasElement.querySelector<HTMLElement>('button.dt-th-cell')
+      const firstHeader = () => canvasElement.querySelector<HTMLElement>('.dt-th-cell')
       const style = getComputedStyle(firstHeader()!.querySelector('.dt-resizer')!, '::before')
       expect(style.backgroundColor).not.toBe('rgba(0, 0, 0, 0)')
       const headerCells = [...canvasElement.querySelectorAll<HTMLElement>('.dt-th > *')]
@@ -371,7 +371,7 @@ export const Expandable: StoryObj<{
     template: `
       <DataTable :columns="args.columns" :rows="args.rows" :title="args.title" :empty-text="args.emptyText" expandable :resizable="args.resizable">
         <template #expanded="{ row }">
-          <div style="font-size: 13px; color: var(--ui-text-2);">
+          <div style="font-size: calc(var(--ui-font-scale, 1) * 13px); color: var(--ui-text-2);">
             Детали статуса «{{ row.name }}»: код {{ row.code }}, доступность {{ row.available ? 'да' : 'нет' }}.
             Раскрытие переключается кликом по строке.
           </div>
@@ -410,18 +410,35 @@ export const Filters: StoryObj<{
   emptyText?: string
 }> = {
   name: 'Фильтры в шапке',
+  tags: ['vitest'],
   args: { columns: stateColumns, rows: stateRows, title: 'Статусы', emptyText: 'Нет данных о статусах' },
   render: (args: DataTableProps<StateRow>) => ({
     components: { DataTable },
     setup: () => ({ args }),
     template: `
       <DataTable :columns="args.columns" :rows="args.rows" :title="args.title" :empty-text="args.emptyText" :resizable="args.resizable">
-        <template #filters>
-          <input placeholder="по коду" style="box-sizing:border-box; width:100%; padding:5px 8px; border:1px solid var(--ui-border-strong); border-radius:6px; background:var(--ui-surface); color:var(--ui-foreground); font:inherit; font-size:12px;" />
-          <input placeholder="по названию" style="box-sizing:border-box; width:100%; padding:5px 8px; border:1px solid var(--ui-border-strong); border-radius:6px; background:var(--ui-surface); color:var(--ui-foreground); font:inherit; font-size:12px;" />
-          <input placeholder="по доступности" style="box-sizing:border-box; width:100%; padding:5px 8px; border:1px solid var(--ui-border-strong); border-radius:6px; background:var(--ui-surface); color:var(--ui-foreground); font:inherit; font-size:12px;" />
+        <template #filter="{ column }">
+          <input v-if="column.key === 'code'" placeholder="по коду" style="box-sizing:border-box; width:100%; border:none; border-bottom:1px solid var(--ui-border-strong); border-radius:0; background:transparent; color:var(--ui-foreground); font:inherit; font-size: calc(var(--ui-font-scale, 1) * 12px); padding:3px 0 4px;" />
+          <input v-else-if="column.key === 'name'" placeholder="по названию" style="box-sizing:border-box; width:100%; border:none; border-bottom:1px solid var(--ui-border-strong); border-radius:0; background:transparent; color:var(--ui-foreground); font:inherit; font-size: calc(var(--ui-font-scale, 1) * 12px); padding:3px 0 4px;" />
+          <input v-else-if="column.key === 'available'" placeholder="по доступности" style="box-sizing:border-box; width:100%; border:none; border-bottom:1px solid var(--ui-border-strong); border-radius:0; background:transparent; color:var(--ui-foreground); font:inherit; font-size: calc(var(--ui-font-scale, 1) * 12px); padding:3px 0 4px;" />
         </template>
       </DataTable>
     `,
   }),
+  play: async ({ canvasElement, step }) => {
+    const { expect } = await import('vitest')
+    await step('every filter sits inside its column header cell', async () => {
+      const cells = [...canvasElement.querySelectorAll<HTMLElement>('.dt-th-cell')]
+      expect(cells.length).toBe(3)
+      const filled = cells.filter((c) => c.querySelector('input'))
+      expect(filled.length).toBe(3)
+      for (const cell of cells) {
+        const input = cell.querySelector('input')
+        if (!input) continue
+        const il = input.getBoundingClientRect().left
+        const ll = cell.querySelector('.dt-th-label')!.getBoundingClientRect().left
+        expect(Math.abs(il - ll)).toBeLessThan(1)
+      }
+    })
+  },
 }

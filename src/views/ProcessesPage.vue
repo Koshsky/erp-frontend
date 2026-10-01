@@ -308,7 +308,7 @@ onMounted(() => {
 }
 .pp-st {
   color: var(--ui-text-2);
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   padding: 30px;
   text-align: center;
 }

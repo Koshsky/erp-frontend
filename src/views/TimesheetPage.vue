@@ -221,7 +221,7 @@ const stateColorMap = computed<Record<number, string>>(() => {
   border: 1px solid var(--ui-border-strong);
   border-radius: var(--ui-radius-sm);
   padding: 9px 12px;
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   font-family: inherit;
   color: var(--ui-text);
   background: var(--ui-surface);
@@ -237,7 +237,7 @@ const stateColorMap = computed<Record<number, string>>(() => {
   border: 1px solid var(--ui-border-strong);
   border-radius: var(--ui-radius-sm);
   padding: 9px 12px;
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   font-family: inherit;
   color: var(--ui-text);
   background: var(--ui-surface);
@@ -249,7 +249,7 @@ const stateColorMap = computed<Record<number, string>>(() => {
   box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.12);
 }
 .tp-title {
-  font-size: 24px;
+  font-size: calc(var(--ui-font-scale, 1) * 24px);
   font-weight: 700;
   color: var(--ui-text);
   margin: 0;
@@ -263,7 +263,7 @@ const stateColorMap = computed<Record<number, string>>(() => {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
+  font-size: calc(var(--ui-font-scale, 1) * 12px);
   color: var(--ui-text-muted);
 }
 .tp-swatch {
@@ -274,12 +274,12 @@ const stateColorMap = computed<Record<number, string>>(() => {
 }
 .tp-note {
   margin-left: auto;
-  font-size: 12px;
+  font-size: calc(var(--ui-font-scale, 1) * 12px);
   color: var(--ui-text-faint);
 }
 .tp-error {
   margin: 12px 0 0;
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   color: var(--ui-danger);
 }
 /* "Load more" rows: the roster is paged server-side (PAGE_SIZE per request) */
@@ -292,7 +292,7 @@ const stateColorMap = computed<Record<number, string>>(() => {
   border: 1px solid var(--ui-border-strong);
   border-radius: var(--ui-radius-sm);
   padding: 9px 18px;
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   font-weight: 600;
   font-family: inherit;
   cursor: pointer;
@@ -311,7 +311,7 @@ const stateColorMap = computed<Record<number, string>>(() => {
 }
 .tp-empty {
   color: var(--ui-text-2);
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   padding: 40px 12px;
   text-align: center;
   box-sizing: border-box;

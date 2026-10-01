@@ -328,7 +328,7 @@ watch(
 .tb-title {
   flex: 0 1 auto;
   min-width: 0;
-  font-size: 12px;
+  font-size: calc(var(--ui-font-scale, 1) * 12px);
   font-weight: 700;
   color: var(--ui-accent-on);
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
@@ -348,7 +348,7 @@ watch(
 }
 .tb-proj {
   flex-shrink: 0;
-  font-size: 10px;
+  font-size: calc(var(--ui-font-scale, 1) * 10px);
   font-weight: 600;
   line-height: 1.6;
   color: #fff;
@@ -361,7 +361,7 @@ watch(
 }
 .tb-owner {
   flex-shrink: 0;
-  font-size: 10px;
+  font-size: calc(var(--ui-font-scale, 1) * 10px);
   font-weight: 600;
   line-height: 1.6;
   color: #fff;
@@ -375,7 +375,7 @@ watch(
 /* Completion percentage of the task's operations (badge on the bar) */
 .tb-progress {
   flex-shrink: 0;
-  font-size: 10px;
+  font-size: calc(var(--ui-font-scale, 1) * 10px);
   font-weight: 700;
   line-height: 1.6;
   color: #fff;
@@ -403,7 +403,7 @@ watch(
   flex-shrink: 0;
   width: fit-content;
   margin-left: 6px;
-  font-size: 10px;
+  font-size: calc(var(--ui-font-scale, 1) * 10px);
   font-weight: 700;
   line-height: 1.6;
   color: #fff;
@@ -432,7 +432,7 @@ watch(
   align-items: center;
   gap: 3px;
   margin-left: 6px;
-  font-size: 10px;
+  font-size: calc(var(--ui-font-scale, 1) * 10px);
   font-weight: 700;
   line-height: 1.6;
   color: #fff;

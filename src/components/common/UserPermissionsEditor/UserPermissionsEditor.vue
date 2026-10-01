@@ -362,9 +362,9 @@ function cardSummary(res: string): string {
 .uped-tools {
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
 }
-.uped-title { margin: 0; font-size: 16px; font-weight: 700; color: var(--ui-text); }
+.uped-title { margin: 0; font-size: calc(var(--ui-font-scale, 1) * 16px); font-weight: 700; color: var(--ui-text); }
 .uped-preset-select {
-  font-family: inherit; font-size: 12px; color: var(--ui-text);
+  font-family: inherit; font-size: calc(var(--ui-font-scale, 1) * 12px); color: var(--ui-text);
   background: var(--ui-surface); border: 1px solid var(--ui-border-strong);
   border-radius: 8px; padding: 4px 10px; cursor: pointer;
   transition: border-color 0.15s ease-out;
@@ -374,23 +374,23 @@ function cardSummary(res: string): string {
   outline: none; border-color: var(--ui-accent);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--ui-accent) 18%, transparent);
 }
-.uped-dirty { font-size: 12px; font-weight: 600; color: var(--ui-accent); }
+.uped-dirty { font-size: calc(var(--ui-font-scale, 1) * 12px); font-weight: 600; color: var(--ui-accent); }
 .uped-reset {
-  margin-left: auto; font-size: 12px; color: var(--ui-text-muted);
+  margin-left: auto; font-size: calc(var(--ui-font-scale, 1) * 12px); color: var(--ui-text-muted);
   background: var(--ui-surface); border: 1px solid var(--ui-border-strong);
   border-radius: 999px; padding: 4px 12px; cursor: pointer;
 }
 .uped-reset:hover { color: var(--ui-text); border-color: var(--ui-accent); }
-.uped-st { color: var(--ui-text-2); font-size: 14px; padding: 20px; text-align: center; }
+.uped-st { color: var(--ui-text-2); font-size: calc(var(--ui-font-scale, 1) * 14px); padding: 20px; text-align: center; }
 .er { color: var(--ui-danger); }
 .uped-admin {
   padding: 16px; border: 1px dashed var(--ui-border-strong);
-  border-radius: var(--ui-radius-sm); color: var(--ui-text-2); font-size: 13px;
+  border-radius: var(--ui-radius-sm); color: var(--ui-text-2); font-size: calc(var(--ui-font-scale, 1) * 13px);
 }
 .uped-list { display: flex; flex-direction: column; gap: 2px; }
 .uped-group { margin-bottom: 8px; }
 .uped-group-title {
-  margin: 10px 0 6px; font-size: 11px; font-weight: 700;
+  margin: 10px 0 6px; font-size: calc(var(--ui-font-scale, 1) * 11px); font-weight: 700;
   letter-spacing: 0.05em; text-transform: uppercase; color: var(--ui-text-muted);
 }
 
@@ -411,12 +411,12 @@ function cardSummary(res: string): string {
   border-bottom: 1px solid var(--ui-border);
 }
 .uped-res-title {
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   font-weight: 700;
   color: var(--ui-text);
 }
 .uped-res-summary {
-  font-size: 11px;
+  font-size: calc(var(--ui-font-scale, 1) * 11px);
   color: var(--ui-text-muted);
   white-space: nowrap;
   overflow: hidden;
@@ -441,7 +441,7 @@ function cardSummary(res: string): string {
 .ur-cap {
   width: 84px;
   flex-shrink: 0;
-  font-size: 12px;
+  font-size: calc(var(--ui-font-scale, 1) * 12px);
   color: var(--ui-text);
 }
 .ur-chips {
@@ -456,7 +456,7 @@ function cardSummary(res: string): string {
   border: 1px solid var(--ui-border-strong);
   border-radius: 999px;
   padding: 3px 10px;
-  font-size: 11px;
+  font-size: calc(var(--ui-font-scale, 1) * 11px);
   font-family: inherit;
   color: var(--ui-text-2);
   background: var(--ui-surface);
@@ -492,7 +492,7 @@ function cardSummary(res: string): string {
 /* Собранное выражение множественного выбора — компактная подпись */
 .ur-zone-mini {
   font-family: ui-monospace, Menlo, Consolas, monospace;
-  font-size: 10px;
+  font-size: calc(var(--ui-font-scale, 1) * 10px);
   color: var(--ui-text-muted);
   background: var(--ui-surface-2);
   border-radius: 5px;

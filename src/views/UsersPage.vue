@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useRouter } from 'vue-router'
 import { HintButton, ContextMenu, ConfirmDialog, DataTable } from '../components/common'
@@ -50,12 +50,17 @@ const fLogin = ref('')
 const filteredUsers = computed(() => {
   const qName = fName.value.trim().toLowerCase()
   const qLogin = fLogin.value.trim().toLowerCase()
+  const preset = fPreset.value
   return adminUsers.value.filter((u) => {
     if (qName && !(u.name ?? '').toLowerCase().includes(qName)) return false
     if (qLogin && !(u.username ?? '').toLowerCase().includes(qLogin)) return false
+    if (preset && u.preset !== preset) return false
     return true
   })
 })
+
+/** Preset filter: '' — all, otherwise the preset code */
+const fPreset = ref('')
 
 const emptyText = computed(() => (adminUsers.value.length ? 'Ничего не найдено' : 'Нет данных'))
 
@@ -130,29 +135,9 @@ onMounted(() => {
   void app.loadAdminUsers()
 })
 
-/**
- * Server-side search over the whole user base (not only over the loaded page):
- * the list is capped at 500 rows, so users beyond the cap would otherwise be
- * unreachable. Debounced (~300 ms) and always restarts from the first page.
- */
-const search = ref('')
-let searchTimer: ReturnType<typeof setTimeout> | null = null
-
-watch(search, () => {
-  if (searchTimer) clearTimeout(searchTimer)
-  searchTimer = setTimeout(() => {
-    searchTimer = null
-    void app.refreshAdminUsers(search.value.trim())
-  }, 300)
-})
-
-onBeforeUnmount(() => {
-  if (searchTimer) clearTimeout(searchTimer)
-})
-
-/** Refreshes the list keeping the active search after a mutation (delete) */
+/** Reloads the admin list after a mutation (delete) */
 async function refreshAfterMutation() {
-  await app.refreshAdminUsers(search.value.trim())
+  await app.refreshAdminUsers('')
 }
 </script>
 
@@ -179,17 +164,17 @@ async function refreshAfterMutation() {
     >
       <template #actions>
         <HintButton hint="users" />
-        <input v-model="search" type="search" class="up-search" placeholder="Поиск по ФИО или логину" />
         <button v-if="rbac.can('user_admin', 'create')" type="button" class="up-add" @click="router.push('/users/new')">
           Создать пользователя
         </button>
       </template>
-      <template #filters>
-        <input v-model="fName" type="search" class="th-filter" placeholder="по ФИО" />
-        <input v-model="fLogin" type="search" class="th-filter" placeholder="по логину" />
-        <!-- No per-preset filter (display + sort only); an empty cell keeps the
-             filter row aligned with the three header columns. -->
-        <div></div>
+      <template #filter="{ column }">
+        <input v-if="column.key === 'name'" v-model="fName" type="search" class="th-filter" placeholder="Иванов Иван Иванович" />
+        <input v-else-if="column.key === 'username'" v-model="fLogin" type="search" class="th-filter" placeholder="по логину" />
+        <select v-else-if="column.key === 'preset'" v-model="fPreset" class="th-filter">
+          <option value="">Все пресеты</option>
+          <option v-for="(label, code) in PRESET_LABELS" :key="code" :value="code">{{ label }}</option>
+        </select>
       </template>
       <template #cell="{ row, column }">
         <span v-if="column.key === 'name'" class="up-name">{{ asUser(row).name }}</span>
@@ -218,7 +203,7 @@ async function refreshAfterMutation() {
   border: none;
   border-radius: var(--ui-radius-sm);
   padding: 9px 18px;
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   font-weight: 600;
   cursor: pointer;
   background: var(--ui-accent);
@@ -232,59 +217,24 @@ async function refreshAfterMutation() {
   opacity: 0.55;
   cursor: not-allowed;
 }
-.up-search {
-  width: 240px;
-  box-sizing: border-box;
-  border: 1px solid var(--ui-border-strong);
-  border-radius: var(--ui-radius-sm);
-  padding: 9px 12px;
-  font-size: 14px;
-  font-family: inherit;
-  color: var(--ui-text);
-  background: var(--ui-surface);
-  outline: none;
-  transition: border-color var(--ui-duration), box-shadow var(--ui-duration);
-}
-.up-search:focus {
-  border-color: var(--ui-accent);
-  box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.12);
-}
 /* Loading / error placeholders outside the table */
 .up-st {
   color: var(--ui-text-2);
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   padding: 30px;
   text-align: center;
 }
 .er { color: var(--ui-danger); }
 .mono {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 12px;
+  font-size: calc(var(--ui-font-scale, 1) * 12px);
 }
-/* Filter-row inputs (rendered inside the DataTable #filters slot) */
-.th-filter {
-  min-width: 0;
-  width: 100%;
-  box-sizing: border-box;
-  border: 1px solid var(--ui-border-strong);
-  border-radius: 6px;
-  padding: 5px 8px;
-  font-size: 12px;
-  font-family: inherit;
-  color: var(--ui-text);
-  background: var(--ui-surface);
-  outline: none;
-}
-.th-filter:focus {
-  border-color: var(--ui-accent);
-}
-/* Cell renders */
 .up-name {
   font-weight: 700;
   color: var(--ui-text);
 }
 .up-preset {
   color: var(--ui-text-2);
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
 }
 </style>

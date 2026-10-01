@@ -131,7 +131,7 @@ onBeforeUnmount(() => {
 @import '../styles/tokens.css';
 
 .ss-title {
-  font-size: 24px;
+  font-size: calc(var(--ui-font-scale, 1) * 24px);
   font-weight: 700;
   color: var(--ui-text);
   margin-bottom: 20px;
@@ -146,7 +146,7 @@ onBeforeUnmount(() => {
 }
 
 .ss-card-title {
-  font-size: 18px;
+  font-size: calc(var(--ui-font-scale, 1) * 18px);
   font-weight: 700;
   color: var(--ui-text);
   margin: 0 0 16px;
@@ -161,7 +161,7 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   padding: 9px 0;
   border-bottom: 1px solid var(--ui-border);
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
 }
 
 .ss-row:last-child {

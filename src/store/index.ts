@@ -5,6 +5,7 @@ import { AuthApi, ProjectsApi, ProcessesApi, TasksApi, TimesheetResourcesApi, Ti
 import type { DtoUserInfo, DtoProject, DtoResourceResponse, DtoResourceCalendar, DtoResourceMemberResponse, DtoResourceAbsenceResponse, DtoUserResponse, DtoUserStateResponse, DtoStateResponse, DtoCreateResourceRequest, DtoUpdateResourceRequest, DtoCreateUserRequest, DtoUpdateUserRequest, DtoSetDaysRequest, DtoAdminUserResponse, DtoCreateUserResult, DtoAutoCreateConfig, DtoAutoCreatedCounts, DtoCommentResponse, DtoPresetView, DtoPresetRuleInput, DtoPresetRuleView, DtoMatrixCell, DtoRoutePolicyView, EngineKindInfo, DtoPermission, DtoUserPermissionsView, DtoUserPermissionsInput, DtoAuditEventView, DtoAssignmentResponse, DtoDetailedProcess, DtoDetailedProject, DtoDetailedTask, DtoMilestone, DtoProcess, DtoProcessPlanning, DtoProjectPlanning, DtoResource, DtoTaskDependency, DtoTaskPlanning } from '@/api'
 import { apiErrorMessage } from '@/utils'
 import { getApiUrl } from '@/config'
+import { tablePageSize } from '@/settings'
 import { isOffline } from '@/offline/state'
 import { offlineFailFastAdapter } from '@/offline/failFast'
 import { scheduleWarmup } from '@/offline/warmup'
@@ -52,7 +53,7 @@ const REFRESH_MARGIN_MS = 120 * 1000
 const REFRESH_INTERVAL_MS = 30 * 1000
 
 /** Page size for listings (matches the backend default). */
-const PAGE_SIZE = 50
+// Paged lists use the live UI setting (tablePageSize) — see the API calls below.
 
 /** Max employee ids per batch days request (backend contract — see GET /user/days). */
 const BATCH_IDS_MAX = 200
@@ -669,7 +670,7 @@ export const useAppStore = defineStore('app', () => {
     projectsError.value = null
     try {
       const api = new ProjectsApi(apiConfig())
-      const resp = await api.projectGet(PAGE_SIZE, undefined, 0)
+      const resp = await api.projectGet(tablePageSize.value, undefined, 0)
       const data = resp.data?.data
       projects.value = data?.items ?? []
     } catch (e: unknown) {
@@ -740,7 +741,7 @@ export const useAppStore = defineStore('app', () => {
     resourcesError.value = null
     try {
       const api = new TimesheetResourcesApi(apiConfig())
-      const resp = await api.resourcesGet(PAGE_SIZE, undefined, 0)
+      const resp = await api.resourcesGet(tablePageSize.value, undefined, 0)
       const data = resp.data?.data
       const items = data?.items ?? []
       // The background PULL must not truncate pages already loaded via
@@ -786,7 +787,7 @@ export const useAppStore = defineStore('app', () => {
         return merged
       }
       const api = new TimesheetResourcesApi(apiConfig())
-      const resp = await api.resourcesGet(PAGE_SIZE, undefined, resources.value.length)
+      const resp = await api.resourcesGet(tablePageSize.value, undefined, resources.value.length)
       const data = resp.data?.data
       mergeResources(data?.items ?? [])
       resourcesTotal.value = data?.total ?? resourcesTotal.value
@@ -1610,12 +1611,12 @@ export const useTimesheetStore = defineStore('timesheet', () => {
     }
     try {
       const api = new UsersApi(apiConfig())
-      const resp = await api.userGet(PAGE_SIZE, undefined, managerId ?? undefined, undefined, undefined, 0)
+      const resp = await api.userGet(tablePageSize.value, undefined, managerId ?? undefined, undefined, undefined, 0)
       const data = resp.data?.data
       // Sorting is added by the computed employeesWithTitles.
       //
       // The background PULL must not silently drop pages the user already
-      // opened via "Показать ещё" (PAGE_SIZE=50): instead of wholesale
+      // opened via "Показать ещё" (page size from the UI setting): instead of wholesale
       // replacing the array with page 0, merge the fresh first page into the
       // existing list — dedup by id, fresh page wins, already-loaded extra
       // pages are kept (the same identity-preserving merge the offline path
@@ -1666,7 +1667,7 @@ export const useTimesheetStore = defineStore('timesheet', () => {
         return merged
       }
       const api = new UsersApi(apiConfig())
-      const resp = await api.userGet(PAGE_SIZE, undefined, undefined, undefined, undefined, employees.value.length)
+      const resp = await api.userGet(tablePageSize.value, undefined, undefined, undefined, undefined, employees.value.length)
       const data = resp.data?.data
       mergeEmployees(data?.items ?? [])
       employeesTotal.value = data?.total ?? employeesTotal.value

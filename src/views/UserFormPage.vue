@@ -511,7 +511,7 @@ async function onSubmit() {
   flex-wrap: wrap;
 }
 .ufp-title {
-  font-size: 24px;
+  font-size: calc(var(--ui-font-scale, 1) * 24px);
   font-weight: 700;
   color: var(--ui-text);
   margin: 0;
@@ -582,7 +582,7 @@ async function onSubmit() {
   min-width: 0;
 }
 .ufp-label {
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   color: var(--ui-text-2);
   font-weight: 500;
 }
@@ -592,7 +592,7 @@ async function onSubmit() {
   border: 1px solid var(--ui-border-strong);
   border-radius: var(--ui-radius-sm);
   padding: 9px 12px;
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   font-family: inherit;
   color: var(--ui-text);
   background: var(--ui-surface);
@@ -606,7 +606,7 @@ async function onSubmit() {
   cursor: pointer;
 }
 .ufp-hint {
-  font-size: 12px;
+  font-size: calc(var(--ui-font-scale, 1) * 12px);
   color: var(--ui-text-muted);
 }
 .ufp-hint.er {
@@ -615,12 +615,12 @@ async function onSubmit() {
 }
 .ufp-error {
   margin: 0;
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   color: var(--ui-danger);
 }
 .ufp-ok {
   margin: 0;
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   font-weight: 600;
   color: var(--ui-success, #22c55e);
 }
@@ -631,7 +631,7 @@ async function onSubmit() {
   border-radius: var(--ui-radius-sm);
   background: var(--ui-surface);
   padding: 8px 16px;
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   font-weight: 600;
   color: var(--ui-accent);
   cursor: pointer;
@@ -646,7 +646,7 @@ async function onSubmit() {
 }
 .ufp-st {
   color: var(--ui-text-2);
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   padding: 30px;
   text-align: center;
 }
@@ -661,7 +661,7 @@ async function onSubmit() {
   border-radius: var(--ui-radius-sm);
   background: var(--ui-surface);
   padding: 9px 18px;
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   color: var(--ui-accent);
   cursor: pointer;
   white-space: nowrap;
@@ -681,7 +681,7 @@ async function onSubmit() {
   border: none;
   border-radius: var(--ui-radius-sm);
   padding: 9px 18px;
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   font-weight: 600;
   cursor: pointer;
   background: var(--ui-accent);

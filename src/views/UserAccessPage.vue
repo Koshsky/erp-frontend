@@ -162,7 +162,7 @@ watch(permissionDirty, (dirty) => {
   flex-wrap: wrap;
 }
 .ua-title {
-  font-size: 20px;
+  font-size: calc(var(--ui-font-scale, 1) * 20px);
   font-weight: 700;
   color: var(--ui-text);
   margin: 0;
@@ -172,7 +172,7 @@ watch(permissionDirty, (dirty) => {
   border-radius: var(--ui-radius-sm);
   background: var(--ui-surface);
   padding: 7px 14px;
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   color: var(--ui-accent);
   cursor: pointer;
 }
@@ -186,18 +186,18 @@ watch(permissionDirty, (dirty) => {
 }
 .ua-st {
   color: var(--ui-text-2);
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   padding: 30px;
   text-align: center;
 }
 .ua-error {
   margin: 0;
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   color: var(--ui-danger);
 }
 .ua-ok {
   margin: 0;
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   font-weight: 600;
   color: var(--ui-success, #22c55e);
 }
@@ -211,7 +211,7 @@ watch(permissionDirty, (dirty) => {
   border: none;
   border-radius: var(--ui-radius-sm);
   padding: 9px 18px;
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   font-weight: 600;
   cursor: pointer;
   background: var(--ui-accent);

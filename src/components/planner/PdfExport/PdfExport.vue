@@ -658,7 +658,7 @@ onBeforeUnmount(() => {
   border: none;
   border-radius: 8px;
   padding: 9px 18px;
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   font-weight: 600;
   font-family: inherit;
   color: #fff;
@@ -685,7 +685,7 @@ onBeforeUnmount(() => {
   background: var(--ui-surface);
   color: var(--ui-text);
   padding: 9px 16px;
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   font-weight: 600;
   font-family: inherit;
   cursor: pointer;
@@ -696,7 +696,7 @@ onBeforeUnmount(() => {
   border-color: var(--ui-border-stronger);
 }
 .pe-open-icon {
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   line-height: 1;
   color: var(--ui-accent);
 }
@@ -732,7 +732,7 @@ onBeforeUnmount(() => {
   border-bottom: 1px solid #e8e8e8;
 }
 .pe-title {
-  font-size: 16px;
+  font-size: calc(var(--ui-font-scale, 1) * 16px);
   font-weight: 700;
   color: #2c3e50;
   margin: 0;
@@ -740,7 +740,7 @@ onBeforeUnmount(() => {
 .pe-close {
   border: none;
   background: transparent;
-  font-size: 22px;
+  font-size: calc(var(--ui-font-scale, 1) * 22px);
   line-height: 1;
   color: #999;
   cursor: pointer;
@@ -775,7 +775,7 @@ onBeforeUnmount(() => {
   gap: 6px;
 }
 .pe-label {
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   color: #444;
   font-weight: 500;
 }
@@ -785,7 +785,7 @@ onBeforeUnmount(() => {
   border: 1px solid #ddd;
   border-radius: 8px;
   padding: 9px 12px;
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   font-family: inherit;
   color: #333;
   background: #fff;
@@ -797,7 +797,7 @@ onBeforeUnmount(() => {
   box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.12);
 }
 .pe-hint {
-  font-size: 11px;
+  font-size: calc(var(--ui-font-scale, 1) * 11px);
   color: #999;
 }
 .pe-style-row {
@@ -809,7 +809,7 @@ onBeforeUnmount(() => {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   color: #333;
   cursor: pointer;
 }
@@ -823,7 +823,7 @@ onBeforeUnmount(() => {
   accent-color: #1a73e8;
 }
 .pe-range-value {
-  font-size: 12px;
+  font-size: calc(var(--ui-font-scale, 1) * 12px);
   color: #555;
   min-width: 40px;
   text-align: right;
@@ -853,7 +853,7 @@ onBeforeUnmount(() => {
   background: #f8f9fa;
   border-radius: 8px;
   padding: 8px 10px;
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   font-weight: 500;
   font-family: inherit;
   color: #333;
@@ -872,7 +872,7 @@ onBeforeUnmount(() => {
   border-radius: 9px;
   background: #1a73e8;
   color: #fff;
-  font-size: 11px;
+  font-size: calc(var(--ui-font-scale, 1) * 11px);
   font-weight: 600;
   display: inline-flex;
   align-items: center;
@@ -881,7 +881,7 @@ onBeforeUnmount(() => {
 .pe-caret {
   margin-left: auto;
   color: #888;
-  font-size: 11px;
+  font-size: calc(var(--ui-font-scale, 1) * 11px);
 }
 .pe-filter-list {
   display: flex;
@@ -906,7 +906,7 @@ onBeforeUnmount(() => {
   background: #f2f6fc;
 }
 .pe-filter-label {
-  font-size: 12px;
+  font-size: calc(var(--ui-font-scale, 1) * 12px);
   color: #333;
   min-width: 0;
   overflow: hidden;
@@ -922,24 +922,24 @@ onBeforeUnmount(() => {
   border-top: 1px solid #f0f0f0;
 }
 .pe-file-label {
-  font-size: 11px;
+  font-size: calc(var(--ui-font-scale, 1) * 11px);
   color: #999;
   text-transform: uppercase;
   letter-spacing: 0.4px;
 }
 .pe-file-name {
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   font-weight: 600;
   color: #333;
   word-break: break-all;
 }
 .pe-file-sub {
-  font-size: 12px;
+  font-size: calc(var(--ui-font-scale, 1) * 12px);
   color: #666;
 }
 .pe-period-hint {
   padding: 8px 12px;
-  font-size: 12px;
+  font-size: calc(var(--ui-font-scale, 1) * 12px);
   color: #b45309;
   background: #fef3c7;
   border-bottom: 1px solid #fde68a;
@@ -969,7 +969,7 @@ onBeforeUnmount(() => {
   padding: 8px 12px;
   border-bottom: 1px solid #e8e8e8;
   background: #fff;
-  font-size: 12px;
+  font-size: calc(var(--ui-font-scale, 1) * 12px);
   color: #666;
 }
 .pe-updating {
@@ -996,7 +996,7 @@ onBeforeUnmount(() => {
   justify-content: center;
   gap: 8px;
   color: #666;
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   background: #f4f6f9;
 }
 .pe-msg-error {
@@ -1031,7 +1031,7 @@ onBeforeUnmount(() => {
   border: none;
   border-radius: 8px;
   padding: 9px 18px;
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   font-weight: 600;
   font-family: inherit;
   cursor: pointer;
@@ -1055,7 +1055,7 @@ onBeforeUnmount(() => {
   border: none;
   border-radius: 8px;
   padding: 9px 18px;
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   font-weight: 600;
   font-family: inherit;
   cursor: pointer;
@@ -1104,7 +1104,7 @@ onBeforeUnmount(() => {
   border-radius: 9px;
   background: #1a73e8;
   color: #fff;
-  font-size: 11px;
+  font-size: calc(var(--ui-font-scale, 1) * 11px);
   font-weight: 600;
   display: flex;
   align-items: center;

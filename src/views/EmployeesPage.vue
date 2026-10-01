@@ -13,6 +13,7 @@ import { useAppStore, useTimesheetStore, useRbacStore } from '../store'
 import { isOffline } from '../offline/state'
 import { scheduleNamedRefresh } from '../offline/sync'
 import { useColumnWidths } from '../composables/useColumnWidths'
+import { compareByName } from '../utils'
 import type { DtoResourceResponse, DtoUserResponse } from '@/api'
 
 const ts = useTimesheetStore()
@@ -57,7 +58,9 @@ const asEmp = (row: unknown): DtoUserResponse => row as DtoUserResponse
 const columns = computed<DataTableColumn[]>(() => {
   const cols: DataTableColumn[] = [
     { key: 'name', label: 'ФИО', width: 'fit-content(380px)' },
-    { key: 'position', label: 'Должность', width: 'fit-content(320px)' },
+    { key: 'position', label: 'Должность', width: 'fit-content(280px)' },
+    { key: 'resource', label: 'Ресурс', width: 'fit-content(200px)' },
+    { key: 'resource_owner', label: 'Владелец ресурса', width: 'fit-content(260px)' },
     { key: 'hire_date', label: 'Дата приёма', width: '110px' },
     { key: 'termination_date', label: 'Дата увольнения', width: '140px' },
   ]
@@ -109,12 +112,30 @@ function managerLabel(managerId?: number | null): string {
   return u?.name ?? `#${managerId}`
 }
 
+/** Label of the resource owner (a name from the user catalog) */
+function ownerLabel(ownerId?: number | null): string {
+  if (ownerId == null) return '—'
+  if (ownerId === userId.value) return 'Я'
+  const u = users.value.find((x) => x.id === ownerId)
+  return u?.name ?? `#${ownerId}`
+}
+
+/**
+ * Sort values for derived columns: `resource` / `resource_owner` are not raw
+ * row fields (they come from resourceOf), everything else falls back to the
+ * row field itself.
+ */
+function empSortValue(emp: DtoUserResponse, key: string): string {
+  if (key === 'resource') return resourceOf(emp.id)?.code ?? ''
+  if (key === 'resource_owner') return ownerLabel(resourceOf(emp.id)?.owner_id)
+  return String((emp as unknown as Record<string, unknown>)[key] ?? '')
+}
+
 /**
  * Shared employee filters (search / manager / resource) — synchronized with the
  * "Timesheet" page: the state is a single module-level source of truth.
  */
 const {
-  search,
   managerFilter,
   resourceFilter,
   managerFilterOptions,
@@ -122,7 +143,38 @@ const {
   applyFilters,
 } = useEmployeeFilters()
 
-const filteredEmployees = computed(() => applyFilters(employeesWithTitles.value))
+// Per-column filters local to this page (the shared `search` remains the
+// timesheet page's combined ФИО+position filter).
+const fName = ref('')
+const fPosition = ref('')
+
+/** Owner filter value: '' — all, 'none' — resource without an owner, number — owner user id */
+const ownerFilter = ref<number | 'none' | ''>('')
+
+/** Owner options for the filter (non-worker users), like the owner select on Resources */
+const ownerFilterOptions = computed(() =>
+  [...users.value].filter((u) => u.preset !== 'worker').sort(compareByName),
+)
+
+const filteredEmployees = computed(() => {
+  const list = applyFilters(employeesWithTitles.value)
+  const qName = fName.value.trim().toLowerCase()
+  const qPos = fPosition.value.trim().toLowerCase()
+  const owner = ownerFilter.value
+  return list.filter((emp) => {
+    if (qName && !(emp.name ?? '').toLowerCase().includes(qName)) return false
+    if (qPos && !(emp.position ?? '').toLowerCase().includes(qPos)) return false
+    if (owner !== '') {
+      const res = resourceOf(emp.id)
+      if (owner === 'none') {
+        if (res?.owner_id != null) return false
+      } else if (res?.owner_id !== owner) {
+        return false
+      }
+    }
+    return true
+  })
+})
 
 // Right-click on a row: only the resource change. The employee's profile is a
 // system user — editing it happens solely on the admin "Пользователи" page.
@@ -236,21 +288,51 @@ function onLoadMore() {
       :rows="filteredEmployees"
       title="Сотрудники"
       :empty-text="employees.length ? 'Ничего не найдено' : 'Нет данных о сотрудниках'"
+      :sort-value="empSortValue"
       resizable
       v-model:column-widths="columnWidths"
       @row-contextmenu="(e, row) => onRowContextMenu(e, asEmp(row))"
     >
-      <template #actions>
-        <input v-model="search" type="search" class="ep-search" placeholder="Поиск по ФИО или должности" />
-        <select v-if="seesAllEmployees" v-model="managerFilter" class="ep-filter">
-          <option value="">Все руководители</option>
-          <option value="none">Без руководителя</option>
-          <option v-for="u in managerFilterOptions" :key="u.id" :value="u.id">{{ u.name ?? `#${u.id}` }}</option>
-        </select>
-        <select v-if="resources.length" v-model="resourceFilter" class="ep-filter" title="Фильтр по ресурсу">
+      <!-- Filters live under their columns (maybe none in the toolbar) -->
+      <template #filter="{ column }">
+        <input
+          v-if="column.key === 'name'"
+          v-model="fName"
+          type="search"
+          placeholder="Иванов Иван Иванович"
+        />
+        <input
+          v-else-if="column.key === 'position'"
+          v-model="fPosition"
+          type="search"
+          placeholder="по должности"
+        />
+        <select
+          v-else-if="column.key === 'resource'"
+          v-model="resourceFilter"
+          class="ep-filter"
+          title="Фильтр по ресурсу"
+        >
           <option value="">Все ресурсы</option>
           <option value="none">Без ресурса</option>
           <option v-for="r in resourceFilterOptions" :key="r.id" :value="r.id">{{ r.code }} — {{ r.title }}</option>
+        </select>
+        <select
+          v-else-if="column.key === 'resource_owner'"
+          v-model="ownerFilter"
+        >
+          <option value="">Все владельцы</option>
+          <option value="none">Без владельца</option>
+          <option v-for="u in ownerFilterOptions" :key="u.id" :value="u.id">{{ u.name ?? `#${u.id}` }}</option>
+        </select>
+        <select
+          v-else-if="column.key === 'manager_id' && seesAllEmployees"
+          v-model="managerFilter"
+          class="ep-filter"
+        >
+          <option value="">Все руководители</option>
+          <option value="none">Без руководителя</option>
+          <option v-for="u in managerFilterOptions" :key="u.id" :value="u.id">{{ u.name ?? `#${u.id}` }}</option>
         </select>
       </template>
       <template #cell="{ row, column }">
@@ -258,7 +340,8 @@ function onLoadMore() {
           {{ asEmp(row).name }}
           <PendingMark entity="user" :id="asEmp(row).id" />
         </span>
-        <span v-else-if="column.key === 'position'" class="pos-cell">
+        <span v-else-if="column.key === 'position'" class="pos-text">{{ asEmp(row).position || '—' }}</span>
+        <span v-else-if="column.key === 'resource'">
           <span
             v-if="resourceOf(asEmp(row).id)"
             class="ep-badge"
@@ -267,8 +350,9 @@ function onLoadMore() {
           >
             {{ resourceOf(asEmp(row).id)?.code }}
           </span>
-          <span class="pos-text">{{ asEmp(row).position || '—' }}</span>
+          <span v-else class="ep-none">—</span>
         </span>
+        <template v-else-if="column.key === 'resource_owner'">{{ ownerLabel(resourceOf(asEmp(row).id)?.owner_id) }}</template>
         <template v-else-if="column.key === 'hire_date'">{{ fmtDate(asEmp(row).hire_date) }}</template>
         <template v-else-if="column.key === 'termination_date'">{{ fmtDate(asEmp(row).termination_date) }}</template>
         <template v-else>{{ managerLabel(asEmp(row).manager_id) }}</template>
@@ -292,44 +376,10 @@ function onLoadMore() {
 <style scoped>
 @import '../styles/tokens.css';
 
-/* Toolbar controls (rendered inside the DataTable actions slot) */
-.ep-search {
-  width: 240px;
-  box-sizing: border-box;
-  border: 1px solid var(--ui-border-strong);
-  border-radius: var(--ui-radius-sm);
-  padding: 9px 12px;
-  font-size: 14px;
-  font-family: inherit;
-  color: var(--ui-text);
-  background: var(--ui-surface);
-  outline: none;
-  transition: border-color var(--ui-duration), box-shadow var(--ui-duration);
-}
-.ep-search:focus {
-  border-color: var(--ui-accent);
-  box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.12);
-}
-.ep-filter {
-  box-sizing: border-box;
-  border: 1px solid var(--ui-border-strong);
-  border-radius: var(--ui-radius-sm);
-  padding: 9px 12px;
-  font-size: 14px;
-  font-family: inherit;
-  color: var(--ui-text);
-  background: var(--ui-surface);
-  outline: none;
-  transition: border-color var(--ui-duration), box-shadow var(--ui-duration);
-}
-.ep-filter:focus {
-  border-color: var(--ui-accent);
-  box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.12);
-}
 /* Loading / error placeholders outside the table */
 .ep-st {
   color: var(--ui-text-2);
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   padding: 30px;
   text-align: center;
 }
@@ -345,7 +395,7 @@ function onLoadMore() {
   border: 1px solid var(--ui-border-strong);
   border-radius: var(--ui-radius-sm);
   padding: 9px 18px;
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   font-weight: 600;
   font-family: inherit;
   cursor: pointer;
@@ -368,11 +418,8 @@ function onLoadMore() {
   font-weight: 700;
   color: var(--ui-text);
 }
-.pos-cell {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
+.ep-none {
+  color: var(--ui-text-muted);
 }
 .pos-text {
   overflow: hidden;
@@ -387,7 +434,7 @@ function onLoadMore() {
   text-align: center;
   border-radius: 999px;
   padding: 2px 10px;
-  font-size: 12px;
+  font-size: calc(var(--ui-font-scale, 1) * 12px);
   font-weight: 700;
   line-height: 1.5;
   background: var(--ui-accent-soft);

@@ -493,7 +493,7 @@ watch(() => props.categories, (cats) => loadItemIcons(cats), { immediate: true }
 }
 
 .nd-brand {
-  font-size: 20px;
+  font-size: calc(var(--ui-font-scale, 1) * 20px);
   font-weight: 750;
   letter-spacing: 0.2px;
   color: var(--ui-text);
@@ -574,7 +574,7 @@ watch(() => props.categories, (cats) => loadItemIcons(cats), { immediate: true }
   border-radius: 8px;
   color: var(--ui-text-2);
   text-decoration: none;
-  font-size: 15px;
+  font-size: calc(var(--ui-font-scale, 1) * 15px);
   font-family: inherit;
   transition: background var(--ui-duration), color var(--ui-duration);
 }
@@ -652,7 +652,7 @@ watch(() => props.categories, (cats) => loadItemIcons(cats), { immediate: true }
   align-items: center;
   justify-content: center;
   border-radius: 999px;
-  font-size: 12px;
+  font-size: calc(var(--ui-font-scale, 1) * 12px);
   font-weight: 700;
   line-height: 1;
   background: var(--ui-accent-soft);
