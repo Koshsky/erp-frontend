@@ -5,6 +5,7 @@ import type { NavCategory, NavItem } from '../../../composables/useNavigation'
 import { NAV_WIDTH } from '../../../composables/useNavDrawer'
 import { AppIcon, type AppIconName } from '../AppIcon'
 import { useWindowPointerTrack } from '../../../utils/windowPointer'
+import { resolveAssetWithCustom } from '../../../assets'
 import type { AppNavDrawerEmits, AppNavDrawerProps } from './types'
 
 const props = withDefaults(defineProps<AppNavDrawerProps>(), { brand: 'MVS ERP' })
@@ -226,7 +227,7 @@ function startItemDrag(p: { row: HTMLElement; catLabel: string }) {
   clearPending()
 }
 
-function onDragUp(e: PointerEvent) {
+function onDragUp(_e: PointerEvent) {
   const d = drag.value
   const from = d?.from
   const b = d?.to
@@ -316,6 +317,32 @@ const ITEM_ICONS: Record<string, AppIconName> = {
 function iconFor(item: NavItem): AppIconName {
   return ITEM_ICONS[item.name] ?? 'list'
 }
+
+// ---------------------------------------------------------------------------
+// Item icons from the asset catalog (Lucide defaults, overridable by mounted
+// custom icons — see src/assets). Each item with `icon` resolves its SVG
+// markup once (async, memoized in the asset module); while it is resolving or
+// on a miss the legacy AppIcon fallback above is rendered, so navigation never
+// waits on the fetch.
+// ---------------------------------------------------------------------------
+const itemIconSvg = ref<Record<string, string | null>>({})
+
+function loadItemIcons(cats: NavCategory[]) {
+  for (const cat of cats) {
+    for (const item of cat.items) {
+      const key = item.name
+      if (!item.icon || itemIconSvg.value[key] !== undefined) continue
+      // Mark the key as in-flight *before* the async hop: the watcher re-enters
+      // on reorders and must not schedule duplicate resolutions.
+      itemIconSvg.value[key] = null
+      void resolveAssetWithCustom('icons', `${item.icon}.svg`).then((raw) => {
+        itemIconSvg.value[key] = typeof raw === 'string' ? raw : null
+      })
+    }
+  }
+}
+
+watch(() => props.categories, (cats) => loadItemIcons(cats), { immediate: true })
 </script>
 
 <template>
@@ -393,7 +420,13 @@ function iconFor(item: NavItem): AppIconName {
                   @pointerdown="onItemPointerDown"
                   @click="(e) => onItemNavigate(e, item)"
                 >
-                  <AppIcon :name="iconFor(item)" :size="22" />
+                  <span
+                    v-if="itemIconSvg[item.name]"
+                    class="nd-item-icon"
+                    aria-hidden="true"
+                    v-html="itemIconSvg[item.name]"
+                  ></span>
+                  <AppIcon v-else :name="iconFor(item)" :size="22" />
                   <span class="nd-item-label">{{ item.label }}</span>
                   <span v-if="item.badge" class="nd-badge">{{ item.badge }}</span>
                 </a>
@@ -460,7 +493,7 @@ function iconFor(item: NavItem): AppIconName {
 }
 
 .nd-brand {
-  font-size: 20px;
+  font-size: calc(var(--ui-font-scale, 1) * 20px);
   font-weight: 750;
   letter-spacing: 0.2px;
   color: var(--ui-text);
@@ -541,7 +574,7 @@ function iconFor(item: NavItem): AppIconName {
   border-radius: 8px;
   color: var(--ui-text-2);
   text-decoration: none;
-  font-size: 15px;
+  font-size: calc(var(--ui-font-scale, 1) * 15px);
   font-family: inherit;
   transition: background var(--ui-duration), color var(--ui-duration);
 }
@@ -551,6 +584,24 @@ function iconFor(item: NavItem): AppIconName {
 .nd-item :deep(svg) {
   color: var(--ui-text-faint);
   transition: color var(--ui-duration);
+}
+
+/* Asset-catalog icon (inline SVG markup): fixed 18px box; color flows through
+   the same :deep(svg) rules as the legacy AppIcon above (faint → text-2 on
+   hover → accent when active). */
+.nd-item-icon {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  color: inherit;
+}
+.nd-item-icon :deep(svg) {
+  width: 18px;
+  height: 18px;
+  display: block;
 }
 
 .nd-item:hover {
@@ -601,7 +652,7 @@ function iconFor(item: NavItem): AppIconName {
   align-items: center;
   justify-content: center;
   border-radius: 999px;
-  font-size: 12px;
+  font-size: calc(var(--ui-font-scale, 1) * 12px);
   font-weight: 700;
   line-height: 1;
   background: var(--ui-accent-soft);

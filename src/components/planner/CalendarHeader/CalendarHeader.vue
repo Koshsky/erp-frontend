@@ -67,11 +67,13 @@ const showWdRow = computed(() => props.t.unit === 'day' && props.t.cellPx >= CEL
       {{ m.label }}
     </div>
 
-    <div v-if="showNumRow" v-for="i in t.visibleIndices" :key="'n' + i"
-      class="th-num"
-      :style="{ left: t.cellLeft(i) + 'px', width: t.cellPx + 'px' }">
-      {{ numLabel(i) }}
-    </div>
+    <template v-if="showNumRow">
+      <div v-for="i in t.visibleIndices" :key="'n' + i"
+        class="th-num"
+        :style="{ left: t.cellLeft(i) + 'px', width: t.cellPx + 'px' }">
+        {{ numLabel(i) }}
+      </div>
+    </template>
 
     <template v-if="showWdRow">
       <div v-for="i in t.visibleIndices" :key="'w' + i"
@@ -109,7 +111,7 @@ const showWdRow = computed(() => props.t.unit === 'day' && props.t.cellPx >= CEL
   padding: 0 10px;
   box-sizing: border-box;
   font-weight: 700;
-  font-size: 12px;
+  font-size: calc(var(--ui-font-scale, 1) * 12px);
   color: var(--ui-text-2);
   border-right: 1px solid var(--ui-border);
   border-bottom: 1px solid var(--ui-border);
@@ -121,7 +123,7 @@ const showWdRow = computed(() => props.t.unit === 'day' && props.t.cellPx >= CEL
   position: absolute;
   top: 2px;
   height: 18px;
-  font-size: 11px;
+  font-size: calc(var(--ui-font-scale, 1) * 11px);
   font-weight: 600;
   color: var(--ui-text-2);
   overflow: hidden;
@@ -138,7 +140,7 @@ const showWdRow = computed(() => props.t.unit === 'day' && props.t.cellPx >= CEL
   position: absolute;
   top: 20px;
   height: 18px;
-  font-size: 10px;
+  font-size: calc(var(--ui-font-scale, 1) * 10px);
   color: var(--ui-text-2);
   display: flex;
   align-items: flex-end;
@@ -154,7 +156,7 @@ const showWdRow = computed(() => props.t.unit === 'day' && props.t.cellPx >= CEL
   position: absolute;
   top: 38px;
   height: 18px;
-  font-size: 10px;
+  font-size: calc(var(--ui-font-scale, 1) * 10px);
   color: var(--ui-text-muted);
   display: flex;
   align-items: flex-end;

@@ -1,5 +1,6 @@
 import { computed } from 'vue'
 import { useAuthStore, usePlanningStore, useRbacStore } from '../store'
+import type { DtoDetailedProcess, DtoDetailedProject, DtoProcess, DtoProject } from '@/api'
 
 type OwnerId = number | null | undefined
 
@@ -30,8 +31,8 @@ export function useRoleAccess() {
 
   /** Parent project owner of a process (process.update/delete — parent scope) */
   function processProjectOwner(processId: number): OwnerId {
-    const project = planning.processPlanning?.projects?.find((p: any) =>
-      (p.processes ?? []).some((pr: any) => pr.id === processId),
+    const project = planning.processPlanning?.projects?.find((p: DtoDetailedProject) =>
+      (p.processes ?? []).some((pr: DtoProcess) => pr.id === processId),
     )
     return project?.owner_id ?? null
   }
@@ -39,18 +40,18 @@ export function useRoleAccess() {
   /** Process owner of a task/milestone (task/milestone.update — parent scope) */
   function processOwner(processId: OwnerId): OwnerId {
     if (processId == null) return null
-    return planning.taskPlanning?.processes?.find((p: any) => p.id === processId)?.owner_id ?? null
+    return planning.taskPlanning?.processes?.find((p: DtoDetailedProcess) => p.id === processId)?.owner_id ?? null
   }
 
   /** Edit project: project.update permission + ownership (own) */
   function canManageProject(projectId: number): boolean {
-    const project = planning.projectPlanning?.projects?.find((p: any) => p.id === projectId)
+    const project = planning.projectPlanning?.projects?.find((p: DtoProject) => p.id === projectId)
     return rbac.canOwn('project', 'update', { projectOwner: project?.owner_id ?? null })
   }
 
   /** Delete project: project.delete permission + ownership (own) */
   function canDeleteProject(projectId: number): boolean {
-    const project = planning.projectPlanning?.projects?.find((p: any) => p.id === projectId)
+    const project = planning.projectPlanning?.projects?.find((p: DtoProject) => p.id === projectId)
     return rbac.canOwn('project', 'delete', { projectOwner: project?.owner_id ?? null })
   }
 

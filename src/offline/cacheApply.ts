@@ -1,6 +1,22 @@
+import type {
+  DtoAssignmentResponse,
+  DtoDetailedProcess,
+  DtoDetailedProject,
+  DtoDetailedTask,
+  DtoMilestone,
+  DtoProcess,
+  DtoProjectPlanning,
+  DtoProjectResponse,
+  DtoResourceMemberResponse,
+  DtoResourceResponse,
+  DtoStateResponse,
+  DtoTaskPlanning,
+  DtoUserResponse,
+  DtoUserStateResponse,
+} from '@/api'
 import { idbGet, idbKeys, idbPut } from './db'
 import type { OutboxEntry } from './outbox'
-import { applyRangeSplit } from './periodSplit'
+import { applyRangeSplit, type PutPeriodFields } from './periodSplit'
 
 /**
  * Write-through of offline deltas into "warmed" data (cache of GET responses in IndexedDB).
@@ -25,6 +41,73 @@ interface CachedBody {
 interface CachedEntryLike {
   ts: number
   data: CachedBody
+}
+
+/** A listing stored in the cache: { items, total } */
+interface ListPayload<T> {
+  items: T[]
+  total?: number
+}
+
+/**
+ * Fields of offline mutation bodies (OutboxEntry.body) read by the write-through.
+ * All optional — only the fields this module consumes are declared.
+ */
+interface MutationBody {
+  code?: string
+  title?: string
+  name?: string
+  preset?: string
+  position?: string
+  manager_id?: number
+  hire_date?: string
+  termination_date?: string
+  username?: string
+  owner_id?: number
+  start_date?: string
+  end_date?: string
+  date?: string
+  priority?: number
+  project_id?: number
+  parent_id?: number
+  process_id?: number
+  status?: string
+  color?: string
+  content?: string
+  task_id?: number
+  resource_id?: number
+  quantity?: number
+  user_id?: number
+  state_id?: number
+  is_available?: boolean
+}
+
+/** Project group inside the /planning/processes aggregate (its processes carry tasks/milestones). */
+interface PlanningProjectGroup extends Omit<DtoDetailedProject, 'processes'> {
+  processes?: DtoDetailedProcess[]
+}
+
+/** User fields read from the roster cache (for offline member rows) */
+interface EmployeeFields {
+  name?: string
+  preset?: string
+  position?: string
+  manager_id?: number
+  hire_date?: string
+  termination_date?: string
+}
+
+/** Resource code/name read from the resources cache (for the task badge) */
+interface ResourceFields {
+  code?: string
+  title?: string
+}
+
+/** State code/name/availability read from the states cache (for cell abbreviation/color) */
+interface StateFields {
+  state_code?: string
+  state_name?: string
+  is_available?: boolean
 }
 
 function pathnameOf(url: string): string {
@@ -62,17 +145,18 @@ async function forEachCacheKey(
 }
 
 /** Mutation for a listing { items, total } */
-function applyListMutation(
-  payload: { items: any[]; total?: number },
+function applyListMutation<T extends { id?: number }>(
+  payload: ListPayload<T>,
   entry: OutboxEntry,
-  makeItem: (body: any, tempId?: number) => any,
+  makeItem: (body: MutationBody | undefined, tempId?: number) => T | undefined,
 ): void {
   const items = payload.items
+  const body = entry.body as MutationBody | undefined
   const id = entryId(entry)
   const method = (entry.method || '').toUpperCase()
   switch (method) {
     case 'POST': {
-      const item = makeItem(entry.body, entry.tempId)
+      const item = makeItem(body, entry.tempId)
       if (item && !items.some((x) => x.id === item.id)) {
         items.push(item)
         payload.total = (payload.total ?? items.length - 1) + 1
@@ -82,7 +166,7 @@ function applyListMutation(
     case 'PUT': {
       if (id == null) break
       const i = items.findIndex((x) => x.id === id)
-      if (i >= 0) items[i] = { ...items[i], ...(entry.body ?? {}) }
+      if (i >= 0) items[i] = { ...items[i], ...(body ?? {}) }
       break
     }
     case 'DELETE': {
@@ -99,24 +183,27 @@ function applyListMutation(
   }
 }
 
-function listApplier(path: string, make: (b: any, tempId?: number) => any) {
+function listApplier<T extends { id?: number }>(
+  path: string,
+  make: (b: MutationBody | undefined, tempId?: number) => T | undefined,
+) {
   return (entry: OutboxEntry): Promise<void> =>
-    forEachCacheKey((p) => p === path, (body) => {
-      const data = body.data as { items?: any[]; total?: number } | undefined
+    forEachCacheKey((p) => p === path, (cachedBody) => {
+      const data = cachedBody.data as ListPayload<T> | undefined
       if (!data || !Array.isArray(data.items)) return
-      applyListMutation(data as { items: any[]; total?: number }, entry, make)
+      applyListMutation(data, entry, make)
     })
 }
 
 // Synthesize created objects from the request body (with a temporary id)
-const makeResource = (b: any, tempId?: number) => ({
+const makeResource = (b: MutationBody | undefined, tempId?: number): DtoResourceResponse => ({
   id: tempId ?? -1,
   code: b?.code,
   title: b?.title,
   owner_id: b?.owner_id,
   employees_count: 0,
 })
-const makeEmployee = (b: any, tempId?: number) => ({
+const makeEmployee = (b: MutationBody | undefined, tempId?: number): DtoUserResponse => ({
   id: tempId ?? -1,
   name: b?.name,
   preset: b?.preset ?? 'worker',
@@ -126,7 +213,7 @@ const makeEmployee = (b: any, tempId?: number) => ({
   termination_date: b?.termination_date,
   username: b?.username,
 })
-const makeProject = (b: any, tempId?: number) => ({
+const makeProject = (b: MutationBody | undefined, tempId?: number): DtoProjectResponse => ({
   id: tempId ?? -1,
   code: b?.code,
   start_date: b?.start_date,
@@ -134,7 +221,7 @@ const makeProject = (b: any, tempId?: number) => ({
   priority: b?.priority ?? 100,
   owner_id: b?.owner_id,
 })
-const makeProcess = (b: any, tempId?: number) => ({
+const makeProcess = (b: MutationBody | undefined, tempId?: number): DtoProcess => ({
   id: tempId ?? -1,
   title: b?.title,
   project_id: b?.project_id,
@@ -142,7 +229,7 @@ const makeProcess = (b: any, tempId?: number) => ({
   end_date: b?.end_date,
   owner_id: b?.owner_id,
 })
-const makeTask = (b: any, tempId?: number) => ({
+const makeTask = (b: MutationBody | undefined, tempId?: number): DtoDetailedTask => ({
   id: tempId ?? -1,
   title: b?.title,
   process_id: b?.process_id,
@@ -152,14 +239,14 @@ const makeTask = (b: any, tempId?: number) => ({
   end_date: b?.end_date,
   resources: [],
 })
-const makeMilestone = (b: any, tempId?: number) => ({
+const makeMilestone = (b: MutationBody | undefined, tempId?: number): DtoMilestone => ({
   id: tempId ?? -1,
   title: b?.title,
   content: b?.content ?? '',
   date: b?.date,
   process_id: b?.process_id,
 })
-const makeAssignment = (b: any, tempId?: number) => ({
+const makeAssignment = (b: MutationBody | undefined, tempId?: number): DtoAssignmentResponse => ({
   id: tempId ?? -1,
   task_id: b?.task_id,
   resource_id: b?.resource_id,
@@ -168,10 +255,10 @@ const makeAssignment = (b: any, tempId?: number) => ({
 
 /** Aggregate /planning/projects: projects with priority */
 async function applyPlanningProjects(entry: OutboxEntry): Promise<void> {
-  const body = entry.body as Record<string, any> | undefined
+  const body = entry.body as MutationBody | undefined
   const method = (entry.method || '').toUpperCase()
   await forEachCacheKey((p) => p === '/api/v1/planning/projects', (cachedBody) => {
-    const data = cachedBody.data as { projects?: any[] } | undefined
+    const data = cachedBody.data as DtoProjectPlanning | undefined
     const projects = data?.projects
     if (!Array.isArray(projects)) return
     const id = entryId(entry)
@@ -199,11 +286,11 @@ async function applyPlanningProjects(entry: OutboxEntry): Promise<void> {
 
 /** Aggregate /planning/processes: processes inside projects */
 async function applyPlanningProcesses(entry: OutboxEntry): Promise<void> {
-  const body = entry.body as Record<string, any> | undefined
+  const body = entry.body as MutationBody | undefined
   const method = (entry.method || '').toUpperCase()
   await forEachCacheKey((p) => p === '/api/v1/planning/processes', (cachedBody) => {
-    const data = cachedBody.data as any
-    const projects = data?.projects as any[] | undefined
+    const data = cachedBody.data as { projects?: PlanningProjectGroup[] } | undefined
+    const projects = data?.projects
     if (!Array.isArray(projects)) return
     const id = entryId(entry)
     if (method === 'POST') {
@@ -219,13 +306,14 @@ async function applyPlanningProcesses(entry: OutboxEntry): Promise<void> {
         project_id: pid,
         owner_id: undefined,
       }
-      if (!pr.processes.some((x: any) => x.id === item.id)) pr.processes.push(item)
+      if (!pr.processes.some((x) => x.id === item.id)) pr.processes.push(item)
     } else if (method === 'PUT') {
       if (id == null) return
       for (const pr of projects) {
-        const i = (pr.processes ?? []).findIndex((x: any) => x.id === id)
+        const list = pr.processes ?? []
+        const i = list.findIndex((x) => x.id === id)
         if (i >= 0) {
-          pr.processes[i] = { ...pr.processes[i], ...(body ?? {}) }
+          list[i] = { ...list[i], ...(body ?? {}) }
           return
         }
       }
@@ -234,14 +322,15 @@ async function applyPlanningProcesses(entry: OutboxEntry): Promise<void> {
       // A project deletion cascades its processes server-side: drop the whole
       // project group (processes included) from the cached processes aggregate.
       if (/^\/api\/v1\/project\/\d+$/.test(pathnameOf(entry.url))) {
-        const i = projects.findIndex((p: any) => p.id === id)
+        const i = projects.findIndex((p) => p.id === id)
         if (i >= 0) projects.splice(i, 1)
         return
       }
       for (const pr of projects) {
-        const i = (pr.processes ?? []).findIndex((x: any) => x.id === id)
+        const list = pr.processes ?? []
+        const i = list.findIndex((x) => x.id === id)
         if (i >= 0) {
-          pr.processes.splice(i, 1)
+          list.splice(i, 1)
           return
         }
       }
@@ -250,13 +339,16 @@ async function applyPlanningProcesses(entry: OutboxEntry): Promise<void> {
 }
 
 /** Finds a task (top-level or subtask) among the cached processes. */
-function findTaskInProcesses(processes: any[], taskId: number): any {
+function findTaskInProcesses(
+  processes: DtoDetailedProcess[],
+  taskId: number,
+): DtoDetailedTask | undefined {
   for (const pr of processes) {
-    const t = (pr.tasks ?? []).find((x: any) => x.id === taskId)
+    const t = (pr.tasks ?? []).find((x) => x.id === taskId)
     if (t) return t
     const s = (pr.tasks ?? [])
-      .flatMap((x: any) => x.subtasks ?? [])
-      .find((x: any) => x.id === taskId)
+      .flatMap((x) => x.subtasks ?? [])
+      .find((x) => x.id === taskId)
     if (s) return s
   }
   return undefined
@@ -267,16 +359,16 @@ async function applyPlanningTasks(
   entry: OutboxEntry,
   kind: 'task' | 'milestone' | 'assignment',
 ): Promise<void> {
-  const body = entry.body as Record<string, any> | undefined
+  const body = entry.body as MutationBody | undefined
   const method = (entry.method || '').toUpperCase()
   // Resource code/name for the task badge on offline assignment (from the reference cache)
-  const resourceFields =
+  const resourceFields: ResourceFields =
     kind === 'assignment' && method === 'POST'
-      ? await getResourceFields(body?.resource_id as number | undefined)
+      ? await getResourceFields(body?.resource_id)
       : {}
   await forEachCacheKey((p) => p === '/api/v1/planning/tasks', (cachedBody) => {
-    const data = cachedBody.data as any
-    const processes = data?.processes as any[] | undefined
+    const data = cachedBody.data as DtoTaskPlanning | undefined
+    const processes = data?.processes
     if (!Array.isArray(processes)) return
     const id = entryId(entry)
 
@@ -301,26 +393,28 @@ async function applyPlanningTasks(
           const parent = findTaskInProcesses(processes, parentId)
           if (!parent) return
           parent.subtasks = parent.subtasks ?? []
-          if (!parent.subtasks.some((x: any) => x.id === item.id)) parent.subtasks.push(item)
+          if (!parent.subtasks.some((x) => x.id === item.id)) parent.subtasks.push(item)
           return
         }
         const pr = processes.find((p) => p.id === pid)
         if (!pr) return
         pr.tasks = pr.tasks ?? []
-        if (!pr.tasks.some((x: any) => x.id === item.id)) pr.tasks.push(item)
+        if (!pr.tasks.some((x) => x.id === item.id)) pr.tasks.push(item)
       } else if (method === 'PUT') {
         if (id == null) return
         for (const pr of processes) {
-          const i = (pr.tasks ?? []).findIndex((x: any) => x.id === id)
+          const tasks = pr.tasks ?? []
+          const i = tasks.findIndex((x) => x.id === id)
           if (i >= 0) {
-            pr.tasks[i] = { ...pr.tasks[i], ...(body ?? {}) }
+            tasks[i] = { ...tasks[i], ...(body ?? {}) }
             return
           }
-          const t = (pr.tasks ?? []).find((x: any) => (x.subtasks ?? []).some((s: any) => s.id === id))
+          const t = tasks.find((x) => (x.subtasks ?? []).some((s) => s.id === id))
           if (t) {
-            const si = (t.subtasks ?? []).findIndex((s: any) => s.id === id)
+            const subtasks = t.subtasks ?? []
+            const si = subtasks.findIndex((s) => s.id === id)
             if (si >= 0) {
-              t.subtasks[si] = { ...t.subtasks[si], ...(body ?? {}) }
+              subtasks[si] = { ...subtasks[si], ...(body ?? {}) }
               return
             }
           }
@@ -330,20 +424,22 @@ async function applyPlanningTasks(
         // A project deletion cascades its processes (and their tasks) on the
         // server: drop every process of the project from the cached aggregate.
         if (/^\/api\/v1\/project\/\d+$/.test(pathnameOf(entry.url))) {
-          const i = processes.findIndex((p: any) => p.project_id === id)
+          const i = processes.findIndex((p) => p.project_id === id)
           if (i >= 0) processes.splice(i, 1)
           return
         }
         for (const pr of processes) {
-          const i = (pr.tasks ?? []).findIndex((x: any) => x.id === id)
+          const tasks = pr.tasks ?? []
+          const i = tasks.findIndex((x) => x.id === id)
           if (i >= 0) {
-            pr.tasks.splice(i, 1)
+            tasks.splice(i, 1)
             return
           }
-          const t = (pr.tasks ?? []).find((x: any) => (x.subtasks ?? []).some((s: any) => s.id === id))
+          const t = tasks.find((x) => (x.subtasks ?? []).some((s) => s.id === id))
           if (t) {
-            const si = (t.subtasks ?? []).findIndex((s: any) => s.id === id)
-            if (si >= 0) t.subtasks.splice(si, 1)
+            const subtasks = t.subtasks ?? []
+            const si = subtasks.findIndex((s) => s.id === id)
+            if (si >= 0) subtasks.splice(si, 1)
             return
           }
         }
@@ -360,22 +456,24 @@ async function applyPlanningTasks(
           content: body?.content ?? '',
           date: body?.date,
         }
-        if (!pr.milestones.some((x: any) => x.id === item.id)) pr.milestones.push(item)
+        if (!pr.milestones.some((x) => x.id === item.id)) pr.milestones.push(item)
       } else if (method === 'PUT') {
         if (id == null) return
         for (const pr of processes) {
-          const i = (pr.milestones ?? []).findIndex((x: any) => x.id === id)
+          const milestones = pr.milestones ?? []
+          const i = milestones.findIndex((x) => x.id === id)
           if (i >= 0) {
-            pr.milestones[i] = { ...pr.milestones[i], ...(body ?? {}) }
+            milestones[i] = { ...milestones[i], ...(body ?? {}) }
             return
           }
         }
       } else if (method === 'DELETE') {
         if (id == null) return
         for (const pr of processes) {
-          const i = (pr.milestones ?? []).findIndex((x: any) => x.id === id)
+          const milestones = pr.milestones ?? []
+          const i = milestones.findIndex((x) => x.id === id)
           if (i >= 0) {
-            pr.milestones.splice(i, 1)
+            milestones.splice(i, 1)
             return
           }
         }
@@ -384,16 +482,16 @@ async function applyPlanningTasks(
       if (method === 'POST') {
         const taskId = body?.task_id
         for (const pr of processes) {
-          const t = (pr.tasks ?? []).find((x: any) => x.id === taskId)
+          const t = (pr.tasks ?? []).find((x) => x.id === taskId)
           if (!t) continue
           t.resources = t.resources ?? []
-          if (!t.resources.some((r: any) => r.id === body?.resource_id)) {
+          if (!t.resources.some((r) => r.id === body?.resource_id)) {
             t.resources.push({
               id: body?.resource_id,
               assignment_id: entry.tempId ?? -1,
               quantity: body?.quantity,
-              code: resourceFields.code as string | undefined,
-              title: resourceFields.title as string | undefined,
+              code: resourceFields.code,
+              title: resourceFields.title,
             })
           }
           return
@@ -402,9 +500,10 @@ async function applyPlanningTasks(
         if (id == null) return
         for (const pr of processes) {
           for (const t of pr.tasks ?? []) {
-            const i = (t.resources ?? []).findIndex((r: any) => r.assignment_id === id)
+            const resources = t.resources ?? []
+            const i = resources.findIndex((r) => r.assignment_id === id)
             if (i >= 0) {
-              t.resources.splice(i, 1)
+              resources.splice(i, 1)
               return
             }
           }
@@ -416,10 +515,10 @@ async function applyPlanningTasks(
 
 /** Array /timesheet/states */
 async function applyState(entry: OutboxEntry): Promise<void> {
-  const body = entry.body as Record<string, any> | undefined
+  const body = entry.body as MutationBody | undefined
   const method = (entry.method || '').toUpperCase()
   await forEachCacheKey((p) => p === '/api/v1/timesheet/states', (cachedBody) => {
-    const data = cachedBody.data as any[] | undefined
+    const data = cachedBody.data as DtoStateResponse[] | undefined
     if (!Array.isArray(data)) return
     const id = entryId(entry)
     if (method === 'POST') {
@@ -462,12 +561,12 @@ function parseEmployeeDays(entry: OutboxEntry): {
 }
 
 /** Full status info from the states cache (for cell abbreviation/color) */
-async function getStateFields(stateId: number | undefined): Promise<Record<string, unknown>> {
+async function getStateFields(stateId: number | undefined): Promise<StateFields> {
   if (stateId == null) return {}
   const keys = await idbKeys(CACHE_STORE)
   for (const key of keys) {
     if (pathnameOf(key) !== '/api/v1/timesheet/states') continue
-    const cached = await idbGet<{ data: { data?: any[] } }>(CACHE_STORE, key)
+    const cached = await idbGet<{ data: { data?: DtoStateResponse[] } }>(CACHE_STORE, key)
     const arr = cached?.data?.data
     if (Array.isArray(arr)) {
       const st = arr.find((s) => s.id === stateId)
@@ -482,12 +581,12 @@ async function getStateFields(stateId: number | undefined): Promise<Record<strin
 }
 
 /** Resource code/name from the /api/v1/resources reference cache (for the task badge) */
-async function getResourceFields(resourceId: number | undefined): Promise<Record<string, unknown>> {
+async function getResourceFields(resourceId: number | undefined): Promise<ResourceFields> {
   if (resourceId == null) return {}
   const keys = await idbKeys(CACHE_STORE)
   for (const key of keys) {
     if (pathnameOf(key) !== '/api/v1/resources') continue
-    const cached = await idbGet<{ data: { data?: any[] } }>(CACHE_STORE, key)
+    const cached = await idbGet<{ data: { data?: DtoResourceResponse[] } }>(CACHE_STORE, key)
     const arr = cached?.data?.data
     if (Array.isArray(arr)) {
       const r = arr.find((x) => x.id === resourceId)
@@ -504,26 +603,26 @@ async function getResourceFields(resourceId: number | undefined): Promise<Record
 async function applyPeriod(entry: OutboxEntry): Promise<void> {
   const { employeeId, start, end, stateId } = parseEmployeeDays(entry)
   if (employeeId == null) return
-  const body = entry.body as Record<string, any> | undefined
+  const body = entry.body as MutationBody | undefined
   const method = (entry.method || '').toUpperCase()
   const prefix = `/api/v1/user/${employeeId}/days`
-  const enrichment =
-    method === 'PUT' ? await getStateFields(body?.state_id as number | undefined) : {}
+  const enrichment: StateFields =
+    method === 'PUT' ? await getStateFields(body?.state_id) : {}
   await forEachCacheKey((p) => p === prefix, (cachedBody) => {
-    const data = cachedBody.data as any[] | undefined
+    const data = cachedBody.data as DtoUserStateResponse[] | undefined
     if (!Array.isArray(data)) return
     if (method === 'PUT') {
-      const s = body?.start_date as string | undefined
-      const e = body?.end_date as string | undefined
+      const s = body?.start_date
+      const e = body?.end_date
       if (!s || !e) return
       // Splitting as on the backend: subtract [s,e], keep the tails.
       cachedBody.data = applyRangeSplit(data, 'put', s, e, undefined, {
         id: -entry.ts,
         state_id: body?.state_id,
-        state_code: enrichment.state_code as string | undefined,
-        state_name: enrichment.state_name as string | undefined,
-        is_available: enrichment.is_available as boolean | undefined,
-      })
+        state_code: enrichment.state_code,
+        state_name: enrichment.state_name,
+        is_available: enrichment.is_available,
+      } as PutPeriodFields)
     } else if (method === 'DELETE') {
       if (!start || !end) return
       cachedBody.data = applyRangeSplit(data, 'delete', start, end, stateId)
@@ -532,12 +631,12 @@ async function applyPeriod(entry: OutboxEntry): Promise<void> {
 }
 
 /** User fields from the /api/v1/users reference cache (offline member addition) */
-async function getUserFields(userId: number | undefined): Promise<Record<string, unknown>> {
+async function getUserFields(userId: number | undefined): Promise<EmployeeFields> {
   if (userId == null) return {}
   const keys = await idbKeys(CACHE_STORE)
   for (const key of keys) {
     if (pathnameOf(key) !== '/api/v1/user') continue
-    const cached = await idbGet<{ data: { data?: { items?: any[] } } }>(CACHE_STORE, key)
+    const cached = await idbGet<{ data: { data?: { items?: DtoUserResponse[] } } }>(CACHE_STORE, key)
     const u = cached?.data?.data?.items?.find((x) => x.id === userId)
     if (u) {
       return {
@@ -557,16 +656,16 @@ async function getUserFields(userId: number | undefined): Promise<Record<string,
 
 /** Resource members array /api/v1/resources/{id}/members */
 async function applyMembers(entry: OutboxEntry): Promise<void> {
-  const body = entry.body as Record<string, any> | undefined
+  const body = entry.body as MutationBody | undefined
   const method = (entry.method || '').toUpperCase()
   const path = pathnameOf(entry.url).replace(/\/+$/, '')
   const m = path.match(/\/api\/v1\/resources\/(\d+)\/members(?:\/(\d+))?$/)
   if (!m) return
   const resourceId = Number(m[1])
   const userId = m[2] ? Number(m[2]) : undefined
-  const fields = method === 'POST' ? await getUserFields(body?.user_id as number | undefined) : {}
+  const fields: EmployeeFields = method === 'POST' ? await getUserFields(body?.user_id) : {}
   await forEachCacheKey((p) => p === `/api/v1/resources/${resourceId}/members`, (cachedBody) => {
-    const data = cachedBody.data as any[] | undefined
+    const data = cachedBody.data as DtoResourceMemberResponse[] | undefined
     if (!Array.isArray(data)) return
     if (method === 'POST') {
       const item = { id: body?.user_id ?? entry.tempId ?? -1, ...fields }
@@ -579,7 +678,7 @@ async function applyMembers(entry: OutboxEntry): Promise<void> {
   // Member counter in the resources reference
   if (method === 'POST' || method === 'DELETE') {
     await forEachCacheKey((p) => p === '/api/v1/resources', (cachedBody) => {
-      const data = cachedBody.data as { items?: any[] } | undefined
+      const data = cachedBody.data as { items?: DtoResourceResponse[] } | undefined
       const res = data?.items?.find((r) => r.id === resourceId)
       if (!res) return
       if (method === 'POST') res.employees_count = (res.employees_count ?? 0) + 1

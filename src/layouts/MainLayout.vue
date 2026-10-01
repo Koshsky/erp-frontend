@@ -1,16 +1,39 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted } from 'vue'
+import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import AppHeader from '../components/common/AppHeader/AppHeader.vue'
 import AppNavDrawer from '../components/common/AppNavDrawer/AppNavDrawer.vue'
 import { useRbacStore } from '../store'
 import { useNavigation } from '../composables/useNavigation'
 import { saveCategoryOrder, saveItemOrder } from '../composables/useNavigationOrder'
-import { installDrawerEdgeDetection, isNavOpen } from '../composables/useNavDrawer'
+import {
+  installDrawerEdgeDetection,
+  closeNav,
+  isNavOpen,
+  isNarrowScreen,
+} from '../composables/useNavDrawer'
 
 const route = useRoute()
 const rbac = useRbacStore()
 const { visibleCategories } = useNavigation()
+
+/**
+ * Close request from the drawer (scrim tap, item click). On desktop the drawer
+ * is a pinned layout column and stays open — only the narrow-screen overlay
+ * mode closes (the scrim is the only close path without a navigation).
+ */
+function onDrawerCloseRequest(): void {
+  if (isNarrowScreen()) closeNav()
+}
+
+/**
+ * Narrow screens: after ANY navigation (menu item, programmatic navigation,
+ * Android hardware back / browser back) the overlay drawer must not stay
+ * open. Desktop (pinned layout column) is intentionally unaffected.
+ */
+watch(route, () => {
+  if (isNarrowScreen() && isNavOpen.value) closeNav()
+})
 
 /** Applies a section drag onto the navigation order. */
 function onReorderCategory(p: { from: number; to: number }) {
@@ -71,6 +94,7 @@ onBeforeUnmount(() => {
       :open="isNavOpen"
       :categories="visibleCategories"
       :active-name="routeName"
+      @close="onDrawerCloseRequest"
       @reorder-category="onReorderCategory"
       @reorder-item="onReorderItem"
     />

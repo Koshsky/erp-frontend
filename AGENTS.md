@@ -11,7 +11,8 @@ Frontend service of the MVS ERP monorepo (repo root is `../..`, sibling `service
 ## Commands
 - `npm run dev` runs **Storybook** (port 6006) — not the app. `npm start` runs the Vite dev server (port 5173); `npm run stop` kills it.
 - There is **no `npm test`**. Vitest tests run through Storybook's `@storybook/addon-vitest` (`.stories.ts` files).
-- `npm run check` (alias `typecheck`) = `vue-tsc --noEmit` — the only type/lint gate, run after edits.
+- `npm run check` (alias `typecheck`) = `vue-tsc --noEmit` — the type gate, run after edits.
+- `npm run lint` = `eslint src --max-warnings 0` — the lint gate (flat config in `eslint.config.js`; generated `src/api` is excluded), run after edits; **0 problems required**.
 - `npm run build` = `vite build` → `dist/`.
 
 ## Changelog

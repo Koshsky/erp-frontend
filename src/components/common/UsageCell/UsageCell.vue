@@ -58,7 +58,7 @@ const displayText = computed(() =>
   flex: 1;
   min-width: 0;
   text-align: center;
-  font-size: 10px;
+  font-size: calc(var(--ui-font-scale, 1) * 10px);
   font-weight: 600;
   min-height: 18px;
   display: flex;

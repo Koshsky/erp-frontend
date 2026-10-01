@@ -122,7 +122,7 @@ function onClose() {
   padding: 10px 30px 10px 18px;
   border-radius: var(--ui-radius-sm);
   box-shadow: var(--ui-shadow-md);
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   max-width: 90vw;
   min-width: 300px;
   text-align: center;
@@ -139,7 +139,7 @@ function onClose() {
   background: transparent;
   border: none;
   color: color-mix(in srgb, var(--ui-accent-on) 85%, transparent);
-  font-size: 18px;
+  font-size: calc(var(--ui-font-scale, 1) * 18px);
   line-height: 1;
   cursor: pointer;
   padding: 2px 6px;
@@ -173,7 +173,7 @@ function onClose() {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  font-size: 12px;
+  font-size: calc(var(--ui-font-scale, 1) * 12px);
 }
 
 .sync-toast__req {
@@ -198,7 +198,7 @@ function onClose() {
   border: none;
   border-radius: 6px;
   padding: 6px 14px;
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   font-weight: 600;
   cursor: pointer;
 }

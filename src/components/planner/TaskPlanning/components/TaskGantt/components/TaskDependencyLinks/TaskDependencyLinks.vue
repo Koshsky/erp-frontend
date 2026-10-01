@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { TaskDependencyLinksProps, DependencyArrow } from './types'
 import { cellIndexForDate } from '../../../../../calendar'
-import type { DependencyEdge } from '../../../../../dependencies'
+import type { TaskDependencyLinksProps, DependencyArrow } from './types'
 
 const props = withDefaults(defineProps<TaskDependencyLinksProps>(), {
   dependencies: () => [],

@@ -83,7 +83,7 @@ async function onRetry() {
   color: var(--ui-text);
   border: 1px solid var(--ui-border-strong);
   box-shadow: var(--ui-shadow-md);
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   line-height: 1.35;
   display: flex;
   flex-direction: column;
@@ -123,14 +123,14 @@ async function onRetry() {
 
 .reconnect-toast__countdown {
   color: var(--ui-text-2);
-  font-size: 12px;
+  font-size: calc(var(--ui-font-scale, 1) * 12px);
 }
 
 .reconnect-toast__retry {
   border: none;
   border-radius: var(--ui-radius-sm);
   padding: 6px 14px;
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   font-weight: 600;
   background: var(--ui-accent);
   color: var(--ui-accent-on);

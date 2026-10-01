@@ -17,7 +17,7 @@ const router = useRouter()
 const app = useAppStore()
 const auth = useAuthStore()
 const rbac = useRbacStore()
-const { adminUsers, adminUsersError } = storeToRefs(app)
+const { adminUsers } = storeToRefs(app)
 
 const PRESET_LABELS: Record<string, string> = {
   admin: 'Администратор',
@@ -70,35 +70,29 @@ onMounted(async () => {
 /* ── переопределения (staged) + сохранение ─────────────── */
 const permissionOverrides = ref<PermissionOverride[]>([])
 const permissionDirty = ref(false)
-const permissionError = ref<string | null>(null)
 const permissionSaved = ref(false)
-/** Ошибка сохранения пресета (свойство профиля). */
-const presetError = ref<string | null>(null)
 
 async function savePermissions(): Promise<boolean> {
   const id = userId.value
   if (id == null) return false
-  permissionError.value = null
+  // A failed save is reported by the global toast (http.ts), not inline.
   const ok = await rbac.saveUserPermissions(id, permissionOverrides.value)
-  if (!ok) {
-    permissionError.value = rbac.userPermissionsError ?? 'Не удалось сохранить права'
-    return false
-  }
+  if (!ok) return false
   permissionDirty.value = false
   permissionSaved.value = true
+  // Refresh the server snapshot so the yellow "changed" rows clear — a row is
+  // highlighted only while the frontend staged value differs from the backend.
+  void rbac.loadUserPermissions(id)
   return true
 }
 
-/** Смена пресета на странице прав сохраняется сразу (это свойство профиля). */
+/** Смена пресета на странице прав сохраняется сразу (это свойство профиля).
+ *  Ошибка сохранения — в глобальный тост (http.ts). */
 function onChangePreset(preset: string) {
   const id = userId.value
   if (id == null || user.value == null || user.value.preset === preset) return
   user.value.preset = preset
-  void (async () => {
-    presetError.value = null
-    const ok = await app.updateUser(id, { preset })
-    if (!ok) presetError.value = adminUsersError.value ?? 'Не удалось сохранить пресет'
-  })()
+  void app.updateUser(id, { preset })
 }
 
 watch(permissionDirty, (dirty) => {
@@ -135,9 +129,6 @@ watch(permissionDirty, (dirty) => {
         @update:dirty="permissionDirty = $event"
       />
 
-      <p v-if="presetError" class="ua-error" role="alert">{{ presetError }}</p>
-      <p v-if="permissionError" class="ua-error" role="alert">{{ permissionError }}</p>
-
       <div class="ua-actions">
         <p v-if="permissionSaved" class="ua-ok" role="status">Права сохранены ✓</p>
         <button
@@ -171,7 +162,7 @@ watch(permissionDirty, (dirty) => {
   flex-wrap: wrap;
 }
 .ua-title {
-  font-size: 20px;
+  font-size: calc(var(--ui-font-scale, 1) * 20px);
   font-weight: 700;
   color: var(--ui-text);
   margin: 0;
@@ -181,7 +172,7 @@ watch(permissionDirty, (dirty) => {
   border-radius: var(--ui-radius-sm);
   background: var(--ui-surface);
   padding: 7px 14px;
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   color: var(--ui-accent);
   cursor: pointer;
 }
@@ -195,18 +186,18 @@ watch(permissionDirty, (dirty) => {
 }
 .ua-st {
   color: var(--ui-text-2);
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   padding: 30px;
   text-align: center;
 }
 .ua-error {
   margin: 0;
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   color: var(--ui-danger);
 }
 .ua-ok {
   margin: 0;
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   font-weight: 600;
   color: var(--ui-success, #22c55e);
 }
@@ -220,7 +211,7 @@ watch(permissionDirty, (dirty) => {
   border: none;
   border-radius: var(--ui-radius-sm);
   padding: 9px 18px;
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   font-weight: 600;
   cursor: pointer;
   background: var(--ui-accent);

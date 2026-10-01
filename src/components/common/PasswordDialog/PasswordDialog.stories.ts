@@ -24,7 +24,7 @@ type Story = StoryObj<typeof meta>
 
 export const GeneratedPassword: Story = {
   tags: ['vitest'],
-  play: async ({ canvasElement, step }) => {
+  play: async ({ canvasElement: _canvasElement, step }) => {
     await step('mount: dialog with a password renders the copy field', async () => {
       await new Promise((r) => setTimeout(r, 50))
       const card = document.body.querySelector<HTMLElement>('.pd-card')
@@ -69,7 +69,7 @@ export const NoticeOnly: Story = {
     password: '',
     notice: 'Ссылка для сброса пароля отправлена на почту пользователя.',
   },
-  play: async ({ canvasElement, step }) => {
+  play: async ({ canvasElement: _canvasElement, step }) => {
     await step('mount: the notice text is rendered', async () => {
       await new Promise((r) => setTimeout(r, 50))
       const card = document.body.querySelector<HTMLElement>('.pd-card')

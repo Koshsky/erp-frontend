@@ -72,7 +72,7 @@ export function keyMatchesUser(key: string, userId: number | null): boolean {
  * stored solely to surface freshness in the UI and to let the PULL cycle decide
  * whether a background re-fetch is worthwhile (PULL_TTL_MS) — it is never used
  * to delete data. The cache as a whole is cleared only on an app-version change
- * (ensureCacheVersion) or by the explicit user reset (clearLocalData).
+ * (ensureCacheVersion).
  * See docs/no-ttl-local-storage.md.
  */
 

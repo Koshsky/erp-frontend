@@ -1,44 +1,42 @@
 /**
  * Centralized hint-content registry: every "?" explanation lives in the hint
- * ASSETS (src/assets/default/hints + src/assets/custom/hints — a single
- * assets entry point with mirroring catalogs). Lookup rule (applies to every
- * asset kind): the custom asset wins when it exists, otherwise the default
- * one is used. Invalid custom assets are ignored (fall back to the default),
- * so a broken override can never break the panel.
+ * ASSETS as a Markdown file (src/assets/default/hints + src/assets/custom/hints
+ * — a single assets entry point with mirroring catalogs). Lookup rule
+ * (applies to every asset kind): the custom asset wins when it exists,
+ * otherwise the default one is used. Invalid custom assets are ignored (fall
+ * back to the default), so a broken override can never break the panel.
+ *
+ * Mapping: the hint id is the file name without the `.md` extension (so
+ * `planner.md` → id `planner`); the title is the first `# ` heading of the
+ * document (falling back to the id); the body is the remaining Markdown and
+ * is rendered by the MarkdownView component (see
+ * src/components/common/MarkdownView).
  */
 import { resolveAssets } from '@/assets'
-
-export type HintBlock =
-  | { kind: 'p'; text: string }
-  | { kind: 'ul' | 'ol'; items: string[] }
-  | { kind: 'code'; text: string }
 
 export interface HintPage {
   id: string
   title: string
-  blocks: HintBlock[]
+  /** Markdown body (everything after the title heading). */
+  body: string
 }
 
-/** Validates a raw JSON value as a HintPage (null — invalid). */
-export function parseHintPage(raw: unknown): HintPage | null {
-  if (typeof raw !== 'object' || raw === null) return null
-  const p = raw as { id?: unknown; title?: unknown; blocks?: unknown }
-  if (typeof p.id !== 'string' || p.id === '' || typeof p.title !== 'string' || p.title === '') return null
-  if (!Array.isArray(p.blocks)) return null
-  const blocks: HintBlock[] = []
-  for (const b of p.blocks) {
-    const block = b as { kind?: unknown; text?: unknown; items?: unknown }
-    if (block.kind === 'p' || block.kind === 'code') {
-      if (typeof block.text !== 'string') return null
-      blocks.push({ kind: block.kind, text: block.text })
-    } else if (block.kind === 'ul' || block.kind === 'ol') {
-      if (!Array.isArray(block.items) || !block.items.every((i) => typeof i === 'string')) return null
-      blocks.push({ kind: block.kind, items: block.items as string[] })
-    } else {
-      return null
-    }
+/**
+ * Validates a raw value as Markdown hint content and extracts «title, body»
+ * (null — invalid). The title is the first `# ` heading (empty when the
+ * document has none); the body is the rest of the document.
+ */
+export function parseHintMarkdown(raw: unknown): { title: string; body: string } | null {
+  if (typeof raw !== 'string') return null
+  const text = raw.trim()
+  if (text === '') return null
+  // First `# ` heading (line start): split the title from the body.
+  const heading = /^#\s+(.+)$/m.exec(text)
+  if (heading) {
+    return { title: heading[1].trim(), body: text.slice(heading.index + heading[0].length).trim() }
   }
-  return { id: p.id, title: p.title, blocks }
+  // No heading — the whole document is the body; the caller falls back to the id.
+  return { title: '', body: text }
 }
 
 /** Merges asset sets: custom pages override the defaults by id (every asset). */
@@ -48,15 +46,26 @@ export function mergeHintPages(defaults: HintPage[], custom: HintPage[]): Map<st
   return out
 }
 
+/** Hint id from an asset file name (`planner.md` → `planner`). */
+function hintIdFromName(assetName: string): string {
+  return assetName.replace(/\.md$/i, '')
+}
+
 function loadAssets(): Map<string, HintPage> {
   // resolveAssets('hints') keeps the custom-first rule per file name, but a
   // custom entry is merged only when it passes the validator: an invalid
   // override of a built-in file name falls back to the built-in page instead
   // of dropping the entry (the documented asset rule for every kind).
   const pages: HintPage[] = []
-  for (const raw of resolveAssets('hints', (r) => parseHintPage(r) !== null).values()) {
-    const page = parseHintPage(raw)
-    if (page) pages.push(page)
+  for (const [name, raw] of resolveAssets('hints', (r) => parseHintMarkdown(r) !== null)) {
+    const parsed = parseHintMarkdown(raw)
+    if (!parsed) continue
+    const id = hintIdFromName(name)
+    pages.push({
+      id,
+      title: parsed.title === '' ? id : parsed.title,
+      body: parsed.body,
+    })
   }
   return new Map(pages.map((p) => [p.id, p]))
 }

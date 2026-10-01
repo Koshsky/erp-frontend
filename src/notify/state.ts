@@ -1,5 +1,6 @@
 import { ref } from 'vue'
 import type { Ref } from 'vue'
+import { notificationsEnabled, notifyDurationMs } from '@/settings'
 
 export type NotificationKind = 'error' | 'success' | 'info'
 
@@ -7,15 +8,8 @@ export interface NotificationItem {
   id: number
   kind: NotificationKind
   text: string
-  /** Live duration of the auto-dismiss countdown — the timer bar uses the same value. */
+  /** Live duration of the auto-dismiss countdown — the timer bar uses the same value. 0 = no auto-dismiss. */
   durationMs: number
-}
-
-/** Default auto-dismiss per kind: errors need reading time, the others are affirmations. */
-const DURATION_MS: Record<NotificationKind, number> = {
-  error: 5000,
-  success: 4000,
-  info: 4000,
 }
 
 /** Maximum visible notifications at once; the oldest one leaves first. */
@@ -43,19 +37,23 @@ function dismiss(id: number): void {
 }
 
 function push(kind: NotificationKind, text: string, durationMs: number): void {
+  // The stack can be switched off in Settings — filtered globally at the
+  // source: while hidden, no items and no timers are created.
+  if (!notificationsEnabled.value) return
   const id = nextId++
   notifications.value.push({ id, kind, text, durationMs })
   const overflow = notifications.value.length - MAX_VISIBLE
   for (const gone of notifications.value.slice(0, overflow)) dismiss(gone.id)
-  timers.set(id, window.setTimeout(() => dismiss(id), durationMs))
+  if (durationMs > 0) timers.set(id, window.setTimeout(() => dismiss(id), durationMs))
 }
 
 /**
  * Pushes a notification onto the global stack. `durationMs` overrides the
- * per-kind default (error 5 s, success/info 4 s).
+ * user setting; otherwise the Settings value applies (0 — never auto-hide).
  */
 export function notify(kind: NotificationKind, text: string, durationMs?: number): void {
-  push(kind, text, durationMs ?? DURATION_MS[kind])
+  const duration = durationMs ?? (notifyDurationMs.value === 0 ? 0 : notifyDurationMs.value)
+  push(kind, text, duration)
 }
 
 /** Fires a global error notification (auto-dismissed after 5 s). */

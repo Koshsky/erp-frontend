@@ -143,7 +143,7 @@ describe('enqueueMutation — dedup and persistence', () => {
 describe('flushOutbox — temp-id → real-id mapping (idmap)', () => {
   it('rewrites dependent entry urls/bodies with the real id returned by the create', async () => {
     let call = 0
-    axiosCall.fn.mockImplementation(async (config: { url: string }) => {
+    axiosCall.fn.mockImplementation(async (_config: { url: string }) => {
       call++
       if (call === 1) {
         // The create answers with the real entity id.

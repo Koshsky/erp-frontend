@@ -34,7 +34,7 @@ export const DayUnit: Story = {
           <div v-for="i in 4" :key="i" style="height:48px;border-bottom:1px solid #e8e8e8;"></div>
           <TodayLine :timeline="timeline" />
         </div>
-        <div style="font-size:12px;color:#666;margin-top:6px;">Красный луч стоит на границе между «вчера» и «сегодня» — левый край ячейки текущего дня.</div>
+        <div style="font-size: calc(var(--ui-font-scale, 1) * 12px);color:#666;margin-top:6px;">Красный луч стоит на границе между «вчера» и «сегодня» — левый край ячейки текущего дня.</div>
       </div>
     `,
   }),
@@ -56,7 +56,7 @@ export const DecadeUnit: Story = {
           <div v-for="i in 4" :key="i" style="height:48px;border-bottom:1px solid #e8e8e8;"></div>
           <TodayLine :timeline="timeline" />
         </div>
-        <div style="font-size:12px;color:#666;margin-top:6px;">Декада: луч на дробной позиции текущего дня внутри ячейки-декады.</div>
+        <div style="font-size: calc(var(--ui-font-scale, 1) * 12px);color:#666;margin-top:6px;">Декада: луч на дробной позиции текущего дня внутри ячейки-декады.</div>
       </div>
     `,
   }),
@@ -76,7 +76,7 @@ export const HiddenOutsideWindow: Story = {
         <div style="position:relative;height:96px;border:1px solid #e8e8e8;border-radius:6px;overflow:hidden;background:#fff;">
           <TodayLine :timeline="timeline" />
         </div>
-        <div style="font-size:12px;color:#666;margin-top:6px;">Окно далеко от сегодняшней даты — луч скрыт (виртуализация).</div>
+        <div style="font-size: calc(var(--ui-font-scale, 1) * 12px);color:#666;margin-top:6px;">Окно далеко от сегодняшней даты — луч скрыт (виртуализация).</div>
       </div>
     `,
   }),

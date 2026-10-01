@@ -13,6 +13,9 @@ export interface NavItem {
   roles?: string[] | null
   /** Compact badge shown on the right of the item ("new", a counter, etc.) */
   badge?: string | number
+  /** Bundled Lucide icon name (without the .svg suffix) — rendered from the
+   *  asset catalog, overridable by a mounted custom icon of the same name */
+  icon?: string
 }
 
 export interface NavCategory {
@@ -38,6 +41,7 @@ export const NAV_CATEGORIES: NavCategory[] = [
         name: 'projects',
         perm: ['project', 'view'],
         roles: ['dp', 'rp', 'admin'],
+        icon: 'chart-gantt',
       },
       {
         label: 'Процессы',
@@ -45,6 +49,7 @@ export const NAV_CATEGORIES: NavCategory[] = [
         name: 'processes',
         perm: ['process', 'view'],
         roles: ['dp', 'rp', 'admin'],
+        icon: 'chart-bar-big',
       },
       {
         label: 'Задачи',
@@ -52,6 +57,7 @@ export const NAV_CATEGORIES: NavCategory[] = [
         name: 'planner',
         perm: ['task', 'view'],
         roles: ['dp', 'rp', 'admin', 'vp'],
+        icon: 'chart-bar-stacked',
       },
     ],
   },
@@ -59,31 +65,31 @@ export const NAV_CATEGORIES: NavCategory[] = [
     label: 'Табель',
     roles: ['vp', 'admin'],
     items: [
-      { label: 'Табель', to: '/timesheet', name: 'timesheet', perm: ['worker', 'view'] },
-      { label: 'Сотрудники', to: '/employees', name: 'employees', perm: ['worker', 'view'] },
-      { label: 'Ресурсы', to: '/resources', name: 'resources', perm: ['resource', 'view'] },
+      { label: 'Табель', to: '/timesheet', name: 'timesheet', perm: ['worker', 'view'], icon: 'calendar' },
+      { label: 'Сотрудники', to: '/employees', name: 'employees', perm: ['worker', 'view'], icon: 'user-group' },
+      { label: 'Ресурсы', to: '/resources', name: 'resources', perm: ['resource', 'view'], icon: 'hammer' },
     ],
   },
   {
     label: 'Админ',
     roles: ['admin'],
     items: [
-      { label: 'Пользователи', to: '/users', name: 'users', perm: ['user_admin', 'view'] },
-      { label: 'Структура компании', to: '/structure', name: 'structure', perm: ['org_structure', 'view'] },
-      { label: 'Триггер создания проекта', to: '/auto-create', name: 'auto-create', perm: ['rbac_config', 'view'] },
-      { label: 'Статусы', to: '/statuses', name: 'statuses', perm: ['state_admin', 'view'] },
-      { label: 'Пресеты прав', to: '/permissions', name: 'permissions', perm: ['rbac_config', 'view'] },
-      { label: 'Журнал действий', to: '/audit', name: 'audit', perm: ['audit', 'view'] },
+      { label: 'Пользователи', to: '/users', name: 'users', perm: ['user_admin', 'view'], icon: 'users-round' },
+      { label: 'Структура компании', to: '/structure', name: 'structure', perm: ['org_structure', 'view'], icon: 'network' },
+      { label: 'Триггер создания проекта', to: '/auto-create', name: 'auto-create', perm: ['rbac_config', 'view'], icon: 'wand-sparkles' },
+      { label: 'Статусы', to: '/statuses', name: 'statuses', perm: ['state_admin', 'view'], icon: 'tags' },
+      { label: 'Пресеты прав', to: '/permissions', name: 'permissions', perm: ['rbac_config', 'view'], icon: 'file-key' },
+      { label: 'Журнал действий', to: '/audit', name: 'audit', perm: ['audit', 'view'], icon: 'notebook-text' },
     ],
   },
   {
     label: 'Система',
     roles: null,
     items: [
-      { label: 'Пульт', to: '/system/console', name: 'system-console' },
-      { label: 'Очередь изменений', to: '/system/queue', name: 'system-queue' },
-      { label: 'Статус', to: '/system/status', name: 'system-status' },
-      { label: 'Настройки', to: '/system/settings', name: 'system-settings' },
+      // «Пульт» (/system/console) and «Статус» (/system/status) stay
+      // URL-accessible diagnostics pages but are no longer in the sidebar.
+      { label: 'Очередь изменений', to: '/system/queue', name: 'system-queue', icon: 'list' },
+      { label: 'Настройки', to: '/system/settings', name: 'system-settings', icon: 'settings' },
     ],
   },
 ]

@@ -4,6 +4,7 @@ import App from './App.vue'
 import router from './router'
 import { setupHttp } from './http'
 import { initTheme } from './theme'
+import { applyUiSize, uiFontSize } from './settings'
 import { useAuthStore } from './store'
 import { initOfflineSync, startSessionMaintenance } from './offline/sync'
 import { startConnectionMonitor } from './offline/connection'
@@ -11,6 +12,9 @@ import { ensureCacheVersion } from './offline/cache'
 
 setupHttp()
 initTheme()
+// UI font scale (small / default / large) — applied now and re-applied on change.
+applyUiSize()
+watch(uiFontSize, applyUiSize)
 
 // Pinia is activated before touching the stores (auto re-login for the exe): otherwise
 // useXStore() outside setup would fail with "no active Pinia".

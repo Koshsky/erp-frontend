@@ -21,6 +21,7 @@ import { isOffline } from '../offline/state'
 import { scheduleNamedRefresh } from '../offline/sync'
 import { addMonthsISO, fmtDate } from '../components/planner/calendar'
 import { CELL_WIDTH } from '../components/planner/layout'
+import type { DtoProject } from '@/api'
 
 const store = usePlanningStore()
 const app = useAppStore()
@@ -42,7 +43,7 @@ function onVisibleRange(v: { from: string; to: string; cellWidthPx: number; scal
 
 /** Print model for PdfExport: one "Projects" group, rows = projects */
 const projectGroups = computed<PdfGanttGroup[]>(() => {
-  const rows = (projectPlanning.value?.projects ?? []).map((p: any) => ({
+  const rows = (projectPlanning.value?.projects ?? []).map((p: DtoProject) => ({
     id: p.id,
     title: p.project_code ?? '',
     start_date: p.start_date ?? '',
@@ -199,9 +200,8 @@ async function createProjectAt(date: string) {
     start_date: date,
     end_date: addMonthsISO(date, 6),
   })
-  if (!res.ok) {
-    error.value = store.error
-  } else if (res.autoCreated) {
+  // A failed creation is reported by the global toast (http.ts) — no inline banner.
+  if (res.ok && res.autoCreated) {
     const a = res.autoCreated
     showFeedback(
       'Проект создан. По шаблону автосоздания добавлено: процессов — ' +
@@ -229,8 +229,8 @@ async function handleSelect(id: string) {
 }
 
 async function onReorder(e: { from: number; to: number }) {
-  const ok = await store.reorderProjects(e.from, e.to)
-  if (!ok) error.value = store.error
+  // A failed reorder is reported by the global toast (http.ts) — no inline banner.
+  await store.reorderProjects(e.from, e.to)
 }
 
 /** Click on a project bar — navigate to the processes tab anchored at the project start */
@@ -342,11 +342,11 @@ onMounted(() => {
   color: var(--ui-success);
   border: 1px solid color-mix(in srgb, var(--ui-success) 30%, transparent);
   border-radius: var(--ui-radius-sm);
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
 }
 .pp-st {
   color: var(--ui-text-2);
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   padding: 30px;
   text-align: center;
 }

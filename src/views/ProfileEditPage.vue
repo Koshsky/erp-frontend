@@ -87,7 +87,7 @@ async function onChangePassword() {
 @import '../styles/tokens.css';
 
 .pf-title {
-  font-size: 24px;
+  font-size: calc(var(--ui-font-scale, 1) * 24px);
   font-weight: 700;
   color: var(--ui-text);
   margin-bottom: 20px;
@@ -108,7 +108,7 @@ async function onChangePassword() {
 }
 
 .pf-title.sm {
-  font-size: 18px;
+  font-size: calc(var(--ui-font-scale, 1) * 18px);
   margin: 0 0 16px;
 }
 
@@ -124,7 +124,7 @@ async function onChangePassword() {
 
 .pf-msg {
   margin-top: 14px;
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   color: var(--ui-danger);
 }
 .pf-msg.ok {
@@ -139,7 +139,7 @@ async function onChangePassword() {
   border-radius: var(--ui-radius-sm);
   background: var(--ui-accent);
   color: var(--ui-accent-on);
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   font-weight: 600;
   cursor: pointer;
   transition: background var(--ui-duration);
@@ -155,7 +155,7 @@ async function onChangePassword() {
 .pf-back {
   display: inline-block;
   margin-top: 14px;
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   color: var(--ui-accent);
   text-decoration: none;
 }

@@ -707,7 +707,7 @@ function drawGrid(ctx: DrawCtx, colFrom: number, colTo: number, winTop: number, 
 
 /** Draws a group (milestone strip, merged label, task bars), clipped to the visible window */
 function drawGroup(ctx: DrawCtx, gl: GroupLayout, colFrom: number, colTo: number, winTop: number, winBottom: number) {
-  const { page, font, bold, unit, cellW, stripH, groupsStart, layout, z, palette } = ctx
+  const { page, font, bold, unit, cellW, groupsStart, layout, z, palette } = ctx
   const g = gl.group
   const strip = gl.stripH
   const top = gl.top

@@ -7,7 +7,7 @@ import ResourceHeader from '@/components/common/ResourceHeader/ResourceHeader.vu
 import TaskGantt from './components/TaskGantt/TaskGantt.vue'
 import { provideDragPreview } from '@/composables/useDragPreview'
 import type { DragPreviewState } from '@/composables/useDragPreview'
-import type { DtoDetailedProcess, DtoResource, DtoResourceResponse, DtoResourceCalendar, DtoResourceAbsenceResponse, DtoAvailabilityPeriod, DtoUserInfo, DtoCommentResponse } from '@/api'
+import type { DtoDetailedProcess, DtoResourceResponse, DtoResourceCalendar, DtoResourceAbsenceResponse, DtoAvailabilityPeriod, DtoUserInfo, DtoCommentResponse, DtoDetailedTask, DtoTaskDependency } from '@/api'
 import type { Resource } from '@/components/common/ResourceHeader/types'
 import type { Process } from './types'
 import type { PlanningUnit } from '../calendar'
@@ -105,7 +105,7 @@ const displayProcesses = computed<Process[]>(() =>
           owner_short: owner ? shortName(owner) : undefined,
           comments_count: t.comments_count ?? 0,
           status: t.status ?? 'not_started',
-          subtasks: (t.subtasks || []).map((s: any) => ({
+          subtasks: (t.subtasks || []).map((s: DtoDetailedTask) => ({
             id: s.id ?? 0,
             title: s.title ?? '',
             status: s.status ?? 'not_started',
@@ -127,7 +127,7 @@ const displayProcesses = computed<Process[]>(() =>
       color: m.color ?? '',
       date: m.date ?? '',
     })),
-    dependencies: (dto.dependencies || []).map((e: any) => ({
+    dependencies: (dto.dependencies || []).map((e: DtoTaskDependency) => ({
       id: e.id ?? 0,
       task_id: e.task_id ?? 0,
       depends_on_task_id: e.depends_on_task_id ?? 0,
@@ -196,7 +196,7 @@ function findTaskRow(taskId: number) {
  *  subtract it from the abandoned old one. Cell colors update in real time
  *  while the mouse button is held. */
 function usageForDayPreview(resourceId: number, day: Date): number {
-  let used = usageForDay(resourceId, day)
+  const used = usageForDay(resourceId, day)
   const p = dragPreview.value
   if (!p.active || p.taskId == null || p.startDate == null || p.endDate == null) return used
   const t = findTaskRow(p.taskId)

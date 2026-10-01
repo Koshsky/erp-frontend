@@ -80,7 +80,7 @@ const { dialogEl, onKeydown } = useModalFocus({
   border-bottom: 1px solid var(--ui-border);
 }
 .cd-title {
-  font-size: 16px;
+  font-size: calc(var(--ui-font-scale, 1) * 16px);
   font-weight: 700;
   color: var(--ui-text);
   margin: 0;
@@ -88,7 +88,7 @@ const { dialogEl, onKeydown } = useModalFocus({
 .cd-close {
   border: none;
   background: transparent;
-  font-size: 22px;
+  font-size: calc(var(--ui-font-scale, 1) * 22px);
   line-height: 1;
   color: var(--ui-text-muted);
   cursor: pointer;
@@ -102,7 +102,7 @@ const { dialogEl, onKeydown } = useModalFocus({
 .cd-message {
   margin: 0;
   padding: 18px 16px;
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   line-height: 1.5;
   color: var(--ui-text-2);
 }
@@ -116,7 +116,7 @@ const { dialogEl, onKeydown } = useModalFocus({
   border: none;
   border-radius: var(--ui-radius-sm);
   padding: 9px 18px;
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   font-weight: 600;
   cursor: pointer;
   transition: background var(--ui-duration), opacity var(--ui-duration);

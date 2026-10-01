@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/vue3-vite'
 import ProcessGantt from './ProcessGantt.vue'
+import type { ProcessItem } from './types'
 import { makeDemoTimeline } from '@/components/planner/plannerStoryHelpers'
 
 const now = new Date()
@@ -17,7 +18,7 @@ const meta: Meta<typeof ProcessGantt> = {
 export default meta
 type Story = StoryObj<typeof meta>
 
-function withProcesses(processes: any[]): Story['render'] {
+function withProcesses(processes: ProcessItem[]): Story['render'] {
   return () => ({
     components: { ProcessGantt },
     data: () => ({ timeline: makeDemoTimeline(iso(day(1, 1)), 'day'), projectCode: 'КО-1234', processes }),

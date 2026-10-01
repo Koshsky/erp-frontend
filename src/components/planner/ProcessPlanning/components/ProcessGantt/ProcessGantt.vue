@@ -81,7 +81,7 @@ function onBarContextMenu(p: { clientX: number; clientY: number }, id: number) {
 <style scoped>
 @import "../../../../../styles/tokens.css";
 .pg-code {
-  font-size: 16px;
+  font-size: calc(var(--ui-font-scale, 1) * 16px);
   font-weight: 800;
   line-height: 1.2;
   color: var(--ui-accent);
@@ -92,7 +92,7 @@ function onBarContextMenu(p: { clientX: number; clientY: number }, id: number) {
   text-overflow: ellipsis;
 }
 .pg-dates {
-  font-size: 10px;
+  font-size: calc(var(--ui-font-scale, 1) * 10px);
   font-weight: 400;
   color: var(--ui-text-muted);
   white-space: nowrap;

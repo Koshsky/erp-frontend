@@ -1,8 +1,7 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import type { GroupGanttProps } from './types'
+import { computed, ref, type VNode } from 'vue'
+import type { GroupGanttSlotItem, GroupGanttProps } from './types'
 import { cellRangeForSpan, toDate } from '../calendar'
-import { LABEL_WIDTH } from '../layout'
 import { useRowReorder } from '../../../composables/useRowReorder'
 
 const props = withDefaults(defineProps<GroupGanttProps>(), {
@@ -59,10 +58,10 @@ const { dropStyle, startRowDrag } = useRowReorder(
 )
 
 defineSlots<{
-  label(): any
-  row(props: { item: any; index: number }): any
+  label(): VNode[]
+  row(props: { item: GroupGanttSlotItem; index: number }): VNode[]
   /** startReorder — begin row reordering with the bar's pointerdown event */
-  bar(props: { item: any; index: number; count: number; startReorder: (e: PointerEvent) => void }): any
+  bar(props: { item: GroupGanttSlotItem; index: number; count: number; startReorder: (e: PointerEvent) => void }): VNode[]
 }>()
 
 function fmt(d: string | Date | number | null | undefined): string {
@@ -87,7 +86,7 @@ function fmt(d: string | Date | number | null | undefined): string {
     <template v-for="(item, index) in items" :key="'gi' + item.id">
       <div class="gg-row" :style="{ height: rowHeight + 'px' }" :data-row-index="index">
         <div v-if="!mergedLabel" class="gg-label">
-          <slot name="row" :item="item" :index="index">
+          <slot name="row" :item="item as GroupGanttSlotItem" :index="index">
             <span class="item-title">{{ item.title }}</span>
             <div class="item-dates">{{ fmt(item.start_date) }} — {{ fmt(item.end_date) }}</div>
           </slot>
@@ -95,7 +94,7 @@ function fmt(d: string | Date | number | null | undefined): string {
         <div class="gg-bars">
           <slot
             name="bar"
-            :item="item"
+            :item="item as GroupGanttSlotItem"
             :index="index"
             :count="items.length"
             :start-reorder="(e: PointerEvent) => startRowDrag(e, index)"
@@ -178,7 +177,7 @@ function fmt(d: string | Date | number | null | undefined): string {
   flex-direction: column;
   align-items: flex-start;
   justify-content: center;
-  font-size: 12px;
+  font-size: calc(var(--ui-font-scale, 1) * 12px);
   font-weight: 500;
   color: var(--ui-text);
   padding: 1px 8px;
@@ -192,7 +191,7 @@ function fmt(d: string | Date | number | null | undefined): string {
 }
 .item-title {
   font-weight: 400;
-  font-size: 11px;
+  font-size: calc(var(--ui-font-scale, 1) * 11px);
   color: var(--ui-text-2);
   max-width: 100%;
   overflow: hidden;
@@ -200,7 +199,7 @@ function fmt(d: string | Date | number | null | undefined): string {
   white-space: nowrap;
 }
 .item-dates {
-  font-size: 9px;
+  font-size: calc(var(--ui-font-scale, 1) * 9px);
   color: var(--ui-text-muted);
   font-weight: 400;
   margin-top: 1px;

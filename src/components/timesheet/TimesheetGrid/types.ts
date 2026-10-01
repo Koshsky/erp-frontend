@@ -21,6 +21,8 @@ export interface TimesheetGridProps {
   t: TimelineCtx
   employees: EmployeeWithTitle[]
   states: DtoStateResponse[]
+  /** state_id → user-defined color; overrides the palette fallback in swatches and cells */
+  colorMap?: Record<number, string>
   /** State covering an employee's day (undefined — a workday) */
   stateForDay: (employeeId: number, iso: string) => DtoUserStateResponse | undefined
   /** Load/save error */

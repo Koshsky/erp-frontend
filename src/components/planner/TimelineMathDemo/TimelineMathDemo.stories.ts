@@ -56,7 +56,7 @@ export const DayCells: Story = {
     methods: { fmt, fmtRange, monthColor, consistency },
     template: `
       <div style="font-family:sans-serif;max-width:1100px;">
-        <h3 style="margin:0 0 6px;font-size:15px;">День: origin = 2026-07-15, индексы -8..17</h3>
+        <h3 style="margin:0 0 6px;font-size: calc(var(--ui-font-scale, 1) * 15px);">День: origin = 2026-07-15, индексы -8..17</h3>
         <div style="display:flex;overflow-x:auto;gap:2px;padding-bottom:10px;margin-bottom:18px;">
           <div v-for="c in cells" :key="c.index"
             :style="{ minWidth: 56, textAlign: 'center', fontSize: 11, padding: '4px 2px', border: '1px solid #e0e0e0', borderRadius: 4,
@@ -65,12 +65,12 @@ export const DayCells: Story = {
             <div>{{ fmt(c.start) }}</div>
           </div>
         </div>
-        <p style="font-size:12px;color:#555;margin:0 0 20px;">
+        <p style="font-size: calc(var(--ui-font-scale, 1) * 12px);color:#555;margin:0 0 20px;">
           Синяя ячейка — индекс 0 (origin). Отрицательные индексы — слева от якоря, положительные — справа.
           Проверка спана [2,6) → {{ span.start_date }} … {{ span.end_date }}
         </p>
 
-        <h3 style="margin:0 0 6px;font-size:15px;">Декада: origin = 2026-07-15, индексы -4..5</h3>
+        <h3 style="margin:0 0 6px;font-size: calc(var(--ui-font-scale, 1) * 15px);">Декада: origin = 2026-07-15, индексы -4..5</h3>
         <div style="display:flex;overflow-x:auto;gap:2px;margin-bottom:8px;">
           <div v-for="c in decadeCells" :key="c.index"
             :style="{ minWidth: 96, textAlign: 'center', fontSize: 11, padding: '4px 2px', border: '1px solid #e0e0e0', borderRadius: 4,
@@ -79,13 +79,13 @@ export const DayCells: Story = {
             <div>{{ fmtRange(c.start, c.end) }}</div>
           </div>
         </div>
-        <p style="font-size:12px;color:#555;margin:0 0 20px;">
+        <p style="font-size: calc(var(--ui-font-scale, 1) * 12px);color:#555;margin:0 0 20px;">
           Декады выровнены по календарю (1-10/11-20/21-конец), фоном выделены месяцы.
           Первая декада месяца-якоря частичная: ячейка 0 начинается в день якоря (15.07) и идёт до конца своей
           календарной декады (11–20 → 15–20); дни 11–14 лежат в ячейке −1.
         </p>
 
-        <h3 style="margin:0 0 6px;font-size:15px;">Декада: origin = 2026-07-01 (первое число — как стартовая позиция)</h3>
+        <h3 style="margin:0 0 6px;font-size: calc(var(--ui-font-scale, 1) * 15px);">Декада: origin = 2026-07-01 (первое число — как стартовая позиция)</h3>
         <div style="display:flex;overflow-x:auto;gap:2px;margin-bottom:8px;">
           <div v-for="c in decadeCellsFromMonthStart" :key="c.index"
             :style="{ minWidth: 96, textAlign: 'center', fontSize: 11, padding: '4px 2px', border: '1px solid #e0e0e0', borderRadius: 4,
@@ -94,7 +94,7 @@ export const DayCells: Story = {
             <div>{{ fmtRange(c.start, c.end) }}</div>
           </div>
         </div>
-        <p style="font-size:12px;color:#555;margin:0;">
+        <p style="font-size: calc(var(--ui-font-scale, 1) * 12px);color:#555;margin:0;">
           Согласованность (индекс ячейки === индексы её границ): день={{ consistency('2026-07-01','day',-100,200) ? 'OK' : 'FAIL' }},
           декада={{ consistency('2026-07-15','decade',-50,100) ? 'OK' : 'FAIL' }}
         </p>

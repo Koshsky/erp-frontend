@@ -50,8 +50,6 @@ export function toggleScheme(): void {
   setScheme(resolvedScheme.value === 'dark' ? 'light' : 'dark')
 }
 
-let stopListening: (() => void) | undefined
-
 /** Call once on app bootstrap: applies the scheme and tracks the OS theme */
 export function initTheme(): void {
   apply()
@@ -59,5 +57,4 @@ export function initTheme(): void {
     if (scheme.value === 'system') apply()
   }
   media.addEventListener('change', onChange)
-  stopListening = () => media.removeEventListener('change', onChange)
 }

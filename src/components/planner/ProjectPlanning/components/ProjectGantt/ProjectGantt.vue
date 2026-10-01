@@ -89,7 +89,7 @@ function fmt(d: string): string {
   align-items: center;
   gap: 4px;
   font-weight: 400;
-  font-size: 11px;
+  font-size: calc(var(--ui-font-scale, 1) * 11px);
   color: var(--ui-text-2);
   max-width: 100%;
   overflow: hidden;
@@ -97,7 +97,7 @@ function fmt(d: string): string {
   white-space: nowrap;
 }
 .item-dates {
-  font-size: 9px;
+  font-size: calc(var(--ui-font-scale, 1) * 9px);
   color: var(--ui-text-muted);
   font-weight: 400;
   margin-top: 1px;

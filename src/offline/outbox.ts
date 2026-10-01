@@ -19,8 +19,8 @@ import { getAccessToken } from '../token'
  * swept by age/timers. Entries are removed only after a successful send, on a
  * verified login of a different account (pruneForeignOutbox — the previous
  * account is logged out, so the flush-time creator guard would park its entries
- * forever), or by explicit user actions (discardFailed / discardEntry /
- * clearLocalData). Logout itself does NOT wipe the queue: a sibling tab of the
+ * forever), or by explicit user actions (discardFailed / discardEntry).
+ * Logout itself does NOT wipe the queue: a sibling tab of the
  * same user may still have pending edits (H-OFF-3). Backoff and quarantined
  * flags only gate auto-retries; they never delete an entry.
  * See docs/no-ttl-local-storage.md.
@@ -480,7 +480,6 @@ function logOutboxError(entry: OutboxEntry, url: string, e: unknown): void {
         timeout_ms: err.timeout,
         message: err.message,
       }
-  // eslint-disable-next-line no-console
   console.error('[outbox] не удалось отправить запись:', base, detail, {
     config: err.config ? { method: err.config.method, url: err.config.url, data: err.config.data } : undefined,
   })

@@ -58,11 +58,6 @@ function okMsg(msg: string) {
   statusOk.value = true
 }
 
-function failMsg(msg: string) {
-  statusMsg.value = msg
-  statusOk.value = false
-}
-
 async function refreshStatus() {
   await refreshPendingCount().catch(() => {})
   failedEntries.value = (await getFailedEntries().catch(() => [])).map((e) => ({
@@ -211,7 +206,7 @@ onBeforeUnmount(() => {
 @import '../styles/tokens.css';
 
 .sq-title {
-  font-size: 24px;
+  font-size: calc(var(--ui-font-scale, 1) * 24px);
   font-weight: 700;
   color: var(--ui-text);
   margin-bottom: 20px;
@@ -226,7 +221,7 @@ onBeforeUnmount(() => {
 }
 
 .sq-card-title {
-  font-size: 18px;
+  font-size: calc(var(--ui-font-scale, 1) * 18px);
   font-weight: 700;
   color: var(--ui-text);
   margin: 0 0 16px;
@@ -244,13 +239,13 @@ onBeforeUnmount(() => {
   border-radius: 999px;
   background: var(--ui-milestone);
   color: #4a3d14;
-  font-size: 12px;
+  font-size: calc(var(--ui-font-scale, 1) * 12px);
   font-weight: 700;
 }
 
 .sq-hint {
   margin: 0;
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   color: var(--ui-text-muted);
 }
 
@@ -294,7 +289,7 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 12px;
+  font-size: calc(var(--ui-font-scale, 1) * 12px);
 }
 
 .queue-op {
@@ -326,7 +321,7 @@ onBeforeUnmount(() => {
   border-radius: 999px;
   background: var(--ui-danger-soft);
   color: var(--ui-danger);
-  font-size: 10px;
+  font-size: calc(var(--ui-font-scale, 1) * 10px);
   font-weight: 700;
   white-space: nowrap;
 }
@@ -339,7 +334,7 @@ onBeforeUnmount(() => {
 
 .queue-summary {
   margin-top: 4px;
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   font-weight: 600;
   color: var(--ui-text);
 }
@@ -349,7 +344,7 @@ onBeforeUnmount(() => {
   display: flex;
   flex-wrap: wrap;
   gap: 4px 14px;
-  font-size: 12px;
+  font-size: calc(var(--ui-font-scale, 1) * 12px);
   color: var(--ui-text-2);
 }
 
@@ -359,7 +354,7 @@ onBeforeUnmount(() => {
 
 .queue-toggle {
   float: right;
-  font-size: 11px;
+  font-size: calc(var(--ui-font-scale, 1) * 11px);
   font-weight: 500;
   color: var(--ui-accent);
 }
@@ -379,7 +374,7 @@ onBeforeUnmount(() => {
 .queue-info-row {
   display: flex;
   gap: 8px;
-  font-size: 12px;
+  font-size: calc(var(--ui-font-scale, 1) * 12px);
   align-items: baseline;
 }
 
@@ -416,7 +411,7 @@ onBeforeUnmount(() => {
   border: 1px solid var(--ui-border);
   border-radius: 6px;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 11px;
+  font-size: calc(var(--ui-font-scale, 1) * 11px);
   line-height: 1.5;
   color: var(--ui-text);
   white-space: pre-wrap;
@@ -433,7 +428,7 @@ onBeforeUnmount(() => {
 }
 
 .sp-errors-head {
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   font-weight: 700;
   color: var(--ui-danger);
   margin-bottom: 6px;
@@ -452,7 +447,7 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  font-size: 12px;
+  font-size: calc(var(--ui-font-scale, 1) * 12px);
 }
 
 .sp-errors-req {
@@ -479,7 +474,7 @@ onBeforeUnmount(() => {
   border-radius: var(--ui-radius-sm);
   background: var(--ui-accent);
   color: var(--ui-accent-on);
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   font-weight: 600;
   cursor: pointer;
   transition: background var(--ui-duration), opacity var(--ui-duration);
@@ -509,7 +504,7 @@ onBeforeUnmount(() => {
 }
 
 .sp-msg {
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   color: var(--ui-danger);
   margin: 10px 0 0;
 }

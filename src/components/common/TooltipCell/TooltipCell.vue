@@ -93,7 +93,7 @@ onBeforeUnmount(() => {
   position: fixed;
   background: var(--ui-surface);
   color: var(--ui-text);
-  font-size: 12px;
+  font-size: calc(var(--ui-font-scale, 1) * 12px);
   line-height: 1.45;
   padding: 8px 12px;
   border-radius: var(--ui-radius-sm);

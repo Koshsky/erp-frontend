@@ -13,7 +13,6 @@ const meta: Meta<typeof ModalForm> = {
     title: 'Редактировать проект',
     submitLabel: 'Сохранить',
     busy: false,
-    error: null,
   },
 }
 
@@ -98,13 +97,6 @@ export const Busy: Story = {
   },
 }
 
-export const WithError: Story = {
-  args: {
-    error: 'Не удалось сохранить: сервер недоступен',
-    fields: [textField('title', 'Название', 'Новый процесс')],
-  },
-}
-
 /**
  * Test (regression for 4ae6326/useModalFocus): the dialog traps the focus
  * (Tab cycles inside, Shift+Tab wraps back), Escape emits `close` (the wrapper
@@ -127,7 +119,7 @@ export const FocusTrapEscapeAndDoubleSubmitGuard: Story = {
       <div>
         <button type="button" class="mf-open" @click="open = true">Открыть форму</button>
         <ModalForm :open="open" :busy="busy" title="Новый процесс" :fields="fields" :submit-label="'Сохранить'" @save="saves += 1; busy = true" @close="open = false" />
-        <div data-testid="mf-saves" style="font-size:12px;">{{ saves }}</div>
+        <div data-testid="mf-saves" style="font-size: calc(var(--ui-font-scale, 1) * 12px);">{{ saves }}</div>
       </div>
     `,
   }),

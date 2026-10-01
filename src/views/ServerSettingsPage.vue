@@ -177,7 +177,7 @@ function onSave() {
   display: block;
   text-align: center;
   margin-top: 12px;
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   color: var(--ui-accent);
   text-decoration: none;
 }
@@ -193,7 +193,7 @@ function onSave() {
   border-radius: 10px;
   background: var(--ui-surface-2);
   margin-bottom: 10px;
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
 }
 
 .ss-label {

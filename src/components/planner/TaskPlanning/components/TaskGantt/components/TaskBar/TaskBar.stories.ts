@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/vue3-vite'
 import { expect } from 'vitest'
 import TaskBar from './TaskBar.vue'
+import type { Task } from './types'
 import { makeDemoTimeline } from '@/components/planner/plannerStoryHelpers'
 
 const now = new Date()
@@ -18,7 +19,7 @@ const meta: Meta<typeof TaskBar> = {
 export default meta
 type Story = StoryObj<typeof meta>
 
-function withTask(task: any, projectCode = 'КО_505', width = 3000): Story['render'] {
+function withTask(task: Task, projectCode = 'КО_505', width = 3000): Story['render'] {
   return () => ({
     components: { TaskBar },
     data: () => ({ timeline: makeDemoTimeline(iso(day(1, 1)), 'day'), task, projectCode }),

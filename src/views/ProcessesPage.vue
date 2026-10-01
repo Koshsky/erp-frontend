@@ -20,6 +20,7 @@ import { isOffline } from '../offline/state'
 import { scheduleNamedRefresh } from '../offline/sync'
 import { addMonthsISO, shiftSpanDates } from '../components/planner/calendar'
 import { CELL_WIDTH } from '../components/planner/layout'
+import type { DtoDetailedProject, DtoProcess } from '@/api'
 
 const store = usePlanningStore()
 const app = useAppStore()
@@ -42,14 +43,14 @@ function onVisibleRange(v: { from: string; to: string; cellWidthPx: number; scal
 
 /** Print model for PdfExport: a project = a group, processes = rows */
 const processGroups = computed<PdfGanttGroup[]>(() =>
-  (processPlanning.value?.projects ?? []).map((project: any) => ({
+  (processPlanning.value?.projects ?? []).map((project: DtoDetailedProject) => ({
     id: project.id,
     code: project.project_code ?? '',
     title: '',
     start_date: project.start_date ?? '',
     end_date: project.end_date ?? '',
     project_id: project.id,
-    rows: (project.processes ?? []).map((p: any) => ({
+    rows: (project.processes ?? []).map((p: DtoProcess) => ({
       id: p.id,
       title: p.title ?? '',
       start_date: p.start_date ?? '',
@@ -69,8 +70,8 @@ const { canCreateProcess, canManageProcess, canDeleteProcess, role, userId } = u
 
 /** Drag/resize/reorder are enabled when the user can manage at least one visible process */
 const anyManageableProcess = computed(() =>
-  (processPlanning.value?.projects ?? []).some((p: any) =>
-    (p.processes ?? []).some((pr: any) => canManageProcess(pr.id)),
+  (processPlanning.value?.projects ?? []).some((p: DtoDetailedProject) =>
+    (p.processes ?? []).some((pr: DtoProcess) => canManageProcess(pr.id ?? 0)),
   ),
 )
 
@@ -80,7 +81,7 @@ const { findProcess } = useFindPlanningItem()
 const focusDate = computed(() => {
   const id = Number(route.query.project)
   if (!id) return null
-  const project = store.processPlanning?.projects?.find((p: any) => p.id === id)
+  const project = store.processPlanning?.projects?.find((p: DtoDetailedProject) => p.id === id)
   return project?.start_date ?? null
 })
 
@@ -185,7 +186,7 @@ async function handleSelect(id: string) {
   const { date, rowIndex, projectId, processId } = menu.value
   if (id === 'create-process') {
     if (projectId == null || date == null) return
-    const project = store.processPlanning?.projects?.find((p: any) => p.id === projectId)
+    const project = store.processPlanning?.projects?.find((p: DtoDetailedProject) => p.id === projectId)
     // A process is created within the bounds of the parent project keeping the default length:
     // a click outside the bounds clamps the span to the parent start/end but does not shrink it.
     const { start_date, end_date } = shiftSpanDates(
@@ -194,13 +195,13 @@ async function handleSelect(id: string) {
       project?.start_date,
       project?.end_date,
     )
-    const ok = await store.createProcess({
+    await store.createProcess({
       title: 'Новый процесс',
       project_id: projectId,
       start_date,
       end_date,
     }, rowIndex)
-    if (!ok) error.value = store.error
+    // A failed creation is reported by the global toast (http.ts) — no inline banner.
   } else if (id === 'edit-process' && processId != null) {
     openProcessEdit(processId)
   } else if (id === 'delete-process' && processId != null) {
@@ -307,7 +308,7 @@ onMounted(() => {
 }
 .pp-st {
   color: var(--ui-text-2);
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   padding: 30px;
   text-align: center;
 }

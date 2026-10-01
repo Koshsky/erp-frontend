@@ -1,18 +1,38 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { storeToRefs } from 'pinia'
-import { ContextMenu, ModalForm, ConfirmDialog, PendingMark } from '../components/common'
+import { ContextMenu, ModalForm, ConfirmDialog, PendingMark, DataTable } from '../components/common'
+import type { DataTableColumn } from '../components/common'
 import type { ContextMenuItem } from '../components/common/ContextMenu'
 import type { ModalField } from '../components/common/ModalForm'
 import { useConfirm } from '../composables/useConfirm'
 import { useContextMenu } from '../composables/useContextMenu'
 import { useEditModal } from '../composables/useEditModal'
 import { useRoleAccess } from '../composables/useRoleAccess'
+import { useColumnWidths } from '../composables/useColumnWidths'
 import { useTimesheetStore } from '../store'
 import type { DtoStateResponse } from '@/api'
 
 const ts = useTimesheetStore()
 const { states, loading, error } = storeToRefs(ts)
+
+/**
+ * The DataTable cell slot gives the row as `unknown` (generic inference does
+ * not reach through the store's refs) — cast to the page's row type here.
+ */
+const asState = (row: unknown): DtoStateResponse => row as DtoStateResponse
+
+// Column config for the DataTable: content-sized tracks with a hard cap
+// (long values wrap instead of shifting the following columns); the
+// component itself appends the 1fr spacer that stretches the bands.
+const columns: DataTableColumn[] = [
+  { key: 'code', label: 'Код', width: '140px' },
+  { key: 'name', label: 'Название', width: 'fit-content(420px)' },
+  { key: 'is_available', label: 'Доступность', width: '160px' },
+]
+
+/** Per-user persisted column widths (drag-resize on the header edges). */
+const { columnWidths } = useColumnWidths('statuses')
 
 // The page is available to vp/admin only (route + guard); the buttons follow
 // the exact backend rights: create/update/delete are separate state.* rules.
@@ -37,7 +57,7 @@ const { confirm: confirmDialog, ask, proceed, cancel } = useConfirm()
 
 type ModalMode =
   | { type: 'create' }
-  | { type: 'edit'; id: number; code: string; name: string; isAvailable: boolean }
+  | { type: 'edit'; id: number; code: string; name: string; isAvailable: boolean; color: string }
 
 /** Status availability (ModalField does not support boolean — we use '1'/'0') */
 const availabilityOptions: ModalField['options'] = [
@@ -49,6 +69,12 @@ const { open: openModal, close: closeModal, submit: submitModal, bind: modalBind
   (state) => [
     { key: 'code', label: 'Код', type: 'text', value: state.type === 'edit' ? state.code : '', required: true },
     { key: 'name', label: 'Название', type: 'text', value: state.type === 'edit' ? state.name : '', required: true },
+    {
+      key: 'color',
+      label: 'Цвет',
+      type: 'color',
+      value: state.type === 'edit' ? state.color ?? '' : '',
+    },
     {
       key: 'isAvailable',
       label: 'Доступность',
@@ -62,6 +88,8 @@ const { open: openModal, close: closeModal, submit: submitModal, bind: modalBind
       code: String(values.code ?? '').trim(),
       name: String(values.name ?? '').trim(),
       is_available: values.isAvailable === '1',
+      // '' means "no custom color" — the backend stores NULL (palette fallback).
+      color: String(values.color ?? ''),
     }
     const ok =
       state.type === 'create'
@@ -93,6 +121,7 @@ function openEdit(id: number) {
       code: st.code ?? '',
       name: st.name ?? '',
       isAvailable: st.is_available ?? true,
+      color: st.color ?? '',
     })
   }
 }
@@ -116,11 +145,6 @@ onMounted(() => {
 
 <template>
   <section class="sp">
-    <div class="sp-head">
-      <h2 class="sp-title">Статусы</h2>
-      <button v-if="canCreateState" type="button" class="sp-add" @click="openCreate">Создать статус</button>
-    </div>
-
     <p v-if="loading && !states.length" class="sp-st">Загрузка...</p>
     <p v-if="error && !states.length" class="sp-st er">{{ error }}</p>
 
@@ -129,33 +153,31 @@ onMounted(() => {
       data: the empty-state message is rendered inside the table instead of
       replacing it.
     -->
-    <div v-if="states.length || (!loading && !error)" class="table">
-      <div class="tr th">
-        <div>Код</div>
-        <div>Название</div>
-        <div>Доступность</div>
-      </div>
-      <template v-if="states.length">
-        <div
-          v-for="st in states"
-          :key="st.id"
-          class="tr"
-          @contextmenu.prevent.stop="onRowContextMenu($event, st)"
-        >
-          <div class="code">
-            {{ st.code }}
-            <PendingMark entity="state" :id="st.id" />
-          </div>
-          <div>{{ st.name }}</div>
-          <div>
-            <span class="avail" :class="{ off: !st.is_available }">
-              {{ st.is_available ? 'Доступен' : 'Недоступен' }}
-            </span>
-          </div>
-        </div>
+    <DataTable
+      v-if="states.length || (!loading && !error)"
+      :columns="columns"
+      :rows="states"
+      title="Статусы"
+      empty-text="Нет данных о статусах"
+      resizable
+      v-model:column-widths="columnWidths"
+      @row-contextmenu="onRowContextMenu"
+    >
+      <template #actions>
+        <button v-if="canCreateState" type="button" class="tbar-add" @click="openCreate">Создать статус</button>
       </template>
-      <p v-else class="sp-st">Нет данных о статусах</p>
-    </div>
+      <template #cell="{ row, column }">
+        <span v-if="column.key === 'code'" class="code">
+          <span v-if="asState(row).color" class="swatch" :style="{ background: asState(row).color }" aria-hidden="true"></span>
+          {{ asState(row).code }}
+          <PendingMark entity="state" :id="asState(row).id" />
+        </span>
+        <span v-else-if="column.key === 'is_available'" class="avail" :class="{ off: !asState(row).is_available }">
+          {{ asState(row).is_available ? 'Доступен' : 'Недоступен' }}
+        </span>
+        <template v-else>{{ asState(row).name }}</template>
+      </template>
+    </DataTable>
 
     <ContextMenu v-bind="menuBind" @select="select" @close="closeMenu" />
 
@@ -174,74 +196,54 @@ onMounted(() => {
 <style scoped>
 @import '../styles/tokens.css';
 
-.sp-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 20px;
-}
-.sp-title {
-  font-size: 24px;
-  font-weight: 700;
-  color: var(--ui-text);
-}
-.sp-add {
+/* "Create status" button — sits in the DataTable toolbar actions slot. */
+.tbar-add {
   border: none;
   border-radius: var(--ui-radius-sm);
   padding: 9px 18px;
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   font-weight: 600;
   cursor: pointer;
   background: var(--ui-accent);
   color: var(--ui-accent-on);
   transition: background var(--ui-duration);
 }
-.sp-add:hover {
+.tbar-add:hover {
   background: color-mix(in srgb, var(--ui-accent) 88%, black);
 }
+/* Loading / error placeholders outside the table */
 .sp-st {
   color: var(--ui-text-muted);
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   padding: 30px;
   text-align: center;
 }
 .er { color: var(--ui-danger); }
 
-.table {
-  background: var(--ui-surface);
-  border-radius: var(--ui-radius-md);
-  box-shadow: var(--ui-shadow-sm);
-  overflow: hidden;
-}
-.tr {
-  display: grid;
-  grid-template-columns: 140px 1fr 160px;
-  gap: 8px;
-  padding: 12px 20px;
-  border-bottom: 1px solid var(--ui-border);
-  font-size: 14px;
-}
-.tr:last-child { border-bottom: none; }
-.tr:not(.th):hover {
-  background: var(--ui-surface-2);
-}
-.th {
-  background: var(--ui-surface-2);
-  font-weight: 600;
-  color: var(--ui-text-muted);
-}
+/* Status code cell: swatch + code + pending mark */
 .code {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   font-weight: 700;
   color: var(--ui-accent);
 }
+/* Borderless custom-color swatch next to the state code (only when a color is set) */
+.swatch {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  display: inline-block;
+}
+/* Availability badge */
 .avail {
   display: inline-block;
   padding: 2px 10px;
   border-radius: 10px;
   background: var(--ui-success-soft);
   color: var(--ui-success);
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   font-weight: 600;
 }
 .avail.off {

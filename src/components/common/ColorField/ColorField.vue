@@ -53,7 +53,11 @@ function clampPanel() {
 }
 
 function toggle() {
-  open.value ? close() : (open.value = true)
+  if (open.value) {
+    close()
+  } else {
+    open.value = true
+  }
 }
 
 watch(open, (isOpen) => {
@@ -296,7 +300,7 @@ const panelSizeClass = computed(() => (props.size === 'sm' ? 'cf-panel--sm' : ''
   gap: 6px;
   border: none;
   background: transparent;
-  font-size: 12px;
+  font-size: calc(var(--ui-font-scale, 1) * 12px);
   color: var(--ui-text-2);
   cursor: pointer;
   padding: 2px 6px;

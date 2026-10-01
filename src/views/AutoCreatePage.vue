@@ -7,7 +7,6 @@ import { useAppStore } from '../store'
 import { ColorField, ConfirmDialog } from '../components/common'
 import { randomPaletteColor } from '../components/common/ColorField/palette'
 import { useConfirm } from '../composables/useConfirm'
-import type { DtoAutoCreateConfig } from '@/api'
 
 interface LocalResource {
   resource_id: number
@@ -85,7 +84,7 @@ const ownerOptions = computed(() =>
 
 /** Task resource candidates */
 const resourceOptions = computed(() =>
-  resources.value
+  [...resources.value]
     .sort((a, b) => (a.title ?? '').localeCompare(b.title ?? '', 'ru'))
     .map((r) => ({ value: r.id as number, label: `${r.title}${r.code ? ` (${r.code})` : ''}` })),
 )
@@ -104,7 +103,7 @@ const preview = computed(() => {
     tasks += p.tasks.length
     for (const t of p.tasks) {
       operations += t.operations.length
-      for (const r of t.resources) assignments += 1
+      assignments += t.resources.length
     }
   }
   return { processes: form.processes.length, tasks, operations, assignments }
@@ -331,7 +330,9 @@ async function onSave() {
     })),
   })
   saving.value = false
-  saveMsg.value = { ok, text: ok ? 'Сохранено' : (autoCreateError.value ?? 'Ошибка сохранения') }
+  // Summary only: the raw API error on failure is surfaced by the global
+  // toast (http.ts), so the inline message stays a generic custom summary.
+  saveMsg.value = { ok, text: ok ? 'Сохранено' : 'Ошибка сохранения' }
   if (ok) dirty.value = false
 }
 </script>
@@ -491,14 +492,14 @@ async function onSave() {
   flex-wrap: wrap;
 }
 .ac-title {
-  font-size: 24px;
+  font-size: calc(var(--ui-font-scale, 1) * 24px);
   font-weight: 700;
   color: var(--ui-text);
   margin: 0 0 6px;
 }
 .ac-st {
   color: var(--ui-text-muted);
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   padding: 30px;
   text-align: center;
 }
@@ -515,7 +516,7 @@ async function onSave() {
   color: var(--ui-danger);
   border-radius: var(--ui-radius-sm);
   padding: 7px 18px;
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   cursor: pointer;
 }
 .ac-form {
@@ -527,7 +528,7 @@ async function onSave() {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   font-weight: 600;
   color: var(--ui-text);
 }
@@ -541,7 +542,7 @@ async function onSave() {
   border: none;
   background: transparent;
   padding: 0;
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   font-weight: 600;
   color: var(--ui-accent);
   cursor: pointer;
@@ -553,7 +554,7 @@ async function onSave() {
 }
 .ac-preview-off {
   margin-top: 8px;
-  font-size: 12px;
+  font-size: calc(var(--ui-font-scale, 1) * 12px);
   color: var(--ui-warning);
   font-weight: 600;
 }
@@ -562,7 +563,7 @@ async function onSave() {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
 }
 .ac-preview-empty {
   color: var(--ui-text-muted);
@@ -601,7 +602,7 @@ async function onSave() {
   border: none;
   background: var(--ui-surface);
   color: var(--ui-text-2);
-  font-size: 12px;
+  font-size: calc(var(--ui-font-scale, 1) * 12px);
   padding: 6px 10px;
   cursor: pointer;
   transition: background var(--ui-duration), color var(--ui-duration);
@@ -619,7 +620,7 @@ async function onSave() {
 }
 .ac-preview-res {
   color: var(--ui-text-muted);
-  font-size: 12px;
+  font-size: calc(var(--ui-font-scale, 1) * 12px);
 }
 .ac-process {
   background: var(--ui-surface);
@@ -641,7 +642,7 @@ async function onSave() {
 }
 .ac-owner-hint {
   margin: -6px 0 10px;
-  font-size: 12px;
+  font-size: calc(var(--ui-font-scale, 1) * 12px);
   color: var(--ui-text-muted);
 }
 .ac-tasks {
@@ -669,7 +670,7 @@ async function onSave() {
   border-radius: 6px;
   background: var(--ui-surface);
   color: var(--ui-text-muted);
-  font-size: 12px;
+  font-size: calc(var(--ui-font-scale, 1) * 12px);
   line-height: 1;
   cursor: pointer;
   padding: 4px 7px;
@@ -717,7 +718,7 @@ async function onSave() {
   border: 1px solid var(--ui-border-strong);
   border-radius: var(--ui-radius-sm);
   padding: 8px 10px;
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   font-family: inherit;
   color: var(--ui-text);
   background: var(--ui-surface);
@@ -734,7 +735,7 @@ async function onSave() {
   color: var(--ui-accent);
   border-radius: var(--ui-radius-sm);
   padding: 7px 14px;
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   cursor: pointer;
   align-self: flex-start;
 }
@@ -746,7 +747,7 @@ async function onSave() {
   border: none;
   background: transparent;
   color: var(--ui-danger);
-  font-size: 15px;
+  font-size: calc(var(--ui-font-scale, 1) * 15px);
   line-height: 1;
   cursor: pointer;
   padding: 4px 6px;
@@ -765,7 +766,7 @@ async function onSave() {
   border: none;
   border-radius: var(--ui-radius-sm);
   padding: 9px 22px;
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   font-weight: 600;
   cursor: pointer;
   background: var(--ui-accent);
@@ -780,13 +781,13 @@ async function onSave() {
   border-radius: var(--ui-radius-sm);
   background: var(--ui-surface);
   padding: 8px 16px;
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
   color: var(--ui-text-2);
   cursor: pointer;
 }
 .ac-msg {
   margin: 0;
-  font-size: 14px;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
 }
 .ac-msg.ok {
   color: var(--ui-success);

@@ -117,7 +117,7 @@ onBeforeUnmount(() => {
   border: none;
   background: transparent;
   padding: 8px 12px;
-  font-size: 13px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   color: var(--ui-text);
   border-radius: 6px;
   cursor: pointer;
