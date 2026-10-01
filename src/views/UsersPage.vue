@@ -2,11 +2,13 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useRouter } from 'vue-router'
-import { HintButton, ContextMenu, ConfirmDialog } from '../components/common'
+import { HintButton, ContextMenu, ConfirmDialog, DataTable } from '../components/common'
+import type { DataTableColumn } from '../components/common'
 import type { ContextMenuItem } from '../components/common/ContextMenu'
 import { useConfirm } from '../composables/useConfirm'
 import { useContextMenu } from '../composables/useContextMenu'
 import { useAppStore, useRbacStore } from '../store'
+import { useColumnWidths } from '../composables/useColumnWidths'
 import type { DtoAdminUserResponse } from '@/api'
 
 const router = useRouter()
@@ -14,13 +16,17 @@ const app = useAppStore()
 const rbac = useRbacStore()
 const { adminUsers, adminUsersLoading, adminUsersError } = storeToRefs(app)
 
-type ColumnKey = 'name' | 'username' | 'preset'
+/**
+ * The DataTable cell slot gives the row as `unknown` (generic inference does
+ * not reach through the store's refs) — cast to the page's row type here.
+ */
+const asUser = (row: unknown): DtoAdminUserResponse => row as DtoAdminUserResponse
 
-/** Table columns: header labels and sortable keys */
-const COLUMNS: { key: ColumnKey; label: string }[] = [
-  { key: 'name', label: 'ФИО' },
-  { key: 'username', label: 'Логин' },
-  { key: 'preset', label: 'Пресет' },
+/** Table columns: sortable keys; sorting itself lives inside DataTable. */
+const columns: DataTableColumn[] = [
+  { key: 'name', label: 'ФИО', width: 'fit-content(380px)' },
+  { key: 'username', label: 'Логин', width: 'fit-content(280px)' },
+  { key: 'preset', label: 'Пресет', width: 'fit-content(260px)' },
 ]
 
 /** Russian preset labels for the column (unknown values fall back to the raw code). */
@@ -36,46 +42,25 @@ function presetLabel(preset?: string): string {
   return preset ? (PRESET_LABELS[preset] ?? preset) : '—'
 }
 
-/** Per-column filters, rendered under the table header */
+/** Per-column filters, rendered as the DataTable filter row */
 const fName = ref('')
 const fLogin = ref('')
 
-/** Active sort: column key + direction (1 asc, -1 desc); default ФИО ↑ */
-const sortBy = ref<{ key: ColumnKey; dir: 1 | -1 }>({ key: 'name', dir: 1 })
-
-function toggleSort(key: ColumnKey) {
-  if (sortBy.value.key === key) {
-    sortBy.value = { key, dir: sortBy.value.dir === 1 ? -1 : 1 }
-  } else {
-    sortBy.value = { key, dir: 1 }
-  }
-}
-
-/** Alphanumeric-aware string comparison: "worker_2" sorts before "worker_10" */
-function cmp(a: string, b: string): number {
-  return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })
-}
-
-/** Sort-key value of a user for a column */
-function sortValue(u: DtoAdminUserResponse, key: ColumnKey): string {
-  switch (key) {
-    case 'name': return u.name ?? ''
-    case 'username': return u.username ?? ''
-    case 'preset': return presetLabel(u.preset)
-  }
-}
-
+/** Client-side filtering (sorting is delegated to DataTable) */
 const filteredUsers = computed(() => {
   const qName = fName.value.trim().toLowerCase()
   const qLogin = fLogin.value.trim().toLowerCase()
-  const list = adminUsers.value.filter((u) => {
+  return adminUsers.value.filter((u) => {
     if (qName && !(u.name ?? '').toLowerCase().includes(qName)) return false
     if (qLogin && !(u.username ?? '').toLowerCase().includes(qLogin)) return false
     return true
   })
-  const { key, dir } = sortBy.value
-  return list.sort((a, b) => dir * cmp(sortValue(a, key), sortValue(b, key)))
 })
+
+const emptyText = computed(() => (adminUsers.value.length ? 'Ничего не найдено' : 'Нет данных'))
+
+/** Per-user persisted column widths (drag-resize on the header edges). */
+const { columnWidths } = useColumnWidths('users')
 
 /**
  * Row actions (context menu), gated by the user-admin rights: editing a user
@@ -141,15 +126,6 @@ function goToEdit(u: DtoAdminUserResponse) {
   void router.push(`/users/${u.id}/edit`)
 }
 
-/** Keyboard activation of the row (Enter/Space), ignoring keys from inner controls */
-function onRowKeydown(e: KeyboardEvent, u: DtoAdminUserResponse) {
-  if (e.target !== e.currentTarget) return
-  if (e.key === 'Enter' || e.key === ' ') {
-    e.preventDefault()
-    goToEdit(u)
-  }
-}
-
 onMounted(() => {
   void app.loadAdminUsers()
 })
@@ -182,17 +158,6 @@ async function refreshAfterMutation() {
 
 <template>
   <section class="up">
-    <div class="up-head">
-      <h2 class="up-title">Пользователи</h2>
-      <HintButton hint="users" />
-      <div class="up-actions">
-        <input v-model="search" type="search" class="up-search" placeholder="Поиск по ФИО или логину" />
-        <button v-if="rbac.can('user_admin', 'create')" type="button" class="up-add" @click="router.push('/users/new')">
-          Создать пользователя
-        </button>
-      </div>
-    </div>
-
     <p v-if="adminUsersLoading && !adminUsers.length" class="up-st">Загрузка...</p>
     <p v-if="adminUsersError && !adminUsers.length" class="up-st er">{{ adminUsersError }}</p>
 
@@ -201,47 +166,37 @@ async function refreshAfterMutation() {
       filters leave no rows: the empty-state message is rendered inside the
       table instead of replacing it, so the filters remain editable.
     -->
-    <div v-if="adminUsers.length || (!adminUsersLoading && !adminUsersError)" class="table">
-      <div class="tr th th-sort">
-        <button
-          v-for="col in COLUMNS"
-          :key="col.key"
-          type="button"
-          class="th-cell"
-          :class="{ 'th-active': sortBy.key === col.key }"
-          :title="`Сортировать по «${col.label}»`"
-          @click="toggleSort(col.key)"
-        >
-          {{ col.label }}
-          <span v-if="sortBy.key === col.key" class="th-arrow">{{ sortBy.dir === 1 ? '▲' : '▼' }}</span>
+    <DataTable
+      v-if="adminUsers.length || (!adminUsersLoading && !adminUsersError)"
+      :columns="columns"
+      :rows="filteredUsers"
+      title="Пользователи"
+      :empty-text="emptyText"
+      resizable
+      v-model:column-widths="columnWidths"
+      @row-click="(_e, row) => goToEdit(asUser(row))"
+      @row-contextmenu="(e, row) => onRowContextMenu(e, asUser(row))"
+    >
+      <template #actions>
+        <HintButton hint="users" />
+        <input v-model="search" type="search" class="up-search" placeholder="Поиск по ФИО или логину" />
+        <button v-if="rbac.can('user_admin', 'create')" type="button" class="up-add" @click="router.push('/users/new')">
+          Создать пользователя
         </button>
-      </div>
-      <div class="tr th th-filters">
+      </template>
+      <template #filters>
         <input v-model="fName" type="search" class="th-filter" placeholder="по ФИО" />
         <input v-model="fLogin" type="search" class="th-filter" placeholder="по логину" />
         <!-- No per-preset filter (display + sort only); an empty cell keeps the
-             grid aligned with the three header columns. -->
+             filter row aligned with the three header columns. -->
         <div></div>
-      </div>
-      <template v-if="filteredUsers.length">
-        <div
-          v-for="u in filteredUsers"
-          :key="u.id"
-          class="tr"
-          role="link"
-          tabindex="0"
-          :aria-label="`Редактировать пользователя «${u.name ?? u.username ?? ''}»`"
-          @click="goToEdit(u)"
-          @keydown="onRowKeydown($event, u)"
-          @contextmenu.prevent.stop="onRowContextMenu($event, u)"
-        >
-          <div class="name">{{ u.name }}</div>
-          <div class="mono">{{ u.username }}</div>
-          <div class="preset">{{ presetLabel(u.preset) }}</div>
-        </div>
       </template>
-      <p v-else class="up-st">{{ adminUsers.length ? 'Ничего не найдено' : 'Нет данных' }}</p>
-    </div>
+      <template #cell="{ row, column }">
+        <span v-if="column.key === 'name'" class="up-name">{{ asUser(row).name }}</span>
+        <span v-else-if="column.key === 'username'" class="mono">{{ asUser(row).username }}</span>
+        <span v-else class="up-preset">{{ presetLabel(asUser(row).preset) }}</span>
+      </template>
+    </DataTable>
 
     <ContextMenu v-bind="menuBind" @select="select" @close="closeMenu" />
 
@@ -258,26 +213,7 @@ async function refreshAfterMutation() {
 <style scoped>
 @import '../styles/tokens.css';
 
-.up-head {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 20px;
-  flex-wrap: wrap;
-}
-.up-title {
-  font-size: 24px;
-  font-weight: 700;
-  color: var(--ui-text);
-}
-.up-actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-
-  margin-left: auto;
-}
+/* Toolbar controls (rendered inside the DataTable actions slot) */
 .up-add {
   border: none;
   border-radius: var(--ui-radius-sm);
@@ -313,6 +249,7 @@ async function refreshAfterMutation() {
   border-color: var(--ui-accent);
   box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.12);
 }
+/* Loading / error placeholders outside the table */
 .up-st {
   color: var(--ui-text-2);
   font-size: 14px;
@@ -324,62 +261,7 @@ async function refreshAfterMutation() {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 12px;
 }
-.table {
-  background: var(--ui-surface);
-  border-radius: var(--ui-radius-md);
-  box-shadow: var(--ui-shadow-sm);
-  overflow: hidden;
-}
-.tr {
-  display: grid;
-  grid-template-columns: 1.3fr 1fr 1fr;
-  gap: 8px;
-  padding: 12px 20px;
-  border-bottom: 1px solid var(--ui-border);
-  font-size: 14px;
-  align-items: center;
-}
-.tr:last-child { border-bottom: none; }
-.tr:not(.th):hover { background: var(--ui-surface-3); }
-.tr:not(.th) { cursor: pointer; }
-.th {
-  background: var(--ui-surface-2);
-  font-weight: 600;
-  color: var(--ui-text-2);
-}
-.th-sort {
-  padding-top: 6px;
-  padding-bottom: 6px;
-}
-.th-cell {
-  border: none;
-  background: transparent;
-  font: inherit;
-  font-weight: 600;
-  color: inherit;
-  text-align: left;
-  padding: 0;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  user-select: none;
-}
-.th-cell:hover {
-  color: var(--ui-accent);
-}
-.th-active {
-  color: var(--ui-text);
-}
-.th-arrow {
-  font-size: 10px;
-  line-height: 1;
-}
-.th-filters {
-  background: var(--ui-surface-2);
-  padding-top: 6px;
-  padding-bottom: 6px;
-}
+/* Filter-row inputs (rendered inside the DataTable #filters slot) */
 .th-filter {
   min-width: 0;
   width: 100%;
@@ -396,11 +278,12 @@ async function refreshAfterMutation() {
 .th-filter:focus {
   border-color: var(--ui-accent);
 }
-.name {
+/* Cell renders */
+.up-name {
   font-weight: 700;
   color: var(--ui-text);
 }
-.preset {
+.up-preset {
   color: var(--ui-text-2);
   font-size: 13px;
 }

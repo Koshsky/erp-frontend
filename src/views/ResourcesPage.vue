@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { storeToRefs } from 'pinia'
-import { ContextMenu, ModalForm, ConfirmDialog, PendingMark } from '../components/common'
+import { ContextMenu, ModalForm, ConfirmDialog, PendingMark, DataTable } from '../components/common'
+import type { DataTableColumn } from '../components/common'
 import type { ContextMenuItem } from '../components/common/ContextMenu'
 import type { ModalField } from '../components/common/ModalForm'
 import { useConfirm } from '../composables/useConfirm'
@@ -10,6 +11,9 @@ import { useEditModal } from '../composables/useEditModal'
 import { useRoleAccess } from '../composables/useRoleAccess'
 import { useAppStore, useTimesheetStore, useAuthStore, useRbacStore } from '../store'
 import { compareByName } from '../utils'
+import { useColumnWidths } from '../composables/useColumnWidths'
+import { isOffline } from '../offline/state'
+import { scheduleNamedRefresh } from '../offline/sync'
 import type { DtoResourceMemberResponse, DtoResourceResponse } from '@/api'
 
 const store = useAppStore()
@@ -17,6 +21,23 @@ const { resources, resourcesLoading, resourcesError, users } = storeToRefs(store
 const ts = useTimesheetStore()
 const { employees } = storeToRefs(ts)
 const auth = useAuthStore()
+
+/**
+ * The DataTable cell slot gives the row as `unknown` (generic inference does
+ * not reach through the store's refs) — cast to the page's row type here.
+ */
+const asRes = (row: unknown): DtoResourceResponse => row as DtoResourceResponse
+
+/** Table columns; sorting is handled inside DataTable. */
+const columns: DataTableColumn[] = [
+  { key: 'code', label: 'Код', width: '120px' },
+  { key: 'title', label: 'Название', width: 'fit-content(460px)' },
+  { key: 'employees_count', label: 'Сотрудников', width: '120px' },
+  { key: 'owner_id', label: 'Владелец', width: 'fit-content(300px)' },
+]
+
+/** Per-user persisted column widths (drag-resize on the header edges). */
+const { columnWidths } = useColumnWidths('resources')
 
 // dp (project director) — read-only: can change only project priorities,
 // so creating/editing/deleting resources is not available to them.
@@ -160,11 +181,19 @@ function handleSelect(id: string) {
 }
 
 // === Resource member (user) management ===
-const expandedId = ref<number | null>(null)
 const addMemberId = ref<number | ''>('')
 
 function membersFor(id: number): DtoResourceMemberResponse[] {
   return [...(store.resourceMembers[id] ?? [])].sort(compareByName)
+}
+
+/**
+ * Expand toggling itself lives inside DataTable (row click); this hook only
+ * hydrates the member list before the first render of the detail.
+ */
+async function ensureMembers(res: DtoResourceResponse) {
+  if (res.id == null || membersFor(res.id).length) return
+  await store.loadResourceMembers(res.id)
 }
 
 /** Workers and the current user not yet in the resource (candidates for adding) */
@@ -179,16 +208,6 @@ function workersNotIn(id: number) {
     candidates.push({ id: me.id, name: me.name ?? 'Я' })
   }
   return candidates.sort(compareByName)
-}
-
-async function toggleExpanded(res: DtoResourceResponse) {
-  if (res.id == null) return
-  if (expandedId.value === res.id) {
-    expandedId.value = null
-    return
-  }
-  expandedId.value = res.id
-  if (!membersFor(res.id).length) await store.loadResourceMembers(res.id)
 }
 
 async function onAddMember(resourceId: number) {
@@ -208,6 +227,10 @@ onMounted(() => {
   const needsCatalog = seesAllResources.value || canSetOwner('create') || canSetOwner('edit')
   if (!users.value.length && needsCatalog) store.loadUsers()
   if (!employees.value.length) void ts.loadEmployees()
+  // Page-entry SWR (as on the Employees page): local-first render, then re-read
+  // the resource list from the network while online — covers a cold start with
+  // an empty cache and the background sync disabled.
+  if (!isOffline.value) void scheduleNamedRefresh(['resources'])
 })
 
 /** "Load more": appends the next resources page (dedup by id) */
@@ -218,17 +241,6 @@ function onLoadMore() {
 
 <template>
   <section class="rp">
-    <div class="rp-head">
-      <h2 class="rp-title">Ресурсы</h2>
-      <div class="rp-actions">
-        <select v-if="seesAllResources" v-model="ownerFilter" class="rp-filter">
-          <option value="">Все владельцы</option>
-          <option v-for="u in users.filter((u) => u.preset !== 'worker').sort(compareByName)" :key="u.id" :value="u.id">{{ u.name ?? `#${u.id}` }}</option>
-        </select>
-        <button v-if="canCreateResource" type="button" class="rp-add" @click="openCreate">Создать ресурс</button>
-      </div>
-    </div>
-
     <p v-if="resourcesLoading" class="rp-st">Загрузка...</p>
     <p v-if="resourcesError" class="rp-st er">{{ resourcesError }}</p>
 
@@ -237,69 +249,73 @@ function onLoadMore() {
       leave no rows: the empty-state message is rendered inside the table
       instead of replacing it, so the header and filter controls remain usable.
     -->
-    <div v-if="resources.length || (!resourcesLoading && !resourcesError)" class="table">
-      <div class="tr th">
-        <div>Код</div>
-        <div>Название</div>
-        <div>Сотрудников</div>
-        <div>Владелец</div>
-      </div>
-      <template v-if="filteredResources.length">
-        <template v-for="res in filteredResources" :key="res.id">
-          <div
-            class="tr rp-row"
-            :class="{ 'rp-open': expandedId === res.id }"
-            @click="toggleExpanded(res)"
-            @contextmenu.prevent.stop="onRowContextMenu($event, res)"
-          >
-            <div class="code">
-              {{ res.code }}
-              <PendingMark entity="resource" :id="res.id" />
-            </div>
-            <div>{{ res.title }}</div>
-            <div>{{ res.employees_count }}</div>
-            <div>{{ ownerLabel(res.owner_id) }}</div>
-          </div>
-          <div v-if="expandedId === res.id" class="rp-members">
-            <div class="rp-members-head">
-              <span class="rp-members-title">Пользователи ({{ membersFor(res.id ?? 0).length }})</span>
-              <div v-if="canManageResource(res.owner_id)" class="rp-members-add">
-                <select v-model="addMemberId" class="rp-filter">
-                  <option value="">Добавить пользователя...</option>
-                  <option v-for="w in workersNotIn(res.id ?? 0)" :key="w.id" :value="w.id">
-                    {{ w.name }}
-                  </option>
-                </select>
-                <button
-                  type="button"
-                  class="rp-member-btn"
-                  :disabled="!addMemberId"
-                  @click="onAddMember(res.id ?? 0)"
-                >
-                  Добавить
-                </button>
-              </div>
-            </div>
-            <div v-if="membersFor(res.id ?? 0).length" class="rp-members-list">
-              <div v-for="m in membersFor(res.id ?? 0)" :key="m.id" class="rp-member">
-                <span class="rp-member-name">{{ m.name }}</span>
-                <span class="rp-member-pos">{{ m.position || '—' }}</span>
-                <button
-                  v-if="canManageResource(res.owner_id)"
-                  type="button"
-                  class="rp-member-btn rp-member-remove"
-                  @click="onRemoveMember(res.id ?? 0, m.id ?? 0)"
-                >
-                  Убрать
-                </button>
-              </div>
-            </div>
-            <p v-else class="rp-members-empty">Нет участников</p>
-          </div>
-        </template>
+    <DataTable
+      v-if="resources.length || (!resourcesLoading && !resourcesError)"
+      :columns="columns"
+      :rows="filteredResources"
+      title="Ресурсы"
+      expandable
+      resizable
+      v-model:column-widths="columnWidths"
+      :empty-text="resources.length ? 'Ничего не найдено' : 'Нет данных о ресурсах'"
+      @row-click="(_e, row) => void ensureMembers(asRes(row))"
+      @row-contextmenu="(e, row) => onRowContextMenu(e, asRes(row))"
+    >
+      <template #actions>
+        <select v-if="seesAllResources" v-model="ownerFilter" class="rp-filter">
+          <option value="">Все владельцы</option>
+          <option v-for="u in users.filter((u) => u.preset !== 'worker').sort(compareByName)" :key="u.id" :value="u.id">{{ u.name ?? `#${u.id}` }}</option>
+        </select>
+        <button v-if="canCreateResource" type="button" class="rp-add" @click="openCreate">Создать ресурс</button>
       </template>
-      <p v-else class="rp-st">{{ resources.length ? 'Ничего не найдено' : 'Нет данных о ресурсах' }}</p>
-    </div>
+      <template #cell="{ row, column }">
+        <span v-if="column.key === 'code'" class="code">
+          {{ asRes(row).code }}
+          <PendingMark entity="resource" :id="asRes(row).id" />
+        </span>
+        <template v-else-if="column.key === 'title'">{{ asRes(row).title }}</template>
+        <template v-else-if="column.key === 'employees_count'">{{ asRes(row).employees_count }}</template>
+        <template v-else>{{ ownerLabel(asRes(row).owner_id) }}</template>
+      </template>
+      <template #expanded="{ row }">
+        <div class="rp-members">
+          <div class="rp-members-head">
+            <span class="rp-members-title">Пользователи ({{ membersFor(asRes(row).id ?? 0).length }})</span>
+            <div v-if="canManageResource(asRes(row).owner_id)" class="rp-members-add">
+              <select v-model="addMemberId" class="rp-filter">
+                <option value="">Добавить пользователя...</option>
+                <option v-for="w in workersNotIn(asRes(row).id ?? 0)" :key="w.id" :value="w.id">
+                  {{ w.name }}
+                </option>
+              </select>
+              <button
+                type="button"
+                class="rp-member-btn"
+                :disabled="!addMemberId"
+                @click="onAddMember(asRes(row).id ?? 0)"
+              >
+                Добавить
+              </button>
+            </div>
+          </div>
+          <div v-if="membersFor(asRes(row).id ?? 0).length" class="rp-members-list">
+            <div v-for="m in membersFor(asRes(row).id ?? 0)" :key="m.id" class="rp-member">
+              <span class="rp-member-name">{{ m.name }}</span>
+              <span class="rp-member-pos">{{ m.position || '—' }}</span>
+              <button
+                v-if="canManageResource(asRes(row).owner_id)"
+                type="button"
+                class="rp-member-btn rp-member-remove"
+                @click="onRemoveMember(asRes(row).id ?? 0, m.id ?? 0)"
+              >
+                Убрать
+              </button>
+            </div>
+          </div>
+          <p v-else class="rp-members-empty">Нет участников</p>
+        </div>
+      </template>
+    </DataTable>
 
     <!-- Resources pagination: the backend returns PAGE_SIZE (50) rows plus a total -->
     <div v-if="store.resourcesHasMore" class="rp-more">
@@ -325,18 +341,7 @@ function onLoadMore() {
 <style scoped>
 @import '../styles/tokens.css';
 
-.rp-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 20px;
-}
-.rp-title {
-  font-size: 24px;
-  font-weight: 700;
-  color: var(--ui-text);
-}
+/* Toolbar controls (rendered inside the DataTable actions slot) */
 .rp-add {
   border: none;
   border-radius: var(--ui-radius-sm);
@@ -347,6 +352,9 @@ function onLoadMore() {
   background: var(--ui-accent);
   color: var(--ui-accent-on);
   transition: background var(--ui-duration);
+}
+.rp-add:hover {
+  background: color-mix(in srgb, var(--ui-accent) 88%, black);
 }
 /* "Load more" footer: resources are paged server-side (PAGE_SIZE per request) */
 .rp-more {
@@ -375,14 +383,6 @@ function onLoadMore() {
   opacity: 0.6;
   cursor: not-allowed;
 }
-.rp-add:hover {
-  background: color-mix(in srgb, var(--ui-accent) 88%, black);
-}
-.rp-actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
 .rp-filter {
   box-sizing: border-box;
   border: 1px solid var(--ui-border-strong);
@@ -399,6 +399,7 @@ function onLoadMore() {
   border-color: var(--ui-accent);
   box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.12);
 }
+/* Loading / error placeholders outside the table */
 .rp-st {
   color: var(--ui-text-muted);
   font-size: 14px;
@@ -407,34 +408,10 @@ function onLoadMore() {
 }
 .er { color: var(--ui-danger); }
 
-.table {
-  background: var(--ui-surface);
-  border-radius: var(--ui-radius-md);
-  box-shadow: var(--ui-shadow-md);
-  overflow: hidden;
-}
-.tr {
-  display: grid;
-  grid-template-columns: 120px 1fr 120px 1fr;
-  gap: 8px;
-  padding: 12px 20px;
-  border-bottom: 1px solid var(--ui-border);
-  font-size: 14px;
-}
-.tr:last-child { border-bottom: none; }
-.tr:not(.th):hover {
-  background: var(--ui-surface-3);
-}
-.rp-row {
-  cursor: pointer;
-}
-.rp-open {
-  background: var(--ui-surface-3);
-}
+/* Expanded member block (DataTable #expanded slot) */
 .rp-members {
   padding: 12px 20px;
   background: var(--ui-surface-2);
-  border-bottom: 1px solid var(--ui-border);
 }
 .rp-members-head {
   display: flex;
@@ -509,12 +486,11 @@ function onLoadMore() {
   color: var(--ui-text-muted);
   text-align: center;
 }
-.th {
-  background: var(--ui-surface-2);
-  font-weight: 600;
-  color: var(--ui-text-2);
-}
+/* Resource code cell */
 .code {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   font-weight: 700;
   color: var(--ui-accent);
 }

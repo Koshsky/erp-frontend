@@ -6,14 +6,37 @@
  * колонка сортируется (вверх/вниз), причём сортировка применяется к текущей
  * странице (Loki отдаёт страницы без глобальной сортировки по полям).
  */
-import { HintButton } from '../components/common'
+import { HintButton, DataTable } from '../components/common'
+import type { DataTableColumn } from '../components/common'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useAuditStore } from '../store'
+import { useColumnWidths } from '../composables/useColumnWidths'
 import type { DtoAuditEventView } from '@/api'
 
 const audit = useAuditStore()
 const { items, loading, error, disabled } = storeToRefs(audit)
+
+/**
+ * The DataTable cell slot gives the row as `unknown` (generic inference does
+ * not reach through the store's refs) — cast to the page's row type here.
+ */
+const asEv = (row: unknown): DtoAuditEventView => row as DtoAuditEventView
+
+/** Table columns; sorting lives inside DataTable (values via sortValue). */
+const columns: DataTableColumn[] = [
+  { key: 'ts', label: 'Время', width: 'fit-content(230px)' },
+  { key: 'actor', label: 'Пользователь', width: 'fit-content(340px)' },
+  { key: 'entity', label: 'Сущность', width: 'fit-content(230px)' },
+  { key: 'action', label: 'Действие', width: 'fit-content(240px)' },
+  { key: 'id', label: 'ID', width: '70px' },
+  { key: 'status', label: 'Статус', width: 'fit-content(180px)' },
+  { key: 'ip', label: 'IP', width: 'fit-content(230px)' },
+  { key: 'duration', label: 'Время, мс', width: 'fit-content(170px)' },
+]
+
+/** Per-user persisted column widths (drag-resize on the header edges). */
+const { columnWidths } = useColumnWidths('audit')
 
 /** Russian labels for entities (used in the filter and the table). */
 const ENTITY_LABELS: Record<string, string> = {
@@ -138,15 +161,13 @@ const page = computed(() => Math.floor(offset.value / PAGE_SIZE) + 1)
  * a full page. */
 const hasMore = computed(() => items.value.length >= PAGE_SIZE)
 
-/** Expandable detail row (raw request/response JSON). */
-const expandedId = ref<number | null>(null)
-
-/** Per-column sort state (applies to the current page, client-side). */
-type SortKey = 'ts' | 'actor' | 'entity' | 'action' | 'id' | 'status' | 'ip' | 'duration'
-const sortKey = ref<SortKey>('ts')
-const sortDir = ref<'asc' | 'desc'>('desc')
-
-function sortValue(ev: DtoAuditEventView, key: SortKey): number | string {
+/**
+ * Sort values for the DataTable: ts is a timestamp, actor prefers the full
+ * name, id and status/duration are numbers (default row[col.key] would not
+ * match these semantics). The sort state itself lives inside DataTable
+ * (default: newest first).
+ */
+function sortValue(ev: DtoAuditEventView, key: string): number | string {
   switch (key) {
     case 'ts':
       return new Date(ev.ts ?? 0).getTime()
@@ -164,34 +185,10 @@ function sortValue(ev: DtoAuditEventView, key: SortKey): number | string {
       return (ev.actor_ip ?? '').toLowerCase()
     case 'duration':
       return ev.duration_ms ?? -1
+    default:
+      return String((ev as unknown as Record<string, unknown>)[key] ?? '')
   }
 }
-
-function toggleSort(key: SortKey) {
-  if (sortKey.value === key) {
-    sortDir.value = sortDir.value === 'asc' ? 'desc' : 'asc'
-  } else {
-    sortKey.value = key
-    sortDir.value = 'asc'
-  }
-}
-
-function isSort(key: SortKey, dir: 'asc' | 'desc'): boolean {
-  return sortKey.value === key && sortDir.value === dir
-}
-
-const sortedItems = computed<DtoAuditEventView[]>(() => {
-  const arr = [...items.value]
-  const key = sortKey.value
-  const dir = sortDir.value === 'asc' ? 1 : -1
-  arr.sort((a, b) => {
-    const va = sortValue(a, key)
-    const vb = sortValue(b, key)
-    if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * dir
-    return String(va).localeCompare(String(vb), 'ru') * dir
-  })
-  return arr
-})
 
 function toRFC3339(value: string): string {
   // datetime-local → "YYYY-MM-DDTHH:mm" → RFC3339 with seconds.
@@ -224,8 +221,6 @@ function resetFilters() {
   filters.search = ''
   filters.id = ''
   filters.ip = ''
-  sortKey.value = 'ts'
-  sortDir.value = 'desc'
   void applyFilters(0)
 }
 
@@ -299,22 +294,6 @@ onMounted(() => {
 
 <template>
   <section class="al">
-    <div class="al-head">
-      <h2 class="al-title">Журнал действий</h2>
-      <div class="al-head-tools">
-        <HintButton hint="audit" />
-        <input
-          v-model="filters.search"
-          class="al-search"
-          type="text"
-          placeholder="Поиск по строке события..."
-          @keyup.enter="applyFilters(0)"
-        />
-        <button type="button" class="al-btn" :disabled="loading" @click="applyFilters(offset)">Обновить</button>
-        <button type="button" class="al-btn" @click="resetFilters">Сбросить</button>
-      </div>
-    </div>
-
     <p v-if="loading && !items.length" class="al-st">Загрузка...</p>
     <p v-if="loading && items.length" class="al-refreshing">Обновление…</p>
     <p v-if="error" class="al-st er">{{ error }}</p>
@@ -330,76 +309,38 @@ onMounted(() => {
       </ol>
     </div>
 
-    <!-- Table: header (titles + sort), embedded filter row, data rows.
-         Never unmounts while data is present: during a filter-triggered reload
-         the previous rows stay visible (dimmed) until the new ones arrive,
-         so the table does not blink/disappear. -->
-    <div
+    <!-- Table: toolbar (search/reload), sortable headers, embedded filter row,
+         expandable rows with request/response details. Never unmounts while
+         data is present: during a filter-triggered reload the previous rows
+         stay visible (dimmed) until the new ones arrive. -->
+    <DataTable
       v-if="!disabled && (items.length > 0 || (!loading && !error))"
-      class="al-table"
+      :columns="columns"
+      :rows="items"
+      title="Журнал действий"
+      expandable
+      resizable
+      v-model:column-widths="columnWidths"
+      :sort-value="sortValue"
+      :default-sort="{ key: 'ts', dir: -1 }"
+      empty-text="Нет записей"
       :class="{ 'al-table--loading': loading && items.length > 0 }"
     >
-      <div class="al-row al-th">
-        <div class="al-th-cell">
-          <span>Время</span>
-          <span class="al-sorts">
-            <button type="button" :class="{ on: isSort('ts', 'asc') }" title="Сортировать ↑" @click="toggleSort('ts')">↑</button>
-            <button type="button" :class="{ on: isSort('ts', 'desc') }" title="Сортировать ↓" @click="toggleSort('ts')">↓</button>
-          </span>
-        </div>
-        <div class="al-th-cell">
-          <span>Пользователь</span>
-          <span class="al-sorts">
-            <button type="button" :class="{ on: isSort('actor', 'asc') }" @click="toggleSort('actor')">↑</button>
-            <button type="button" :class="{ on: isSort('actor', 'desc') }" @click="toggleSort('actor')">↓</button>
-          </span>
-        </div>
-        <div class="al-th-cell">
-          <span>Сущность</span>
-          <span class="al-sorts">
-            <button type="button" :class="{ on: isSort('entity', 'asc') }" @click="toggleSort('entity')">↑</button>
-            <button type="button" :class="{ on: isSort('entity', 'desc') }" @click="toggleSort('entity')">↓</button>
-          </span>
-        </div>
-        <div class="al-th-cell">
-          <span>Действие</span>
-          <span class="al-sorts">
-            <button type="button" :class="{ on: isSort('action', 'asc') }" @click="toggleSort('action')">↑</button>
-            <button type="button" :class="{ on: isSort('action', 'desc') }" @click="toggleSort('action')">↓</button>
-          </span>
-        </div>
-        <div class="al-th-cell">
-          <span>ID</span>
-          <span class="al-sorts">
-            <button type="button" :class="{ on: isSort('id', 'asc') }" @click="toggleSort('id')">↑</button>
-            <button type="button" :class="{ on: isSort('id', 'desc') }" @click="toggleSort('id')">↓</button>
-          </span>
-        </div>
-        <div class="al-th-cell">
-          <span>Статус</span>
-          <span class="al-sorts">
-            <button type="button" :class="{ on: isSort('status', 'asc') }" @click="toggleSort('status')">↑</button>
-            <button type="button" :class="{ on: isSort('status', 'desc') }" @click="toggleSort('status')">↓</button>
-          </span>
-        </div>
-        <div class="al-th-cell">
-          <span>IP</span>
-          <span class="al-sorts">
-            <button type="button" :class="{ on: isSort('ip', 'asc') }" @click="toggleSort('ip')">↑</button>
-            <button type="button" :class="{ on: isSort('ip', 'desc') }" @click="toggleSort('ip')">↓</button>
-          </span>
-        </div>
-        <div class="al-th-cell">
-          <span>Время, мс</span>
-          <span class="al-sorts">
-            <button type="button" :class="{ on: isSort('duration', 'asc') }" @click="toggleSort('duration')">↑</button>
-            <button type="button" :class="{ on: isSort('duration', 'desc') }" @click="toggleSort('duration')">↓</button>
-          </span>
-        </div>
-      </div>
+      <template #actions>
+        <HintButton hint="audit" />
+        <input
+          v-model="filters.search"
+          class="al-search"
+          type="text"
+          placeholder="Поиск по строке события..."
+          @keyup.enter="applyFilters(0)"
+        />
+        <button type="button" class="al-btn" :disabled="loading" @click="applyFilters(offset)">Обновить</button>
+        <button type="button" class="al-btn" @click="resetFilters">Сбросить</button>
+      </template>
 
-      <!-- Per-column filters embedded in the header -->
-      <div class="al-row al-th al-filter-row">
+      <!-- Per-column filters, aligned with the columns via shared tracks -->
+      <template #filters>
         <div class="al-filter">
           <input v-model="filters.when" type="datetime-local" title="Показывать с этого момента" @change="applyFilters(0)" />
         </div>
@@ -431,56 +372,51 @@ onMounted(() => {
           <input v-model="filters.ip" type="text" placeholder="IP (точный)" title="Полный IP адрес актора" @keyup.enter="applyFilters(0)" />
         </div>
         <div></div>
-      </div>
+      </template>
 
-      <template v-if="items.length">
-        <div
-          v-for="ev in sortedItems"
-          :key="ev.id"
-          class="al-row"
-          :class="{ 'al-row--open': expandedId === ev.id }"
-          @click="expandedId = expandedId === ev.id ? null : (ev.id ?? null)"
-        >
-          <div class="al-ts">{{ formatTS(ev.ts) }}</div>
-          <div class="al-actor">
-            <span class="al-actor-name">{{ actorName(ev) }}</span>
+      <template #cell="{ row, column }">
+        <template v-if="column.key === 'ts'"><span class="al-ts">{{ formatTS(asEv(row).ts) }}</span></template>
+        <template v-else-if="column.key === 'actor'">
+          <span class="al-actor">
+            <span class="al-actor-name">{{ actorName(asEv(row)) }}</span>
             <!-- Login on its own line only when a separate full name is shown
                  (prevents the "admin / admin" duplication). -->
-            <span v-if="ev.actor_name && ev.actor_email && ev.actor_email !== ev.actor_name" class="al-actor-login">{{ ev.actor_email }}</span>
-            <span v-if="ev.actor_role" class="al-actor-role">{{ ev.actor_role }}</span>
-          </div>
-          <div>{{ entityLabel(ev.entity ?? '') }}</div>
-          <div>
-            <span class="al-action" :class="`al-action--${actionKindOf(ev.action)}`">
-              {{ actionLabel(ev.action ?? '') }}
-            </span>
-          </div>
-          <div>{{ ev.entity_id ?? ev.actor_user_id ?? '—' }}</div>
-          <div><span class="al-status" :class="statusClass(ev.status)">{{ ev.status }}</span></div>
-          <div class="al-ip">{{ ev.actor_ip || '—' }}</div>
-          <div>{{ ev.duration_ms ?? '—' }}</div>
+            <span v-if="asEv(row).actor_name && asEv(row).actor_email && asEv(row).actor_email !== asEv(row).actor_name" class="al-actor-login">{{ asEv(row).actor_email }}</span>
+            <span v-if="asEv(row).actor_role" class="al-actor-role">{{ asEv(row).actor_role }}</span>
+          </span>
+        </template>
+        <template v-else-if="column.key === 'entity'">{{ entityLabel(asEv(row).entity ?? '') }}</template>
+        <template v-else-if="column.key === 'action'">
+          <span class="al-action" :class="`al-action--${actionKindOf(asEv(row).action)}`">
+            {{ actionLabel(asEv(row).action ?? '') }}
+          </span>
+        </template>
+        <template v-else-if="column.key === 'id'">{{ asEv(row).entity_id ?? asEv(row).actor_user_id ?? '—' }}</template>
+        <template v-else-if="column.key === 'status'"><span class="al-status" :class="statusClass(asEv(row).status)">{{ asEv(row).status }}</span></template>
+        <template v-else-if="column.key === 'ip'"><span class="al-ip">{{ asEv(row).actor_ip || '—' }}</span></template>
+        <template v-else>{{ asEv(row).duration_ms ?? '—' }}</template>
+      </template>
 
-          <!-- Expanded detail -->
-          <div v-if="expandedId === ev.id" class="al-detail">
-            <div class="al-detail-meta">
-              <span class="al-method" :class="methodClass(ev.method)">{{ ev.method }}</span>
-              <code>{{ ev.path }}</code>
+      <!-- Expanded detail: method + path + raw request/response JSON -->
+      <template #expanded="{ row }">
+        <div class="al-detail">
+          <div class="al-detail-meta">
+            <span class="al-method" :class="methodClass(asEv(row).method)">{{ asEv(row).method }}</span>
+            <code>{{ asEv(row).path }}</code>
+          </div>
+          <div class="al-detail-cols">
+            <div class="al-detail-col">
+              <div class="al-detail-title">Тело запроса</div>
+              <pre>{{ prettyJSON(asEv(row).request_body) }}</pre>
             </div>
-            <div class="al-detail-cols">
-              <div class="al-detail-col">
-                <div class="al-detail-title">Тело запроса</div>
-                <pre>{{ prettyJSON(ev.request_body) }}</pre>
-              </div>
-              <div class="al-detail-col">
-                <div class="al-detail-title">Тело ответа</div>
-                <pre>{{ prettyJSON(ev.response_body) }}</pre>
-              </div>
+            <div class="al-detail-col">
+              <div class="al-detail-title">Тело ответа</div>
+              <pre>{{ prettyJSON(asEv(row).response_body) }}</pre>
             </div>
           </div>
         </div>
       </template>
-      <p v-else class="al-st">Нет записей</p>
-    </div>
+    </DataTable>
 
     <!-- Pagination -->
     <div v-if="items.length > 0" class="al-pager">
@@ -494,28 +430,7 @@ onMounted(() => {
 <style scoped>
 @import '../styles/tokens.css';
 
-.al-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 20px;
-  flex-wrap: wrap;
-}
-
-.al-title {
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--ui-text);
-  margin: 0;
-}
-
-.al-head-tools {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
+/* Toolbar controls (rendered inside the DataTable actions slot) */
 .al-search {
   border: 1px solid var(--ui-border-strong);
   border-radius: 8px;
@@ -676,16 +591,7 @@ onMounted(() => {
   color: var(--ui-accent);
 }
 
-/* Filter row embedded under the header */
-.al-filter-row {
-  background: var(--ui-surface-2);
-  border-top: 1px solid var(--ui-border);
-  border-bottom: 1px solid var(--ui-border);
-  padding-top: 8px;
-  padding-bottom: 8px;
-  gap: 8px;
-}
-
+/* Filter cells — aligned with the columns via the DataTable filter row */
 .al-filter {
   display: flex;
   flex-direction: column;
@@ -703,14 +609,6 @@ onMounted(() => {
   font-size: 12px;
   color: var(--ui-text);
   background: var(--ui-surface);
-}
-
-.al-row--open {
-  background: var(--ui-surface-2);
-}
-
-.al-row:hover:not(.al-th) {
-  background: var(--ui-surface-2);
 }
 
 .al-ts {
@@ -815,11 +713,10 @@ onMounted(() => {
 
 /* Expanded detail */
 .al-detail {
-  grid-column: 1 / -1;
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 10px 4px 4px;
+  padding: 12px 20px;
   cursor: default;
 }
 

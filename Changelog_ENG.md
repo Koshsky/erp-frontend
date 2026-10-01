@@ -10,11 +10,13 @@ The web app and the desktop wrapper (`desktop/`) are versioned together.
 
 ### Changed
 
+- Tables (statuses, users, employees, resources, audit log) now use a shared table component: full-width card with an actions toolbar, sortable column headers, in-header filters, expandable rows, horizontal scrolling for wide tables, and user-adjustable column widths (drag the header edge; widths are remembered per user; double-click resets a column to auto width).
 - Settings: the "Clear local data" option removed.
 - Hints are now Markdown files (`*.md` assets); the hint panel renders them through a dedicated safe Markdown view with a new `MarkdownView` component.
 
 ### Fixed
 
+- Resources page: the list now refreshes from the network on page entry, so it no longer stays empty until a re-login when the cache is empty on a cold start (background sync disabled).
 - Tasks page: the "Save to PDF" and help buttons are vertically centered in the toolbar with a small gap between them; the help button is now a rounded square.
 - Mobile: the navigation drawer can now be closed again (scrim tap, menu item tap, browser back).
 
