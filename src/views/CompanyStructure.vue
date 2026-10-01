@@ -3,24 +3,19 @@ import { computed, onMounted, ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import { DataTable, HintButton } from '../components/common'
 import type { DataTableColumn } from '../components/common'
-import { useAppStore } from '../store'
+import { useAppStore, useRbacStore } from '../store'
 import { compareByName } from '../utils'
 import { useColumnWidths } from '../composables/useColumnWidths'
+import { presetLabelFromCatalog } from '../utils/presets'
 import type { DtoAdminUserResponse } from '@/api'
 
 const app = useAppStore()
+const rbac = useRbacStore()
 const { adminUsers, adminUsersLoading, adminUsersError, users } = storeToRefs(app)
-
-const PRESET_LABELS: Record<string, string> = {
-  admin: 'Администратор',
-  dp: 'Директор проектов',
-  rp: 'Руководитель проекта',
-  vp: 'Владелец процесса',
-  worker: 'Работник',
-}
+const { presets } = storeToRefs(rbac)
 
 function presetLabel(preset?: string | null): string {
-  return preset ? (PRESET_LABELS[preset] ?? preset) : '—'
+  return presetLabelFromCatalog(preset, presets.value)
 }
 
 interface TreeNode {

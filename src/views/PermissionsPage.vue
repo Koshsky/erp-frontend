@@ -14,6 +14,7 @@ import { SCOPE_OPTIONS as SCOPE_CHIPS } from '../components/common/UserPermissio
 import { canonicalScope, scopeMoves, toggleScopeMove } from '@/rbacScope'
 import { useRbacStore } from '../store'
 import { useConfirm } from '../composables/useConfirm'
+import { presetDisplayName } from '../utils/presets'
 
 const rbac = useRbacStore()
 const { presets, presetRules, matrix, loading, error, saving } = storeToRefs(rbac)
@@ -171,26 +172,24 @@ function scopeLabel(resource: string, scope: string): string {
   return opt?.label ?? 'Нет доступа'
 }
 
-/** Human-readable names of known presets (the DB catalog keeps descriptions in English). */
-const PRESET_TITLES: Record<string, string> = {
-  admin: 'Администратор',
-  dp: 'Директор проектов',
-  rp: 'Руководитель проекта',
-  vp: 'Владелец процесса',
-  worker: 'Работник',
+/** Human-readable name of a preset catalog entry: the stored name, else a
+ *  fallback for a built-in tag, else the tag itself. */
+function presetName(tag: string): string {
+  return presetDisplayName(presetEntry(tag) ?? { tag })
 }
 
-function presetTitle(code: string): string {
-  return PRESET_TITLES[code] ?? code
+/** Catalog entry of the selected tag (name/description) or undefined. */
+function presetEntry(tag: string) {
+  return presets.value.find((p) => p.tag === tag)
 }
 
 /** Preset tabs: the catalog without the admin bypass (admin is a code invariant, not an editable tab). */
 const presetList = computed(() => {
-  const names: string[] = []
-  for (const r of presets.value) {
-    if (r.name && r.name !== 'admin' && !names.includes(r.name)) names.push(r.name)
+  const tags: string[] = []
+  for (const p of presets.value) {
+    if (p.tag && p.tag !== 'admin' && !tags.includes(p.tag)) tags.push(p.tag)
   }
-  return names
+  return tags
 })
 
 /** Changed cells. */
@@ -324,85 +323,98 @@ const BUILTIN_PRESETS = new Set(['admin'])
 
 /** Preset name pattern: letters of any script (latin/cyrillic), digits, «-», «_»
  *  (mirrors the backend codec). */
-const PRESET_NAME_RE = /^[\p{L}\p{N}_-]+$/u
+const PRESET_TAG_RE = /^[\p{L}\p{N}_-]+$/u
 const presetMsg = ref<{ ok: boolean; text: string } | null>(null)
 
-function validatePresetNameInput(name: string): string | null {
-  const trimmed = name.trim()
-  if (!trimmed) return 'Укажите имя пресета (буквы, цифры, «-», «_»), описание можно не заполнять'
-  if (!PRESET_NAME_RE.test(trimmed)) return 'Имя пресета: буквы (латиница/кириллица), цифры, «-», «_»'
-  if (rbac.presets.some((r) => r.name === trimmed)) return 'Пресет с таким именем уже существует'
+/** Validates the create/rename form: tag (code) + display name. excludeTag —
+ *  the rename target's own tag (collision with itself is allowed). */
+function validatePresetForm(tag: string, name: string, excludeTag?: string): string | null {
+  const trimmed = tag.trim()
+  if (!trimmed) return 'Укажите тэг пресета (код, напр. auditor)'
+  if (!PRESET_TAG_RE.test(trimmed)) return 'Тэг пресета: буквы (латиница/кириллица), цифры, «-», «_»'
+  if (excludeTag !== trimmed && rbac.presets.some((r) => r.tag === trimmed)) {
+    return 'Пресет с таким тэгом уже существует'
+  }
+  if (!name.trim()) return 'Укажите имя пресета'
   return null
 }
 
 /* — create modal — */
 const createOpen = ref(false)
-const createForm = reactive({ name: '', description: '' })
-/** Local validation message (empty/invalid/duplicate name); mutation errors
- *  are surfaced by the global toast (http.ts) instead. */
+const createForm = reactive({ tag: '', name: '', description: '' })
+/** Local validation message (empty/invalid/duplicate tag, empty name);
+ *  mutation errors are surfaced by the global toast (http.ts) instead. */
 const createError = ref<string | null>(null)
 const createBusy = ref(false)
 
 async function onCreatePreset() {
+  const tag = createForm.tag.trim()
   const name = createForm.name.trim()
-  const localError = validatePresetNameInput(name)
+  const localError = validatePresetForm(tag, name)
   if (localError) {
     createError.value = localError
     return
   }
   createBusy.value = true
-  const ok = await rbac.createPreset({ name, description: createForm.description.trim() })
+  const ok = await rbac.createPreset({ tag, name, description: createForm.description.trim() })
   createBusy.value = false
   if (!ok) return
   presetMsg.value = { ok: true, text: `Пресет «${name}» создан` }
   createOpen.value = false
-  selected.value = name
+  selected.value = tag
   void rbac.loadRbac()
 }
 
-/* — rename modal (name + description) — */
+/* — rename modal (tag + name + description) — */
 const renameOpen = ref(false)
 const renameTarget = ref<string>('')
-const renameForm = reactive({ name: '', description: '' })
+const renameForm = reactive({ tag: '', name: '', description: '' })
 /** Local validation message; mutation errors — to the toast. */
 const renameError = ref<string | null>(null)
 const renameBusy = ref(false)
 
-function openRename(presetName: string) {
-  if (BUILTIN_PRESETS.has(presetName)) return
-  renameTarget.value = presetName
-  renameForm.name = presetName
-  renameForm.description = rbac.presets.find((r) => r.name === presetName)?.description ?? ''
+function openRename(presetTag: string) {
+  if (BUILTIN_PRESETS.has(presetTag)) return
+  const entry = presetEntry(presetTag)
+  renameTarget.value = presetTag
+  renameForm.tag = presetTag
+  renameForm.name = entry?.name ?? ''
+  renameForm.description = entry?.description ?? ''
   renameError.value = null
   renameOpen.value = true
 }
 
 async function onRenamePreset() {
+  const tag = renameForm.tag.trim()
   const name = renameForm.name.trim()
-  const localError = validatePresetNameInput(name)
+  const localError = validatePresetForm(tag, name, renameTarget.value)
   if (localError) {
     renameError.value = localError
     return
   }
   renameBusy.value = true
-  const ok = await rbac.updatePreset(renameTarget.value, { name, description: renameForm.description.trim() })
+  const ok = await rbac.updatePreset(renameTarget.value, {
+    tag,
+    name,
+    description: renameForm.description.trim(),
+  })
   renameBusy.value = false
   if (!ok) return
   presetMsg.value = ok ? { ok: true, text: `Пресет переименован в «${name}»` } : null
   renameOpen.value = false
-  if (selected.value === renameTarget.value) selected.value = name
+  if (selected.value === renameTarget.value) selected.value = tag
   void rbac.loadRbac()
 }
 
-/* — delete modal (confirmation by typing the preset name) — */
+/* — delete modal (confirmation by typing the preset tag) — */
 const deleteOpen = ref(false)
 const deleteTarget = ref<string>('')
 const deleteConfirm = ref('')
 const deleteBusy = ref(false)
 
-function openDelete(presetName: string) {
-  if (BUILTIN_PRESETS.has(presetName)) return
-  deleteTarget.value = presetName
+function openDelete(presetTag: string) {
+  if (BUILTIN_PRESETS.has(presetTag)) return
+  deleteTarget.value = presetTag
   deleteConfirm.value = ''
   deleteOpen.value = true
 }
@@ -413,7 +425,7 @@ async function onDeletePreset() {
   const ok = await rbac.deletePreset(deleteTarget.value)
   deleteBusy.value = false
   if (!ok) return
-  presetMsg.value = { ok: true, text: `Пресет «${deleteTarget.value}» удалён` }
+  presetMsg.value = { ok: true, text: `Пресет «${presetName(deleteTarget.value)}» удалён` }
   deleteOpen.value = false
   if (selected.value === deleteTarget.value) {
     const rest = presetList.value.filter((p) => p !== deleteTarget.value)
@@ -425,12 +437,12 @@ async function onDeletePreset() {
 /* — context menu (ПКМ) — */
 const ctxMenu = reactive({ open: false, x: 0, y: 0, preset: '' })
 
-function onPresetContextMenu(e: MouseEvent, presetName: string) {
-  if (BUILTIN_PRESETS.has(presetName)) return
+function onPresetContextMenu(e: MouseEvent, presetTag: string) {
+  if (BUILTIN_PRESETS.has(presetTag)) return
   ctxMenu.open = true
   ctxMenu.x = e.clientX
   ctxMenu.y = e.clientY
-  ctxMenu.preset = presetName
+  ctxMenu.preset = presetTag
 }
 
 function onCtxSelect(id: string) {
@@ -490,14 +502,14 @@ onMounted(() => {
         >
           <span class="pm-preset-code">{{ preset }}</span>
           <span class="pm-preset-name">
-            {{ presetTitle(preset) }}
+            {{ presetName(preset) }}
           </span>
           <span
             v-if="!BUILTIN_PRESETS.has(preset)"
             class="pm-preset-remove"
             role="button"
             tabindex="0"
-            :title="'Удалить пресет ' + preset"
+            :title="'Удалить пресет ' + presetName(preset)"
             @click.stop="openDelete(preset)"
             @keydown.enter.stop.prevent="openDelete(preset)"
           >✕</span>
@@ -564,10 +576,10 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- Preset management modals: create / rename / delete (type the name).
+    <!-- Preset management modals: create / rename / delete (type the tag).
          Mutation failures are surfaced by the global toast (http.ts); the
          modal error line shows LOCAL validation only (empty/invalid/duplicate
-         name) — e.g. a cyrillic preset name is valid and must be sent. -->
+         tag, empty name) — e.g. a cyrillic preset tag is valid and must be sent. -->
     <ModalForm
       :open="createOpen"
       title="Создать пресет"
@@ -575,10 +587,11 @@ onMounted(() => {
       :busy="createBusy"
       :error="createError"
       :fields="[
-        { key: 'name', label: 'Имя пресета', type: 'text', required: true, placeholder: 'имя пресета, напр. auditor' },
+        { key: 'name', label: 'Имя', type: 'text', required: true, placeholder: 'название, напр. Внешний аудит' },
+        { key: 'tag', label: 'Тэг', type: 'text', required: true, placeholder: 'код, напр. auditor' },
         { key: 'description', label: 'Описание', type: 'textarea', placeholder: 'описание' },
       ]"
-      @save="(v: Record<string, string | number>) => { createForm.name = String(v.name ?? ''); createForm.description = String(v.description ?? ''); void onCreatePreset() }"
+      @save="(v: Record<string, string | number>) => { createForm.name = String(v.name ?? ''); createForm.tag = String(v.tag ?? ''); createForm.description = String(v.description ?? ''); void onCreatePreset() }"
       @close="createOpen = false"
     />
 
@@ -589,20 +602,21 @@ onMounted(() => {
       :busy="renameBusy"
       :error="renameError"
       :fields="[
-        { key: 'name', label: 'Имя пресета', type: 'text', required: true, value: renameForm.name, placeholder: 'имя пресета' },
+        { key: 'name', label: 'Имя', type: 'text', required: true, value: renameForm.name, placeholder: 'название' },
+        { key: 'tag', label: 'Тэг', type: 'text', required: true, value: renameForm.tag, placeholder: 'код' },
         { key: 'description', label: 'Описание', type: 'textarea', value: renameForm.description, placeholder: 'описание' },
       ]"
-      @save="(v: Record<string, string | number>) => { renameForm.name = String(v.name ?? ''); renameForm.description = String(v.description ?? ''); void onRenamePreset() }"
+      @save="(v: Record<string, string | number>) => { renameForm.name = String(v.name ?? ''); renameForm.tag = String(v.tag ?? ''); renameForm.description = String(v.description ?? ''); void onRenamePreset() }"
       @close="renameOpen = false"
     />
 
-    <!-- Удаление с подтверждением: нужно ввести имя пресета -->
+    <!-- Удаление с подтверждением: нужно ввести тэг пресета -->
     <div v-if="deleteOpen" class="pm-del-overlay" @mousedown.self="deleteOpen = false">
       <div class="pm-del" role="dialog" aria-modal="true" aria-label="Удалить пресет">
         <h3 class="pm-del-title">Удалить пресет «{{ deleteTarget }}»?</h3>
         <p class="pm-del-text">
           Назначенные пользователи сохранятся, но потеряют базовые права этого пресета;
-          правила пресета будут удалены. Введите имя пресета, чтобы подтвердить:
+          правила пресета будут удалены. Введите тэг пресета, чтобы подтвердить:
         </p>
         <input
           v-model="deleteConfirm"

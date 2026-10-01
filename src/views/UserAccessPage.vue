@@ -10,6 +10,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import { UserPermissionsEditor } from '../components/common'
 import { useAppStore, useAuthStore, useRbacStore } from '../store'
+import { FALLBACK_PRESET_NAMES, presetDisplayName } from '../utils/presets'
 import type { PermissionOverride } from '../components/common/UserPermissionsEditor/types'
 
 const route = useRoute()
@@ -19,17 +20,10 @@ const auth = useAuthStore()
 const rbac = useRbacStore()
 const { adminUsers } = storeToRefs(app)
 
-const PRESET_LABELS: Record<string, string> = {
-  admin: 'Администратор',
-  dp: 'Директор проектов',
-  rp: 'Руководитель проекта',
-  vp: 'Владелец процесса',
-  worker: 'Работник',
-}
-const STATIC_PRESET_OPTIONS = Object.entries(PRESET_LABELS).map(([value, label]) => ({ value, label }))
+const STATIC_PRESET_OPTIONS = Object.entries(FALLBACK_PRESET_NAMES).map(([value, label]) => ({ value, label }))
 const presetOptions = computed(() =>
   rbac.presets.length
-    ? rbac.presets.map((p) => ({ value: p.name ?? '', label: PRESET_LABELS[p.name ?? ''] ?? p.name ?? '' }))
+    ? rbac.presets.map((p) => ({ value: p.tag ?? '', label: presetDisplayName(p) }))
     : STATIC_PRESET_OPTIONS,
 )
 

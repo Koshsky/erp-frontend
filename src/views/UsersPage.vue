@@ -9,12 +9,14 @@ import { useConfirm } from '../composables/useConfirm'
 import { useContextMenu } from '../composables/useContextMenu'
 import { useAppStore, useRbacStore } from '../store'
 import { useColumnWidths } from '../composables/useColumnWidths'
+import { presetDisplayName, presetLabelFromCatalog } from '../utils/presets'
 import type { DtoAdminUserResponse } from '@/api'
 
 const router = useRouter()
 const app = useAppStore()
 const rbac = useRbacStore()
 const { adminUsers, adminUsersLoading, adminUsersError } = storeToRefs(app)
+const { presets } = storeToRefs(rbac)
 
 /**
  * The DataTable cell slot gives the row as `unknown` (generic inference does
@@ -29,20 +31,17 @@ const columns: DataTableColumn[] = [
   { key: 'preset', label: 'Пресет', width: 'fit-content(260px)' },
 ]
 
-/** Russian preset labels for the column (unknown values fall back to the raw code). */
-const PRESET_LABELS: Record<string, string> = {
-  admin: 'Администратор',
-  dp: 'Директор проектов',
-  rp: 'Руководитель проекта',
-  vp: 'Владелец процесса',
-  worker: 'Работник',
-}
-
+/** Display name of a preset by its tag: looked up in the catalog (name wins),
+ *  falling back to the built-in label, then to the raw tag. */
 function presetLabel(preset?: string): string {
-  return preset ? (PRESET_LABELS[preset] ?? preset) : '—'
+  return presetLabelFromCatalog(preset, presets.value)
 }
 
-/** Per-column filters, rendered as the DataTable filter row */
+/** Preset filter: '' — all, otherwise the preset tag */
+const fPreset = ref('')
+
+/** Preset filter options: the whole catalog (built-in + custom). */
+const presetFilterOptions = computed(() => presets.value.map((p) => ({ value: p.tag ?? '', label: presetDisplayName(p) })))
 const fName = ref('')
 const fLogin = ref('')
 
@@ -58,9 +57,6 @@ const filteredUsers = computed(() => {
     return true
   })
 })
-
-/** Preset filter: '' — all, otherwise the preset code */
-const fPreset = ref('')
 
 const emptyText = computed(() => (adminUsers.value.length ? 'Ничего не найдено' : 'Нет данных'))
 
@@ -173,7 +169,7 @@ async function refreshAfterMutation() {
         <input v-else-if="column.key === 'username'" v-model="fLogin" type="search" class="th-filter" placeholder="по логину" />
         <select v-else-if="column.key === 'preset'" v-model="fPreset" class="th-filter">
           <option value="">Все пресеты</option>
-          <option v-for="(label, code) in PRESET_LABELS" :key="code" :value="code">{{ label }}</option>
+          <option v-for="opt in presetFilterOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
         </select>
       </template>
       <template #cell="{ row, column }">

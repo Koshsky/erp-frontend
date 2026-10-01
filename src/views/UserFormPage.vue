@@ -6,6 +6,7 @@ import { HintButton, ConfirmDialog, PasswordDialog, UserPermissionsEditor } from
 import { useAppStore, useAuthStore, useRbacStore } from '../store'
 import { compareByName, translitPhio } from '../utils'
 import { useConfirm } from '../composables/useConfirm'
+import { FALLBACK_PRESET_NAMES, presetDisplayName } from '../utils/presets'
 import type { DtoAdminUserResponse, DtoCreateUserRequest, DtoUpdateUserRequest } from '@/api'
 import type { PermissionOverride } from '../components/common/UserPermissionsEditor/types'
 
@@ -87,20 +88,13 @@ watch(
   },
 )
 
-const PRESET_LABELS: Record<string, string> = {
-  admin: 'Администратор',
-  dp: 'Директор проектов',
-  rp: 'Руководитель проекта',
-  vp: 'Владелец процесса',
-  worker: 'Работник',
-}
-
-const STATIC_PRESET_OPTIONS = Object.entries(PRESET_LABELS).map(([value, label]) => ({ value, label }))
+/** Fallback options for a cold start (catalog not loaded yet). */
+const STATIC_PRESET_OPTIONS = Object.entries(FALLBACK_PRESET_NAMES).map(([value, label]) => ({ value, label }))
 
 /** Пресеты из /rbac/presets; запасной вариант — статический список. */
 const presetOptions = computed(() =>
   rbac.presets.length
-    ? rbac.presets.map((p) => ({ value: p.name ?? '', label: PRESET_LABELS[p.name ?? ''] ?? p.name ?? '' }))
+    ? rbac.presets.map((p) => ({ value: p.tag ?? '', label: presetDisplayName(p) }))
     : STATIC_PRESET_OPTIONS,
 )
 

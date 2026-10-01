@@ -3468,11 +3468,15 @@ export const useRbacStore = defineStore('rbac', () => {
   }
 
   /** Creates (or revives) a preset and updates the local catalog. */
-  async function createPreset(input: { name: string; description?: string }): Promise<boolean> {
+  async function createPreset(input: { tag: string; name: string; description?: string }): Promise<boolean> {
     try {
-      const resp = await new RBACApi(apiConfig()).rbacPresetsPost({ name: input.name, description: input.description ?? '' })
+      const resp = await new RBACApi(apiConfig()).rbacPresetsPost({
+        tag: input.tag,
+        name: input.name,
+        description: input.description ?? '',
+      })
       if (resp.data?.data) {
-        presets.value = [...presets.value.filter((r) => r.name !== resp.data?.data?.name), resp.data.data]
+        presets.value = [...presets.value.filter((r) => r.tag !== resp.data?.data?.tag), resp.data.data]
       }
       return true
     } catch {
@@ -3480,21 +3484,22 @@ export const useRbacStore = defineStore('rbac', () => {
     }
   }
 
-  /** Updates a preset: optional rename (patch.name) plus a new description. */
+  /** Updates a preset: optional tag rename (patch.tag) plus name and description. */
   async function updatePreset(
-    name: string,
-    patch: { name?: string; description?: string },
+    tag: string,
+    patch: { tag?: string; name: string; description: string },
   ): Promise<boolean> {
     try {
-      const resp = await new RBACApi(apiConfig()).rbacPresetsNamePut(name, {
+      const resp = await new RBACApi(apiConfig()).rbacPresetsTagPut(tag, {
+        tag: patch.tag,
         name: patch.name,
-        description: patch.description ?? '',
+        description: patch.description,
       })
       const saved = resp.data?.data
       if (saved) {
         presets.value = presets.value
-          .filter((r) => r.name !== name)
-          .concat({ name: saved.name ?? name, description: saved.description ?? '' })
+          .filter((r) => r.tag !== tag)
+          .concat({ tag: saved.tag ?? tag, name: saved.name ?? '', description: saved.description ?? '' })
       }
       return true
     } catch {
@@ -3503,10 +3508,10 @@ export const useRbacStore = defineStore('rbac', () => {
   }
 
   /** Softly deletes a preset (and its rules) and removes it from the local catalog. */
-  async function deletePreset(name: string): Promise<boolean> {
+  async function deletePreset(tag: string): Promise<boolean> {
     try {
-      await new RBACApi(apiConfig()).rbacPresetsNameDelete(name)
-      presets.value = presets.value.filter((r) => r.name !== name)
+      await new RBACApi(apiConfig()).rbacPresetsTagDelete(tag)
+      presets.value = presets.value.filter((r) => r.tag !== tag)
       return true
     } catch {
       return false
