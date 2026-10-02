@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { presetDisplayName, presetLabelFromCatalog } from './presets'
+import { presetDescriptionByTag, presetDisplayName, presetLabelFromCatalog } from './presets'
 
 describe('preset display helpers', () => {
   it('uses the human-readable name first', () => {
@@ -31,5 +31,16 @@ describe('preset display helpers', () => {
     expect(presetLabelFromCatalog('worker', catalog)).toBe('Работник')
     expect(presetLabelFromCatalog('custom', catalog)).toBe('custom')
     expect(presetLabelFromCatalog(null, catalog)).toBe('—')
+  })
+
+  it('returns the description by tag', () => {
+    const catalog = [
+      { tag: 'auditor', name: 'Внешний аудит', description: 'Проверка годовой отчётности' },
+      { tag: 'dp', name: 'Директор проектов', description: '  ' },
+    ]
+    expect(presetDescriptionByTag('auditor', catalog)).toBe('Проверка годовой отчётности')
+    expect(presetDescriptionByTag('dp', catalog)).toBe('')
+    expect(presetDescriptionByTag('worker', catalog)).toBe('')
+    expect(presetDescriptionByTag(null, catalog)).toBe('')
   })
 })

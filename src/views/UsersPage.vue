@@ -9,7 +9,7 @@ import { useConfirm } from '../composables/useConfirm'
 import { useContextMenu } from '../composables/useContextMenu'
 import { useAppStore, useRbacStore } from '../store'
 import { useColumnWidths } from '../composables/useColumnWidths'
-import { presetDisplayName, presetLabelFromCatalog } from '../utils/presets'
+import { presetDisplayName, presetDescriptionByTag, presetLabelFromCatalog } from '../utils/presets'
 import type { DtoAdminUserResponse } from '@/api'
 
 const router = useRouter()
@@ -35,6 +35,11 @@ const columns: DataTableColumn[] = [
  *  falling back to the built-in label, then to the raw tag. */
 function presetLabel(preset?: string): string {
   return presetLabelFromCatalog(preset, presets.value)
+}
+
+/** Native tooltip of the "Preset" cell: the preset description, else its name. */
+function presetHint(preset?: string): string {
+  return presetDescriptionByTag(preset, presets.value) || presetLabel(preset)
 }
 
 /** Preset filter: '' — all, otherwise the preset tag */
@@ -175,7 +180,7 @@ async function refreshAfterMutation() {
       <template #cell="{ row, column }">
         <span v-if="column.key === 'name'" class="up-name">{{ asUser(row).name }}</span>
         <span v-else-if="column.key === 'username'" class="mono">{{ asUser(row).username }}</span>
-        <span v-else class="up-preset">{{ presetLabel(asUser(row).preset) }}</span>
+        <span v-else class="up-preset" :title="presetHint(asUser(row).preset)">{{ presetLabel(asUser(row).preset) }}</span>
       </template>
     </DataTable>
 

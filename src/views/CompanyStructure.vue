@@ -6,7 +6,7 @@ import type { DataTableColumn } from '../components/common'
 import { useAppStore, useRbacStore } from '../store'
 import { compareByName } from '../utils'
 import { useColumnWidths } from '../composables/useColumnWidths'
-import { presetLabelFromCatalog } from '../utils/presets'
+import { presetDescriptionByTag, presetLabelFromCatalog } from '../utils/presets'
 import type { DtoAdminUserResponse } from '@/api'
 
 const app = useAppStore()
@@ -16,6 +16,11 @@ const { presets } = storeToRefs(rbac)
 
 function presetLabel(preset?: string | null): string {
   return presetLabelFromCatalog(preset, presets.value)
+}
+
+/** Native tooltip of the "Preset" cell: the preset description, else its name. */
+function presetHint(preset?: string | null): string {
+  return presetDescriptionByTag(preset, presets.value) || presetLabel(preset)
 }
 
 interface TreeNode {
@@ -167,7 +172,7 @@ onMounted(() => {
           <span class="name">{{ asNode(row).user.name }}</span>
           <span class="mono">{{ asNode(row).user.username }}</span>
         </span>
-        <template v-else-if="column.key === 'role'">{{ presetLabel(asNode(row).user.preset) }}</template>
+        <template v-else-if="column.key === 'role'"><span :title="presetHint(asNode(row).user.preset)">{{ presetLabel(asNode(row).user.preset) }}</span></template>
         <span v-else-if="column.key === 'manager'" class="cs-mgr-wrap">
           <select
             class="cs-mgr"

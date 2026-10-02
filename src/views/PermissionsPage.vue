@@ -9,7 +9,7 @@
  */
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
-import { ConfirmDialog, ContextMenu, HintButton, ModalForm } from '../components/common'
+import { ConfirmDialog, ContextMenu, HintButton, InfoTooltip, ModalForm, TooltipCell } from '../components/common'
 import { SCOPE_OPTIONS as SCOPE_CHIPS } from '../components/common/UserPermissionsEditor/labels'
 import { canonicalScope, scopeMoves, toggleScopeMove } from '@/rbacScope'
 import { useRbacStore } from '../store'
@@ -181,6 +181,12 @@ function presetName(tag: string): string {
 /** Catalog entry of the selected tag (name/description) or undefined. */
 function presetEntry(tag: string) {
   return presets.value.find((p) => p.tag === tag)
+}
+
+/** Tooltip lines of a preset: its description, else the tag itself. */
+function presetTooltipLines(tag: string): string[] {
+  const description = presetEntry(tag)?.description?.trim()
+  return description ? [description] : [tag]
 }
 
 /** Preset tabs: the catalog without the admin bypass (admin is a code invariant, not an editable tab). */
@@ -500,10 +506,15 @@ onMounted(() => {
           @click="selected = preset"
           @contextmenu.prevent="onPresetContextMenu($event, preset)"
         >
-          <span class="pm-preset-code">{{ preset }}</span>
-          <span class="pm-preset-name">
-            {{ presetName(preset) }}
-          </span>
+          <TooltipCell :multiline="true">
+            <span class="pm-preset-code">{{ preset }}</span>
+            <span class="pm-preset-name">
+              {{ presetName(preset) }}
+            </span>
+            <template #popup>
+              <InfoTooltip :title="presetName(preset)" :lines="presetTooltipLines(preset)" />
+            </template>
+          </TooltipCell>
           <span
             v-if="!BUILTIN_PRESETS.has(preset)"
             class="pm-preset-remove"

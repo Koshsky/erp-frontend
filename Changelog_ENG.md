@@ -14,6 +14,7 @@ The web app and the desktop wrapper (`desktop/`) are versioned together.
 - Tables with drag navigation keep the plain arrow cursor at rest (headers, rows, empty space); Gantt bars show a clickable pointer; while the middle button is held, the cursor globally turns into the grabbing fist.
 - Weekday labels in the calendar header raised by a couple of pixels.
 - Presets have three editable fields — name, tag (access code) and description — set on creation and changeable later; lists and selects show the preset name.
+- The preset tooltip shows its description.
 
 ## [1.1.0] - 2026-10-01
 

@@ -18,6 +18,7 @@ export const FALLBACK_PRESET_NAMES: Record<string, string> = {
 export interface PresetLike {
   tag?: string | null
   name?: string | null
+  description?: string | null
 }
 
 /** Display name of a catalog entry: the name, else the fallback, else the tag. */
@@ -37,4 +38,10 @@ export function presetLabelFromCatalog(tag: string | null | undefined, catalog: 
   const entry = catalog.find((p) => p.tag === tag)
   if (entry) return presetDisplayName(entry)
   return FALLBACK_PRESET_NAMES[tag] ?? tag
+}
+
+/** Description of a preset referenced by its tag (' ' when absent/empty). */
+export function presetDescriptionByTag(tag: string | null | undefined, catalog: PresetLike[]): string {
+  if (!tag) return ''
+  return catalog.find((p) => p.tag === tag)?.description?.trim() ?? ''
 }
