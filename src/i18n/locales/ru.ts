@@ -19,6 +19,7 @@ export default {
     themeDark: 'тёмная',
     changelog: 'Журнал изменений',
     language: 'Язык интерфейса',
+    languageAuto: 'Как в системе',
     logout: 'Выйти из системы',
     menuShortcut: 'Меню (Ctrl+B)',
     menuOpen: 'Открыть меню',

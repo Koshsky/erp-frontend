@@ -25,6 +25,7 @@ export default {
     themeDark: 'dark',
     changelog: 'Changelog',
     language: 'Interface language',
+    languageAuto: 'System language',
     logout: 'Sign out',
     menuShortcut: 'Menu (Ctrl+B)',
     menuOpen: 'Open menu',

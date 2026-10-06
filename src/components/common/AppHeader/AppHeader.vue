@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../../../store'
 import { resolvedScheme, toggleScheme } from '../../../theme'
 import { isNavOpen, toggleNav } from '../../../composables/useNavDrawer'
 import { AppIcon } from '../AppIcon'
 import { ChangelogDialog } from '../ChangelogDialog'
-import { t, detectBrowserLanguage } from '../../../i18n'
+import { t } from '../../../i18n'
 import { uiLanguage, type UiLanguage } from '../../../settings'
 
 const router = useRouter()
@@ -17,16 +17,45 @@ const authStore = useAuthStore()
 const themeLabel = computed(() => t(resolvedScheme.value === 'dark' ? 'header.themeDark' : 'header.themeLight'))
 const themeToggleTitle = computed(() => t('header.themeToggle', { theme: themeLabel.value }))
 
-/** The active interface language ('auto' resolves to the detected one). */
-const currentLanguage = computed<'ru' | 'en'>(() =>
-  uiLanguage.value === 'auto' ? detectBrowserLanguage() : uiLanguage.value,
-)
+/** Language dropdown options (own-language labels; auto is localized). */
+const LANG_OPTIONS: Array<{ value: UiLanguage; label: string }> = [
+  { value: 'ru', label: 'Русский' },
+  { value: 'en', label: 'English' },
+  { value: 'auto', label: '' }, // label filled below via t()
+]
 
-/** Square language toggle: switches RU ↔ EN and pins the setting. */
-function toggleLanguage(): void {
-  const next: UiLanguage = currentLanguage.value === 'ru' ? 'en' : 'ru'
-  uiLanguage.value = next
+const langMenuOpen = ref(false)
+const langMenuEl = ref<HTMLElement | null>(null)
+
+function toggleLangMenu(): void {
+  langMenuOpen.value = !langMenuOpen.value
 }
+
+function selectLanguage(value: UiLanguage): void {
+  uiLanguage.value = value
+  langMenuOpen.value = false
+}
+
+/** Close the dropdown on outside clicks and on Escape. */
+function onLangDocumentMousedown(e: MouseEvent): void {
+  if (langMenuOpen.value && langMenuEl.value && !langMenuEl.value.contains(e.target as Node)) {
+    langMenuOpen.value = false
+  }
+}
+
+function onLangDocumentKeydown(e: KeyboardEvent): void {
+  if (e.key === 'Escape') langMenuOpen.value = false
+}
+
+onMounted(() => {
+  document.addEventListener('mousedown', onLangDocumentMousedown)
+  document.addEventListener('keydown', onLangDocumentKeydown)
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('mousedown', onLangDocumentMousedown)
+  document.removeEventListener('keydown', onLangDocumentKeydown)
+})
 
 /** Whether the centered changelog dialog is visible (header icon) */
 const changelogOpen = ref(false)
@@ -87,15 +116,34 @@ const burgerLabel = computed(() => (isNavOpen.value ? t('header.menuClose') : t(
       >
         <AppIcon :name="resolvedScheme === 'dark' ? 'sun' : 'moon'" :size="18" />
       </button>
-      <button
-        type="button"
-        class="ah-act ah-act--icon ah-lang"
-        :title="t('header.language')"
-        :aria-label="t('header.language')"
-        @click="toggleLanguage"
-      >
-        {{ currentLanguage.toUpperCase() }}
-      </button>
+      <div ref="langMenuEl" class="ah-langwrap">
+        <button
+          type="button"
+          class="ah-act ah-act--icon"
+          :title="t('header.language')"
+          :aria-label="t('header.language')"
+          :aria-haspopup="'menu'"
+          :aria-expanded="langMenuOpen"
+          @click="toggleLangMenu"
+        >
+          <AppIcon name="globe" :size="18" />
+        </button>
+        <div v-if="langMenuOpen" class="ah-langmenu" role="menu" :aria-label="t('header.language')">
+          <button
+            v-for="opt in LANG_OPTIONS"
+            :key="opt.value"
+            type="button"
+            class="ah-langitem"
+            role="menuitemradio"
+            :aria-checked="opt.value === uiLanguage"
+            @click="selectLanguage(opt.value)"
+          >
+            <span>{{ opt.value === 'auto' ? t('header.languageAuto') : opt.label }}</span>
+            <span v-if="opt.value === uiLanguage" class="ah-langcheck" aria-hidden="true">✓</span>
+            <span v-else class="ah-langcheck" aria-hidden="true"></span>
+          </button>
+        </div>
+      </div>
       <button
         type="button"
         class="ah-act ah-act--icon"
@@ -248,12 +296,58 @@ const burgerLabel = computed(() => (isNavOpen.value ? t('header.menuClose') : t(
   justify-content: center;
 }
 
-/* Language toggle: a square button showing the two-letter language code */
-.ah-lang {
-  font-size: calc(var(--ui-font-scale, 1) * 12px);
+/* Language dropdown: anchored under the square globe button, right-aligned */
+.ah-langwrap {
+  position: relative;
+}
+
+.ah-langmenu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 120;
+  min-width: 180px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px;
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
+  box-shadow: var(--ui-shadow-md);
+}
+
+.ah-langitem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: none;
+  background: transparent;
+  color: var(--ui-text);
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
+  font-family: inherit;
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: var(--ui-radius-sm);
+  cursor: pointer;
+  transition: background var(--ui-duration);
+}
+
+.ah-langitem:hover {
+  background: var(--ui-surface-3);
+}
+
+.ah-langcheck {
+  flex: none;
+  color: var(--ui-accent);
   font-weight: 700;
-  letter-spacing: 0.4px;
-  color: var(--ui-text-2);
+  min-width: 14px;
+  text-align: center;
+}
+
+.ah-langmenu .ah-langitem[aria-checked='true'] {
+  font-weight: 600;
 }
 
 .ah-act--logout:hover:not(:disabled) {
