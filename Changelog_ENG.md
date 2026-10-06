@@ -10,7 +10,10 @@ The web app and the desktop wrapper are versioned together.
 
 ### Added
 
-- Multilingual UI: interface language (Russian/English/system) in Settings; the shell (header, menu, dialogs, login, global toasts) is translated.
+- Multilingual UI: interface language (Russian/English/system) in Settings; the whole interface is translated (screens, planner, timesheet, PDF export, hint pages).
+- The interface language also drives date and number formatting, the window title and the desktop shell dialogs.
+- Hint pages ("?") are localized per interface language, with the Russian document as the fallback.
+- API error messages follow the interface language (the client sends Accept-Language).
 
 ## [1.2.1] - 2026-10-06
 
