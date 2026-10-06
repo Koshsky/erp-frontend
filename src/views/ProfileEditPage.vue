@@ -66,9 +66,11 @@ async function onChangePassword() {
             <PasswordRequirements :model-value="newPassword" :rules="passwordChecks" />
           </div>
 
-          <button type="submit" class="pf-btn" :disabled="auth.loading">
-            {{ auth.loading ? 'Сохранение…' : 'Сменить пароль' }}
-          </button>
+          <div class="pf-actions">
+            <button type="submit" class="pf-btn" :disabled="auth.loading">
+              {{ auth.loading ? 'Сохранение…' : 'Сменить пароль' }}
+            </button>
+          </div>
         </form>
       </div>
     </div>
@@ -116,10 +118,14 @@ async function onChangePassword() {
   gap: 14px;
 }
 
-.pf-btn {
+.pf-actions {
+  display: flex;
+  justify-content: flex-end;
   margin-top: 18px;
-  width: 100%;
-  padding: 12px;
+}
+
+.pf-btn {
+  padding: 10px 22px;
   border: none;
   border-radius: var(--ui-radius-sm);
   background: var(--ui-accent);

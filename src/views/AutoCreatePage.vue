@@ -755,6 +755,7 @@ async function onSave() {
 .ac-actions {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 10px;
   margin-top: 4px;
 }

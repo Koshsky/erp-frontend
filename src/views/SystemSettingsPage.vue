@@ -417,6 +417,7 @@ onMounted(() => {
 
 .st-actions {
   display: flex;
+  justify-content: flex-end;
   gap: 10px;
   margin-top: 4px;
 }

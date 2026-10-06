@@ -454,6 +454,7 @@ onBeforeUnmount(() => {
 
 .sp-actions {
   display: flex;
+  justify-content: flex-end;
   gap: 10px;
   margin-top: 4px;
 }
@@ -491,7 +492,7 @@ onBeforeUnmount(() => {
 }
 
 .sp-actions .sp-btn {
-  flex: 1;
+  width: auto;
   margin-top: 14px;
 }
 </style>

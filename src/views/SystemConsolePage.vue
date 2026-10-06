@@ -186,9 +186,11 @@ onBeforeUnmount(() => {
         </button>
       </div>
 
-      <button type="button" class="sp-btn accent" :disabled="busy || isOffline" @click="onSyncAll">
-        Синхронизировать всё (PUSH → PULL)
-      </button>
+      <div class="sp-actions">
+        <button type="button" class="sp-btn accent" :disabled="busy || isOffline" @click="onSyncAll">
+          Синхронизировать всё (PUSH → PULL)
+        </button>
+      </div>
     </div>
   </section>
 </template>
@@ -252,6 +254,7 @@ onBeforeUnmount(() => {
 
 .sp-actions {
   display: flex;
+  justify-content: flex-end;
   gap: 10px;
   margin-top: 4px;
 }
@@ -288,7 +291,7 @@ onBeforeUnmount(() => {
 }
 
 .sp-actions .sp-btn {
-  flex: 1;
+  width: auto;
   margin-top: 14px;
 }
 
