@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../../../store'
 import { resolvedScheme, toggleScheme } from '../../../theme'
 import { isNavOpen, toggleNav } from '../../../composables/useNavDrawer'
 import { AppIcon } from '../AppIcon'
+import { ChangelogDialog } from '../ChangelogDialog'
 
 const router = useRouter()
 const route = useRoute()
@@ -13,10 +14,8 @@ const authStore = useAuthStore()
 // Theme toggle label (Russian UI copy)
 const themeLabel = computed(() => (resolvedScheme.value === 'dark' ? 'Светлая' : 'Тёмная'))
 
-/** Absolute URL of the changelog page (opened in a separate browser tab). */
-const changelogUrl = computed(() =>
-  new URL(router.resolve({ name: 'changelog' }).href, window.location.href).toString(),
-)
+/** Whether the centered changelog dialog is visible (header icon) */
+const changelogOpen = ref(false)
 
 function onLogout(): void {
   authStore.logout()
@@ -74,16 +73,15 @@ const burgerLabel = computed(() => (isNavOpen.value ? 'Закрыть меню' 
       >
         <AppIcon :name="resolvedScheme === 'dark' ? 'sun' : 'moon'" :size="18" />
       </button>
-      <a
+      <button
+        type="button"
         class="ah-act ah-act--icon"
-        :href="changelogUrl"
-        target="_blank"
-        rel="noopener"
         title="Журнал изменений"
         aria-label="Журнал изменений"
+        @click="changelogOpen = true"
       >
         <AppIcon name="scroll" :size="18" />
-      </a>
+      </button>
       <button
         type="button"
         class="ah-act ah-act--icon ah-act--logout"
@@ -94,6 +92,8 @@ const burgerLabel = computed(() => (isNavOpen.value ? 'Закрыть меню' 
         <AppIcon name="logout" :size="18" />
       </button>
     </div>
+
+    <ChangelogDialog :open="changelogOpen" @close="changelogOpen = false" />
   </header>
 </template>
 

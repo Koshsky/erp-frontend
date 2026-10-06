@@ -18,7 +18,7 @@ The web app and the desktop wrapper (`desktop/`) are versioned together.
 - Action notifications (saving, preset create/rename/delete, password change, sync) moved into the notification stack instead of colored text at the top of the page.
 - Action button panels are aligned to the right edge so the notification stack cannot cover them.
 - Diagram settings: default duration of a created project, in days.
-- A changelog icon in the header opens the changelog page (Changelog_RU.md) in a new browser tab.
+- A changelog icon in the header opens the changelog (Changelog_RU.md) in a centered dialog.
 
 ## [1.1.0] - 2026-10-01
 

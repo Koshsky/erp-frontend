@@ -27,3 +27,4 @@ export type {
 
 export { default as HintPanel } from './HintPanel/HintPanel.vue'
 export { default as HintButton } from './HintButton/HintButton.vue'
+export { default as ChangelogDialog } from './ChangelogDialog/ChangelogDialog.vue'

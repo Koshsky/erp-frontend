@@ -141,12 +141,6 @@ const router = createRouter({
           component: () => import('../views/ProfileEditPage.vue'),
         },
         {
-          path: 'changelog',
-          name: 'changelog',
-          meta: { title: 'Журнал изменений' },
-          component: () => import('../views/ChangelogPage.vue'),
-        },
-        {
           path: 'system/console',
           name: 'system-console',
           component: () => import('../views/SystemConsolePage.vue'),
