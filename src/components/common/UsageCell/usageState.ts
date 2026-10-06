@@ -1,3 +1,5 @@
+import { t } from '../../../i18n'
+
 export type UsageState = 'normal' | 'warn' | 'critical' | 'unknown' | 'weekend'
 
 export interface UsageStateInput {
@@ -27,11 +29,25 @@ export function usagePercent(used: number, available: number | null): number | n
   return (used / available) * 100
 }
 
-/** State color (cell background) and label — for the usage tooltip */
-export const USAGE_STATE_META: Record<UsageState, { label: string; color: string }> = {
-  normal: { label: 'Норма', color: 'var(--ui-usage-ok)' },
-  warn: { label: 'Перегруз', color: 'var(--ui-usage-warn)' },
-  critical: { label: 'Критично', color: 'var(--ui-usage-crit)' },
-  unknown: { label: 'Нет данных', color: 'var(--ui-usage-unknown)' },
-  weekend: { label: 'Выходной', color: 'var(--ui-usage-weekend)' },
+/** State color (cell background) — for the usage tooltip marker and label. */
+export const USAGE_STATE_COLOR: Record<UsageState, string> = {
+  normal: 'var(--ui-usage-ok)',
+  warn: 'var(--ui-usage-warn)',
+  critical: 'var(--ui-usage-crit)',
+  unknown: 'var(--ui-usage-unknown)',
+  weekend: 'var(--ui-usage-weekend)',
+}
+
+/** Catalog keys of the state labels (resolved at render time, never at import). */
+const USAGE_STATE_LABEL_KEY: Record<UsageState, string> = {
+  normal: 'ui.usage.normal',
+  warn: 'ui.usage.warn',
+  critical: 'ui.usage.critical',
+  unknown: 'common.noData',
+  weekend: 'ui.usage.weekend',
+}
+
+/** Human-readable state label in the active language. */
+export function usageStateLabel(state: UsageState): string {
+  return t(USAGE_STATE_LABEL_KEY[state])
 }

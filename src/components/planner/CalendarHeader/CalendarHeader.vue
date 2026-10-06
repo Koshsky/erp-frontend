@@ -2,6 +2,8 @@
 import { computed } from 'vue'
 import type { TimelineCtx } from '../../../composables/timeline-context'
 import { cellIndexForDate } from '../calendar'
+import { appLocale } from '@/i18n'
+import { fmtMonthLong, weekdayShort } from '@/i18n/date'
 import {
   LABEL_WIDTH,
   headerHeight,
@@ -14,7 +16,8 @@ const props = defineProps<{
   t: TimelineCtx
 }>()
 
-const dowMap = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб']
+/** Short weekday names indexed by `Date.getDay()` — follow the interface language */
+const dowMap = computed(() => weekdayShort(appLocale.value))
 
 /** Cell number label: for a day — the number; for a decade — the day range (1-10, 11-20, 21-end) */
 function numLabel(i: number): string {
@@ -24,7 +27,7 @@ function numLabel(i: number): string {
 }
 
 function monthLabel(d: Date): string {
-  const m = d.toLocaleDateString('ru', { month: 'long' })
+  const m = fmtMonthLong(d)
   return m.charAt(0).toUpperCase() + m.slice(1) + ' ' + d.getFullYear()
 }
 

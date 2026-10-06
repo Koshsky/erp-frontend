@@ -1,16 +1,17 @@
 <script setup lang="ts">
 /**
- * UserAccessPage — индивидуальные права пользователя (переопределения зон).
- * Отдельная страница, на которую ведёт кнопка «Изменить права» страницы
- * редактирования пользователя (/users/:id/edit). Смена пресета сохраняется
- * сразу (это свойство профиля), переопределения — кнопкой «Сохранить» ниже.
+ * UserAccessPage — individual user permissions (zone overrides).
+ * A separate page reached from the "Edit permissions" button of the user
+ * editor (/users/:id/edit). A preset change is saved immediately (it is a
+ * profile property), the overrides — with the "Save" button below.
  */
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import { UserPermissionsEditor } from '../components/common'
 import { useAppStore, useAuthStore, useRbacStore } from '../store'
-import { FALLBACK_PRESET_NAMES, presetDisplayName } from '../utils/presets'
+import { builtinPresetOptions, presetDisplayName } from '../utils/presets'
+import { t } from '../i18n'
 import type { PermissionOverride } from '../components/common/UserPermissionsEditor/types'
 
 const route = useRoute()
@@ -20,14 +21,14 @@ const auth = useAuthStore()
 const rbac = useRbacStore()
 const { adminUsers } = storeToRefs(app)
 
-const STATIC_PRESET_OPTIONS = Object.entries(FALLBACK_PRESET_NAMES).map(([value, label]) => ({ value, label }))
+const staticPresetOptions = () => builtinPresetOptions()
 const presetOptions = computed(() =>
   rbac.presets.length
     ? rbac.presets.map((p) => ({ value: p.tag ?? '', label: presetDisplayName(p) }))
-    : STATIC_PRESET_OPTIONS,
+    : staticPresetOptions(),
 )
 
-/** Редактирование прав — admin-only (как на странице редактирования). */
+/** Permission editing is admin-only (as on the user editor page). */
 const permsReady = computed(() => rbac.permsLoaded || rbac.myPermissions.length > 0)
 const canManageUserRights = computed(() =>
   permsReady.value ? rbac.can('rbac_config', 'view') : auth.user?.preset === 'admin',
@@ -61,7 +62,7 @@ onMounted(async () => {
   }
 })
 
-/* ── переопределения (staged) + сохранение ─────────────── */
+/* ── overrides (staged) + saving ─────────────── */
 const permissionOverrides = ref<PermissionOverride[]>([])
 const permissionDirty = ref(false)
 const permissionSaved = ref(false)
@@ -80,8 +81,8 @@ async function savePermissions(): Promise<boolean> {
   return true
 }
 
-/** Смена пресета на странице прав сохраняется сразу (это свойство профиля).
- *  Ошибка сохранения — в глобальный тост (http.ts). */
+/** A preset change on the permissions page is saved immediately (it is a
+ *  profile property). Save errors go to the global toast (http.ts). */
 function onChangePreset(preset: string) {
   const id = userId.value
   if (id == null || user.value == null || user.value.preset === preset) return
@@ -97,19 +98,19 @@ watch(permissionDirty, (dirty) => {
 <template>
   <section class="ua">
     <div class="ua-head">
-      <h2 class="ua-title">Права доступа — {{ user?.name ?? '…' }}</h2>
+      <h2 class="ua-title">{{ t('adminUsers.userAccess.title', { name: user?.name ?? '…' }) }}</h2>
       <button type="button" class="ua-back" @click="router.push(`/users/${userId}/edit`)">
-        ← К редактированию
+        {{ t('adminUsers.userAccess.back') }}
       </button>
     </div>
 
-    <p v-if="loading" class="ua-st">Загрузка…</p>
+    <p v-if="loading" class="ua-st">{{ t('common.loading') }}</p>
     <div v-else-if="missing" class="ua-st">
-      <p class="ua-error">Пользователь не найден</p>
+      <p class="ua-error">{{ t('adminUsers.userAccess.missing') }}</p>
     </div>
 
     <p v-else-if="!canManageUserRights" class="ua-st">
-      Нет прав на изменение прав доступа
+      {{ t('adminUsers.userAccess.denied') }}
     </p>
 
     <div v-else class="ua-card">
@@ -124,14 +125,14 @@ watch(permissionDirty, (dirty) => {
       />
 
       <div class="ua-actions">
-        <p v-if="permissionSaved" class="ua-ok" role="status">Права сохранены ✓</p>
+        <p v-if="permissionSaved" class="ua-ok" role="status">{{ t('adminUsers.userAccess.saved') }}</p>
         <button
           type="button"
           class="ua-save"
           :disabled="!permissionDirty || rbac.saving"
           @click="savePermissions"
         >
-          {{ rbac.saving ? 'Сохранение…' : 'Сохранить' }}
+          {{ rbac.saving ? t('adminUsers.userForm.action.saving') : t('common.save') }}
         </button>
       </div>
     </div>

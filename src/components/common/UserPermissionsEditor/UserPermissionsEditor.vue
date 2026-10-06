@@ -21,8 +21,9 @@
 import { computed, onMounted, reactive, watch } from 'vue'
 import { useRbacStore } from '../../../store'
 import type { PermissionCell, PermissionOverride, UserPermissionsModel } from './types'
-import { GROUPS, ACTIONS, RESOURCE_LABELS, ACTION_LABELS, SCOPE_OPTIONS } from './labels'
+import { GROUPS, ACTIONS, SCOPE_OPTIONS, resourceTitle, actionTitle, scopeOptionLabel } from './labels'
 import { canonicalScope, scopeMoves, toggleScopeMove } from '@/rbacScope'
+import { t } from '@/i18n'
 import HintButton from '../HintButton/HintButton.vue'
 
 const props = defineProps<{
@@ -258,10 +259,10 @@ function isChangedCell(r: string, a: string): boolean {
 function cardSummary(res: string): string {
   const ind = ACTIONS.filter((a) => rowSource(res, a) === 'override' && isChangedCell(res, a)).length
   const rev = ACTIONS.filter((a) => rowSource(res, a) === 'revoked').length
-  if (ind === 0 && rev === 0) return 'по пресету'
+  if (ind === 0 && rev === 0) return t('adminConfig.editor.summaryByPreset')
   const parts: string[] = []
-  if (ind) parts.push(`${ind} из ${ACTIONS.length} — индивидуально`)
-  if (rev) parts.push(`${rev} запрет${rev > 1 ? 'а' : ''}`)
+  if (ind) parts.push(t('adminConfig.editor.summaryIndividual', { count: ind, total: ACTIONS.length }))
+  if (rev) parts.push(t(rev > 1 ? 'adminConfig.editor.summaryRevokedPlural' : 'adminConfig.editor.summaryRevoked', { count: rev }))
   return parts.join(' · ')
 }
 </script>
@@ -271,43 +272,43 @@ function cardSummary(res: string): string {
     <!-- Шапка: строка 1 — заголовок, строка 2 — переключатель пресета и действия.
          Смена пресета сразу перестраивает базис правил ниже (edit) / черновик (create). -->
     <div class="uped-head">
-      <h3 class="uped-title">Права доступа</h3>
+      <h3 class="uped-title">{{ t('adminConfig.editor.title') }}</h3>
       <div class="uped-tools">
         <select
           v-if="presetOptions && presetOptions.length"
           class="uped-preset-select"
           :value="preset ?? model?.preset ?? ''"
-          aria-label="Пресет прав"
+          :aria-label="t('adminConfig.editor.presetAria')"
           @change="$emit('update:preset', ($event.target as HTMLSelectElement).value)"
         >
           <option v-for="opt in presetOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
         </select>
-        <span v-if="dirty" class="uped-dirty">есть изменения</span>
-        <button v-if="dirty" type="button" class="uped-reset" @click="resetAll">Сбросить индивидуальные</button>
+        <span v-if="dirty" class="uped-dirty">{{ t('adminConfig.editor.dirty') }}</span>
+        <button v-if="dirty" type="button" class="uped-reset" @click="resetAll">{{ t('adminConfig.editor.resetIndividual') }}</button>
         <!-- Единственная подсказка блока — в шапке (центральная панель) -->
         <HintButton hint="permissions-editor" />
       </div>
     </div>
 
-    <p v-if="loading" class="uped-st">Загрузка прав…</p>
+    <p v-if="loading" class="uped-st">{{ t('adminConfig.editor.loading') }}</p>
     <p v-else-if="loadError" class="uped-st er" role="alert">{{ loadError }}</p>
 
     <div v-else-if="model?.admin" class="uped-admin" role="note">
-      Администратор — полный доступ (обход в коде); индивидуальные права не применимы.
+      {{ t('adminConfig.editor.adminNote') }}
     </div>
 
     <!-- Список карточек ресурсов (вариант A: шапка-сводка + строки действий с чипами) -->
     <div v-else-if="model" class="uped-list">
       <div v-for="group in GROUPS" :key="group.key" class="uped-group">
-        <h4 class="uped-group-title">{{ group.title }}</h4>
+        <h4 class="uped-group-title">{{ t(`adminConfig.perm.group.${group.key}`) }}</h4>
         <div v-for="res in group.resources" :key="res" class="uped-res-card">
           <div class="uped-res-head">
-            <span class="uped-res-title">{{ RESOURCE_LABELS[res] ?? res }}</span>
+            <span class="uped-res-title">{{ resourceTitle(res) }}</span>
             <span class="uped-res-summary">{{ cardSummary(res) }}</span>
           </div>
 
           <div v-for="act in ACTIONS" :key="act" class="ur-row" :class="{ changed: isChangedCell(res, act) }">
-            <span class="ur-cap">{{ ACTION_LABELS[act] }}</span>
+            <span class="ur-cap">{{ actionTitle(act) }}</span>
 
             <div class="ur-chips">
               <button
@@ -319,18 +320,18 @@ function cardSummary(res: string): string {
                   on: isChipOn(res, act, opt.value),
                   preset: isPresetZone(res, act, opt.value),
                 }"
-                :title="opt.label"
+                :title="scopeOptionLabel(res, opt.value)"
                 @click="onChipClick(res, act, opt.value)"
               >
-                {{ opt.label }}
+                {{ scopeOptionLabel(res, opt.value) }}
               </button>
               <button
                 type="button"
                 class="ur-chip rev"
                 :class="{ on: rowSource(res, act) === 'revoked' }"
-                :title="rowSource(res, act) === 'revoked' ? 'Вернуть к пресету' : 'Запретить'"
+                :title="rowSource(res, act) === 'revoked' ? t('adminConfig.editor.revertToPreset') : t('adminConfig.editor.revoke')"
                 @click="onRevokeClick(res, act)"
-              >⛔ запрет</button>
+              >{{ t('adminConfig.editor.revokeChip') }}</button>
               <!-- Собранное выражение при множественном выборе -->
               <span v-if="scopeMoves(exprText(res, act)).length > 1" class="ur-zone-mini">
                 {{ exprText(res, act) }}

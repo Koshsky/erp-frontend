@@ -14,6 +14,8 @@
  * is guaranteed to complete.
  */
 
+import { t } from '@/i18n'
+
 /** Timeout for the whole preview render — protection against an "endless" spinner */
 const RENDER_TIMEOUT_MS = 20000
 
@@ -125,7 +127,7 @@ export async function renderPdfPreview(bytes: Uint8Array, container: HTMLElement
     })
 
   const run = async (): Promise<PdfPreviewHandle> => {
-    const doc = await withTimeout(loadingTask.promise, RENDER_TIMEOUT_MS, 'Не удалось открыть документ для предпросмотра (таймаут)')
+    const doc = await withTimeout(loadingTask.promise, RENDER_TIMEOUT_MS, t('pdf.preview.openTimeout'))
     const pageCount = doc.numPages
     const dpr = Math.min(window.devicePixelRatio || 1, 2)
     const targetW = Math.max((container.clientWidth || 560) - 16, 220)
@@ -170,7 +172,7 @@ export async function renderPdfPreview(bytes: Uint8Array, container: HTMLElement
   }
 
   try {
-    return await withTimeout(run(), RENDER_TIMEOUT_MS, 'Не удалось отрисовать предпросмотр (таймаут)')
+    return await withTimeout(run(), RENDER_TIMEOUT_MS, t('pdf.preview.renderTimeout'))
   } catch (e) {
     void loadingTask.destroy()
     container.innerHTML = ''

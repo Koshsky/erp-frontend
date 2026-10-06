@@ -7,6 +7,7 @@ import { useAppStore, useRbacStore } from '../store'
 import { compareByName } from '../utils'
 import { useColumnWidths } from '../composables/useColumnWidths'
 import { presetDescriptionByTag, presetLabelFromCatalog } from '../utils/presets'
+import { t } from '../i18n'
 import type { DtoAdminUserResponse } from '@/api'
 
 const app = useAppStore()
@@ -89,12 +90,12 @@ const tree = computed<TreeNode[]>(() => {
 const asNode = (row: unknown): TreeNode => row as TreeNode
 
 /** Column config; sorting is intentionally off — the tree keeps its order. */
-const columns: DataTableColumn[] = [
-  { key: 'name', label: 'Сотрудник', width: 'fit-content(420px)', sortable: false },
-  { key: 'role', label: 'Роль', width: 'fit-content(240px)', sortable: false },
-  { key: 'manager', label: 'Руководитель', width: 'fit-content(280px)', sortable: false },
-  { key: 'children', label: 'Подчинённых', width: '120px', sortable: false },
-]
+const columns = computed<DataTableColumn[]>(() => [
+  { key: 'name', label: t('adminUsers.structure.column.employee'), width: 'fit-content(420px)', sortable: false },
+  { key: 'role', label: t('adminUsers.structure.column.role'), width: 'fit-content(240px)', sortable: false },
+  { key: 'manager', label: t('adminUsers.structure.column.manager'), width: 'fit-content(280px)', sortable: false },
+  { key: 'children', label: t('adminUsers.structure.column.subordinates'), width: '120px', sortable: false },
+])
 
 /** Per-user persisted column widths (drag-resize on the header edges). */
 const { columnWidths } = useColumnWidths('structure')
@@ -119,7 +120,7 @@ function managerOptions(user: DtoAdminUserResponse) {
   const excluded = user.id != null ? descendantsOf(user.id) : new Set<number>()
   if (user.id != null) excluded.add(user.id)
   return [
-    { value: '', label: 'Без руководителя' },
+    { value: '', label: t('adminUsers.structure.noManager') },
     ...adminUsers.value
       .filter((u) => u.id != null && !excluded.has(u.id))
       .sort(compareByName)
@@ -146,7 +147,7 @@ onMounted(() => {
 
 <template>
   <section class="cs">
-    <p v-if="adminUsersLoading && !tree.length" class="cs-st">Загрузка...</p>
+    <p v-if="adminUsersLoading && !tree.length" class="cs-st">{{ t('common.loading') }}</p>
     <p v-if="adminUsersError && !tree.length" class="cs-st er">{{ adminUsersError }}</p>
 
     <!--
@@ -158,8 +159,8 @@ onMounted(() => {
       v-if="tree.length || (!adminUsersLoading && !adminUsersError)"
       :columns="columns"
       :rows="tree"
-      title="Структура компании"
-      empty-text="Нет данных"
+      :title="t('adminUsers.structure.title')"
+      :empty-text="t('common.noData')"
       resizable
       v-model:column-widths="columnWidths"
     >

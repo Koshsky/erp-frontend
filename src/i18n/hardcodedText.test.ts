@@ -16,6 +16,8 @@
  */
 import { describe, expect, it } from 'vitest'
 
+import { PENDING } from './pending'
+
 const CYRILLIC = /[\u0400-\u04FF]/
 
 /**
@@ -34,76 +36,6 @@ const EXCLUDED_FILES = new Set(['utils/translit.ts'])
 /** Prefixed directories that never carry UI strings of this app. */
 const EXCLUDED_PREFIXES = ['api/', 'i18n/locales/']
 
-/** Reported paths are relative to src/. */
-const PENDING: string[] = [
-  "components/common/ColorField/ColorField.vue",
-  "components/common/CopyField/CopyField.vue",
-  "components/common/DataTable/DataTable.vue",
-  "components/common/HintButton/HintButton.vue",
-  "components/common/HintPanel/HintPanel.vue",
-  "components/common/PasswordDialog/PasswordDialog.vue",
-  "components/common/PasswordField/PasswordField.vue",
-  "components/common/PendingMark/PendingMark.vue",
-  "components/common/PlannerStates/PlannerStates.vue",
-  "components/common/ResourceHeader/ResourceHeader.vue",
-  "components/common/Tooltips/UsageTooltip.vue",
-  "components/common/UsageCell/usageState.ts",
-  "components/common/UserPermissionsEditor/labels.ts",
-  "components/common/UserPermissionsEditor/UserPermissionsEditor.vue",
-  "components/planner/Bar/Bar.vue",
-  "components/planner/CalendarHeader/CalendarHeader.vue",
-  "components/planner/dependencies.ts",
-  "components/planner/MilestoneMarker/MilestoneMarker.vue",
-  "components/planner/PdfExport/PdfExport.vue",
-  "components/planner/PdfExport/pdfRenderer.ts",
-  "components/planner/PdfExport/previewPdf.ts",
-  "components/planner/ProcessPlanning/components/ProcessBar/ProcessBar.vue",
-  "components/planner/ProjectPlanning/components/ProjectBar/ProjectBar.vue",
-  "components/planner/ProjectPlanning/ProjectPlanning.vue",
-  "components/planner/ResourceManagerModal/ResourceManagerModal.vue",
-  "components/planner/ScaleBadge/ScaleBadge.vue",
-  "components/planner/TaskComments/TaskComments.vue",
-  "components/planner/TaskEditor/index.ts",
-  "components/planner/TaskEditor/TaskEditor.vue",
-  "components/planner/TaskPlanning/components/TaskGantt/components/TaskBar/TaskBar.vue",
-  "components/timesheet/TimesheetCell/TimesheetCell.vue",
-  "components/timesheet/TimesheetGrid/TimesheetGrid.vue",
-  "composables/usePasswordValidation.ts",
-  "composables/usePlanningOrigin.ts",
-  "composables/useSyncStatus.ts",
-  "config.ts",
-  "http.ts",
-  "offline/db.ts",
-  "offline/outbox.ts",
-  "offline/ReconnectToast.vue",
-  "offline/SyncToast.vue",
-  "offline/warmup.ts",
-  "rbacScope.ts",
-  "store/index.ts",
-  "utils/apiError.ts",
-  "utils/presets.ts",
-  "views/AuditLogPage.vue",
-  "views/AutoCreatePage.vue",
-  "views/CompanyStructure.vue",
-  "views/EmployeesPage.vue",
-  "views/PermissionsPage.vue",
-  "views/PlannerPage.vue",
-  "views/ProcessesPage.vue",
-  "views/ProfileEditPage.vue",
-  "views/ProfilePage.vue",
-  "views/ProjectsPage.vue",
-  "views/ResourcesPage.vue",
-  "views/ServerSettingsPage.vue",
-  "views/StatusesPage.vue",
-  "views/SystemConsolePage.vue",
-  "views/SystemQueuePage.vue",
-  "views/SystemSettingsPage.vue",
-  "views/SystemStatusPage.vue",
-  "views/TimesheetPage.vue",
-  "views/UserAccessPage.vue",
-  "views/UserFormPage.vue",
-  "views/UsersPage.vue",
-]
 
 interface Hit {
   file: string
@@ -267,12 +199,34 @@ function offenders(): Map<string, number> {
   return out
 }
 
+/**
+ * A hardcoded Russian Intl locale freezes the date/unit formatting to Russian
+ * even when the interface language is English. Localized areas must format
+ * through src/i18n/date.ts (Intl per locale), so this is checked on the same
+ * basis as the text: a file leaves the list before it can regress.
+ */
+const HARDCODED_RU_LOCALE =
+  /(toLocaleDateString|toLocaleTimeString|toLocaleString|Intl\.DateTimeFormat)\(\s*['"](ru|ru-RU)['"]/
+
 describe('hardcoded user-visible text', () => {
   it('keeps Russian UI text out of the sources (catalog-only)', () => {
     const found = offenders()
     const unexpected = [...found.keys()].filter((f) => !PENDING.includes(f)).sort()
     const detail = unexpected.map((f) => `${f}: ${found.get(f)}`).join('\n')
     expect(detail).toBe('')
+  })
+
+  it('routes every localized file through the locale-aware date helpers', () => {
+    const offenders: string[] = []
+    for (const [rel, raw] of sourceFiles()) {
+      if (PENDING.includes(rel)) continue
+      for (const [i, line] of raw.split('\n').entries()) {
+        if (HARDCODED_RU_LOCALE.test(line) && !line.includes('i18n-allow')) {
+          offenders.push(`${rel}:${i + 1}`)
+        }
+      }
+    }
+    expect(offenders.sort()).toEqual([])
   })
 
   it('lists no file that is already fully localized', () => {

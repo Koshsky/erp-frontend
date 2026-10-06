@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, ref, type VNode } from 'vue'
 import type { GroupGanttSlotItem, GroupGanttProps } from './types'
-import { cellRangeForSpan, toDate } from '../calendar'
+import { cellRangeForSpan } from '../calendar'
+import { fmtDate } from '@/i18n/date'
 import { useRowReorder } from '../../../composables/useRowReorder'
 
 const props = withDefaults(defineProps<GroupGanttProps>(), {
@@ -65,7 +66,7 @@ defineSlots<{
 }>()
 
 function fmt(d: string | Date | number | null | undefined): string {
-  return d ? toDate(d).toLocaleDateString('ru') : ''
+  return d ? fmtDate(d) : ''
 }
 </script>
 

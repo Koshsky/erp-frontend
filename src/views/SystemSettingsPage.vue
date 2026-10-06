@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
+import { t } from '@/i18n'
 import { getApiUrl, setApiUrl, hasApiUrlOverride, httpSchemeWarning } from '../config'
 import { scheme, setScheme } from '../theme'
 import { autoSync, saveSyncSettings } from '../settings'
@@ -23,13 +24,14 @@ type SettingsSection = 'interface' | 'tables' | 'diagrams' | 'sync' | 'connectio
 
 const activeSection = ref<SettingsSection>('interface')
 
-const SECTIONS: { id: SettingsSection; label: string }[] = [
-  { id: 'interface', label: 'Интерфейс' },
-  { id: 'tables', label: 'Таблицы' },
-  { id: 'diagrams', label: 'Диаграммы' },
-  { id: 'sync', label: 'Синхронизация' },
-  { id: 'connection', label: 'Подключение' },
-]
+/** Section switcher labels; rebuilt on a language switch. */
+const sections = computed<{ id: SettingsSection; label: string }[]>(() => [
+  { id: 'interface', label: t('adminSystem.settings.sections.interface') },
+  { id: 'tables', label: t('adminSystem.settings.sections.tables') },
+  { id: 'diagrams', label: t('adminSystem.settings.sections.diagrams') },
+  { id: 'sync', label: t('adminSystem.settings.sections.sync') },
+  { id: 'connection', label: t('adminSystem.settings.sections.connection') },
+])
 
 const apiUrl = ref('')
 
@@ -58,7 +60,7 @@ function applyApiUrl(): boolean {
   if (warn) notifyInfo(warn)
   const applied = setApiUrl(apiUrl.value, true)
   if (!applied) {
-    notifyError('Некорректный API_URL: ожидается http(s)://…')
+    notifyError(t('adminSystem.settings.connection.invalid'))
   }
   return applied
 }
@@ -66,7 +68,7 @@ function applyApiUrl(): boolean {
 /** The "Save" button for API_URL: validates and saves to localStorage */
 function onSaveApiUrl() {
   if (!applyApiUrl()) return
-  notifySuccess('API_URL сохранён')
+  notifySuccess(t('adminSystem.settings.connection.saved'))
 }
 
 watch(autoSync, saveSyncSettings)
@@ -84,12 +86,12 @@ onMounted(() => {
 
 <template>
   <section class="st">
-    <h2 class="st-title">Настройки</h2>
+    <h2 class="st-title">{{ t('adminSystem.settings.title') }}</h2>
 
     <!-- Section switcher: segmented control -->
-    <div class="st-seg" role="tablist" aria-label="Разделы настроек">
+    <div class="st-seg" role="tablist" :aria-label="t('adminSystem.settings.sectionsAria')">
       <button
-        v-for="sec in SECTIONS"
+        v-for="sec in sections"
         :key="sec.id"
         type="button"
         role="tab"
@@ -102,98 +104,100 @@ onMounted(() => {
       </button>
     </div>
 
-    <!-- Интерфейс -->
+    <!-- Interface -->
     <template v-if="activeSection === 'interface'">
       <div class="st-card">
-        <h3 class="st-card-title">Интерфейс</h3>
+        <h3 class="st-card-title">{{ t('adminSystem.settings.interface.title') }}</h3>
         <div class="st-field">
-          <span>Цветовая тема</span>
+          <span>{{ t('adminSystem.settings.interface.theme') }}</span>
           <select v-model="scheme" class="st-select">
-            <option value="system">Как в системе</option>
-            <option value="light">Светлая</option>
-            <option value="dark">Тёмная</option>
+            <option value="system">{{ t('adminSystem.settings.interface.themeSystem') }}</option>
+            <option value="light">{{ t('adminSystem.settings.interface.themeLight') }}</option>
+            <option value="dark">{{ t('adminSystem.settings.interface.themeDark') }}</option>
           </select>
         </div>
         <div class="st-field">
-          <span>Размер шрифта интерфейса</span>
+          <span>{{ t('adminSystem.settings.interface.fontSize') }}</span>
           <select v-model="uiFontSize" class="st-select">
-            <option value="small">Мелкий</option>
-            <option value="default">Средний</option>
-            <option value="large">Крупный</option>
+            <option value="small">{{ t('adminSystem.settings.interface.fontSizeSmall') }}</option>
+            <option value="default">{{ t('adminSystem.settings.interface.fontSizeDefault') }}</option>
+            <option value="large">{{ t('adminSystem.settings.interface.fontSizeLarge') }}</option>
           </select>
-          <p class="st-hint">Применяется сразу, без перезагрузки.</p>
+          <p class="st-hint">{{ t('adminSystem.settings.interface.fontSizeHint') }}</p>
         </div>
         <div class="st-field">
-          <span>Язык интерфейса</span>
+          <span>{{ t('adminSystem.settings.interface.language') }}</span>
           <select v-model="uiLanguage" class="st-select">
-            <option value="auto">Как в системе</option>
-            <option value="ru">Русский</option>
-            <option value="en">English</option>
+            <option value="auto">{{ t('adminSystem.settings.interface.languageAuto') }}</option>
+            <option value="ru">{{ t('adminSystem.settings.interface.languageRu') }}</option>
+            <option value="en">{{ t('adminSystem.settings.interface.languageEn') }}</option>
           </select>
-          <p class="st-hint">Применяется сразу; «Как в системе» — язык браузера.</p>
+          <p class="st-hint">{{ t('adminSystem.settings.interface.languageHint') }}</p>
         </div>
       </div>
 
       <div class="st-card">
-        <h3 class="st-card-title">Уведомления</h3>
+        <h3 class="st-card-title">{{ t('adminSystem.settings.notifications.title') }}</h3>
         <label class="st-option">
           <input v-model="notificationsEnabled" type="checkbox" />
-          <span>Показывать стек уведомлений</span>
+          <span>{{ t('adminSystem.settings.notifications.enabled') }}</span>
         </label>
         <div class="st-field">
-          <span>Время показа сообщений</span>
+          <span>{{ t('adminSystem.settings.notifications.duration') }}</span>
           <select v-model.number="notifyDurationMs" class="st-select">
-            <option v-for="ms in NOTIFY_DURATION_OPTIONS" :key="ms" :value="ms">{{ ms / 1000 }} сек</option>
-            <option :value="0">Не скрывать</option>
+            <option v-for="ms in NOTIFY_DURATION_OPTIONS" :key="ms" :value="ms">
+              {{ t('adminSystem.settings.notifications.durationSeconds', { seconds: ms / 1000 }) }}
+            </option>
+            <option :value="0">{{ t('adminSystem.settings.notifications.durationNever') }}</option>
           </select>
-          <p class="st-hint">«Не скрывать» — сообщение остаётся, пока его не закроют вручную.</p>
+          <p class="st-hint">{{ t('adminSystem.settings.notifications.durationHint') }}</p>
         </div>
       </div>
     </template>
 
-    <!-- Таблицы -->
+    <!-- Tables -->
     <template v-if="activeSection === 'tables'">
       <div class="st-card">
-        <h3 class="st-card-title">Таблицы</h3>
+        <h3 class="st-card-title">{{ t('adminSystem.settings.tables.title') }}</h3>
         <div class="st-field">
-          <span>Записей на странице</span>
+          <span>{{ t('adminSystem.settings.tables.pageSize') }}</span>
           <select v-model.number="tablePageSize" class="st-select">
             <option v-for="n in TABLE_PAGE_SIZE_OPTIONS" :key="n" :value="n">{{ n }}</option>
           </select>
           <p class="st-hint">
-            Для списков с «Показать ещё» (ресурсы, сотрудники) и журнала действий. Применяется со следующей загрузки списка.
+            {{ t('adminSystem.settings.tables.pageSizeHint') }}
           </p>
         </div>
       </div>
     </template>
 
-    <!-- Диаграммы -->
+    <!-- Diagrams -->
     <template v-if="activeSection === 'diagrams'">
       <div class="st-card">
-        <h3 class="st-card-title">Бейджи на диаграммах</h3>
-        <p class="st-hint">Какие видимые отметки рисовать на барах задач, процессов и проектов.</p>
+        <h3 class="st-card-title">{{ t('adminSystem.settings.badges.title') }}</h3>
+        <p class="st-hint">{{ t('adminSystem.settings.badges.hint') }}</p>
         <label class="st-option">
           <input v-model="viewSettings.badgeResource" type="checkbox" />
-          <span>Ресурсы (специализации) на задачах</span>
+          <span>{{ t('adminSystem.settings.badges.resource') }}</span>
         </label>
         <label class="st-option">
           <input v-model="viewSettings.badgeProjectCode" type="checkbox" />
-          <span>Код проекта на барах</span>
+          <span>{{ t('adminSystem.settings.badges.projectCode') }}</span>
         </label>
         <label class="st-option">
           <input v-model="viewSettings.badgeProgress" type="checkbox" />
-          <span>Процент выполнения операций на задачах</span>
+          <span>{{ t('adminSystem.settings.badges.progress') }}</span>
         </label>
         <label class="st-option">
           <input v-model="viewSettings.badgeOwner" type="checkbox" />
-          <span>Ответственный (задачи) / владелец (процессы и проекты)</span>
+          <span>{{ t('adminSystem.settings.badges.owner') }}</span>
         </label>
       </div>
 
       <div class="st-card">
-        <h3 class="st-card-title">Масштаб и календарь при открытии</h3>
+        <h3 class="st-card-title">{{ t('adminSystem.settings.defaults.title') }}</h3>
         <div class="st-field">
-          <span>Стандартный масштаб диаграммы</span>
+          <span>{{ t('adminSystem.settings.defaults.scale') }}</span>
           <div class="st-scale-row">
             <input
               v-model.number="viewSettings.defaultScale"
@@ -205,10 +209,12 @@ onMounted(() => {
             />
             <span class="st-scale-value">{{ viewSettings.defaultScale }}%</span>
           </div>
-          <p class="st-hint">От {{ SCALE_MIN }}% до {{ SCALE_MAX }}% — применяется при открытии диаграммы</p>
+          <p class="st-hint">
+            {{ t('adminSystem.settings.defaults.scaleHint', { min: SCALE_MIN, max: SCALE_MAX }) }}
+          </p>
         </div>
         <div class="st-field">
-          <span>Ширина ячейки при открытии</span>
+          <span>{{ t('adminSystem.settings.defaults.cellZoom') }}</span>
           <div class="st-scale-row">
             <input
               v-model.number="viewSettings.defaultCellZoom"
@@ -221,12 +227,11 @@ onMounted(() => {
             <span class="st-scale-value">{{ viewSettings.defaultCellZoom }}%</span>
           </div>
           <p class="st-hint">
-            От {{ CELL_ZOOM_MIN }}% до {{ CELL_ZOOM_MAX }}% ширины колонки этого окна — как после
-            Ctrl+Shift+колесо. 100% = автоматически по ширине окна.
+            {{ t('adminSystem.settings.defaults.cellZoomHint', { min: CELL_ZOOM_MIN, max: CELL_ZOOM_MAX }) }}
           </p>
         </div>
         <div class="st-field">
-          <span>Длительность проекта по умолчанию</span>
+          <span>{{ t('adminSystem.settings.defaults.projectDays') }}</span>
           <div class="st-num-row">
             <input
               v-model.number="viewSettings.defaultProjectDays"
@@ -235,65 +240,76 @@ onMounted(() => {
               :max="PROJECT_DAYS_MAX"
               step="1"
               class="st-num"
-              aria-label="Длительность проекта по умолчанию, дней"
+              :aria-label="t('adminSystem.settings.defaults.projectDaysAria')"
               @blur="normalizeProjectDays"
               @keydown.enter="onProjectDaysEnter"
             />
-            <span class="st-num-unit">дн.</span>
+            <span class="st-num-unit">{{ t('adminSystem.settings.defaults.daysUnit') }}</span>
           </div>
-          <p class="st-hint">На столько дней создаётся проект по кнопке «Создать» или правым кликом по шкале</p>
+          <p class="st-hint">{{ t('adminSystem.settings.defaults.projectDaysHint') }}</p>
         </div>
         <div class="st-field">
-          <span>Единица календаря по умолчанию</span>
+          <span>{{ t('adminSystem.settings.defaults.unit') }}</span>
           <div class="st-actions">
             <label class="st-radio">
               <input v-model="viewSettings.defaultUnit" type="radio" value="day" />
-              <span>Дни</span>
+              <span>{{ t('adminSystem.settings.defaults.unitDay') }}</span>
             </label>
             <label class="st-radio">
               <input v-model="viewSettings.defaultUnit" type="radio" value="decade" />
-              <span>Декады</span>
+              <span>{{ t('adminSystem.settings.defaults.unitDecade') }}</span>
             </label>
           </div>
         </div>
       </div>
 
       <div class="st-card">
-        <h3 class="st-card-title">Экспорт диаграмм</h3>
+        <h3 class="st-card-title">{{ t('adminSystem.settings.export.title') }}</h3>
         <label class="st-option">
           <input v-model="viewSettings.showPdfButtons" type="checkbox" />
-          <span>Показывать кнопки «Сохранить в PDF» и «Печать» над диаграммой</span>
+          <span>{{ t('adminSystem.settings.export.pdfButtons') }}</span>
         </label>
-        <p class="st-hint">Сочетание Ctrl/Cmd+P работает всегда.</p>
+        <p class="st-hint">{{ t('adminSystem.settings.export.hotkeyHint') }}</p>
       </div>
     </template>
 
-    <!-- Синхронизация -->
+    <!-- Sync -->
     <template v-if="activeSection === 'sync'">
       <div class="st-card">
-        <h3 class="st-card-title">Синхронизация</h3>
+        <h3 class="st-card-title">{{ t('adminSystem.settings.sync.title') }}</h3>
         <label class="st-option">
           <input v-model="autoSync" type="checkbox" />
-          <span>Автосинхронизация при запуске и возврате сети</span>
+          <span>{{ t('adminSystem.settings.sync.auto') }}</span>
         </label>
       </div>
     </template>
 
-    <!-- Подключение -->
+    <!-- Connection -->
     <template v-if="activeSection === 'connection'">
       <div class="st-card">
-        <h3 class="st-card-title">Подключение</h3>
+        <h3 class="st-card-title">{{ t('adminSystem.settings.connection.title') }}</h3>
         <label class="st-field">
-          <span>API_URL бэкенда</span>
-          <input v-model="apiUrl" type="text" spellcheck="false" placeholder="https://host/api/v1" />
+          <span>{{ t('adminSystem.settings.connection.apiUrl') }}</span>
+          <input
+            v-model="apiUrl"
+            type="text"
+            spellcheck="false"
+            :placeholder="t('adminSystem.settings.connection.apiUrlPlaceholder')"
+          />
         </label>
         <div class="st-actions st-actions--tight">
           <button type="button" class="st-btn st-btn--sm" @click="onSaveApiUrl">
-            Сохранить
+            {{ t('common.save') }}
           </button>
         </div>
         <p class="st-hint">
-          Источник: {{ hasApiUrlOverride() ? 'задан вручную' : 'по умолчанию' }}.
+          {{
+            t('adminSystem.settings.connection.source', {
+              value: hasApiUrlOverride()
+                ? t('adminSystem.settings.connection.sourceManual')
+                : t('adminSystem.settings.connection.sourceDefault'),
+            })
+          }}
         </p>
       </div>
     </template>

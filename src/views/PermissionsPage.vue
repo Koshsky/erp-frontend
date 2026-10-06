@@ -10,134 +10,19 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { ConfirmDialog, ContextMenu, HintButton, InfoTooltip, ModalForm, TooltipCell } from '../components/common'
-import { SCOPE_OPTIONS as SCOPE_CHIPS } from '../components/common/UserPermissionsEditor/labels'
+import { GROUPS, ACTIONS, SCOPE_OPTIONS as SCOPE_CHIPS, resourceLabel, resourceTitle, actionTitle, scopeLabel } from '../components/common/UserPermissionsEditor/labels'
 import { canonicalScope, scopeMoves, toggleScopeMove } from '@/rbacScope'
 import { useRbacStore } from '../store'
 import { useConfirm } from '../composables/useConfirm'
 import { notifyError, notifySuccess } from '../notify/state'
 import { presetDisplayName } from '../utils/presets'
+import { t } from '@/i18n'
 
 const rbac = useRbacStore()
 const { presets, presetRules, matrix, loading, error, saving } = storeToRefs(rbac)
 
 /** Selected preset (by default — the first one from the catalog, not admin). */
 const selected = ref('')
-
-/** Resource and action codes (mirror the backend codecs). */
-const ACTION_LABELS: Record<string, string> = {
-  view: 'Просмотр',
-  create: 'Создание',
-  update: 'Изменение',
-  delete: 'Удаление',
-}
-
-// Resource → human-readable name (genitive case for phrases like "View …").
-const RESOURCE_LABELS: Record<string, string> = {
-  project: 'проектов',
-  process: 'процессов',
-  task: 'задач',
-  milestone: 'вех',
-  assignment: 'назначений ресурсов',
-  state: 'статусов',
-  resource: 'ресурсов табеля',
-  worker: 'сотрудников',
-  user_catalog: 'каталога пользователей',
-  user_admin: 'пользователей',
-  rbac_config: 'настроек администрирования',
-}
-
-/** Entity names (nominative) for the collapsible group headers. */
-const ENTITY_NAMES: Record<string, string> = {
-  project: 'Проекты',
-  process: 'Процессы',
-  task: 'Задачи',
-  milestone: 'Вехи',
-  assignment: 'Назначения ресурсов',
-  state: 'Статусы',
-  resource: 'Ресурсы табеля',
-  worker: 'Сотрудники',
-  user_catalog: 'Каталог пользователей',
-  user_admin: 'Пользователи (администрирование)',
-  rbac_config: 'Настройки администрирования',
-}
-
-/**
- * Available scopes with human-readable labels in the resource context.
- * The scope set mirrors policies.ScopeApplicable on the backend; the wording
- * itself explains the owner ("in own processes" = process owner, etc.).
- */
-const SCOPE_OPTIONS: Record<string, { value: string; label: string }[]> = {
-  project: [
-    { value: 'none', label: 'Нет доступа' },
-    { value: 'self', label: 'Только свои' },
-    { value: 'all', label: 'Все' },
-  ],
-  process: [
-    { value: 'none', label: 'Нет доступа' },
-    { value: 'self', label: 'Только своё' },
-    { value: 'up1', label: 'В своих проектах' },
-    { value: 'up', label: 'Свои и любые предки' },
-    { value: 'sib', label: 'Свои и сиблинги' },
-    { value: 'down', label: 'Своё поддерево' },
-    { value: 'all', label: 'Все' },
-  ],
-  task: [
-    { value: 'none', label: 'Нет доступа' },
-    { value: 'self', label: 'Только своё' },
-    { value: 'up1', label: 'В своих процессах' },
-    { value: 'up', label: 'Свои и любые предки' },
-    { value: 'sib', label: 'Свои и сиблинги' },
-    { value: 'down', label: 'Свои подзадачи' },
-    { value: 'all', label: 'Все' },
-  ],
-  milestone: [
-    { value: 'none', label: 'Нет доступа' },
-    { value: 'up1', label: 'В своих процессах' },
-    { value: 'up', label: 'Свои и любые предки' },
-    { value: 'all', label: 'Все' },
-  ],
-  assignment: [
-    { value: 'none', label: 'Нет доступа' },
-    { value: 'up1', label: 'В своих процессах' },
-    { value: 'up', label: 'Свои и любые предки' },
-    { value: 'all', label: 'Все' },
-  ],
-  state: [
-    { value: 'none', label: 'Нет доступа' },
-    { value: 'all', label: 'Всё' },
-  ],
-  resource: [
-    { value: 'none', label: 'Нет доступа' },
-    { value: 'self', label: 'Только свои' },
-    { value: 'all', label: 'Все' },
-  ],
-  worker: [
-    { value: 'none', label: 'Нет доступа' },
-    { value: 'self', label: 'Только свои (подчинённые)' },
-    { value: 'all', label: 'Все' },
-  ],
-  user_catalog: [
-    { value: 'none', label: 'Нет доступа' },
-    { value: 'all', label: 'Доступен' },
-  ],
-  user_admin: [
-    { value: 'none', label: 'Нет доступа' },
-    { value: 'all', label: 'Доступен' },
-  ],
-  rbac_config: [
-    { value: 'none', label: 'Нет доступа' },
-    { value: 'all', label: 'Доступен' },
-  ],
-}
-
-/** Page sections. */
-const GROUPS = [
-  { key: 'planning', title: 'Планирование', resources: ['project', 'process', 'task', 'milestone', 'assignment'] },
-  { key: 'timesheet', title: 'Табель', resources: ['state', 'resource', 'worker'] },
-  { key: 'advanced', title: 'Дополнительные ресурсы', resources: ['user_catalog', 'user_admin', 'rbac_config'] },
-] as const
-
-const ACTIONS = ['view', 'create', 'update', 'delete'] as const
 
 /** Effective cell scope from the matrix (no rule = "no access"). */
 const effective = computed<Record<string, string>>(() => {
@@ -165,12 +50,6 @@ function cellKey(preset: string, resource: string, action: string): string {
 
 function cellValue(preset: string, resource: string, action: string): string {
   return staged[cellKey(preset, resource, action)] ?? effective.value[cellKey(preset, resource, action)] ?? 'none'
-}
-
-/** Human-readable scope label in the resource context. */
-function scopeLabel(resource: string, scope: string): string {
-  const opt = SCOPE_OPTIONS[resource]?.find((o) => o.value === scope)
-  return opt?.label ?? 'Нет доступа'
 }
 
 /** Human-readable name of a preset catalog entry: the stored name, else a
@@ -263,8 +142,10 @@ function isDirtyCell(preset: string, resource: string, action: string): boolean 
 function cardSummary(resource: string): string {
   const granted = ACTIONS.filter((a) => cellValue(selected.value, resource, a) !== 'none').length
   const edited = ACTIONS.filter((a) => isDirtyCell(selected.value, resource, a)).length
-  const base = granted ? `${granted} из ${ACTIONS.length} — с доступом` : 'без доступа'
-  return edited ? `${base} · ${edited} изм.` : base
+  const base = granted
+    ? t('adminConfig.presets.cardSummaryGranted', { granted, total: ACTIONS.length })
+    : t('adminConfig.presets.cardSummaryDenied')
+  return edited ? base + t('adminConfig.presets.cardSummaryEdited', { count: edited }) : base
 }
 
 /** Change descriptions for the save bar. */
@@ -273,7 +154,10 @@ const dirtyChanges = computed(() =>
     const [, resource, action] = key.split('|')
     const from = effective.value[key] ?? 'none'
     const to = staged[key]
-    return `${ACTION_LABELS[action] ?? action} ${RESOURCE_LABELS[resource] ?? resource}: ${scopeLabel(resource, to)}${from !== 'none' ? ` (было: ${scopeLabel(resource, from)})` : ''}`
+    const label = `${actionTitle(action) || action} ${resourceLabel(resource) || resource}`
+    return from !== 'none'
+      ? `${label}: ${t('adminConfig.presets.changeLineFrom', { to: scopeLabel(resource, to), from: scopeLabel(resource, from) })}`
+      : `${label}: ${scopeLabel(resource, to)}`
   }),
 )
 
@@ -293,17 +177,17 @@ async function save() {
       ok = await rbac.upsertRule({ preset, resource, action, scope })
     }
     if (!ok) {
-      failures.push(`${preset} · ${ACTION_LABELS[action] ?? action} ${RESOURCE_LABELS[resource] ?? resource}`)
+      failures.push(`${preset} · ${actionTitle(action) || action} ${resourceLabel(resource) || resource}`)
     }
   }
   await rbac.reloadRules()
   saving.value = false
   if (failures.length) {
-    notifyError(`Не сохранилось: ${failures.join('; ')}`)
+    notifyError(t('adminConfig.presets.saveFailed', { list: failures.join('; ') }))
     return
   }
   for (const key of keys) delete staged[key]
-  notifySuccess('Права обновлены и применены')
+  notifySuccess(t('adminConfig.presets.changesSaved'))
 }
 
 function cancelDirty() {
@@ -328,12 +212,12 @@ const PRESET_TAG_RE = /^[\p{L}\p{N}_-]+$/u
  *  the rename target's own tag (collision with itself is allowed). */
 function validatePresetForm(tag: string, name: string, excludeTag?: string): string | null {
   const trimmed = tag.trim()
-  if (!trimmed) return 'Укажите тэг пресета (код, напр. auditor)'
-  if (!PRESET_TAG_RE.test(trimmed)) return 'Тэг пресета: буквы (латиница/кириллица), цифры, «-», «_»'
+  if (!trimmed) return t('adminConfig.presets.validationTagRequired')
+  if (!PRESET_TAG_RE.test(trimmed)) return t('adminConfig.presets.validationTagFormat')
   if (excludeTag !== trimmed && rbac.presets.some((r) => r.tag === trimmed)) {
-    return 'Пресет с таким тэгом уже существует'
+    return t('adminConfig.presets.validationTagDuplicate')
   }
-  if (!name.trim()) return 'Укажите имя пресета'
+  if (!name.trim()) return t('adminConfig.presets.validationNameRequired')
   return null
 }
 
@@ -357,7 +241,7 @@ async function onCreatePreset() {
   const ok = await rbac.createPreset({ tag, name, description: createForm.description.trim() })
   createBusy.value = false
   if (!ok) return
-  notifySuccess(`Пресет «${name}» создан`)
+  notifySuccess(t('adminConfig.presets.created', { name }))
   createOpen.value = false
   selected.value = tag
   void rbac.loadRbac()
@@ -398,7 +282,7 @@ async function onRenamePreset() {
   })
   renameBusy.value = false
   if (!ok) return
-  notifySuccess(`Пресет переименован в «${name}»`)
+  notifySuccess(t('adminConfig.presets.renamed', { name }))
   renameOpen.value = false
   if (selected.value === renameTarget.value) selected.value = tag
   void rbac.loadRbac()
@@ -423,7 +307,7 @@ async function onDeletePreset() {
   const ok = await rbac.deletePreset(deleteTarget.value)
   deleteBusy.value = false
   if (!ok) return
-  notifySuccess(`Пресет «${presetName(deleteTarget.value)}» удалён`)
+  notifySuccess(t('adminConfig.presets.deleted', { name: presetName(deleteTarget.value) }))
   deleteOpen.value = false
   if (selected.value === deleteTarget.value) {
     const rest = presetList.value.filter((p) => p !== deleteTarget.value)
@@ -451,13 +335,13 @@ function onCtxSelect(id: string) {
 }
 
 function onReset() {
-  ask('Вернуть все права и маршрутные проверки к значениям по умолчанию?', () => {
+  ask(t('adminConfig.presets.resetConfirm'), () => {
     void (async () => {
       const ok = await rbac.resetRbac()
-      if (ok) notifySuccess('Права сброшены к значениям по умолчанию')
-      else notifyError(error.value ?? 'Не удалось сбросить права')
+      if (ok) notifySuccess(t('adminConfig.presets.resetDone'))
+      else notifyError(error.value ?? t('adminConfig.presets.resetFailed'))
     })()
-  }, 'Сбросить')
+  }, t('adminConfig.presets.resetButton'))
 }
 
 /** Select the default preset after the catalog is loaded. */
@@ -477,11 +361,11 @@ onMounted(() => {
 <template>
   <section class="pm">
     <div class="pm-head">
-      <h2 class="pm-title">Пресеты прав</h2>
+      <h2 class="pm-title">{{ t('adminConfig.presets.title') }}</h2>
       <HintButton hint="presets-editor" />
     </div>
 
-    <p v-if="loading && !presetRules.length" class="pm-load">Загрузка...</p>
+    <p v-if="loading && !presetRules.length" class="pm-load">{{ t('adminConfig.presets.loading') }}</p>
     <p v-if="error && !presetRules.length" class="pm-load er">{{ error }}</p>
 
     <div v-if="presetRules.length && presetList.length" class="pm-layout">
@@ -510,21 +394,21 @@ onMounted(() => {
             class="pm-preset-remove"
             role="button"
             tabindex="0"
-            :title="'Удалить пресет ' + presetName(preset)"
+            :title="t('adminConfig.presets.removeTitle', { name: presetName(preset) })"
             @click.stop="openDelete(preset)"
             @keydown.enter.stop.prevent="openDelete(preset)"
           >✕</span>
         </button>
         <button type="button" class="pm-preset-add" @click="createError = null; createOpen = true">
-          + Добавить
+          {{ t('adminConfig.presets.add') }}
         </button>
         <ContextMenu
           :open="ctxMenu.open"
           :x="ctxMenu.x"
           :y="ctxMenu.y"
           :items="[
-            { id: 'rename', label: 'Переименовать' },
-            { id: 'delete', label: 'Удалить' },
+            { id: 'rename', label: t('adminConfig.presets.ctxRename') },
+            { id: 'delete', label: t('adminConfig.presets.ctxDelete') },
           ]"
           @select="onCtxSelect"
           @close="ctxMenu.open = false"
@@ -534,10 +418,10 @@ onMounted(() => {
       <!-- Editor of the selected preset -->
       <div class="pm-editor">
         <div v-for="group in GROUPS" :key="group.key" class="pm-group">
-          <h3 class="pm-group-title">{{ group.title }}</h3>
+          <h3 class="pm-group-title">{{ t(`adminConfig.perm.group.${group.key}`) }}</h3>
           <div v-for="resource in group.resources" :key="resource" class="pm-block">
             <div class="pm-block-head">
-              <span class="pm-block-title">{{ ENTITY_NAMES[resource] ?? resource }}</span>
+              <span class="pm-block-title">{{ resourceTitle(resource) }}</span>
               <span class="pm-block-summary">{{ cardSummary(resource) }}</span>
             </div>
             <div
@@ -546,7 +430,7 @@ onMounted(() => {
               class="pm-row"
               :class="{ dirty: isDirtyCell(selected, resource, action) }"
             >
-              <span class="pm-row-label">{{ ACTION_LABELS[action] }}</span>
+              <span class="pm-row-label">{{ actionTitle(action) }}</span>
               <div class="pm-chips">
                 <button
                   v-for="opt in SCOPE_CHIPS[resource] ?? []"
@@ -556,15 +440,15 @@ onMounted(() => {
                   :class="{ on: isChipOn(resource, action, opt.value) }"
                   @click="onChipClick(resource, action, opt.value)"
                 >
-                  {{ opt.label }}
+                  {{ scopeLabel(resource, opt.value) }}
                 </button>
                 <button
                   type="button"
                   class="pm-chip rev"
                   :class="{ on: isZoneActive(resource, action, 'none') }"
-                  :title="isZoneActive(resource, action, 'none') ? 'Вернуть' : 'Нет доступа'"
+                  :title="isZoneActive(resource, action, 'none') ? t('adminConfig.presets.revertTitle') : t('adminConfig.presets.revokeTitle')"
                   @click="onRevokeClick(resource, action)"
-                >⛔ нет доступа</button>
+                >{{ t('adminConfig.presets.revokeChip') }}</button>
                 <!-- Собранное выражение при множественном выборе -->
                 <span v-if="scopeMoves(rowText(resource, action)).length > 1" class="pm-zone-mini">
                   {{ rowText(resource, action) }}
@@ -583,14 +467,14 @@ onMounted(() => {
          tag, empty name) — e.g. a cyrillic preset tag is valid and must be sent. -->
     <ModalForm
       :open="createOpen"
-      title="Создать пресет"
-      submit-label="Создать пресет"
+      :title="t('adminConfig.presets.createTitle')"
+      :submit-label="t('adminConfig.presets.createSubmit')"
       :busy="createBusy"
       :error="createError"
       :fields="[
-        { key: 'name', label: 'Имя', type: 'text', required: true, placeholder: 'название, напр. Внешний аудит' },
-        { key: 'tag', label: 'Тэг', type: 'text', required: true, placeholder: 'код, напр. auditor' },
-        { key: 'description', label: 'Описание', type: 'textarea', placeholder: 'описание' },
+        { key: 'name', label: t('adminConfig.presets.fieldName'), type: 'text', required: true, placeholder: t('adminConfig.presets.fieldNamePlaceholder') },
+        { key: 'tag', label: t('adminConfig.presets.fieldTag'), type: 'text', required: true, placeholder: t('adminConfig.presets.fieldTagPlaceholder') },
+        { key: 'description', label: t('adminConfig.presets.fieldDescription'), type: 'textarea', placeholder: t('adminConfig.presets.fieldDescriptionPlaceholder') },
       ]"
       @save="(v: Record<string, string | number>) => { createForm.name = String(v.name ?? ''); createForm.tag = String(v.tag ?? ''); createForm.description = String(v.description ?? ''); void onCreatePreset() }"
       @close="createOpen = false"
@@ -598,14 +482,14 @@ onMounted(() => {
 
     <ModalForm
       :open="renameOpen"
-      title="Переименовать пресет"
-      submit-label="Переименовать"
+      :title="t('adminConfig.presets.renameTitle')"
+      :submit-label="t('adminConfig.presets.renameSubmit')"
       :busy="renameBusy"
       :error="renameError"
       :fields="[
-        { key: 'name', label: 'Имя', type: 'text', required: true, value: renameForm.name, placeholder: 'название' },
-        { key: 'tag', label: 'Тэг', type: 'text', required: true, value: renameForm.tag, placeholder: 'код' },
-        { key: 'description', label: 'Описание', type: 'textarea', value: renameForm.description, placeholder: 'описание' },
+        { key: 'name', label: t('adminConfig.presets.fieldName'), type: 'text', required: true, value: renameForm.name, placeholder: t('adminConfig.presets.renameNamePlaceholder') },
+        { key: 'tag', label: t('adminConfig.presets.fieldTag'), type: 'text', required: true, value: renameForm.tag, placeholder: t('adminConfig.presets.renameTagPlaceholder') },
+        { key: 'description', label: t('adminConfig.presets.fieldDescription'), type: 'textarea', value: renameForm.description, placeholder: t('adminConfig.presets.fieldDescriptionPlaceholder') },
       ]"
       @save="(v: Record<string, string | number>) => { renameForm.name = String(v.name ?? ''); renameForm.tag = String(v.tag ?? ''); renameForm.description = String(v.description ?? ''); void onRenamePreset() }"
       @close="renameOpen = false"
@@ -613,11 +497,10 @@ onMounted(() => {
 
     <!-- Удаление с подтверждением: нужно ввести тэг пресета -->
     <div v-if="deleteOpen" class="pm-del-overlay" @mousedown.self="deleteOpen = false">
-      <div class="pm-del" role="dialog" aria-modal="true" aria-label="Удалить пресет">
-        <h3 class="pm-del-title">Удалить пресет «{{ deleteTarget }}»?</h3>
+      <div class="pm-del" role="dialog" aria-modal="true" :aria-label="t('adminConfig.presets.deleteAria')">
+        <h3 class="pm-del-title">{{ t('adminConfig.presets.deleteTitle', { tag: deleteTarget }) }}</h3>
         <p class="pm-del-text">
-          Назначенные пользователи сохранятся, но потеряют базовые права этого пресета;
-          правила пресета будут удалены. Введите тэг пресета, чтобы подтвердить:
+          {{ t('adminConfig.presets.deleteText') }}
         </p>
         <input
           v-model="deleteConfirm"
@@ -627,14 +510,14 @@ onMounted(() => {
           :placeholder="deleteTarget"
         />
         <div class="pm-del-actions">
-          <button type="button" class="pm-btn" @click="deleteOpen = false">Отмена</button>
+          <button type="button" class="pm-btn" @click="deleteOpen = false">{{ t('common.cancel') }}</button>
           <button
             type="button"
             class="pm-btn danger"
             :disabled="deleteConfirm !== deleteTarget || deleteBusy"
             @click="onDeletePreset"
           >
-            {{ deleteBusy ? 'Удаление…' : 'Удалить' }}
+            {{ deleteBusy ? t('adminConfig.presets.deleting') : t('common.delete') }}
           </button>
         </div>
       </div>
@@ -643,15 +526,15 @@ onMounted(() => {
     <!-- Save bar -->
     <div v-if="dirtyKeys.length" class="pm-savebar">
       <div class="pm-savebar-info">
-        <strong>Изменения ({{ dirtyKeys.length }}):</strong>
+        <strong>{{ t('adminConfig.presets.changes', { count: dirtyKeys.length }) }}</strong>
         <ul>
           <li v-for="c in dirtyChanges" :key="c">{{ c }}</li>
         </ul>
       </div>
       <div class="pm-savebar-actions">
-        <button type="button" class="pm-btn primary" :disabled="saving" @click="save">{{ saving ? 'Сохранение...' : 'Сохранить' }}</button>
-        <button type="button" class="pm-btn" :disabled="saving" @click="cancelDirty">Отменить</button>
-        <button type="button" class="pm-btn danger" :disabled="saving" @click="onReset">Сбросить всё к дефолтам</button>
+        <button type="button" class="pm-btn primary" :disabled="saving" @click="save">{{ saving ? t('adminConfig.presets.saving') : t('adminConfig.presets.save') }}</button>
+        <button type="button" class="pm-btn" :disabled="saving" @click="cancelDirty">{{ t('adminConfig.presets.cancel') }}</button>
+        <button type="button" class="pm-btn danger" :disabled="saving" @click="onReset">{{ t('adminConfig.presets.resetAll') }}</button>
       </div>
     </div>
 

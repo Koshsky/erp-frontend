@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { t } from '@/i18n'
+import { fmtDateTime } from '@/i18n/date'
 import { lastPullAt } from '../offline/connection'
 import { lastPushAt } from '../offline/sync'
 import { pendingCount, refreshPendingCount } from '../offline/outbox'
@@ -17,17 +19,21 @@ let refreshTimer: number | null = null
 
 const lastPullLabel = computed(() =>
   lastPullAt.value != null
-    ? new Date(lastPullAt.value).toLocaleString('ru-RU')
-    : 'ещё не было',
+    ? fmtDateTime(lastPullAt.value)
+    : t('adminSystem.status.never'),
 )
 
 const lastPushLabel = computed(() =>
   lastPushAt.value != null
-    ? new Date(lastPushAt.value).toLocaleString('ru-RU')
-    : 'ещё не было',
+    ? fmtDateTime(lastPushAt.value)
+    : t('adminSystem.status.never'),
 )
 
-const connectionLabel = computed(() => (isOffline.value ? 'офлайн' : 'онлайн'))
+const connectionLabel = computed(() =>
+  isOffline.value
+    ? t('adminSystem.status.connection.offline')
+    : t('adminSystem.status.connection.online'),
+)
 
 /** Build version and offline cache sizes (for the "App and offline" card) */
 async function refreshAppInfo() {
@@ -72,55 +78,58 @@ onBeforeUnmount(() => {
 
 <template>
   <section class="ss">
-    <h2 class="ss-title">Статус</h2>
+    <h2 class="ss-title">{{ t('adminSystem.status.title') }}</h2>
 
     <div class="ss-card">
-      <h3 class="ss-card-title">Соединение</h3>
+      <h3 class="ss-card-title">{{ t('adminSystem.status.connection.title') }}</h3>
       <div class="ss-status-rows">
         <div class="ss-row">
-          <span class="ss-label">Соединение</span>
+          <span class="ss-label">{{ t('adminSystem.status.connection.connection') }}</span>
           <span class="ss-value" :class="isOffline ? 'off' : 'on'">
             {{ connectionLabel }}
           </span>
         </div>
         <div class="ss-row">
-          <span class="ss-label">Последний PULL</span>
+          <span class="ss-label">{{ t('adminSystem.status.connection.lastPull') }}</span>
           <span class="ss-value">{{ lastPullLabel }}</span>
         </div>
         <div class="ss-row">
-          <span class="ss-label">Последний PUSH</span>
+          <span class="ss-label">{{ t('adminSystem.status.connection.lastPush') }}</span>
           <span class="ss-value">{{ lastPushLabel }}</span>
         </div>
         <div class="ss-row">
-          <span class="ss-label">Ожидают отправки</span>
+          <span class="ss-label">{{ t('adminSystem.status.connection.pending') }}</span>
           <span class="ss-value">{{ pendingCount }}</span>
         </div>
       </div>
     </div>
 
     <div class="ss-card">
-      <h3 class="ss-card-title">Приложение и офлайн</h3>
+      <h3 class="ss-card-title">{{ t('adminSystem.status.app.title') }}</h3>
       <div class="ss-status-rows">
         <div class="ss-row">
-          <span class="ss-label">Версия приложения</span>
+          <span class="ss-label">{{ t('adminSystem.status.app.version') }}</span>
           <span class="ss-value">{{ appVersion }}</span>
         </div>
         <div class="ss-row">
-          <span class="ss-label">Версия сборки (запущенная)</span>
+          <span class="ss-label">{{ t('adminSystem.status.app.buildVersion') }}</span>
           <span class="ss-value">{{ appBuildVersion }}</span>
         </div>
         <div class="ss-row">
-          <span class="ss-label">Кэш ассетов</span>
-          <span class="ss-value">{{ cachedAssets }} чанков</span>
+          <span class="ss-label">{{ t('adminSystem.status.app.cachedAssets') }}</span>
+          <span class="ss-value">
+            {{ t('adminSystem.status.app.cachedAssetsValue', { count: cachedAssets }) }}
+          </span>
         </div>
         <div class="ss-row">
-          <span class="ss-label">Сохранённых данных</span>
-          <span class="ss-value">{{ cachedData }} записей</span>
+          <span class="ss-label">{{ t('adminSystem.status.app.cachedData') }}</span>
+          <span class="ss-value">
+            {{ t('adminSystem.status.app.cachedDataValue', { count: cachedData }) }}
+          </span>
         </div>
       </div>
       <p v-if="cachedData === 0" class="ss-msg warn">
-        Кэш данных пуст. Для офлайна зайдите онлайн и выполните PULL на странице
-        «Пульт» (доступна по адресу /system/console).
+        {{ t('adminSystem.status.app.emptyCache') }}
       </p>
     </div>
 

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useModalFocus } from '../../../composables/useModalFocus'
 import CopyField from '../CopyField/CopyField.vue'
+import { t } from '../../../i18n'
 import type { PasswordDialogProps } from './types'
 
 const props = withDefaults(defineProps<PasswordDialogProps>(), {
@@ -27,8 +28,8 @@ const { dialogEl, onKeydown } = useModalFocus({
         <div class="pd-caption">{{ caption }}</div>
         <CopyField v-if="password" :value="password" />
         <p v-else-if="notice" class="pd-note">{{ notice }}</p>
-        <p v-if="password" class="pd-note">Пароль показывается один раз. Скопируйте его и передайте пользователю.</p>
-        <button type="button" class="pd-close" @click="emit('close')">Закрыть</button>
+        <p v-if="password" class="pd-note">{{ t('ui.password.dialogShownOnce') }}</p>
+        <button type="button" class="pd-close" @click="emit('close')">{{ t('common.close') }}</button>
       </div>
     </div>
   </Teleport>

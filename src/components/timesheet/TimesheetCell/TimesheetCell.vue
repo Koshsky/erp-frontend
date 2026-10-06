@@ -4,6 +4,7 @@ import type { TimesheetCellProps } from './types'
 import { stateBackground } from '../stateColors'
 import { TooltipCell } from '@/components/common/TooltipCell'
 import { InfoTooltip } from '@/components/common/Tooltips'
+import { t } from '@/i18n'
 
 const props = withDefaults(defineProps<TimesheetCellProps>(), {
   state: null,
@@ -52,7 +53,7 @@ const period = computed(() => {
   return `${fmtDM(s.start_date)}–${fmtDM(s.end_date)}`
 })
 
-const emptyLabel = computed(() => (props.isWeekend ? 'Выходной' : 'Рабочий день'))
+const emptyLabel = computed(() => (props.isWeekend ? t('timesheet.cell.weekend') : t('timesheet.cell.workday')))
 </script>
 
 <template>
@@ -69,7 +70,7 @@ const emptyLabel = computed(() => (props.isWeekend ? 'Выходной' : 'Ра�
            range instead of the per-day info (assignment feedback) -->
       <InfoTooltip
         v-if="selectionRange"
-        title="Выделенный фрагмент"
+        :title="t('timesheet.cell.selection')"
         :lines="[`${fmtFull(selectionRange.start)} — ${fmtFull(selectionRange.end)}`]"
       />
       <InfoTooltip

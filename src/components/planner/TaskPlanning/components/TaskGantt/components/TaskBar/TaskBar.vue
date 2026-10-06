@@ -3,6 +3,8 @@ import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import LabeledBar from '../../../../../Bar/Bar.vue'
 import { BarTooltip } from '@/components/common'
 import { useDragPreview } from '@/composables/useDragPreview'
+import { fmtDateTime } from '@/i18n/date'
+import { t } from '@/i18n'
 import { viewSettings } from '@/settings'
 import type { Task } from './types'
 import type { TimelineCtx } from '@/composables/timeline-context'
@@ -56,22 +58,22 @@ const tooltipRows = (dateRange: string): string[] =>
   [taskOwnerLabel.value, statusLabel.value, progressLabel.value, dateRange].filter(Boolean)
 
 const taskOwnerLabel = computed<string>(() =>
-  props.task.owner_name ? `Ответственный: ${props.task.owner_name}` : '',
+  props.task.owner_name ? t('planner.taskBar.owner', { owner: props.task.owner_name }) : '',
 )
 
 /** Execution status label + color (fixed catalog, mirrors the badge stripe) */
 const statusInfo = computed<{ label: string; color: string }>(() => {
   switch (props.task.status) {
     case 'done':
-      return { label: 'Завершена', color: '#22c55e' }
+      return { label: t('planner.taskStatus.done'), color: '#22c55e' }
     case 'in_progress':
-      return { label: 'В работе', color: '#0f83c4' }
+      return { label: t('planner.taskStatus.inProgress'), color: '#0f83c4' }
     default:
-      return { label: 'Не начата', color: '#94a3b8' }
+      return { label: t('planner.taskStatus.notStarted'), color: '#94a3b8' }
   }
 })
 const statusLabel = computed<string>(() =>
-  props.task.status ? `Статус: ${statusInfo.value.label}` : '',
+  props.task.status ? t('planner.taskBar.status', { status: statusInfo.value.label }) : '',
 )
 
 /**
@@ -87,7 +89,11 @@ const taskProgress = computed<number | null>(() => {
 const progressLabel = computed<string>(() =>
   taskProgress.value == null
     ? ''
-    : `Выполнение: ${taskProgress.value}% (${props.task.subtasks?.filter((s) => s.status === 'done').length} из ${props.task.subtasks?.length} операций)`,
+    : t('planner.taskBar.progress', {
+        value: taskProgress.value,
+        done: props.task.subtasks?.filter((s) => s.status === 'done').length ?? 0,
+        total: props.task.subtasks?.length ?? 0,
+      }),
 )
 
 /** The task has comments — show a badge and the log in the tooltip */
@@ -95,18 +101,9 @@ const hasComments = computed(() => (props.task.comments_count ?? 0) > 0)
 
 const userById = computed(() => new Map((props.users || []).map((u) => [u.id ?? 0, u])))
 
-const fmtDT = new Intl.DateTimeFormat('ru-RU', {
-  day: '2-digit',
-  month: '2-digit',
-  year: 'numeric',
-  hour: '2-digit',
-  minute: '2-digit',
-})
-
 function fmtShortDate(iso?: string): string {
   if (!iso) return ''
-  const d = new Date(iso)
-  return Number.isNaN(d.getTime()) ? '' : fmtDT.format(d)
+  return fmtDateTime(iso)
 }
 
 /** Comment log for the tooltip: author name (from users), short date, text */
@@ -114,7 +111,7 @@ const tooltipComments = computed(() =>
   (props.commentsByTask?.[props.task.id] ?? []).map((c) => ({
     author:
       c.author_id != null
-        ? userById.value.get(c.author_id)?.name ?? `Пользователь #${c.author_id}`
+        ? userById.value.get(c.author_id)?.name ?? t('planner.taskBar.userFallback', { id: c.author_id })
         : undefined,
     date: fmtShortDate(c.created_at),
     text: c.content ?? '',
@@ -239,7 +236,7 @@ watch(
     :color="color || task.color || 'var(--ui-gantt-task)'"
     :draggable="draggable"
     :start-row-reorder="startRowReorder"
-    :aria-label="`Задача «${task.title}»`"
+    :aria-label="t('planner.bar.taskQuoted', { title: task.title })"
     @change="(d) => emit('change', d)"
     @contextmenu="(p) => emit('contextmenu', p)"
     @dragstart="(d) => setDragPreview(d)"
@@ -288,7 +285,7 @@ watch(
           :style="r.color ? { background: r.color } : undefined"
         >{{ badgeLabel(r) }}×{{ r.quantity }}</span>
       </span>
-      <span v-if="hasComments" class="tb-comments" :title="`Комментарии: ${task.comments_count}`" @pointerdown.stop @click.stop="emit('open-comments', task.id)">
+      <span v-if="hasComments" class="tb-comments" :title="t('planner.taskBar.comments', { count: task.comments_count })" @pointerdown.stop @click.stop="emit('open-comments', task.id)">
         <svg
           width="11"
           height="11"

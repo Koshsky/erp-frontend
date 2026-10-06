@@ -264,7 +264,8 @@ async function runPull(settings: { cycle: boolean; refreshAll?: boolean }): Prom
     if (isOffline.value) break
     await pause()
   }
-  console.log(`[warmup] прогрето запросов: ${done} (обновлено: ${refreshed})`)
+  // i18n-allow: developer console diagnostics, never rendered in the UI
+  console.log(`[warmup] warmed requests: ${done} (refreshed: ${refreshed})`)
   return refreshed
 }
 

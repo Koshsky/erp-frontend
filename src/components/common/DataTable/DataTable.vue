@@ -1,9 +1,10 @@
 <script setup lang="ts" generic="Row = unknown">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { t } from '../../../i18n'
 import type { DataTableColumn, DataTableCellScope, DataTableProps, SortDir } from './types'
 
 const props = withDefaults(defineProps<DataTableProps<Row>>(), {
-  emptyText: 'Нет данных',
+  emptyText: '',
   expandable: false,
   resizable: false,
   defaultSort: null,
@@ -329,7 +330,7 @@ function onRowClick(event: MouseEvent, row: Row, index: number) {
               <span
                 v-if="resizable"
                 class="dt-resizer"
-                title="Изменить ширину колонки"
+                :title="t('ui.dataTable.resizeColumn')"
                 @mousedown.prevent.stop="startResize($event, col)"
                 @dblclick.prevent.stop="resetResize(col)"
               ></span>
@@ -356,7 +357,7 @@ function onRowClick(event: MouseEvent, row: Row, index: number) {
           </div>
         </template>
 
-        <p v-if="!visibleRows.length" class="dt-empty">{{ emptyText }}</p>
+        <p v-if="!visibleRows.length" class="dt-empty">{{ emptyText || t('common.noData') }}</p>
       </div>
     </div>
   </div>

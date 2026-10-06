@@ -44,12 +44,17 @@ export function currentLocale(): AppLocale {
 /** Global translator: `t('header.profile')` etc. (composition-mode global). */
 export const t = i18n.global.t
 
-/** Switches the active locale (used by the settings watcher). */
+/**
+ * Switches the active locale (used by the settings watcher and by the tests)
+ * and keeps the document metadata in sync: the html lang attribute for
+ * accessibility and the window title (the static <title> in index.html is only
+ * the pre-paint fallback).
+ */
 export function setAppLocale(locale: AppLocale): void {
   i18n.global.locale.value = locale
   try {
-    // keep the html lang attribute in sync for accessibility
     document.documentElement.lang = locale
+    document.title = t('app.title')
   } catch {
     // non-browser environment (tests)
   }

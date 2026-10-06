@@ -14,6 +14,8 @@
  * the result via the optional probe ({ descendant?, sibling? }).
  */
 
+import { t } from './i18n'
+
 export type ScopeMove = 'self' | 'up' | 'up1' | 'up2' | 'down' | 'down2' | 'sib'
 
 /** All move codes accepted by the parser (canonical + legacy aliases). */
@@ -115,27 +117,33 @@ export function toggleScopeMove(expr: string, move: string): string {
   return [...cur, m].sort((a, b) => moveRank(a) - moveRank(b)).join(' ')
 }
 
-/** Human-readable description of an expression (Russian — product language). */
+/** Catalog keys of the scope words (resolved at call time, so the description
+ *  follows the interface language). */
+const SCOPE_WORD_KEYS: Record<string, string> = {
+  self: 'authz.scope.self',
+  up1: 'authz.scope.parents',
+  up: 'authz.scope.ancestors',
+  up2: 'authz.scope.ancestors2',
+  down: 'authz.scope.subtree',
+  down2: 'authz.scope.subtree2',
+  sib: 'authz.scope.siblings',
+  own: 'authz.scope.self',
+  parent: 'authz.scope.parents',
+  ancestor: 'authz.scope.ancestors',
+}
+
+/** Human-readable description of a scope expression in the active language. */
 export function describeScopeExpr(expr: string): string {
   const raw = (expr ?? '').trim()
-  if (!raw) return 'не задано'
-  if (raw === 'all') return 'всё'
-  if (raw === 'none') return 'запрещено'
+  if (!raw) return t('authz.scope.notSet')
+  if (raw === 'all') return t('authz.scope.all')
+  if (raw === 'none') return t('authz.scope.forbidden')
   const tokens = raw.split(/\s+/)
-  const words: Record<string, string> = {
-    self: 'свои',
-    up1: 'родители',
-    up: 'предки',
-    up2: 'предки до 2 ур.',
-    down: 'поддерево',
-    down2: 'поддерево 2 ур.',
-    sib: 'сиблинги',
-    own: 'свои',
-    parent: 'родители',
-    ancestor: 'предки',
-  }
-  const parts = tokens.map((t) => words[t] ?? `«${t}»`)
-  return parts.join(' + ')
+  const parts = tokens.map((token) => {
+    const key = SCOPE_WORD_KEYS[token]
+    return key ? t(key) : t('authz.scope.unknown', { token })
+  })
+  return parts.join(t('authz.scope.join'))
 }
 
 /**

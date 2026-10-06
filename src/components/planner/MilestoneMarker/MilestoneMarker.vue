@@ -8,6 +8,8 @@ import {
   toDate,
 } from '../calendar'
 import { useTimelineItem } from '../../../composables/useTimelineItem'
+import { fmtDate as fmtDateLocale } from '@/i18n/date'
+import { t } from '@/i18n'
 import { TooltipCell } from '../../common/TooltipCell'
 import { BarTooltip } from '../../common/Tooltips'
 import type { MilestoneMarkerProps } from './types'
@@ -32,7 +34,7 @@ const rootEl = ref<HTMLElement | null>(null)
 /** Milestone date formatted for the tooltip (localized). Shows the STORED
  *  milestone date, not the containing cell's start: in decade mode the marker
  *  is snapped to its cell, but the label must represent the real date. */
-const formattedDate = computed(() => toDate(props.date).toLocaleDateString('ru'))
+const formattedDate = computed(() => fmtDateLocale(toDate(props.date)))
 
 /** Milestone cell index */
 const idx = computed(() =>
@@ -101,7 +103,9 @@ const moveStepCells = computed(() => (props.timeline.unit === 'decade' ? 3 : 1))
 
 /** Accessible name of the milestone (role="slider") */
 const ariaLabel = computed(() =>
-  props.title ? `Веха «${props.title}»: ${formattedDate.value}` : `Веха: ${formattedDate.value}`,
+  props.title
+    ? t('planner.bar.milestoneNamed', { title: props.title, date: formattedDate.value })
+    : t('planner.bar.milestone', { date: formattedDate.value }),
 )
 
 /** aria-value* bounds: the parent (process/project) span when it is known */

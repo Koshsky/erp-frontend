@@ -22,6 +22,27 @@ const http = require('node:http')
 const { URL } = require('node:url')
 
 // ---------------------------------------------------------------------------
+// Shell copy (RU/EN). The renderer follows the interface-language setting, but
+// this dialog is raised before any window exists, so the desktop shell follows
+// the OS locale (Russian is the product default).
+// ---------------------------------------------------------------------------
+const SHELL_TEXT = {
+  ru: {
+    errorTitle: 'MVS ERP — ошибка запуска',
+    startFailed: (detail) => `Не удалось запустить локальный сервер приложения: ${detail}`,
+  },
+  en: {
+    errorTitle: 'MVS ERP — startup error',
+    startFailed: (detail) => `Failed to start the local application server: ${detail}`,
+  },
+}
+
+function shellText() {
+  const locale = String(app.getLocale() || 'ru').toLowerCase()
+  return locale.startsWith('en') ? SHELL_TEXT.en : SHELL_TEXT.ru
+}
+
+// ---------------------------------------------------------------------------
 // User data location — deterministic per-user folder on every platform.
 // ---------------------------------------------------------------------------
 // Pin the directory name explicitly so it never depends on productName and
@@ -66,7 +87,7 @@ const WEB_DIR = app.isPackaged
 const gotTheLock = app.requestSingleInstanceLock()
 const lockFile = path.join(app.getPath('userData'), 'SingletonLock')
 if (!gotTheLock && fs.existsSync(lockFile)) {
-  console.log('[desktop] приложение уже запущено — выходим (single instance)')
+  console.log('[desktop] the app is already running — quitting (single instance)')
   app.quit()
 } else {
   app.on('second-instance', () => {
@@ -180,10 +201,10 @@ async function startHttpServer() {
     } catch (err) {
       // Only a busy port is retried; anything else (permissions, etc.) is fatal.
       if (err.code !== 'EADDRINUSE') throw err
-      console.log(`[desktop] порт ${port} занят — пробуем следующий`)
+      console.log(`[desktop] port ${port} is busy — trying the next one`)
     }
   }
-  throw new Error(`Не удалось найти свободный порт в диапазоне ${DEFAULT_PORT}–${DEFAULT_PORT + PORT_SEARCH_LIMIT - 1}`)
+  throw new Error(`No free port in the range ${DEFAULT_PORT}-${DEFAULT_PORT + PORT_SEARCH_LIMIT - 1}`)
 }
 
 function listenOnce(port) {
@@ -192,7 +213,7 @@ function listenOnce(port) {
     server.once('error', reject)
     server.listen(port, '127.0.0.1', () => {
       const { port: boundPort } = server.address()
-      console.log(`[desktop] локальный http-сервер фронтенда: http://127.0.0.1:${boundPort}`)
+      console.log(`[desktop] local frontend http server: http://127.0.0.1:${boundPort}`)
       resolve(server)
     })
   })
@@ -243,7 +264,7 @@ app.on('certificate-error', (event, webContents, url, error, certificate, callba
     certificate.issuerName === certificate.subjectName &&
     /CN=/.test(certificate.subjectName)
   if (isSelfSigned && /^https:\/\//.test(url)) {
-    console.log('[desktop] принят самоподписанный сертификат:', url)
+    console.log('[desktop] accepted a self-signed certificate:', url)
     event.preventDefault()
     callback(true)
   } else {
@@ -282,7 +303,7 @@ app.whenReady().then(async () => {
       (request.errorCode === -202 || request.errorCode === -207) &&
       isSelfSigned
     if (request.errorCode !== 0 && !isTrustedSelfSigned) {
-      console.log('[desktop] сертификат отклонён:', request.hostname, 'code=', request.errorCode)
+      console.log('[desktop] certificate rejected:', request.hostname, 'code=', request.errorCode)
     }
     if (request.errorCode === 0 || isTrustedSelfSigned) {
       callback(0)
@@ -296,11 +317,9 @@ app.whenReady().then(async () => {
   } catch (err) {
     // No free port at all (or a fatal bind error): tell the user instead of
     // silently showing nothing / a blank window.
-    console.error('[desktop] не удалось запустить локальный http-сервер:', err)
-    dialog.showErrorBox(
-      'MVS ERP — ошибка запуска',
-      `Не удалось запустить локальный сервер приложения: ${err && err.message ? err.message : err}`,
-    )
+    console.error('[desktop] failed to start the local http server:', err)
+    const text = shellText()
+    dialog.showErrorBox(text.errorTitle, text.startFailed(err && err.message ? err.message : err))
     app.quit()
     return
   }

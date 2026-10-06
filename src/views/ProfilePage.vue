@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useAuthStore } from '../store'
 import { isOffline } from '../offline/state'
+import { t } from '../i18n'
 
 const auth = useAuthStore()
 
@@ -14,15 +15,17 @@ interface ProfileField {
 const profile = computed<ProfileField[]>(() => {
   const u = auth.user
   return [
-    { label: 'Логин', value: u?.username || '—' },
-    { label: 'Имя', value: u?.name || '—' },
-    { label: 'Пресет прав', value: u?.preset || '—' },
-    { label: 'ID', value: u?.id != null ? String(u.id) : '—' },
+    { label: t('adminUsers.profile.field.login'), value: u?.username || '—' },
+    { label: t('adminUsers.profile.field.name'), value: u?.name || '—' },
+    { label: t('adminUsers.profile.field.preset'), value: u?.preset || '—' },
+    { label: t('adminUsers.profile.field.id'), value: u?.id != null ? String(u.id) : '—' },
   ]
 })
 
-/** Connection status (mirrors the "Статус" diagnostics page colors). */
-const connectionLabel = computed(() => (isOffline.value ? 'офлайн' : 'онлайн'))
+/** Connection status (mirrors the colors of the "Status" diagnostics page). */
+const connectionLabel = computed(() =>
+  isOffline.value ? t('adminUsers.profile.offline') : t('adminUsers.profile.online'),
+)
 
 /** Version of the running bundle (injected at build time). */
 const appBuildVersion = __APP_VERSION__
@@ -51,13 +54,13 @@ onMounted(() => {
 <template>
   <section class="pf">
     <div class="pf-head">
-      <h2 class="pf-title">Профиль</h2>
-      <!-- Square icon button → the "Редактирование профиля" page -->
+      <h2 class="pf-title">{{ t('adminUsers.profile.title') }}</h2>
+      <!-- Square icon button → the "Edit profile" page -->
       <RouterLink
         to="/profile/edit"
         class="pf-edit"
-        title="Редактировать профиль"
-        aria-label="Редактировать профиль"
+        :title="t('adminUsers.profile.edit')"
+        :aria-label="t('adminUsers.profile.edit')"
       >
         <!-- Pencil icon (line style, matches the CopyField/PasswordField icons) -->
         <svg
@@ -86,18 +89,18 @@ onMounted(() => {
 
       <div class="pf-card">
         <div class="pf-row">
-          <span class="pf-label">Состояние</span>
+          <span class="pf-label">{{ t('adminUsers.profile.field.state') }}</span>
           <span class="pf-value" :class="isOffline ? 'off' : 'on'">{{ connectionLabel }}</span>
         </div>
       </div>
 
       <div class="pf-card">
         <div class="pf-row">
-          <span class="pf-label">Версия приложения</span>
+          <span class="pf-label">{{ t('adminUsers.profile.field.appVersion') }}</span>
           <span class="pf-value">{{ appVersion }}</span>
         </div>
         <div class="pf-row">
-          <span class="pf-label">Версия сборки</span>
+          <span class="pf-label">{{ t('adminUsers.profile.field.buildVersion') }}</span>
           <span class="pf-value">{{ appBuildVersion }}</span>
         </div>
       </div>
@@ -158,7 +161,7 @@ onMounted(() => {
   color: var(--ui-text);
 }
 
-/* Connection state colors (match the "Статус" diagnostics page). */
+/* Connection state colors (match the "Status" diagnostics page). */
 .pf-value.on {
   color: var(--ui-success);
 }

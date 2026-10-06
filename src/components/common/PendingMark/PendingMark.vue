@@ -2,6 +2,7 @@
 import AppIcon from '../AppIcon/AppIcon.vue'
 import { usePendingMark } from '@/composables/usePendingMark'
 import type { MutationEntity } from '@/offline/outbox'
+import { t } from '../../../i18n'
 
 /**
  * "Awaiting sync" clock mark for a list row: shown while the object has at
@@ -24,7 +25,7 @@ const pending = usePendingMark(props.entity, props.id ?? undefined)
 </script>
 
 <template>
-  <span v-if="pending" class="pm" title="Изменение ожидает отправки на сервер">
+  <span v-if="pending" class="pm" :title="t('ui.pending.title')">
     <AppIcon name="clock" :size="size" />
   </span>
 </template>

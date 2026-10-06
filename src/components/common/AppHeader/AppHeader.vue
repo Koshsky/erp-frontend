@@ -65,7 +65,7 @@ function onLogout(): void {
   router.push('/login')
 }
 
-const burgerTitle = t('header.menuShortcut')
+const burgerTitle = computed(() => t('header.menuShortcut'))
 const burgerLabel = computed(() => (isNavOpen.value ? t('header.menuClose') : t('header.menuOpen')))
 </script>
 

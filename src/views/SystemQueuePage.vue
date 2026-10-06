@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { t } from '@/i18n'
+import { fmtDateTime } from '@/i18n/date'
 import { queueItems, refreshPendingCount, getFailedEntries } from '../offline/outbox'
 import { retryFailed, discardFailed, syncNotice, dismissSyncNotice } from '../offline/sync'
 import { isOffline } from '../offline/state'
@@ -31,16 +33,7 @@ function jsonBody(body: unknown): string {
 }
 
 function formatTime(ts: number): string {
-  try {
-    return new Date(ts).toLocaleString('ru-RU', {
-      day: '2-digit',
-      month: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-    })
-  } catch {
-    return ''
-  }
+  return fmtDateTime(ts)
 }
 
 function shortUrl(url: string): string {
@@ -67,8 +60,9 @@ async function onRetry() {
   try {
     await retryFailed()
     const n = syncNotice.value
-    if (n?.failed) notifyError(`Отправлено ${n.ok}, ошибок ${n.failed}`)
-    else notifySuccess('Отправлено без ошибок')
+    if (n?.failed) {
+      notifyError(t('adminSystem.queue.messages.retryFailed', { ok: n.ok, failed: n.failed }))
+    } else notifySuccess(t('adminSystem.queue.messages.retryDone'))
     await refreshStatus()
   } finally {
     busy.value = false
@@ -81,7 +75,7 @@ async function onDiscard() {
   try {
     await discardFailed()
     dismissSyncNotice()
-    notifySuccess('Отвергнутые записи удалены')
+    notifySuccess(t('adminSystem.queue.messages.discarded'))
     await refreshStatus()
   } finally {
     busy.value = false
@@ -100,15 +94,15 @@ onBeforeUnmount(() => {
 
 <template>
   <section class="sq">
-    <h2 class="sq-title">Очередь изменений</h2>
+    <h2 class="sq-title">{{ t('adminSystem.queue.title') }}</h2>
 
     <div v-if="queueItems.length > 0" class="sq-card">
       <h3 class="sq-card-title">
-        Отправка изменений
+        {{ t('adminSystem.queue.sending.title') }}
         <span class="sq-card-badge">{{ queueItems.length }}</span>
       </h3>
       <p v-if="isOffline" class="sq-hint queue-hint">
-        Бэкенд недоступен: изменения копятся в очереди и отправятся при появлении сети.
+        {{ t('adminSystem.queue.sending.offlineHint') }}
       </p>
       <ul class="queue-list">
         <li
@@ -121,7 +115,9 @@ onBeforeUnmount(() => {
           <div class="queue-item-head">
             <span class="queue-op" :class="`queue-op--${it.operation}`">{{ it.operationLabel }}</span>
             <span class="queue-entity">{{ it.entityLabel }}</span>
-            <span v-if="it.error" class="queue-error-badge" :title="it.message">ошибка</span>
+            <span v-if="it.error" class="queue-error-badge" :title="it.message">
+              {{ t('adminSystem.queue.errors.itemBadge') }}
+            </span>
             <span class="queue-time">{{ formatTime(it.ts) }}</span>
           </div>
           <div class="queue-summary">
@@ -129,7 +125,9 @@ onBeforeUnmount(() => {
               {{ it.summary }}<template v-if="it.targetId != null"> · id {{ it.targetId }}</template>
             </template>
             <template v-else-if="it.targetId != null">id {{ it.targetId }}</template>
-            <span class="queue-toggle">{{ selectedId === it.id ? '—' : '↕ подробно' }}</span>
+            <span class="queue-toggle">
+              {{ selectedId === it.id ? t('adminSystem.queue.sending.toggleClose') : t('adminSystem.queue.sending.toggle') }}
+            </span>
           </div>
           <div v-if="it.details.length && selectedId !== it.id" class="queue-details">
             <span v-for="(d, i) in it.details" :key="i" class="queue-detail">
@@ -140,28 +138,28 @@ onBeforeUnmount(() => {
           <div v-if="selectedId === it.id" class="queue-info">
             <div class="queue-info-list">
               <div class="queue-info-row">
-                <span class="queue-info-label">Метод</span>
+                <span class="queue-info-label">{{ t('adminSystem.queue.sending.detail.method') }}</span>
                 <span class="queue-info-value">{{ it.method }}</span>
               </div>
               <div class="queue-info-row">
-                <span class="queue-info-label">Entity</span>
+                <span class="queue-info-label">{{ t('adminSystem.queue.sending.detail.entity') }}</span>
                 <span class="queue-info-value">{{ it.entityLabel }}</span>
               </div>
               <div v-if="it.tempId != null" class="queue-info-row">
-                <span class="queue-info-label">Временный id</span>
+                <span class="queue-info-label">{{ t('adminSystem.queue.sending.detail.tempId') }}</span>
                 <span class="queue-info-value">{{ it.tempId }}</span>
               </div>
               <div v-if="it.error" class="queue-info-row">
-                <span class="queue-info-label">Ошибка</span>
+                <span class="queue-info-label">{{ t('adminSystem.queue.sending.detail.error') }}</span>
                 <span class="queue-info-value queue-info-error">{{ it.message }}</span>
               </div>
               <div class="queue-info-row">
-                <span class="queue-info-label">URL</span>
+                <span class="queue-info-label">{{ t('adminSystem.queue.sending.detail.url') }}</span>
                 <span class="queue-info-value queue-info-url">{{ it.url }}</span>
               </div>
             </div>
             <div class="queue-info-row queue-info-body-row">
-              <span class="queue-info-label">Body</span>
+              <span class="queue-info-label">{{ t('adminSystem.queue.sending.detail.body') }}</span>
               <pre class="queue-info-body">{{ jsonBody(it.body) }}</pre>
             </div>
           </div>
@@ -170,15 +168,17 @@ onBeforeUnmount(() => {
     </div>
 
     <div v-else class="sq-card">
-      <h3 class="sq-card-title">Очередь изменений</h3>
-      <p class="sq-hint">Очередь пуста — все изменения синхронизированы.</p>
+      <h3 class="sq-card-title">{{ t('adminSystem.queue.empty.title') }}</h3>
+      <p class="sq-hint">{{ t('adminSystem.queue.empty.hint') }}</p>
     </div>
 
     <div class="sq-card">
-      <h3 class="sq-card-title">Ошибки синхронизации</h3>
-      <div v-if="!canRetry" class="sq-hint no-errors">Ошибок нет.</div>
+      <h3 class="sq-card-title">{{ t('adminSystem.queue.errors.title') }}</h3>
+      <div v-if="!canRetry" class="sq-hint no-errors">{{ t('adminSystem.queue.errors.none') }}</div>
       <div v-else class="sp-errors">
-        <div class="sp-errors-head">Ошибки синхронизации ({{ failedCount }})</div>
+        <div class="sp-errors-head">
+          {{ t('adminSystem.queue.errors.head', { count: failedCount }) }}
+        </div>
         <ul class="sp-errors-list">
           <li v-for="(it, i) in failedEntries.slice(0, 5)" :key="i" class="sp-errors-item">
             <span class="sp-errors-req">{{ it.method }} {{ shortUrl(it.url) }}</span>
@@ -186,8 +186,12 @@ onBeforeUnmount(() => {
           </li>
         </ul>
         <div class="sp-actions">
-          <button type="button" class="sp-btn" :disabled="busy" @click="onRetry">Повторить ошибки</button>
-          <button type="button" class="sp-btn ghost" :disabled="busy" @click="onDiscard">Пропустить ошибки</button>
+          <button type="button" class="sp-btn" :disabled="busy" @click="onRetry">
+            {{ t('adminSystem.queue.errors.retry') }}
+          </button>
+          <button type="button" class="sp-btn ghost" :disabled="busy" @click="onDiscard">
+            {{ t('adminSystem.queue.errors.discard') }}
+          </button>
         </div>
       </div>
     </div>

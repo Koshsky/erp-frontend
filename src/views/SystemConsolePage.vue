@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { t } from '@/i18n'
 import { useAuthStore } from '../store'
 import { getApiUrl, setApiUrl, hasApiUrlOverride, httpSchemeWarning } from '../config'
 import { warmNow, warmupProgress } from '../offline/warmup'
@@ -27,7 +28,11 @@ const pushPercent = computed(() => {
   return Math.round((p.done / p.total) * 100)
 })
 
-const connectionLabel = computed(() => (isOffline.value ? 'офлайн' : 'онлайн'))
+const connectionLabel = computed(() =>
+  isOffline.value
+    ? t('adminSystem.console.connection.offline')
+    : t('adminSystem.console.connection.online'),
+)
 
 function requireAuth(): boolean {
   if (auth.isAuthenticated) return true
@@ -40,7 +45,7 @@ function applyApiUrl(): boolean {
   if (warn) notifyInfo(warn)
   const applied = setApiUrl(apiUrl.value, true)
   if (!applied) {
-    notifyError('Некорректный API_URL: ожидается http(s)://…')
+    notifyError(t('adminSystem.console.messages.invalidApiUrl'))
   }
   return applied
 }
@@ -57,16 +62,16 @@ async function onPull() {
     if (!requireAuth()) return
     if (!applyApiUrl()) return
     if (isOffline.value) {
-      notifyError('Нет соединения с сервером — PULL недоступен')
+      notifyError(t('adminSystem.console.messages.offlinePull'))
       return
     }
     const ran = await warmNow(true)
     if (ran) {
-      notifySuccess('Данные прогреты')
+      notifySuccess(t('adminSystem.console.messages.warmed'))
     } else if (isOffline.value) {
-      notifyError('Прогревка недоступна: нет сети')
+      notifyError(t('adminSystem.console.messages.warmupOffline'))
     } else {
-      notifyError('Прогревка уже идёт')
+      notifyError(t('adminSystem.console.messages.warmupRunning'))
     }
     await refreshStatus()
   } finally {
@@ -76,7 +81,7 @@ async function onPull() {
 
 /**
  * PUSH: send the queued changes. Kept for compatibility with the old Sync
- * screen — the recommended path is "Синхронизировать всё".
+ * screen — the recommended path is "Sync everything".
  */
 async function onPush() {
   if (busy.value) return
@@ -85,13 +90,13 @@ async function onPush() {
     await syncNow()
     const n = syncNotice.value
     if (n?.interrupted) {
-      notifyError(`Сеть снова пропала: отправлено ${n.ok}, остальное в очереди`)
+      notifyError(t('adminSystem.console.messages.pushInterrupted', { ok: n.ok }))
     } else if (n && n.failed > 0) {
-      notifyError(`Отправлено ${n.ok}, ошибок ${n.failed}. Повторите или пропустите ошибки`)
+      notifyError(t('adminSystem.console.messages.pushFailed', { ok: n.ok, failed: n.failed }))
     } else if (n) {
-      notifySuccess(`Отправлено изменений: ${n.ok}`)
+      notifySuccess(t('adminSystem.console.messages.pushDone', { ok: n.ok }))
     } else {
-      notifySuccess('Нечего отправлять')
+      notifySuccess(t('adminSystem.console.messages.pushNothing'))
     }
     await refreshStatus()
   } finally {
@@ -99,7 +104,7 @@ async function onPush() {
   }
 }
 
-/** "Синхронизировать всё": PUSH (send the queue) → PULL (warmup) */
+/** "Sync everything": PUSH (send the queue) → PULL (warmup) */
 async function onSyncAll() {
   if (busy.value) return
   busy.value = true
@@ -107,20 +112,22 @@ async function onSyncAll() {
     if (!requireAuth()) return
     if (!applyApiUrl()) return
     if (isOffline.value) {
-      notifyError('Нет соединения с сервером — синхронизация недоступна')
+      notifyError(t('adminSystem.console.messages.offlineSync'))
       return
     }
     const res = await syncAll()
     const n = syncNotice.value
     const parts: string[] = []
-    if (res.pushed) parts.push(`отправлено изменений: ${n?.ok ?? 0}`)
-    if (res.pulled) parts.push('данные скачаны')
+    if (res.pushed) {
+      parts.push(t('adminSystem.console.messages.syncPushed', { ok: n?.ok ?? 0 }))
+    }
+    if (res.pulled) parts.push(t('adminSystem.console.messages.syncPulled'))
     if (parts.length > 0) {
-      notifySuccess('Синхронизация завершена: ' + parts.join(', '))
+      notifySuccess(t('adminSystem.console.messages.syncDone', { parts: parts.join(', ') }))
     } else if (n && n.failed > 0) {
-      notifyError(`Отправлено ${n.ok}, ошибок ${n.failed}. Повторите или пропустите ошибки`)
+      notifyError(t('adminSystem.console.messages.pushFailed', { ok: n.ok, failed: n.failed }))
     } else {
-      notifySuccess('Синхронизация завершена: отправлять и скачивать нечего')
+      notifySuccess(t('adminSystem.console.messages.syncNothing'))
     }
     await refreshStatus()
   } finally {
@@ -141,25 +148,31 @@ onBeforeUnmount(() => {
 
 <template>
   <section class="sp">
-    <h2 class="sp-title">Пульт</h2>
+    <h2 class="sp-title">{{ t('adminSystem.console.title') }}</h2>
 
     <div class="sp-card">
-      <h3 class="sp-card-title">Синхронизация данных</h3>
+      <h3 class="sp-card-title">{{ t('adminSystem.console.sync.title') }}</h3>
 
       <div class="sp-status-rows">
         <div class="sp-row">
-          <span class="sp-label">Соединение</span>
+          <span class="sp-label">{{ t('adminSystem.console.sync.connection') }}</span>
           <span class="sp-value" :class="isOffline ? 'off' : 'on'">
             {{ connectionLabel }}
           </span>
         </div>
         <div class="sp-row">
-          <span class="sp-label">Ожидают отправки</span>
+          <span class="sp-label">{{ t('adminSystem.console.sync.pending') }}</span>
           <span class="sp-value">{{ pendingCount }}</span>
         </div>
         <div class="sp-row">
-          <span class="sp-label">Источник API_URL</span>
-          <span class="sp-value">{{ hasApiUrlOverride() ? 'задан вручную' : 'по умолчанию' }}</span>
+          <span class="sp-label">{{ t('adminSystem.console.sync.apiUrlSource') }}</span>
+          <span class="sp-value">
+            {{
+              hasApiUrlOverride()
+                ? t('adminSystem.console.sync.sourceManual')
+                : t('adminSystem.console.sync.sourceDefault')
+            }}
+          </span>
         </div>
       </div>
 
@@ -167,19 +180,28 @@ onBeforeUnmount(() => {
         <div class="warm-bar">
           <div class="warm-fill" :style="{ width: warmupProgress + '%' }" />
         </div>
-        <span class="warm-label">Скачивание данных: {{ warmupProgress }}%</span>
+        <span class="warm-label">
+          {{ t('adminSystem.console.sync.warmProgress', { percent: warmupProgress }) }}
+        </span>
       </div>
 
       <div v-if="pushProgress != null" class="warm-progress" role="progressbar" :aria-valuenow="pushPercent">
         <div class="warm-bar">
           <div class="warm-fill warm-fill--push" :style="{ width: pushPercent + '%' }" />
         </div>
-        <span class="warm-label">Отправка изменений: {{ pushProgress.done }} из {{ pushProgress.total }}</span>
+        <span class="warm-label">
+          {{
+            t('adminSystem.console.sync.pushProgress', {
+              done: pushProgress.done,
+              total: pushProgress.total,
+            })
+          }}
+        </span>
       </div>
 
       <div class="sp-actions">
         <button type="button" class="sp-btn" :disabled="busy || isOffline" @click="onPull">
-          PULL — скачать данные
+          {{ t('adminSystem.console.sync.pull') }}
         </button>
         <button type="button" class="sp-btn accent" :disabled="busy" @click="onPush">
           {{ pendingLabel }}
@@ -188,7 +210,7 @@ onBeforeUnmount(() => {
 
       <div class="sp-actions">
         <button type="button" class="sp-btn accent" :disabled="busy || isOffline" @click="onSyncAll">
-          Синхронизировать всё (PUSH → PULL)
+          {{ t('adminSystem.console.sync.syncAll') }}
         </button>
       </div>
     </div>
