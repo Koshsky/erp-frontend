@@ -44,3 +44,5 @@ logs
 # Документация
 README.md
 *.md
+# ChangelogDialog imports Changelog_RU.md as ?raw — keep it in the context.
+!Changelog_RU.md
