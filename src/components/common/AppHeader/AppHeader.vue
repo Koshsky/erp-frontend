@@ -126,7 +126,7 @@ const burgerLabel = computed(() => (isNavOpen.value ? t('header.menuClose') : t(
           :aria-expanded="langMenuOpen"
           @click="toggleLangMenu"
         >
-          <AppIcon name="globe" :size="18" />
+          <AppIcon name="languages" :size="18" />
         </button>
         <div v-if="langMenuOpen" class="ah-langmenu" role="menu" :aria-label="t('header.language')">
           <button
