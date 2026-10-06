@@ -19,7 +19,7 @@ const themeToggleTitle = computed(() => t('header.themeToggle', { theme: themeLa
 
 /** Language dropdown options (own-language labels; auto is localized). */
 const LANG_OPTIONS: Array<{ value: UiLanguage; label: string }> = [
-  { value: 'ru', label: 'Русский' },
+  { value: 'ru', label: 'Русский' }, // i18n-allow: a language name is shown in its own language
   { value: 'en', label: 'English' },
   { value: 'auto', label: '' }, // label filled below via t()
 ]

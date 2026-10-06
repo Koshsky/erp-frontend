@@ -5,7 +5,25 @@ Frontend service of the MVS ERP monorepo (repo root is `../..`, sibling `service
 ## Language rule (mandatory)
 
 - Code comments, documentation, and commit messages are written in **English only**.
-- UI strings and user-facing messages stay in Russian (the product language) — never translate them (they are displayed to the user, not documentation).
+- The UI is **bilingual (Russian + English)**. Russian is the source of truth
+  and the fallback, English is the translation. User-facing strings never live
+  inline in components: they live in the catalogs `src/i18n/locales/ru/*` and
+  `src/i18n/locales/en/*` (split by domain) and are read with `t()` from
+  `src/i18n` — the active locale follows the `uiLanguage` setting.
+- Adding or changing a visible string means updating **both** catalogs in the
+  same commit; `src/i18n/locales.test.ts` enforces key parity (mirrored by
+  `AGENTS.md` rule checks). The gate `src/i18n/hardcodedText.test.ts` fails on
+  Russian text left inline in a component, a template node or an attribute
+  value; the documented escapes are the catalogs, the `i18n-allow` line marker
+  (own-language names, dev-console logs, internal Error texts, each with a
+  reason) and the functional data allowlist in the test.
+- Text that must re-render on a language switch is computed inside a function /
+  `computed` — module-level `t()` snapshots and materialized view models freeze
+  the language (use `appLocale` from `src/i18n` for a reactive dependency).
+- Dates and numbers go through `src/i18n/date.ts` (Intl per locale), never
+  through a hardcoded `'ru'`/`'ru-RU'` locale.
+- Server-stored data (user, project, process, task, comment, preset and state
+  names) is not translated.
 - **Deliberate exception — changelogs are split per language**: `Changelog_ENG.md` (English) and `Changelog_RU.md` (Russian), see the Changelog section below.
 
 ## Commands

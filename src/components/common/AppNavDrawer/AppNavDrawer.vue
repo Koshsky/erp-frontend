@@ -363,7 +363,7 @@ watch(() => props.categories, (cats) => loadItemIcons(cats), { immediate: true }
       'nd--dragging': drag != null,
     }"
     role="navigation"
-    aria-label="Разделы"
+    :aria-label="t('nav.sections')"
   >
     <div class="nd-inner">
       <!-- Drawer header: the only place the product brand lives. Closing the

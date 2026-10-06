@@ -70,7 +70,7 @@ function onOverlayClick(e: MouseEvent) {
       <div ref="dialogEl" class="mf" :style="maxWidth ? { maxWidth } : undefined" role="dialog" aria-modal="true" :aria-label="title" tabindex="-1" @keydown="onKeydown">
         <div class="mf-head">
           <h3 class="mf-title">{{ title }}</h3>
-          <button type="button" class="mf-close" aria-label="Закрыть" @click="emit('close')">×</button>
+          <button type="button" class="mf-close" :aria-label="t('common.close')" @click="emit('close')">×</button>
         </div>
 
         <slot v-if="$slots.default" />
