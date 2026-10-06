@@ -40,7 +40,7 @@ const { dialogEl, onKeydown } = useModalFocus({
           </span>
           <div class="cdlg-head-text">
             <h3 class="cdlg-title">Журнал изменений</h3>
-            <span class="cdlg-version">Текущая версия: v{{ appVersion }}</span>
+            <span class="cdlg-version">Текущая версия: {{ appVersion }}</span>
           </div>
           <button type="button" class="cdlg-close" aria-label="Закрыть" title="Закрыть" @click="emit('close')">✕</button>
         </header>
