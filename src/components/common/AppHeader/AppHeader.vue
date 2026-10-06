@@ -13,6 +13,11 @@ const authStore = useAuthStore()
 // Theme toggle label (Russian UI copy)
 const themeLabel = computed(() => (resolvedScheme.value === 'dark' ? 'Светлая' : 'Тёмная'))
 
+/** Absolute URL of the changelog page (opened in a separate browser tab). */
+const changelogUrl = computed(() =>
+  new URL(router.resolve({ name: 'changelog' }).href, window.location.href).toString(),
+)
+
 function onLogout(): void {
   authStore.logout()
   router.push('/login')
@@ -69,6 +74,16 @@ const burgerLabel = computed(() => (isNavOpen.value ? 'Закрыть меню' 
       >
         <AppIcon :name="resolvedScheme === 'dark' ? 'sun' : 'moon'" :size="18" />
       </button>
+      <a
+        class="ah-act ah-act--icon"
+        :href="changelogUrl"
+        target="_blank"
+        rel="noopener"
+        title="Журнал изменений"
+        aria-label="Журнал изменений"
+      >
+        <AppIcon name="scroll" :size="18" />
+      </a>
       <button
         type="button"
         class="ah-act ah-act--icon ah-act--logout"
