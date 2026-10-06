@@ -4,7 +4,7 @@
 
 Формат основан на [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/),
 проект придерживается [Semantic Versioning](https://semver.org/lang/ru/).
-Веб-приложение и десктопная обёртка (`desktop/`) версионируются вместе.
+Веб-приложение и десктопная обёртка версионируются вместе.
 
 ## [Unreleased]
 
