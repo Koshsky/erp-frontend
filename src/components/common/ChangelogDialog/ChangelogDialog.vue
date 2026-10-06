@@ -1,14 +1,18 @@
 <script setup lang="ts">
 /**
- * ChangelogDialog: the Russian changelog (Changelog_RU.md — the file maintained
- * with every release) rendered through the shared MarkdownView in a centered
- * modal: rounded corners, header with title and ✕, and a vertically scrolling
- * body. Opened from the header icon.
+ * ChangelogDialog: the changelog of the ACTIVE interface language
+ * (Changelog_RU.md or Changelog_ENG.md — the pair maintained with every
+ * release) rendered through the shared MarkdownView in a centered modal:
+ * rounded corners, header with title and ✕, and a vertically scrolling body.
+ * Opened from the header icon. Both files are bundled as raw text; the switch
+ * is reactive, so a language change re-renders the open dialog.
  */
+import { computed } from 'vue'
+import changelogEn from '../../../../Changelog_ENG.md?raw'
 import changelogRu from '../../../../Changelog_RU.md?raw'
 import { MarkdownView } from '../MarkdownView'
 import { AppIcon } from '../AppIcon'
-import { t } from '../../../i18n'
+import { appLocale, t } from '../../../i18n'
 import { useModalFocus } from '../../../composables/useModalFocus'
 import type { ChangelogDialogProps, ChangelogDialogEmits } from './types'
 
@@ -16,6 +20,9 @@ const props = defineProps<ChangelogDialogProps>()
 const emit = defineEmits<ChangelogDialogEmits>()
 
 const appVersion = __APP_VERSION__
+
+/** Changelog text of the interface language (fallback: Russian). */
+const changelogSource = computed(() => (appLocale.value === 'en' ? changelogEn : changelogRu))
 
 const { dialogEl, onKeydown } = useModalFocus({
   open: () => props.open,
@@ -46,7 +53,7 @@ const { dialogEl, onKeydown } = useModalFocus({
           <button type="button" class="cdlg-close" :aria-label="t('common.close')" :title="t('common.close')" @click="emit('close')">✕</button>
         </header>
         <div class="cdlg-body">
-          <MarkdownView :source="changelogRu" />
+          <MarkdownView :source="changelogSource" />
         </div>
       </div>
     </div>

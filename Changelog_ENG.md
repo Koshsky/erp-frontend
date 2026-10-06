@@ -15,6 +15,11 @@ The web app and the desktop wrapper are versioned together.
 - Hint pages ("?") are localized per interface language, with the Russian document as the fallback.
 - API error messages follow the interface language (the client sends Accept-Language).
 
+### Changed
+
+- The header language button is a toggle switch (only two languages are available) instead of a dropdown.
+- The changelog dialog shows the changelog of the interface language (Changelog_ENG.md / Changelog_RU.md).
+
 ## [1.2.1] - 2026-10-06
 
 ### Fixed

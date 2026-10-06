@@ -81,3 +81,40 @@ export const Interaction: StoryObj = {
     })
   },
 }
+
+/**
+ * The dialog shows the changelog of the interface language: Changelog_ENG.md
+ * for English, Changelog_RU.md otherwise (Russian is the fallback). The switch
+ * is reactive, so an already-open dialog re-renders.
+ */
+export const LocalizedContent: StoryObj = {
+  tags: ['vitest'],
+  render: () => ({
+    components: { ChangelogDialog },
+    setup: () => ({ open: ref(true) }),
+    template: '<ChangelogDialog :open="open" @close="open = false" />',
+  }),
+  play: async ({ step }) => {
+    const { expect } = await import('vitest')
+    const { setAppLocale } = await import('../../../i18n')
+    const card = () => document.querySelector<HTMLElement>('.cdlg-card')
+
+    try {
+      await step('the default content is the Russian changelog', async () => {
+        await new Promise((r) => setTimeout(r, 30))
+        expect(card()!.textContent).toContain('Добавлено')
+        expect(card()!.textContent).not.toContain('Notable changes')
+      })
+
+      await step('switching to English re-renders the dialog with Changelog_ENG.md', async () => {
+        setAppLocale('en')
+        await new Promise((r) => setTimeout(r, 30))
+        expect(card()!.textContent).toContain('Added')
+        expect(card()!.textContent).not.toContain('Добавлено')
+        expect(card()!.textContent).toContain('Changelog')
+      })
+    } finally {
+      setAppLocale('ru')
+    }
+  },
+}

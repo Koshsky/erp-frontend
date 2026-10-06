@@ -44,5 +44,7 @@ logs
 # Документация
 README.md
 *.md
-# ChangelogDialog imports Changelog_RU.md as ?raw — keep it in the context.
+# ChangelogDialog imports both changelog files as ?raw (the dialog shows the
+# one matching the interface language) — keep them in the build context.
 !Changelog_RU.md
+!Changelog_ENG.md
