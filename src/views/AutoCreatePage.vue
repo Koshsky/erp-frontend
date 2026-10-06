@@ -7,6 +7,7 @@ import { useAppStore } from '../store'
 import { ColorField, ConfirmDialog } from '../components/common'
 import { randomPaletteColor } from '../components/common/ColorField/palette'
 import { useConfirm } from '../composables/useConfirm'
+import { notifyError, notifySuccess } from '../notify/state'
 
 interface LocalResource {
   resource_id: number
@@ -69,7 +70,6 @@ const { autoCreateConfig, autoCreateLoading, autoCreateError, users, resources }
 const form = reactive<{ enabled: boolean; processes: LocalProcess[] }>({ enabled: true, processes: [] })
 const dirty = ref(false)
 const saving = ref(false)
-const saveMsg = ref<{ ok: boolean; text: string } | null>(null)
 const previewOpen = ref(false)
 
 const { confirm: confirmDialog, ask, proceed, cancel } = useConfirm()
@@ -125,18 +125,15 @@ function resetForm() {
   }))
   dirty.value = false
   saving.value = false
-  saveMsg.value = null
   previewOpen.value = false
 }
 
 watch(autoCreateConfig, () => {
-  // Reload the form when the config arrives/changes externally, but keep a
-  // successful save message (our own save also updates autoCreateConfig).
-  if (autoCreateConfig.value && !saveMsg.value?.ok) resetForm()
+  // Reload the form when the config arrives/changes externally.
+  if (autoCreateConfig.value) resetForm()
 })
 
 async function reload() {
-  saveMsg.value = null
   await app.loadAutoCreateConfig()
   if (autoCreateConfig.value) {
     if (!users.value.length) await app.loadUsers()
@@ -306,11 +303,10 @@ async function onSave() {
   if (saving.value || !dirty.value) return
   const err = validate()
   if (err) {
-    saveMsg.value = { ok: false, text: err }
+    notifyError(err)
     return
   }
   saving.value = true
-  saveMsg.value = null
   const ok = await app.saveAutoCreateConfig({
     enabled: form.enabled,
     processes: form.processes.map((p) => ({
@@ -331,8 +327,9 @@ async function onSave() {
   })
   saving.value = false
   // Summary only: the raw API error on failure is surfaced by the global
-  // toast (http.ts), so the inline message stays a generic custom summary.
-  saveMsg.value = { ok, text: ok ? 'Сохранено' : 'Ошибка сохранения' }
+  // toast (http.ts), so the notification stays a generic custom summary.
+  if (ok) notifySuccess('Сохранено')
+  else notifyError('Ошибка сохранения')
   if (ok) dirty.value = false
 }
 </script>
@@ -466,7 +463,6 @@ async function onSave() {
       <div class="ac-actions">
         <button type="button" class="ac-save" :disabled="saving || !dirty" @click="onSave">Сохранить</button>
         <button v-if="dirty" type="button" class="ac-cancel" :disabled="saving" @click="resetForm">Отменить</button>
-        <p v-if="saveMsg" class="ac-msg" :class="saveMsg.ok ? 'ok' : 'er'">{{ saveMsg.text }}</p>
       </div>
     </div>
 
@@ -784,15 +780,5 @@ async function onSave() {
   font-size: calc(var(--ui-font-scale, 1) * 14px);
   color: var(--ui-text-2);
   cursor: pointer;
-}
-.ac-msg {
-  margin: 0;
-  font-size: calc(var(--ui-font-scale, 1) * 14px);
-}
-.ac-msg.ok {
-  color: var(--ui-success);
-}
-.ac-msg.er {
-  color: var(--ui-danger);
 }
 </style>

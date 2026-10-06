@@ -7,15 +7,13 @@ import { warmNow, warmupProgress } from '../offline/warmup'
 import { syncNow, syncAll, syncNotice } from '../offline/sync'
 import { pendingCount, pushProgress, refreshPendingCount } from '../offline/outbox'
 import { isOffline } from '../offline/state'
+import { notifyError, notifyInfo, notifySuccess } from '../notify/state'
 
 const router = useRouter()
 const route = useRoute()
 const auth = useAuthStore()
 
 const busy = ref(false)
-const statusMsg = ref<string | null>(null)
-const statusOk = ref(false)
-const apiUrlWarn = ref<string | null>(null)
 const apiUrl = ref('')
 
 let refreshTimer: number | null = null
@@ -31,16 +29,6 @@ const pushPercent = computed(() => {
 
 const connectionLabel = computed(() => (isOffline.value ? 'офлайн' : 'онлайн'))
 
-function okMsg(msg: string) {
-  statusMsg.value = msg
-  statusOk.value = true
-}
-
-function failMsg(msg: string) {
-  statusMsg.value = msg
-  statusOk.value = false
-}
-
 function requireAuth(): boolean {
   if (auth.isAuthenticated) return true
   void router.push({ name: 'login', query: { redirect: route.fullPath } })
@@ -48,10 +36,11 @@ function requireAuth(): boolean {
 }
 
 function applyApiUrl(): boolean {
-  apiUrlWarn.value = httpSchemeWarning(apiUrl.value)
+  const warn = httpSchemeWarning(apiUrl.value)
+  if (warn) notifyInfo(warn)
   const applied = setApiUrl(apiUrl.value, true)
   if (!applied) {
-    failMsg('Некорректный API_URL: ожидается http(s)://…')
+    notifyError('Некорректный API_URL: ожидается http(s)://…')
   }
   return applied
 }
@@ -64,21 +53,20 @@ async function refreshStatus() {
 async function onPull() {
   if (busy.value) return
   busy.value = true
-  statusMsg.value = null
   try {
     if (!requireAuth()) return
     if (!applyApiUrl()) return
     if (isOffline.value) {
-      failMsg('Нет соединения с сервером — PULL недоступен')
+      notifyError('Нет соединения с сервером — PULL недоступен')
       return
     }
     const ran = await warmNow(true)
     if (ran) {
-      okMsg('Данные прогреты')
+      notifySuccess('Данные прогреты')
     } else if (isOffline.value) {
-      failMsg('Прогревка недоступна: нет сети')
+      notifyError('Прогревка недоступна: нет сети')
     } else {
-      failMsg('Прогревка уже идёт')
+      notifyError('Прогревка уже идёт')
     }
     await refreshStatus()
   } finally {
@@ -93,18 +81,17 @@ async function onPull() {
 async function onPush() {
   if (busy.value) return
   busy.value = true
-  statusMsg.value = null
   try {
     await syncNow()
     const n = syncNotice.value
     if (n?.interrupted) {
-      failMsg(`Сеть снова пропала: отправлено ${n.ok}, остальное в очереди`)
+      notifyError(`Сеть снова пропала: отправлено ${n.ok}, остальное в очереди`)
     } else if (n && n.failed > 0) {
-      failMsg(`Отправлено ${n.ok}, ошибок ${n.failed}. Повторите или пропустите ошибки`)
+      notifyError(`Отправлено ${n.ok}, ошибок ${n.failed}. Повторите или пропустите ошибки`)
     } else if (n) {
-      okMsg(`Отправлено изменений: ${n.ok}`)
+      notifySuccess(`Отправлено изменений: ${n.ok}`)
     } else {
-      okMsg('Нечего отправлять')
+      notifySuccess('Нечего отправлять')
     }
     await refreshStatus()
   } finally {
@@ -116,12 +103,11 @@ async function onPush() {
 async function onSyncAll() {
   if (busy.value) return
   busy.value = true
-  statusMsg.value = null
   try {
     if (!requireAuth()) return
     if (!applyApiUrl()) return
     if (isOffline.value) {
-      failMsg('Нет соединения с сервером — синхронизация недоступна')
+      notifyError('Нет соединения с сервером — синхронизация недоступна')
       return
     }
     const res = await syncAll()
@@ -130,11 +116,11 @@ async function onSyncAll() {
     if (res.pushed) parts.push(`отправлено изменений: ${n?.ok ?? 0}`)
     if (res.pulled) parts.push('данные скачаны')
     if (parts.length > 0) {
-      okMsg('Синхронизация завершена: ' + parts.join(', '))
+      notifySuccess('Синхронизация завершена: ' + parts.join(', '))
     } else if (n && n.failed > 0) {
-      failMsg(`Отправлено ${n.ok}, ошибок ${n.failed}. Повторите или пропустите ошибки`)
+      notifyError(`Отправлено ${n.ok}, ошибок ${n.failed}. Повторите или пропустите ошибки`)
     } else {
-      okMsg('Синхронизация завершена: отправлять и скачивать нечего')
+      notifySuccess('Синхронизация завершена: отправлять и скачивать нечего')
     }
     await refreshStatus()
   } finally {
@@ -203,8 +189,6 @@ onBeforeUnmount(() => {
       <button type="button" class="sp-btn accent" :disabled="busy || isOffline" @click="onSyncAll">
         Синхронизировать всё (PUSH → PULL)
       </button>
-
-      <p v-if="statusMsg" class="sp-msg" :class="{ ok: statusOk }">{{ statusMsg }}</p>
     </div>
   </section>
 </template>
@@ -336,15 +320,5 @@ onBeforeUnmount(() => {
   font-size: calc(var(--ui-font-scale, 1) * 12px);
   color: var(--ui-text-2);
   text-align: right;
-}
-
-.sp-msg {
-  font-size: calc(var(--ui-font-scale, 1) * 13px);
-  color: var(--ui-danger);
-  margin: 10px 0 0;
-}
-
-.sp-msg.ok {
-  color: var(--ui-success);
 }
 </style>

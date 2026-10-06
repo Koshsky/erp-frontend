@@ -14,6 +14,7 @@ import { SCOPE_OPTIONS as SCOPE_CHIPS } from '../components/common/UserPermissio
 import { canonicalScope, scopeMoves, toggleScopeMove } from '@/rbacScope'
 import { useRbacStore } from '../store'
 import { useConfirm } from '../composables/useConfirm'
+import { notifyError, notifySuccess } from '../notify/state'
 import { presetDisplayName } from '../utils/presets'
 
 const rbac = useRbacStore()
@@ -276,17 +277,10 @@ const dirtyChanges = computed(() =>
   }),
 )
 
-interface SaveMsg {
-  ok: boolean
-  text: string
-}
-const saveMsg = ref<SaveMsg | null>(null)
-
 async function save() {
   const keys = dirtyKeys.value
   if (!keys.length || saving.value) return
   saving.value = true
-  saveMsg.value = null
   const failures: string[] = []
   for (const key of keys) {
     const [preset, resource, action] = key.split('|')
@@ -305,16 +299,15 @@ async function save() {
   await rbac.reloadRules()
   saving.value = false
   if (failures.length) {
-    saveMsg.value = { ok: false, text: `Не сохранилось: ${failures.join('; ')}` }
+    notifyError(`Не сохранилось: ${failures.join('; ')}`)
     return
   }
   for (const key of keys) delete staged[key]
-  saveMsg.value = { ok: true, text: 'Права обновлены и применены' }
+  notifySuccess('Права обновлены и применены')
 }
 
 function cancelDirty() {
   for (const key of dirtyKeys.value) delete staged[key]
-  saveMsg.value = null
 }
 
 // Reset to defaults.
@@ -330,7 +323,6 @@ const BUILTIN_PRESETS = new Set(['admin'])
 /** Preset name pattern: letters of any script (latin/cyrillic), digits, «-», «_»
  *  (mirrors the backend codec). */
 const PRESET_TAG_RE = /^[\p{L}\p{N}_-]+$/u
-const presetMsg = ref<{ ok: boolean; text: string } | null>(null)
 
 /** Validates the create/rename form: tag (code) + display name. excludeTag —
  *  the rename target's own tag (collision with itself is allowed). */
@@ -365,7 +357,7 @@ async function onCreatePreset() {
   const ok = await rbac.createPreset({ tag, name, description: createForm.description.trim() })
   createBusy.value = false
   if (!ok) return
-  presetMsg.value = { ok: true, text: `Пресет «${name}» создан` }
+  notifySuccess(`Пресет «${name}» создан`)
   createOpen.value = false
   selected.value = tag
   void rbac.loadRbac()
@@ -406,7 +398,7 @@ async function onRenamePreset() {
   })
   renameBusy.value = false
   if (!ok) return
-  presetMsg.value = ok ? { ok: true, text: `Пресет переименован в «${name}»` } : null
+  notifySuccess(`Пресет переименован в «${name}»`)
   renameOpen.value = false
   if (selected.value === renameTarget.value) selected.value = tag
   void rbac.loadRbac()
@@ -431,7 +423,7 @@ async function onDeletePreset() {
   const ok = await rbac.deletePreset(deleteTarget.value)
   deleteBusy.value = false
   if (!ok) return
-  presetMsg.value = { ok: true, text: `Пресет «${presetName(deleteTarget.value)}» удалён` }
+  notifySuccess(`Пресет «${presetName(deleteTarget.value)}» удалён`)
   deleteOpen.value = false
   if (selected.value === deleteTarget.value) {
     const rest = presetList.value.filter((p) => p !== deleteTarget.value)
@@ -461,9 +453,9 @@ function onCtxSelect(id: string) {
 function onReset() {
   ask('Вернуть все права и маршрутные проверки к значениям по умолчанию?', () => {
     void (async () => {
-      saveMsg.value = (await rbac.resetRbac())
-        ? { ok: true, text: 'Права сброшены к значениям по умолчанию' }
-        : { ok: false, text: error.value ?? 'Не удалось сбросить права' }
+      const ok = await rbac.resetRbac()
+      if (ok) notifySuccess('Права сброшены к значениям по умолчанию')
+      else notifyError(error.value ?? 'Не удалось сбросить права')
     })()
   }, 'Сбросить')
 }
@@ -488,8 +480,6 @@ onMounted(() => {
       <h2 class="pm-title">Пресеты прав</h2>
       <HintButton hint="presets-editor" />
     </div>
-
-    <p v-if="presetMsg" class="pm-save-msg" :class="{ er: !presetMsg.ok }">{{ presetMsg.text }}</p>
 
     <p v-if="loading && !presetRules.length" class="pm-load">Загрузка...</p>
     <p v-if="error && !presetRules.length" class="pm-load er">{{ error }}</p>
@@ -664,8 +654,6 @@ onMounted(() => {
         <button type="button" class="pm-btn danger" :disabled="saving" @click="onReset">Сбросить всё к дефолтам</button>
       </div>
     </div>
-
-    <p v-if="saveMsg && !dirtyKeys.length" class="pm-save-msg" :class="{ er: !saveMsg.ok }">{{ saveMsg.text }}</p>
 
     <ConfirmDialog
       :open="!!confirmDialog"

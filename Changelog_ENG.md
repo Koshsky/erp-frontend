@@ -15,6 +15,7 @@ The web app and the desktop wrapper (`desktop/`) are versioned together.
 - Weekday labels in the calendar header raised by a couple of pixels.
 - Presets have three editable fields — name, tag (access code) and description — set on creation and changeable later; lists and selects show the preset name.
 - The preset tooltip shows its description.
+- Action notifications (saving, preset create/rename/delete, password change, sync) moved into the notification stack instead of colored text at the top of the page.
 
 ## [1.1.0] - 2026-10-01
 

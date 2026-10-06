@@ -3,14 +3,13 @@ import { ref, computed } from 'vue'
 import { useAuthStore } from '../store'
 import { PasswordField, PasswordRequirements } from '../components/common'
 import { passwordRules, validatePassword } from '../composables/usePasswordValidation'
+import { notifyError, notifySuccess } from '../notify/state'
 
 const auth = useAuthStore()
 
 const oldPassword = ref('')
 const newPassword = ref('')
 const confirmPassword = ref('')
-const changeMsg = ref<string | null>(null)
-const changeOk = ref(false)
 
 const passwordChecks = [
   ...passwordRules(),
@@ -28,29 +27,26 @@ const newPasswordValid = computed(() => validatePassword(newPassword.value, pass
 const passwordConfirmed = computed(() => confirmPassword.value === newPassword.value)
 
 async function onChangePassword() {
-  changeMsg.value = null
-  changeOk.value = false
   if (!oldPassword.value || !newPassword.value || !confirmPassword.value) {
-    changeMsg.value = 'Заполните все поля'
+    notifyError('Заполните все поля')
     return
   }
   if (!newPasswordValid.value) {
-    changeMsg.value = 'Новый пароль не соответствует требованиям'
+    notifyError('Новый пароль не соответствует требованиям')
     return
   }
   if (!passwordConfirmed.value) {
-    changeMsg.value = 'Новый пароль не совпадает с подтверждением'
+    notifyError('Новый пароль не совпадает с подтверждением')
     return
   }
   const ok = await auth.changePassword(oldPassword.value, newPassword.value)
   if (ok) {
-    changeMsg.value = 'Пароль успешно изменён'
-    changeOk.value = true
+    notifySuccess('Пароль успешно изменён')
     oldPassword.value = ''
     newPassword.value = ''
     confirmPassword.value = ''
   } else {
-    changeMsg.value = auth.error ?? 'Не удалось изменить пароль'
+    notifyError(auth.error ?? 'Не удалось изменить пароль')
   }
 }
 </script>
@@ -69,8 +65,6 @@ async function onChangePassword() {
             <PasswordField v-model="confirmPassword" label="Подтверждение пароля" autocomplete="new-password" placeholder="Повторите пароль" />
             <PasswordRequirements :model-value="newPassword" :rules="passwordChecks" />
           </div>
-
-          <p v-if="changeMsg" class="pf-msg" :class="{ ok: changeOk }">{{ changeMsg }}</p>
 
           <button type="submit" class="pf-btn" :disabled="auth.loading">
             {{ auth.loading ? 'Сохранение…' : 'Сменить пароль' }}
@@ -120,15 +114,6 @@ async function onChangePassword() {
   display: flex;
   flex-direction: column;
   gap: 14px;
-}
-
-.pf-msg {
-  margin-top: 14px;
-  font-size: calc(var(--ui-font-scale, 1) * 13px);
-  color: var(--ui-danger);
-}
-.pf-msg.ok {
-  color: var(--ui-success);
 }
 
 .pf-btn {

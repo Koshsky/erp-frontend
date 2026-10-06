@@ -3,11 +3,10 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { queueItems, refreshPendingCount, getFailedEntries } from '../offline/outbox'
 import { retryFailed, discardFailed, syncNotice, dismissSyncNotice } from '../offline/sync'
 import { isOffline } from '../offline/state'
+import { notifyError, notifySuccess } from '../notify/state'
 
 const failedEntries = ref<Array<{ method: string; url: string; message: string }>>([])
 const busy = ref(false)
-const statusMsg = ref<string | null>(null)
-const statusOk = ref(false)
 
 let refreshTimer: number | null = null
 
@@ -53,11 +52,6 @@ function shortUrl(url: string): string {
   }
 }
 
-function okMsg(msg: string) {
-  statusMsg.value = msg
-  statusOk.value = true
-}
-
 async function refreshStatus() {
   await refreshPendingCount().catch(() => {})
   failedEntries.value = (await getFailedEntries().catch(() => [])).map((e) => ({
@@ -70,11 +64,11 @@ async function refreshStatus() {
 async function onRetry() {
   if (busy.value) return
   busy.value = true
-  statusMsg.value = null
   try {
     await retryFailed()
     const n = syncNotice.value
-    okMsg(n?.failed ? `Отправлено ${n.ok}, ошибок ${n.failed}` : 'Отправлено без ошибок')
+    if (n?.failed) notifyError(`Отправлено ${n.ok}, ошибок ${n.failed}`)
+    else notifySuccess('Отправлено без ошибок')
     await refreshStatus()
   } finally {
     busy.value = false
@@ -84,11 +78,10 @@ async function onRetry() {
 async function onDiscard() {
   if (busy.value) return
   busy.value = true
-  statusMsg.value = null
   try {
     await discardFailed()
     dismissSyncNotice()
-    okMsg('Отвергнутые записи удалены')
+    notifySuccess('Отвергнутые записи удалены')
     await refreshStatus()
   } finally {
     busy.value = false
@@ -197,7 +190,6 @@ onBeforeUnmount(() => {
           <button type="button" class="sp-btn ghost" :disabled="busy" @click="onDiscard">Пропустить ошибки</button>
         </div>
       </div>
-      <p v-if="statusMsg" class="sp-msg" :class="{ ok: statusOk }">{{ statusMsg }}</p>
     </div>
   </section>
 </template>
@@ -501,15 +493,5 @@ onBeforeUnmount(() => {
 .sp-actions .sp-btn {
   flex: 1;
   margin-top: 14px;
-}
-
-.sp-msg {
-  font-size: calc(var(--ui-font-scale, 1) * 13px);
-  color: var(--ui-danger);
-  margin: 10px 0 0;
-}
-
-.sp-msg.ok {
-  color: var(--ui-success);
 }
 </style>

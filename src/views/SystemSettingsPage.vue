@@ -17,6 +17,7 @@ import {
   saveUiSettings,
 } from '../settings'
 import { viewSettings, SCALE_MIN, SCALE_MAX, SCALE_STEP, CELL_ZOOM_MIN, CELL_ZOOM_MAX, CELL_ZOOM_STEP } from '../settings'
+import { notifyError, notifyInfo, notifySuccess } from '../notify/state'
 
 type SettingsSection = 'interface' | 'tables' | 'diagrams' | 'sync' | 'connection'
 
@@ -31,35 +32,22 @@ const SECTIONS: { id: SettingsSection; label: string }[] = [
 ]
 
 const apiUrl = ref('')
-const apiUrlWarn = ref<string | null>(null)
-const statusMsg = ref<string | null>(null)
-const statusOk = ref(false)
-
-function okMsg(msg: string) {
-  statusMsg.value = msg
-  statusOk.value = true
-}
-
-function failMsg(msg: string) {
-  statusMsg.value = msg
-  statusOk.value = false
-}
 
 /** Applies the URL from the field to the runtime config; false — invalid URL */
 function applyApiUrl(): boolean {
-  apiUrlWarn.value = httpSchemeWarning(apiUrl.value)
+  const warn = httpSchemeWarning(apiUrl.value)
+  if (warn) notifyInfo(warn)
   const applied = setApiUrl(apiUrl.value, true)
   if (!applied) {
-    failMsg('Некорректный API_URL: ожидается http(s)://…')
+    notifyError('Некорректный API_URL: ожидается http(s)://…')
   }
   return applied
 }
 
 /** The "Save" button for API_URL: validates and saves to localStorage */
 function onSaveApiUrl() {
-  statusMsg.value = null
   if (!applyApiUrl()) return
-  okMsg('API_URL сохранён')
+  notifySuccess('API_URL сохранён')
 }
 
 watch(autoSync, saveSyncSettings)
@@ -253,7 +241,6 @@ onMounted(() => {
           <span>API_URL бэкенда</span>
           <input v-model="apiUrl" type="text" spellcheck="false" placeholder="https://host/api/v1" />
         </label>
-        <p v-if="apiUrlWarn" class="st-msg warn">{{ apiUrlWarn }}</p>
         <div class="st-actions st-actions--tight">
           <button type="button" class="st-btn st-btn--sm" @click="onSaveApiUrl">
             Сохранить
@@ -265,8 +252,7 @@ onMounted(() => {
       </div>
     </template>
 
-    <p v-if="statusMsg" class="st-status-msg" :class="{ ok: statusOk }">{{ statusMsg }}</p>
-  </section>
+    </section>
 </template>
 
 <style scoped>
@@ -437,22 +423,6 @@ onMounted(() => {
 
 .st-actions--tight {
   margin-top: 0;
-}
-
-.st-msg {
-  font-size: calc(var(--ui-font-scale, 1) * 13px);
-  color: var(--ui-warning);
-  margin: 0 0 10px;
-}
-
-.st-status-msg {
-  font-size: calc(var(--ui-font-scale, 1) * 13px);
-  color: var(--ui-danger);
-  margin: 14px 0 0;
-}
-
-.st-status-msg.ok {
-  color: var(--ui-success);
 }
 
 .st-radio {
