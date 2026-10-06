@@ -19,8 +19,9 @@ import { useFindPlanningItem } from '../composables/useFindPlanningItem'
 import { usePlanningStore, useAppStore, useRbacStore } from '../store'
 import { isOffline } from '../offline/state'
 import { scheduleNamedRefresh } from '../offline/sync'
-import { addMonthsISO, fmtDate } from '../components/planner/calendar'
+import { addDaysISO, fmtDate } from '../components/planner/calendar'
 import { CELL_WIDTH } from '../components/planner/layout'
+import { viewSettings } from '../settings'
 import type { DtoProject } from '@/api'
 
 const store = usePlanningStore()
@@ -198,7 +199,7 @@ async function createProjectAt(date: string) {
   const res = await store.createProject({
     code: 'КО_' + Date.now(),
     start_date: date,
-    end_date: addMonthsISO(date, 6),
+    end_date: addDaysISO(date, viewSettings.defaultProjectDays),
   })
   // A failed creation is reported by the global toast (http.ts) — no inline banner.
   if (res.ok && res.autoCreated) {

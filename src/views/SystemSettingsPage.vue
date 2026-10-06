@@ -16,7 +16,7 @@ import {
   TABLE_PAGE_SIZE_OPTIONS,
   saveUiSettings,
 } from '../settings'
-import { viewSettings, SCALE_MIN, SCALE_MAX, SCALE_STEP, CELL_ZOOM_MIN, CELL_ZOOM_MAX, CELL_ZOOM_STEP } from '../settings'
+import { viewSettings, SCALE_MIN, SCALE_MAX, SCALE_STEP, CELL_ZOOM_MIN, CELL_ZOOM_MAX, CELL_ZOOM_STEP, PROJECT_DAYS_MIN, PROJECT_DAYS_MAX, PROJECT_DAYS_STEP } from '../settings'
 import { notifyError, notifyInfo, notifySuccess } from '../notify/state'
 
 type SettingsSection = 'interface' | 'tables' | 'diagrams' | 'sync' | 'connection'
@@ -196,6 +196,21 @@ onMounted(() => {
             От {{ CELL_ZOOM_MIN }}% до {{ CELL_ZOOM_MAX }}% ширины колонки этого окна — как после
             Ctrl+Shift+колесо. 100% = автоматически по ширине окна.
           </p>
+        </div>
+        <div class="st-field">
+          <span>Длительность проекта по умолчанию</span>
+          <div class="st-scale-row">
+            <input
+              v-model.number="viewSettings.defaultProjectDays"
+              type="range"
+              :min="PROJECT_DAYS_MIN"
+              :max="PROJECT_DAYS_MAX"
+              :step="PROJECT_DAYS_STEP"
+              class="st-scale"
+            />
+            <span class="st-scale-value">{{ viewSettings.defaultProjectDays }} дн.</span>
+          </div>
+          <p class="st-hint">На столько дней создаётся проект по кнопке «Создать» или правым кликом по шкале</p>
         </div>
         <div class="st-field">
           <span>Единица календаря по умолчанию</span>

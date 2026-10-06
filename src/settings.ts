@@ -163,6 +163,8 @@ export interface ViewSettings {
   /** Initial cell width at open (% of the responsive base column width for the
    *  current window). 50–200%; 100 keeps the adaptive default (no fixed cell). */
   defaultCellZoom: number
+  /** How long a project created from the UI lasts, in days (the "Создать" button / right-click) */
+  defaultProjectDays: number
   /** Whether the visible "Save to PDF / Print" toolbar buttons are shown */
   showPdfButtons: boolean
 }
@@ -175,6 +177,7 @@ const DEFAULT_VIEW_SETTINGS: ViewSettings = {
   defaultUnit: 'day',
   defaultScale: 100,
   defaultCellZoom: 100,
+  defaultProjectDays: 180,
   showPdfButtons: true,
 }
 
@@ -215,6 +218,11 @@ export const SCALE_STEP = 5
 export const CELL_ZOOM_MIN = 50
 export const CELL_ZOOM_MAX = 200
 export const CELL_ZOOM_STEP = 5
+
+/** Default project duration offered by the UI (days, used on project create). */
+export const PROJECT_DAYS_MIN = 1
+export const PROJECT_DAYS_MAX = 1095
+export const PROJECT_DAYS_STEP = 1
 
 /** Hard upper bound of the physical cell width in px (mirrors ZOOM_MAX in useTimelineZoom). */
 export const MAX_CELL_PX = 100
