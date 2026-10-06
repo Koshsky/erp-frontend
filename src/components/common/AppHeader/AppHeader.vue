@@ -6,7 +6,8 @@ import { resolvedScheme, toggleScheme } from '../../../theme'
 import { isNavOpen, toggleNav } from '../../../composables/useNavDrawer'
 import { AppIcon } from '../AppIcon'
 import { ChangelogDialog } from '../ChangelogDialog'
-import { t } from '../../../i18n'
+import { t, detectBrowserLanguage } from '../../../i18n'
+import { uiLanguage, type UiLanguage } from '../../../settings'
 
 const router = useRouter()
 const route = useRoute()
@@ -15,6 +16,17 @@ const authStore = useAuthStore()
 // Theme toggle label (Russian UI copy)
 const themeLabel = computed(() => t(resolvedScheme.value === 'dark' ? 'header.themeDark' : 'header.themeLight'))
 const themeToggleTitle = computed(() => t('header.themeToggle', { theme: themeLabel.value }))
+
+/** The active interface language ('auto' resolves to the detected one). */
+const currentLanguage = computed<'ru' | 'en'>(() =>
+  uiLanguage.value === 'auto' ? detectBrowserLanguage() : uiLanguage.value,
+)
+
+/** Square language toggle: switches RU ↔ EN and pins the setting. */
+function toggleLanguage(): void {
+  const next: UiLanguage = currentLanguage.value === 'ru' ? 'en' : 'ru'
+  uiLanguage.value = next
+}
 
 /** Whether the centered changelog dialog is visible (header icon) */
 const changelogOpen = ref(false)
@@ -74,6 +86,15 @@ const burgerLabel = computed(() => (isNavOpen.value ? t('header.menuClose') : t(
         @click="toggleScheme"
       >
         <AppIcon :name="resolvedScheme === 'dark' ? 'sun' : 'moon'" :size="18" />
+      </button>
+      <button
+        type="button"
+        class="ah-act ah-act--icon ah-lang"
+        :title="t('header.language')"
+        :aria-label="t('header.language')"
+        @click="toggleLanguage"
+      >
+        {{ currentLanguage.toUpperCase() }}
       </button>
       <button
         type="button"
@@ -225,6 +246,14 @@ const burgerLabel = computed(() => (isNavOpen.value ? t('header.menuClose') : t(
   width: 42px;
   padding: 0;
   justify-content: center;
+}
+
+/* Language toggle: a square button showing the two-letter language code */
+.ah-lang {
+  font-size: calc(var(--ui-font-scale, 1) * 12px);
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  color: var(--ui-text-2);
 }
 
 .ah-act--logout:hover:not(:disabled) {

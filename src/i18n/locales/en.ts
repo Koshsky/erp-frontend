@@ -24,6 +24,7 @@ export default {
     themeLight: 'light',
     themeDark: 'dark',
     changelog: 'Changelog',
+    language: 'Interface language',
     logout: 'Sign out',
     menuShortcut: 'Menu (Ctrl+B)',
     menuOpen: 'Open menu',

@@ -18,6 +18,7 @@ export default {
     themeLight: 'светлая',
     themeDark: 'тёмная',
     changelog: 'Журнал изменений',
+    language: 'Язык интерфейса',
     logout: 'Выйти из системы',
     menuShortcut: 'Меню (Ctrl+B)',
     menuOpen: 'Открыть меню',
