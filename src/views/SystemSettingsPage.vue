@@ -16,7 +16,7 @@ import {
   TABLE_PAGE_SIZE_OPTIONS,
   saveUiSettings,
 } from '../settings'
-import { viewSettings, SCALE_MIN, SCALE_MAX, SCALE_STEP, CELL_ZOOM_MIN, CELL_ZOOM_MAX, CELL_ZOOM_STEP, PROJECT_DAYS_MIN, PROJECT_DAYS_MAX, PROJECT_DAYS_STEP } from '../settings'
+import { viewSettings, SCALE_MIN, SCALE_MAX, SCALE_STEP, CELL_ZOOM_MIN, CELL_ZOOM_MAX, CELL_ZOOM_STEP, PROJECT_DAYS_MIN, PROJECT_DAYS_MAX } from '../settings'
 import { notifyError, notifyInfo, notifySuccess } from '../notify/state'
 
 type SettingsSection = 'interface' | 'tables' | 'diagrams' | 'sync' | 'connection'
@@ -32,6 +32,25 @@ const SECTIONS: { id: SettingsSection; label: string }[] = [
 ]
 
 const apiUrl = ref('')
+
+/** Clamps the typed project duration into the allowed range (empty/invalid → default). */
+function normalizeProjectDays() {
+  const raw = viewSettings.defaultProjectDays
+  if (!Number.isFinite(raw)) {
+    viewSettings.defaultProjectDays = 180
+    return
+  }
+  viewSettings.defaultProjectDays = Math.min(
+    PROJECT_DAYS_MAX,
+    Math.max(PROJECT_DAYS_MIN, Math.round(raw)),
+  )
+}
+
+/** Enter in the number field commits the value and closes editing. */
+function onProjectDaysEnter(e: KeyboardEvent) {
+  normalizeProjectDays()
+  ;(e.target as HTMLInputElement).blur()
+}
 
 /** Applies the URL from the field to the runtime config; false — invalid URL */
 function applyApiUrl(): boolean {
@@ -199,16 +218,19 @@ onMounted(() => {
         </div>
         <div class="st-field">
           <span>Длительность проекта по умолчанию</span>
-          <div class="st-scale-row">
+          <div class="st-num-row">
             <input
               v-model.number="viewSettings.defaultProjectDays"
-              type="range"
+              type="number"
               :min="PROJECT_DAYS_MIN"
               :max="PROJECT_DAYS_MAX"
-              :step="PROJECT_DAYS_STEP"
-              class="st-scale"
+              step="1"
+              class="st-num"
+              aria-label="Длительность проекта по умолчанию, дней"
+              @blur="normalizeProjectDays"
+              @keydown.enter="onProjectDaysEnter"
             />
-            <span class="st-scale-value">{{ viewSettings.defaultProjectDays }} дн.</span>
+            <span class="st-num-unit">дн.</span>
           </div>
           <p class="st-hint">На столько дней создаётся проект по кнопке «Создать» или правым кликом по шкале</p>
         </div>
@@ -470,5 +492,32 @@ onMounted(() => {
   font-variant-numeric: tabular-nums;
   min-width: 48px;
   text-align: right;
+}
+/* Number input for the default project duration (typed, not a slider) */
+.st-num-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.st-num {
+  box-sizing: border-box;
+  width: 110px;
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius-sm);
+  padding: 8px 10px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
+  font-family: inherit;
+  color: var(--ui-text);
+  background: var(--ui-surface);
+  outline: none;
+  transition: border-color var(--ui-duration), box-shadow var(--ui-duration);
+}
+.st-num:focus {
+  border-color: var(--ui-accent);
+  box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.12);
+}
+.st-num-unit {
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
+  color: var(--ui-text-2);
 }
 </style>
