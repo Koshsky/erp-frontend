@@ -8,6 +8,7 @@
 import changelogRu from '../../../../Changelog_RU.md?raw'
 import { MarkdownView } from '../MarkdownView'
 import { AppIcon } from '../AppIcon'
+import { t } from '../../../i18n'
 import { useModalFocus } from '../../../composables/useModalFocus'
 import type { ChangelogDialogProps, ChangelogDialogEmits } from './types'
 
@@ -30,7 +31,7 @@ const { dialogEl, onKeydown } = useModalFocus({
         class="cdlg-card"
         role="dialog"
         aria-modal="true"
-        aria-label="Журнал изменений"
+        :aria-label="t('changelog.title')"
         tabindex="-1"
         @keydown="onKeydown"
       >
@@ -39,10 +40,10 @@ const { dialogEl, onKeydown } = useModalFocus({
             <AppIcon name="scroll" :size="18" />
           </span>
           <div class="cdlg-head-text">
-            <h3 class="cdlg-title">Журнал изменений</h3>
-            <span class="cdlg-version">Текущая версия: {{ appVersion }}</span>
+            <h3 class="cdlg-title">{{ t('changelog.title') }}</h3>
+            <span class="cdlg-version">{{ t('changelog.currentVersion') }} {{ appVersion }}</span>
           </div>
-          <button type="button" class="cdlg-close" aria-label="Закрыть" title="Закрыть" @click="emit('close')">✕</button>
+          <button type="button" class="cdlg-close" :aria-label="t('common.close')" :title="t('common.close')" @click="emit('close')">✕</button>
         </header>
         <div class="cdlg-body">
           <MarkdownView :source="changelogRu" />

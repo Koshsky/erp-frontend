@@ -16,7 +16,7 @@ import {
   TABLE_PAGE_SIZE_OPTIONS,
   saveUiSettings,
 } from '../settings'
-import { viewSettings, SCALE_MIN, SCALE_MAX, SCALE_STEP, CELL_ZOOM_MIN, CELL_ZOOM_MAX, CELL_ZOOM_STEP, PROJECT_DAYS_MIN, PROJECT_DAYS_MAX } from '../settings'
+import { viewSettings, uiLanguage, SCALE_MIN, SCALE_MAX, SCALE_STEP, CELL_ZOOM_MIN, CELL_ZOOM_MAX, CELL_ZOOM_STEP, PROJECT_DAYS_MIN, PROJECT_DAYS_MAX } from '../settings'
 import { notifyError, notifyInfo, notifySuccess } from '../notify/state'
 
 type SettingsSection = 'interface' | 'tables' | 'diagrams' | 'sync' | 'connection'
@@ -122,6 +122,15 @@ onMounted(() => {
             <option value="large">Крупный</option>
           </select>
           <p class="st-hint">Применяется сразу, без перезагрузки.</p>
+        </div>
+        <div class="st-field">
+          <span>Язык интерфейса</span>
+          <select v-model="uiLanguage" class="st-select">
+            <option value="auto">Как в системе</option>
+            <option value="ru">Русский</option>
+            <option value="en">English</option>
+          </select>
+          <p class="st-hint">Применяется сразу; «Как в системе» — язык браузера.</p>
         </div>
       </div>
 

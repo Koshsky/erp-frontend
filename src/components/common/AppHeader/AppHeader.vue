@@ -6,13 +6,15 @@ import { resolvedScheme, toggleScheme } from '../../../theme'
 import { isNavOpen, toggleNav } from '../../../composables/useNavDrawer'
 import { AppIcon } from '../AppIcon'
 import { ChangelogDialog } from '../ChangelogDialog'
+import { t } from '../../../i18n'
 
 const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
 
 // Theme toggle label (Russian UI copy)
-const themeLabel = computed(() => (resolvedScheme.value === 'dark' ? 'Светлая' : 'Тёмная'))
+const themeLabel = computed(() => t(resolvedScheme.value === 'dark' ? 'header.themeDark' : 'header.themeLight'))
+const themeToggleTitle = computed(() => t('header.themeToggle', { theme: themeLabel.value }))
 
 /** Whether the centered changelog dialog is visible (header icon) */
 const changelogOpen = ref(false)
@@ -22,8 +24,8 @@ function onLogout(): void {
   router.push('/login')
 }
 
-const burgerTitle = 'Меню (Ctrl+B)'
-const burgerLabel = computed(() => (isNavOpen.value ? 'Закрыть меню' : 'Открыть меню'))
+const burgerTitle = t('header.menuShortcut')
+const burgerLabel = computed(() => (isNavOpen.value ? t('header.menuClose') : t('header.menuOpen')))
 </script>
 
 <template>
@@ -62,13 +64,13 @@ const burgerLabel = computed(() => (isNavOpen.value ? 'Закрыть меню' 
     <div class="ah-actions">
       <RouterLink to="/profile" class="ah-act" :class="{ active: route.name === 'profile' }">
         <AppIcon name="user" :size="18" />
-        <span>Профиль</span>
+        <span>{{ t('header.profile') }}</span>
       </RouterLink>
       <button
         type="button"
         class="ah-act ah-act--icon"
-        :title="'Переключить тему (сейчас ' + themeLabel.toLowerCase() + ')'"
-        :aria-label="'Переключить тему'"
+        :title="themeToggleTitle"
+        :aria-label="t('header.themeAria')"
         @click="toggleScheme"
       >
         <AppIcon :name="resolvedScheme === 'dark' ? 'sun' : 'moon'" :size="18" />
@@ -76,8 +78,8 @@ const burgerLabel = computed(() => (isNavOpen.value ? 'Закрыть меню' 
       <button
         type="button"
         class="ah-act ah-act--icon"
-        title="Журнал изменений"
-        aria-label="Журнал изменений"
+        :title="t('header.changelog')"
+        :aria-label="t('header.changelog')"
         @click="changelogOpen = true"
       >
         <AppIcon name="scroll" :size="18" />
@@ -85,8 +87,8 @@ const burgerLabel = computed(() => (isNavOpen.value ? 'Закрыть меню' 
       <button
         type="button"
         class="ah-act ah-act--icon ah-act--logout"
-        :title="'Выйти из системы'"
-        :aria-label="'Выйти из системы'"
+        :title="t('header.logout')"
+        :aria-label="t('header.logout')"
         @click="onLogout"
       >
         <AppIcon name="logout" :size="18" />

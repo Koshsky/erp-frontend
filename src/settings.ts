@@ -11,6 +11,36 @@ import type { PlanningUnit } from './components/planner/calendar'
 
 const AUTO_SYNC_KEY = 'mvs_erp_auto_sync'
 
+// --- Interface language ------------------------------------------------------
+
+export type UiLanguage = 'auto' | 'ru' | 'en'
+
+const UI_LANG_KEY = 'mvs_erp_ui_lang'
+
+function readUiLanguage(): UiLanguage {
+  try {
+    const raw = localStorage.getItem(UI_LANG_KEY)
+    return raw === 'ru' || raw === 'en' || raw === 'auto' ? raw : 'auto'
+  } catch {
+    return 'auto'
+  }
+}
+
+/** Interface language setting: 'auto' — follow the browser language. */
+export const uiLanguage = ref<UiLanguage>(readUiLanguage())
+
+watch(
+  uiLanguage,
+  (v) => {
+    try {
+      localStorage.setItem(UI_LANG_KEY, v)
+    } catch {
+      // not critical
+    }
+  },
+  { immediate: true },
+)
+
 function readBool(key: string, fallback: boolean): boolean {
   try {
     const raw = localStorage.getItem(key)

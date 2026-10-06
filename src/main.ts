@@ -9,6 +9,7 @@ import { useAuthStore } from './store'
 import { initOfflineSync, startSessionMaintenance } from './offline/sync'
 import { startConnectionMonitor } from './offline/connection'
 import { ensureCacheVersion } from './offline/cache'
+import { i18n } from './i18n'
 
 setupHttp()
 initTheme()
@@ -79,5 +80,6 @@ const app = createApp(App)
 
 app.use(pinia)
 app.use(router)
+app.use(i18n)
 
 app.mount('#app')

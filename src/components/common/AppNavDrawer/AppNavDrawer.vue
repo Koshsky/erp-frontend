@@ -6,6 +6,7 @@ import { NAV_WIDTH } from '../../../composables/useNavDrawer'
 import { AppIcon, type AppIconName } from '../AppIcon'
 import { useWindowPointerTrack } from '../../../utils/windowPointer'
 import { resolveAssetWithCustom } from '../../../assets'
+import { t } from '../../../i18n'
 import type { AppNavDrawerEmits, AppNavDrawerProps } from './types'
 
 const props = withDefaults(defineProps<AppNavDrawerProps>(), { brand: 'MVS ERP' })
@@ -387,11 +388,11 @@ watch(() => props.categories, (cats) => loadItemIcons(cats), { immediate: true }
             type="button"
             class="nd-group-head"
             :aria-expanded="isOpen(cat)"
-            title="Перетащите заголовок, чтобы поменять порядок разделов"
+            :title="t('common.dragHeaderTitle')"
             @pointerdown="onHeadPointerDown"
             @click="onHeadClick(cat)"
           >
-            <span class="nd-group-title">{{ cat.label }}</span>
+            <span class="nd-group-title">{{ t(cat.label) }}</span>
             <AppIcon name="chevron-down" :size="16" class="nd-caret" />
           </button>
           <Transition
@@ -416,7 +417,7 @@ watch(() => props.categories, (cats) => loadItemIcons(cats), { immediate: true }
                     active: item.name === props.activeName,
                     'nd-item--dragsource': drag != null && drag.catLabel === cat.label && drag.kind === 'item',
                   }"
-                  :aria-label="item.label"
+                  :aria-label="t(item.label)"
                   @pointerdown="onItemPointerDown"
                   @click="(e) => onItemNavigate(e, item)"
                 >
@@ -427,7 +428,7 @@ watch(() => props.categories, (cats) => loadItemIcons(cats), { immediate: true }
                     v-html="itemIconSvg[item.name]"
                   ></span>
                   <AppIcon v-else :name="iconFor(item)" :size="22" />
-                  <span class="nd-item-label">{{ item.label }}</span>
+                  <span class="nd-item-label">{{ t(item.label) }}</span>
                   <span v-if="item.badge" class="nd-badge">{{ item.badge }}</span>
                 </a>
               </div>

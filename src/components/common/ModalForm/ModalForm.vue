@@ -3,9 +3,10 @@ import { reactive, watch, computed } from 'vue'
 import type { ModalFormProps } from './types'
 import ColorField from '../ColorField/ColorField.vue'
 import { useModalFocus } from '../../../composables/useModalFocus'
+import { t } from '../../../i18n'
 
 const props = withDefaults(defineProps<ModalFormProps>(), {
-  submitLabel: 'Сохранить',
+  submitLabel: '',
   busy: false,
   fields: () => [],
   maxWidth: undefined,
@@ -135,10 +136,10 @@ function onOverlayClick(e: MouseEvent) {
           <p v-if="error" class="mf-error" role="alert">{{ error }}</p>
 
           <div class="mf-actions">
-            <button type="button" class="mf-btn mf-cancel" @click="emit('close')">Отмена</button>
+            <button type="button" class="mf-btn mf-cancel" @click="emit('close')">{{ t('common.cancel') }}</button>
             <button type="submit" class="mf-btn mf-save" :disabled="!canSubmit">
               <span v-if="busy" class="mf-spinner" />
-              {{ submitLabel }}
+              {{ submitLabel || t('common.save') }}
             </button>
           </div>
         </form>

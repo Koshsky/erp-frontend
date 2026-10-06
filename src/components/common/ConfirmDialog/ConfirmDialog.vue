@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { useModalFocus } from '../../../composables/useModalFocus'
+import { t } from '../../../i18n'
 import type { ConfirmDialogProps } from './types'
 
 const props = withDefaults(defineProps<ConfirmDialogProps>(), {
-  title: 'Подтверждение',
-  confirmLabel: 'Удалить',
+  title: '',
+  confirmLabel: '',
   danger: true,
 })
 
@@ -28,21 +29,21 @@ const { dialogEl, onKeydown } = useModalFocus({
 <template>
   <Teleport to="body">
     <div v-if="open" class="cd-overlay" @mousedown.self="emit('close')">
-      <div ref="dialogEl" class="cd" role="dialog" aria-modal="true" :aria-label="title" tabindex="-1" @keydown="onKeydown">
+      <div ref="dialogEl" class="cd" role="dialog" aria-modal="true" :aria-label="title || t('common.confirmTitle')" tabindex="-1" @keydown="onKeydown">
         <div class="cd-head">
-          <h3 class="cd-title">{{ title }}</h3>
-          <button type="button" class="cd-close" aria-label="Закрыть" @click="emit('close')">×</button>
+          <h3 class="cd-title">{{ title || t('common.confirmTitle') }}</h3>
+          <button type="button" class="cd-close" :aria-label="t('common.close')" @click="emit('close')">×</button>
         </div>
         <p class="cd-message">{{ message }}</p>
         <div class="cd-actions">
-          <button type="button" class="cd-btn cd-cancel" @click="emit('close')">Отмена</button>
+          <button type="button" class="cd-btn cd-cancel" @click="emit('close')">{{ t('common.cancel') }}</button>
           <button
             type="button"
             class="cd-btn"
             :class="danger ? 'cd-danger' : 'cd-primary'"
             @click="emit('confirm')"
           >
-            {{ confirmLabel }}
+            {{ confirmLabel || t('common.delete') }}
           </button>
         </div>
       </div>
