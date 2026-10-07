@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 The web app and the desktop wrapper are versioned together.
 
-## [Unreleased]
+## [1.3.0] - 2026-10-07
 
 ### Added
 
@@ -17,8 +17,12 @@ The web app and the desktop wrapper are versioned together.
 
 ### Changed
 
+- Task dependency links (fs/ss/ff/sf) in the planner are drawn as a line with a tick on the constrained date instead of arrowheads; the line shape (six variants) is chosen in the settings with a live preview.
+- Diagram settings: badges and dependency lines are grouped into one "Diagram appearance" block, and badges got a preview.
+- Diagram settings: the comments badge on a task bar can be switched off.
 - The header language button is a toggle switch (only two languages are available) instead of a dropdown.
 - The changelog dialog shows the changelog of the interface language (Changelog_ENG.md / Changelog_RU.md).
+- The Settings sections "Sync" and "Connection" are merged into a single "Server" section.
 
 ## [1.2.1] - 2026-10-06
 
