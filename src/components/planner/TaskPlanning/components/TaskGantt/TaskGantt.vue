@@ -134,7 +134,7 @@ function onMilestoneEdit(id: number) {
   left: 0;
   height: 20px;
   background: var(--ui-surface);
-  /* Side panel — above the today line (25) */
+  /* Side panel — above the today line (35) */
   z-index: 65;
   margin-top: -20px;
   cursor: default;

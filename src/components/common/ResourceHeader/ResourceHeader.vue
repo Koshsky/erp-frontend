@@ -82,7 +82,7 @@ const labelsH = computed(() => resourceCells.value.length * rowH.value)
 
 <template>
   <!-- Resource code layer: a separate sticky side-panel element (z 80), outside
-       the resource block's stacking context — above the current-date line (25) -->
+       the resource block's stacking context — above the current-date line (35) -->
   <div
     class="rs-labels"
     :style="{
@@ -128,7 +128,7 @@ const labelsH = computed(() => resourceCells.value.length * rowH.value)
 @import "../../../styles/tokens.css";
 
 /* Resource code layer — side panel: sticks to the left and top edges (below the
- * calendar header), sits above the current-date line (25). Height and negative margin
+ * calendar header), sits above the current-date line (35). Height and negative margin
  * are set inline so the cell block is not shifted. */
 .rs-labels {
   position: sticky;
@@ -158,7 +158,8 @@ const labelsH = computed(() => resourceCells.value.length * rowH.value)
   letter-spacing: 0.5px;
 }
 /* Load-cell block "4/5": sticks right below the calendar header.
- * z 20 — above content (bars 2, milestones 3), but below the current-date line (25). */
+ * z 20 — above content (bars 2, milestones 3), but below the current-date line (35).
+ * The full ladder lives in TodayLine.vue. */
 .rs-block {
   position: sticky;
   z-index: 20;

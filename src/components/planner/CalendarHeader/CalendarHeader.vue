@@ -98,10 +98,10 @@ const showWdRow = computed(() => props.t.unit === 'day' && props.t.cellPx >= CEL
 }
 /* Corner — part of the side panel: sticks to the left and top edges, sits above
  * all side-panel layers (rows 65, merged labels 70, resource codes 80)
- * and the today line (25), but outside the header stacking context (30). Otherwise
+ * and the today line (35), but outside the header stacking context (30). Otherwise
  * on vertical scroll group labels pass over it — the corner looks like
  * a "punched-out window". Height and negative margin are set inline so the
- * header is not shifted. */
+ * header is not shifted. The full ladder lives in TodayLine.vue. */
 .th-corner {
   position: sticky;
   top: 0;
