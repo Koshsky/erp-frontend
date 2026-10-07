@@ -206,6 +206,64 @@ describe('mergeResourceLists / sameResources (via refreshResources)', () => {
   })
 })
 
+/**
+ * The loading/error flags drive the "Загрузка…" line and the error line of the
+ * Resources page. A background pull (the 60-second PULL cycle, the members
+ * step) must not touch them — otherwise the page repaints its status line over
+ * an already rendered table on every cycle.
+ */
+describe('refreshResources: silent background mode', () => {
+  it('a silent refresh leaves the loading and error flags untouched', async () => {
+    pageResources([{ id: 1, code: 'R1', title: 'Один' }], 1)
+    appStore.resourcesError = 'прошлая ошибка'
+
+    await appStore.refreshResources(true)
+
+    expect(appStore.resourcesLoading).toBe(false)
+    expect(appStore.resourcesError).toBe('прошлая ошибка')
+  })
+
+  it('a silent refresh still applies the data', async () => {
+    appStore.resources = [{ id: 1, code: 'R1', title: 'Один' }]
+    pageResources([{ id: 1, code: 'R1', title: 'Один (свежий)' }], 1)
+
+    await appStore.refreshResources(true)
+
+    expect(appStore.resources[0]?.title).toBe('Один (свежий)')
+  })
+
+  it('a silent failure records nothing (no error line over a good table)', async () => {
+    api.resourcesGet.mockRejectedValue(new Error('boom'))
+
+    await appStore.refreshResources(true)
+
+    expect(appStore.resourcesError).toBeNull()
+    expect(appStore.resourcesLoading).toBe(false)
+  })
+
+  it('a loud refresh raises the flags and clears the previous error', async () => {
+    pageResources([], 0)
+    appStore.resourcesError = 'прошлая ошибка'
+
+    const pending = appStore.refreshResources()
+    expect(appStore.resourcesLoading).toBe(true)
+
+    await pending
+
+    expect(appStore.resourcesLoading).toBe(false)
+    expect(appStore.resourcesError).toBeNull()
+  })
+
+  it('a loud failure lands in the error flag', async () => {
+    api.resourcesGet.mockRejectedValue(new Error('boom'))
+
+    await appStore.refreshResources()
+
+    expect(appStore.resourcesError).toBe('boom')
+    expect(appStore.resourcesLoading).toBe(false)
+  })
+})
+
 describe('mergeEmployeeLists / sameEmployees (via refreshEmployees)', () => {
   it('dedups the roster by id, fresh wins, extras preserved, order stable', async () => {
     tsStore.employees = [

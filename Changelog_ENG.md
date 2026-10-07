@@ -11,6 +11,7 @@ The web app and the desktop wrapper are versioned together.
 ### Fixed
 
 - Badges on task bars are no longer dropped at fine zoom: the markers enabled in the settings always stay visible.
+- The Resources page no longer paints "Loading…" over a filled table on a background refresh.
 
 ## [1.3.0] - 2026-10-07
 

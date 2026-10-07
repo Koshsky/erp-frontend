@@ -131,7 +131,13 @@ export function buildPullSteps(): PullStep[] {
     steps.push({ name: 'projects', path: apiPath('/project'), refresh: () => app.refreshProjects() })
   }
   if (resourceList) {
-    steps.push({ name: 'resources', path: apiPath('/resources'), refresh: () => app.refreshResources() })
+    steps.push({
+      name: 'resources',
+      path: apiPath('/resources'),
+      // Silent: a background pull must not flip the Resources page's loading
+      // flag (the "Загрузка…" line would flash over a full table every cycle).
+      refresh: () => app.refreshResources(true),
+    })
     // Resource members (/resources/{id}/members): consumed by the "Employees"
     // resource badges and the "Resources" expandable rows. They are read
     // local-first (cache hydrate); without a PULL step the cache stays empty
@@ -142,7 +148,7 @@ export function buildPullSteps(): PullStep[] {
       path: apiPath('/resources'),
       keyPredicate: (key) => /\/resources\/\d+\/members/.test(key),
       refresh: async () => {
-        if (!app.resources.length) await app.refreshResources()
+        if (!app.resources.length) await app.refreshResources(true)
         for (const r of app.resources) {
           if (r.id != null) await app.refreshResourceMembers(r.id)
         }

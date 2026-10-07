@@ -260,8 +260,13 @@ function onLoadMore() {
 
 <template>
   <section class="rp">
-    <p v-if="resourcesLoading" class="rp-st">{{ t('adminSystem.resources.loading') }}</p>
-    <p v-if="resourcesError" class="rp-st er">{{ resourcesError }}</p>
+    <!--
+      Both lines are gated on an empty list, like every other list page here:
+      a background refresh (the PULL cycle, a post-mutation reload) must not
+      paint "Загрузка…" or a stale error over an already rendered table.
+    -->
+    <p v-if="resourcesLoading && !resources.length" class="rp-st">{{ t('adminSystem.resources.loading') }}</p>
+    <p v-if="resourcesError && !resources.length" class="rp-st er">{{ resourcesError }}</p>
 
     <!--
       The table frame (header included) stays visible even when the filters

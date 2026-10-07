@@ -737,9 +737,21 @@ export const useAppStore = defineStore('app', () => {
     ])
   }
 
-  async function refreshResources(): Promise<void> {
-    resourcesLoading.value = true
-    resourcesError.value = null
+  /**
+   * Re-reads the first resources page and merges it into the current list.
+   *
+   * `silent` — a background refresh (the PULL cycle / warmup steps): it must not
+   * touch the page's loading and error state. Those flags drive the "Загрузка…"
+   * line, and a background cycle that flips them makes the line flash over an
+   * already rendered table. Page-entry and post-mutation refreshes stay loud on
+   * purpose: while the list is empty they are the only progress indicator the
+   * page has (mirrors `refreshEmployees(managerId, silent)`).
+   */
+  async function refreshResources(silent = false): Promise<void> {
+    if (!silent) {
+      resourcesLoading.value = true
+      resourcesError.value = null
+    }
     try {
       const api = new TimesheetResourcesApi(apiConfig())
       const resp = await api.resourcesGet(tablePageSize.value, undefined, 0)
@@ -755,9 +767,9 @@ export const useAppStore = defineStore('app', () => {
       if (!sameResources(merged, resources.value)) resources.value = merged
       resourcesTotal.value = data?.total ?? 0
     } catch (e: unknown) {
-      resourcesError.value = e instanceof Error ? e.message || String(e) : String(e)
+      if (!silent) resourcesError.value = e instanceof Error ? e.message || String(e) : String(e)
     } finally {
-      resourcesLoading.value = false
+      if (!silent) resourcesLoading.value = false
     }
   }
 
