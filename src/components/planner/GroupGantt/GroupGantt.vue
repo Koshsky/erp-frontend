@@ -2,6 +2,7 @@
 import { computed, ref, type VNode } from 'vue'
 import type { GroupGanttSlotItem, GroupGanttProps } from './types'
 import { cellRangeForSpan } from '../calendar'
+import { LABEL_WIDTH } from '../layout'
 import { fmtDate } from '@/i18n/date'
 import { useRowReorder } from '../../../composables/useRowReorder'
 
@@ -71,7 +72,7 @@ function fmt(d: string | Date | number | null | undefined): string {
 </script>
 
 <template>
-  <div ref="groupEl" class="gg-group" :data-group="groupId ?? ''" :data-rows="displayCount" :style="{ minHeight: mergedHeight }">
+  <div ref="groupEl" class="gg-group" :data-group="groupId ?? ''" :data-rows="displayCount" :style="{ minHeight: mergedHeight, '--label-width': LABEL_WIDTH + 'px' }">
     <div v-if="overlayStyle" class="gg-overlay" :style="overlayStyle" />
 
     <!-- Merged group label (object code + process): sticky left, full height.
@@ -79,14 +80,14 @@ function fmt(d: string | Date | number | null | undefined): string {
     <div
       v-if="mergedLabel"
       class="gg-merged"
-      :style="{ height: mergedHeight, marginBottom: '-' + mergedHeight }"
+      :style="{ width: LABEL_WIDTH + 'px', height: mergedHeight, marginBottom: '-' + mergedHeight }"
     >
       <slot name="label" />
     </div>
 
     <template v-for="(item, index) in items" :key="'gi' + item.id">
       <div class="gg-row" :style="{ height: rowHeight + 'px' }" :data-row-index="index">
-        <div v-if="!mergedLabel" class="gg-label">
+        <div v-if="!mergedLabel" class="gg-label" :style="{ width: LABEL_WIDTH + 'px' }">
           <slot name="row" :item="item as GroupGanttSlotItem" :index="index">
             <span class="item-title">{{ item.title }}</span>
             <div class="item-dates">{{ fmt(item.start_date) }} — {{ fmt(item.end_date) }}</div>
@@ -107,7 +108,7 @@ function fmt(d: string | Date | number | null | undefined): string {
     <!-- Empty placeholder rows up to minRows: same group background, no bars -->
     <template v-for="i in emptyCount" :key="'ge' + (items.length + i)">
       <div class="gg-row" :style="{ height: rowHeight + 'px' }" :data-row-index="items.length + i - 1">
-        <div v-if="!mergedLabel" class="gg-label" />
+        <div v-if="!mergedLabel" class="gg-label" :style="{ width: LABEL_WIDTH + 'px' }" />
         <div class="gg-bars" />
       </div>
     </template>
@@ -122,14 +123,15 @@ function fmt(d: string | Date | number | null | undefined): string {
   position: relative;
 }
 /* Group divider across the full timeline width. Starts right after the side
- * panel (180px = LABEL_WIDTH): in the label column the line already exists (bottom
- * borders of .gg-merged/.gg-label), so without double borders a straight
- * line results. Absolute positioning does not add height to the groups. */
+ * panel (--label-width, set from LABEL_WIDTH by the template): in the label
+ * column the line already exists (bottom borders of .gg-merged/.gg-label), so
+ * without double borders a straight line results. Absolute positioning does not
+ * add height to the groups. */
 .gg-group::after {
   content: '';
   position: absolute;
   bottom: 0;
-  left: 180px;
+  left: var(--label-width, 0);
   right: 0;
   height: 1px;
   background: var(--ui-border);
@@ -146,7 +148,8 @@ function fmt(d: string | Date | number | null | undefined): string {
 .gg-merged {
   position: sticky;
   left: 0;
-  width: 180px;
+  /* Width comes from LABEL_WIDTH through the inline style — never repeat the
+     number here, the side panel is built from the same one. */
   background: var(--ui-surface);
   /* Side panel — above the today line (35) */
   z-index: 70;
@@ -169,7 +172,8 @@ function fmt(d: string | Date | number | null | undefined): string {
 .gg-label {
   position: sticky;
   left: 0;
-  width: 180px;
+  /* Width comes from LABEL_WIDTH through the inline style — never repeat the
+     number here, the side panel is built from the same one. */
   height: 100%;
   background: var(--ui-surface);
   /* Side panel — above the today line (35) */

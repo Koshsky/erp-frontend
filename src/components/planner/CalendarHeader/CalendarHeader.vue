@@ -106,7 +106,8 @@ const showWdRow = computed(() => props.t.unit === 'day' && props.t.cellPx >= CEL
   position: sticky;
   top: 0;
   left: 0;
-  width: 180px;
+  /* Width comes from LABEL_WIDTH through the inline style (see the template) —
+     never repeat the number here, the side panel is built from the same one. */
   background: var(--ui-surface-2);
   z-index: 90;
   display: flex;
