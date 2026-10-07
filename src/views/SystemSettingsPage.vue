@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { t } from '@/i18n'
-import { getApiUrl, setApiUrl, hasApiUrlOverride, httpSchemeWarning } from '../config'
+import { getApiUrl, setApiUrl, httpSchemeWarning } from '../config'
 import { scheme, setScheme } from '../theme'
 import { autoSync, saveSyncSettings } from '../settings'
 import {
@@ -18,20 +18,25 @@ import {
   saveUiSettings,
 } from '../settings'
 import { viewSettings, uiLanguage, SCALE_MIN, SCALE_MAX, SCALE_STEP, CELL_ZOOM_MIN, CELL_ZOOM_MAX, CELL_ZOOM_STEP, PROJECT_DAYS_MIN, PROJECT_DAYS_MAX } from '../settings'
+import { BarBadgesPreview } from '@/components/planner/BarBadgesPreview'
+import { DependencyStylePreview } from '@/components/planner/DependencyStylePreview'
+import { linkStyleOptions } from '@/components/planner/linkStyleLabels'
 import { notifyError, notifyInfo, notifySuccess } from '../notify/state'
 
-type SettingsSection = 'interface' | 'tables' | 'diagrams' | 'sync' | 'connection'
+type SettingsSection = 'interface' | 'tables' | 'diagrams' | 'server'
 
 const activeSection = ref<SettingsSection>('interface')
 
 /** Section switcher labels; rebuilt on a language switch. */
 const sections = computed<{ id: SettingsSection; label: string }[]>(() => [
   { id: 'interface', label: t('adminSystem.settings.sections.interface') },
-  { id: 'tables', label: t('adminSystem.settings.sections.tables') },
   { id: 'diagrams', label: t('adminSystem.settings.sections.diagrams') },
-  { id: 'sync', label: t('adminSystem.settings.sections.sync') },
-  { id: 'connection', label: t('adminSystem.settings.sections.connection') },
+  { id: 'tables', label: t('adminSystem.settings.sections.tables') },
+  { id: 'server', label: t('adminSystem.settings.sections.server') },
 ])
+
+/** Connector style options; rebuilt on a language switch. */
+const connectorOptions = computed(() => linkStyleOptions())
 
 const apiUrl = ref('')
 
@@ -123,7 +128,6 @@ onMounted(() => {
             <option value="default">{{ t('adminSystem.settings.interface.fontSizeDefault') }}</option>
             <option value="large">{{ t('adminSystem.settings.interface.fontSizeLarge') }}</option>
           </select>
-          <p class="st-hint">{{ t('adminSystem.settings.interface.fontSizeHint') }}</p>
         </div>
         <div class="st-field">
           <span>{{ t('adminSystem.settings.interface.language') }}</span>
@@ -132,7 +136,6 @@ onMounted(() => {
             <option value="ru">{{ t('adminSystem.settings.interface.languageRu') }}</option>
             <option value="en">{{ t('adminSystem.settings.interface.languageEn') }}</option>
           </select>
-          <p class="st-hint">{{ t('adminSystem.settings.interface.languageHint') }}</p>
         </div>
       </div>
 
@@ -155,6 +158,124 @@ onMounted(() => {
       </div>
     </template>
 
+    <!-- Diagrams -->
+    <template v-if="activeSection === 'diagrams'">
+      <div class="st-cards">
+        <div class="st-card">
+          <h3 class="st-card-title">{{ t('adminSystem.settings.appearance.title') }}</h3>
+
+          <h4 class="st-group-title">{{ t('adminSystem.settings.badges.title') }}</h4>
+          <label class="st-option">
+            <input v-model="viewSettings.badgeResource" type="checkbox" />
+            <span>{{ t('adminSystem.settings.badges.resource') }}</span>
+          </label>
+          <label class="st-option">
+            <input v-model="viewSettings.badgeProjectCode" type="checkbox" />
+            <span>{{ t('adminSystem.settings.badges.projectCode') }}</span>
+          </label>
+          <label class="st-option">
+            <input v-model="viewSettings.badgeProgress" type="checkbox" />
+            <span>{{ t('adminSystem.settings.badges.progress') }}</span>
+          </label>
+          <label class="st-option">
+            <input v-model="viewSettings.badgeOwner" type="checkbox" />
+            <span>{{ t('adminSystem.settings.badges.owner') }}</span>
+          </label>
+          <label class="st-option">
+            <input v-model="viewSettings.badgeComments" type="checkbox" />
+            <span>{{ t('adminSystem.settings.badges.comments') }}</span>
+          </label>
+          <BarBadgesPreview />
+
+          <h4 class="st-group-title">{{ t('adminSystem.settings.appearance.linksGroup') }}</h4>
+          <div class="st-field">
+            <select
+              v-model="viewSettings.connector"
+              class="st-select"
+              :aria-label="t('adminSystem.settings.defaults.connector')"
+            >
+              <option v-for="o in connectorOptions" :key="o.value" :value="o.value">{{ o.label }}</option>
+            </select>
+            <DependencyStylePreview :connector="viewSettings.connector" />
+          </div>
+        </div>
+
+        <div class="st-card">
+          <h3 class="st-card-title">{{ t('adminSystem.settings.defaults.title') }}</h3>
+          <div class="st-field">
+            <span>{{ t('adminSystem.settings.defaults.scale') }}</span>
+            <div class="st-scale-row">
+              <input
+                v-model.number="viewSettings.defaultScale"
+                type="range"
+                :min="SCALE_MIN"
+                :max="SCALE_MAX"
+                :step="SCALE_STEP"
+                class="st-scale"
+              />
+              <span class="st-scale-value">{{ viewSettings.defaultScale }}%</span>
+            </div>
+          </div>
+          <div class="st-field">
+            <span>{{ t('adminSystem.settings.defaults.cellZoom') }}</span>
+            <div class="st-scale-row">
+              <input
+                v-model.number="viewSettings.defaultCellZoom"
+                type="range"
+                :min="CELL_ZOOM_MIN"
+                :max="CELL_ZOOM_MAX"
+                :step="CELL_ZOOM_STEP"
+                class="st-scale"
+              />
+              <span class="st-scale-value">{{ viewSettings.defaultCellZoom }}%</span>
+            </div>
+          </div>
+          <!-- Two short related fields share one row -->
+          <div class="st-field-row">
+            <div class="st-field">
+              <span>{{ t('adminSystem.settings.defaults.projectDays') }}</span>
+              <div class="st-num-row">
+                <input
+                  v-model.number="viewSettings.defaultProjectDays"
+                  type="number"
+                  :min="PROJECT_DAYS_MIN"
+                  :max="PROJECT_DAYS_MAX"
+                  step="1"
+                  class="st-num"
+                  :aria-label="t('adminSystem.settings.defaults.projectDaysAria')"
+                  @blur="normalizeProjectDays"
+                  @keydown.enter="onProjectDaysEnter"
+                />
+                <span class="st-num-unit">{{ t('adminSystem.settings.defaults.daysUnit') }}</span>
+              </div>
+            </div>
+            <div class="st-field">
+              <span>{{ t('adminSystem.settings.defaults.unit') }}</span>
+              <div class="st-radio-row">
+                <label class="st-radio">
+                  <input v-model="viewSettings.defaultUnit" type="radio" value="day" />
+                  <span>{{ t('adminSystem.settings.defaults.unitDay') }}</span>
+                </label>
+                <label class="st-radio">
+                  <input v-model="viewSettings.defaultUnit" type="radio" value="decade" />
+                  <span>{{ t('adminSystem.settings.defaults.unitDecade') }}</span>
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="st-card">
+          <h3 class="st-card-title">{{ t('adminSystem.settings.export.title') }}</h3>
+          <label class="st-option">
+            <input v-model="viewSettings.showPdfButtons" type="checkbox" />
+            <span>{{ t('adminSystem.settings.export.pdfButtons') }}</span>
+          </label>
+          <p class="st-hint">{{ t('adminSystem.settings.export.hotkeyHint') }}</p>
+        </div>
+      </div>
+    </template>
+
     <!-- Tables -->
     <template v-if="activeSection === 'tables'">
       <div class="st-card">
@@ -171,123 +292,18 @@ onMounted(() => {
       </div>
     </template>
 
-    <!-- Diagrams -->
-    <template v-if="activeSection === 'diagrams'">
+    <!-- Server: sync and connection in a single card -->
+    <template v-if="activeSection === 'server'">
       <div class="st-card">
-        <h3 class="st-card-title">{{ t('adminSystem.settings.badges.title') }}</h3>
-        <p class="st-hint">{{ t('adminSystem.settings.badges.hint') }}</p>
-        <label class="st-option">
-          <input v-model="viewSettings.badgeResource" type="checkbox" />
-          <span>{{ t('adminSystem.settings.badges.resource') }}</span>
-        </label>
-        <label class="st-option">
-          <input v-model="viewSettings.badgeProjectCode" type="checkbox" />
-          <span>{{ t('adminSystem.settings.badges.projectCode') }}</span>
-        </label>
-        <label class="st-option">
-          <input v-model="viewSettings.badgeProgress" type="checkbox" />
-          <span>{{ t('adminSystem.settings.badges.progress') }}</span>
-        </label>
-        <label class="st-option">
-          <input v-model="viewSettings.badgeOwner" type="checkbox" />
-          <span>{{ t('adminSystem.settings.badges.owner') }}</span>
-        </label>
-      </div>
+        <h3 class="st-card-title">{{ t('adminSystem.settings.server.title') }}</h3>
 
-      <div class="st-card">
-        <h3 class="st-card-title">{{ t('adminSystem.settings.defaults.title') }}</h3>
-        <div class="st-field">
-          <span>{{ t('adminSystem.settings.defaults.scale') }}</span>
-          <div class="st-scale-row">
-            <input
-              v-model.number="viewSettings.defaultScale"
-              type="range"
-              :min="SCALE_MIN"
-              :max="SCALE_MAX"
-              :step="SCALE_STEP"
-              class="st-scale"
-            />
-            <span class="st-scale-value">{{ viewSettings.defaultScale }}%</span>
-          </div>
-          <p class="st-hint">
-            {{ t('adminSystem.settings.defaults.scaleHint', { min: SCALE_MIN, max: SCALE_MAX }) }}
-          </p>
-        </div>
-        <div class="st-field">
-          <span>{{ t('adminSystem.settings.defaults.cellZoom') }}</span>
-          <div class="st-scale-row">
-            <input
-              v-model.number="viewSettings.defaultCellZoom"
-              type="range"
-              :min="CELL_ZOOM_MIN"
-              :max="CELL_ZOOM_MAX"
-              :step="CELL_ZOOM_STEP"
-              class="st-scale"
-            />
-            <span class="st-scale-value">{{ viewSettings.defaultCellZoom }}%</span>
-          </div>
-          <p class="st-hint">
-            {{ t('adminSystem.settings.defaults.cellZoomHint', { min: CELL_ZOOM_MIN, max: CELL_ZOOM_MAX }) }}
-          </p>
-        </div>
-        <div class="st-field">
-          <span>{{ t('adminSystem.settings.defaults.projectDays') }}</span>
-          <div class="st-num-row">
-            <input
-              v-model.number="viewSettings.defaultProjectDays"
-              type="number"
-              :min="PROJECT_DAYS_MIN"
-              :max="PROJECT_DAYS_MAX"
-              step="1"
-              class="st-num"
-              :aria-label="t('adminSystem.settings.defaults.projectDaysAria')"
-              @blur="normalizeProjectDays"
-              @keydown.enter="onProjectDaysEnter"
-            />
-            <span class="st-num-unit">{{ t('adminSystem.settings.defaults.daysUnit') }}</span>
-          </div>
-          <p class="st-hint">{{ t('adminSystem.settings.defaults.projectDaysHint') }}</p>
-        </div>
-        <div class="st-field">
-          <span>{{ t('adminSystem.settings.defaults.unit') }}</span>
-          <div class="st-actions">
-            <label class="st-radio">
-              <input v-model="viewSettings.defaultUnit" type="radio" value="day" />
-              <span>{{ t('adminSystem.settings.defaults.unitDay') }}</span>
-            </label>
-            <label class="st-radio">
-              <input v-model="viewSettings.defaultUnit" type="radio" value="decade" />
-              <span>{{ t('adminSystem.settings.defaults.unitDecade') }}</span>
-            </label>
-          </div>
-        </div>
-      </div>
-
-      <div class="st-card">
-        <h3 class="st-card-title">{{ t('adminSystem.settings.export.title') }}</h3>
-        <label class="st-option">
-          <input v-model="viewSettings.showPdfButtons" type="checkbox" />
-          <span>{{ t('adminSystem.settings.export.pdfButtons') }}</span>
-        </label>
-        <p class="st-hint">{{ t('adminSystem.settings.export.hotkeyHint') }}</p>
-      </div>
-    </template>
-
-    <!-- Sync -->
-    <template v-if="activeSection === 'sync'">
-      <div class="st-card">
-        <h3 class="st-card-title">{{ t('adminSystem.settings.sync.title') }}</h3>
+        <h4 class="st-group-title">{{ t('adminSystem.settings.sync.title') }}</h4>
         <label class="st-option">
           <input v-model="autoSync" type="checkbox" />
           <span>{{ t('adminSystem.settings.sync.auto') }}</span>
         </label>
-      </div>
-    </template>
 
-    <!-- Connection -->
-    <template v-if="activeSection === 'connection'">
-      <div class="st-card">
-        <h3 class="st-card-title">{{ t('adminSystem.settings.connection.title') }}</h3>
+        <h4 class="st-group-title">{{ t('adminSystem.settings.connection.title') }}</h4>
         <label class="st-field">
           <span>{{ t('adminSystem.settings.connection.apiUrl') }}</span>
           <input
@@ -302,15 +318,6 @@ onMounted(() => {
             {{ t('common.save') }}
           </button>
         </div>
-        <p class="st-hint">
-          {{
-            t('adminSystem.settings.connection.source', {
-              value: hasApiUrlOverride()
-                ? t('adminSystem.settings.connection.sourceManual')
-                : t('adminSystem.settings.connection.sourceDefault'),
-            })
-          }}
-        </p>
       </div>
     </template>
 
@@ -327,26 +334,34 @@ onMounted(() => {
   margin-bottom: 20px;
 }
 
-/* Section switcher — segmented control */
+/* Section switcher — segmented control.
+ * Sized as a primary control: the tabs are at least 40px tall (44px at the
+ * "large" interface font size), i.e. level with the inputs on this screen
+ * instead of smaller than them. `min-height` rather than padding alone keeps
+ * the height independent of font metrics and evens out tab widths. */
 .st-seg {
   display: flex;
   flex-wrap: wrap;
-  gap: 2px;
+  gap: 4px;
   width: fit-content;
   background: var(--ui-surface-2);
   border: 1px solid var(--ui-border);
-  border-radius: 10px;
-  padding: 3px;
+  border-radius: 12px;
+  padding: 4px;
   margin-bottom: 18px;
 }
 .st-seg-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: calc(var(--ui-font-scale, 1) * 40px);
   border: none;
   background: transparent;
   color: var(--ui-text-2);
   font: inherit;
-  font-size: calc(var(--ui-font-scale, 1) * 13.5px);
+  font-size: calc(var(--ui-font-scale, 1) * 15px);
   font-weight: 600;
-  padding: 7px 16px;
+  padding: 10px 22px;
   border-radius: 8px;
   cursor: pointer;
   transition: background var(--ui-duration), color var(--ui-duration);
@@ -360,6 +375,25 @@ onMounted(() => {
   box-shadow: var(--ui-shadow-sm);
 }
 
+/* Two columns on wide screens: the cards use the free space to the right of the
+   640px column instead of stacking (the calendar card sits next to the badges). */
+.st-cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 640px));
+  gap: 12px;
+  align-items: start;
+}
+
+@media (max-width: 1024px) {
+  .st-cards {
+    grid-template-columns: minmax(0, 640px);
+  }
+}
+
+.st-cards .st-card {
+  margin-bottom: 0;
+}
+
 .st-card {
   background: var(--ui-surface);
   border-radius: var(--ui-radius-md);
@@ -367,6 +401,7 @@ onMounted(() => {
   padding: 20px;
   margin-bottom: 12px;
   /* Settings read best as neat, bounded cards — not full-width slabs */
+  box-sizing: border-box;
   width: 100%;
   max-width: 640px;
 }
@@ -376,6 +411,20 @@ onMounted(() => {
   font-weight: 700;
   color: var(--ui-text);
   margin: 0 0 16px;
+}
+
+/* Group heading inside a card that carries more than one group of settings. */
+.st-group-title {
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
+  font-weight: 600;
+  color: var(--ui-text);
+  margin: 0 0 8px;
+}
+
+.st-group-title:not(:first-of-type) {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--ui-border);
 }
 
 .st-hint {
@@ -517,6 +566,21 @@ onMounted(() => {
   font-variant-numeric: tabular-nums;
   min-width: 48px;
   text-align: right;
+}
+/* Two short related fields on one row (default project duration + calendar unit).
+   They wrap into a column when the card gets too narrow. */
+.st-field-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 24px;
+}
+.st-field-row .st-field {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+.st-radio-row {
+  display: flex;
+  gap: 16px;
 }
 /* Number input for the default project duration (typed, not a slider) */
 .st-num-row {

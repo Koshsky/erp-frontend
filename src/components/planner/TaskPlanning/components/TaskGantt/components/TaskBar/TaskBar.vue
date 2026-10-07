@@ -99,6 +99,10 @@ const progressLabel = computed<string>(() =>
 /** The task has comments — show a badge and the log in the tooltip */
 const hasComments = computed(() => (props.task.comments_count ?? 0) > 0)
 
+/** The badge itself is switchable (Settings → Diagram appearance); `hasComments`
+ *  stays the fact that drives the tooltip's comment log either way. */
+const showComments = computed(() => hasComments.value && viewSettings.badgeComments)
+
 const userById = computed(() => new Map((props.users || []).map((u) => [u.id ?? 0, u])))
 
 function fmtShortDate(iso?: string): string {
@@ -185,8 +189,9 @@ function updateStacked() {
   showOwner.value = ow > 0 && available - (showProj.value ? pw : 0) >= ow
   // The progress badge always has room while the task has operations
   const gw = taskProgress.value == null ? 0 : progressWidth.value
-  // The comments badge reserves space (like the project code/owner)
-  const cw = hasComments.value ? 22 : 0
+  // The comments badge reserves space (like the project code/owner) — only while
+  // it is actually drawn, otherwise the resource badges would stack for nothing.
+  const cw = showComments.value ? 22 : 0
   const availForRes =
     available - (showProj.value ? pw : 0) - (showOwner.value ? ow : 0) - gw - cw
   stacked.value = badges.scrollWidth > availForRes
@@ -285,7 +290,7 @@ watch(
           :style="r.color ? { background: r.color } : undefined"
         >{{ badgeLabel(r) }}×{{ r.quantity }}</span>
       </span>
-      <span v-if="hasComments" class="tb-comments" :title="t('planner.taskBar.comments', { count: task.comments_count })" @pointerdown.stop @click.stop="emit('open-comments', task.id)">
+      <span v-if="showComments" class="tb-comments" :title="t('planner.taskBar.comments', { count: task.comments_count })" @pointerdown.stop @click.stop="emit('open-comments', task.id)">
         <svg
           width="11"
           height="11"
