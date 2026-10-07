@@ -40,4 +40,32 @@ export default defineConfigWithVueTs(
       ],
     },
   },
+  {
+    name: 'app/storybook-stories',
+    files: ['src/**/*.stories.ts'],
+    rules: {
+      // Stories also run in the `storybook dev` canvas, where vitest's `expect`
+      // throws at import time and takes the whole story down (the canvas then
+      // shows "The component failed to render properly"). `storybook/test`
+      // ships an expect that works in the dev canvas AND in the vitest run.
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: 'vitest',
+              message: "Import expect (and userEvent/within) from 'storybook/test', not from 'vitest'.",
+            },
+          ],
+        },
+      ],
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: "ImportExpression[source.value='vitest']",
+          message: "Import expect (and userEvent/within) from 'storybook/test', not from 'vitest'.",
+        },
+      ],
+    },
+  },
 )

@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/vue3-vite'
 import type { ConcreteComponent } from 'vue'
 import { ref } from 'vue'
+import { expect } from 'storybook/test'
 import ChangelogDialog from './ChangelogDialog.vue'
 import changelogArgTypes from './argTypes'
 
@@ -49,7 +50,6 @@ export const Interaction: StoryObj = {
       '<p data-testid="log">{{ log.join(",") }}</p>',
   }),
   play: async ({ canvasElement, step }) => {
-    const { expect } = await import('vitest')
     // The dialog is teleported to <body> — search the document, not the canvas.
     const card = () => document.querySelector<HTMLElement>('.cdlg-card')
     const overlay = () => document.querySelector<HTMLElement>('.cdlg-overlay')
@@ -95,7 +95,6 @@ export const LocalizedContent: StoryObj = {
     template: '<ChangelogDialog :open="open" @close="open = false" />',
   }),
   play: async ({ step }) => {
-    const { expect } = await import('vitest')
     const { setAppLocale } = await import('../../../i18n')
     const card = () => document.querySelector<HTMLElement>('.cdlg-card')
 

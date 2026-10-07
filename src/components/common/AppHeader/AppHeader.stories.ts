@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/vue3-vite'
+import { expect } from 'storybook/test'
 import AppHeader from './AppHeader.vue'
 
 const meta: Meta<typeof AppHeader> = {
@@ -22,7 +23,6 @@ export const Default: Story = {}
 export const LanguageToggle: Story = {
   tags: ['vitest'],
   play: async ({ canvasElement, step }) => {
-    const { expect } = await import('vitest')
     const { setAppLocale, t } = await import('../../../i18n')
 
     const toggle = () =>

@@ -28,13 +28,16 @@ Frontend service of the MVS ERP monorepo (repo root is `../..`, sibling `service
 
 ## Commands
 - `npm run dev` runs **Storybook** (port 6006) — not the app. `npm start` runs the Vite dev server (port 5173); `npm run stop` kills it.
+- The Vite dev server caches SFC transforms and, after edits, can serve a **torn module** (fresh `<script setup>` + an old render function). Symptom: a setting changes in the store but the UI does not react, while the file on disk, the type check and the story tests are all fine. Fix: restart the server (`npm run stop && npm start`); a quick alternative is `touch` on the edited file plus a page reload. To see what the server actually returns, check the render condition, e.g. `curl -s 'http://127.0.0.1:5173/src/<path>.vue' | grep -n 'tb-comments' -B3` — it must reference the current bindings.
 - There is **no `npm test`**. Vitest tests run through Storybook's `@storybook/addon-vitest` (`.stories.ts` files).
+- Stories take their assertions from `storybook/test` (`import { expect } from 'storybook/test'`), **never from `vitest`**: a story also renders in the `storybook dev` canvas, where vitest's `expect` throws at import time and the story fails with "The component failed to render properly". ESLint enforces this (`no-restricted-imports`/`no-restricted-syntax` for `src/**/*.stories.ts`).
 - `npm run check` (alias `typecheck`) = `vue-tsc --noEmit` — the type gate, run after edits.
 - `npm run lint` = `eslint src --max-warnings 0` — the lint gate (flat config in `eslint.config.js`; generated `src/api` is excluded), run after edits; **0 problems required**.
 - `npm run build` = `vite build` → `dist/`.
 
 ## Changelog
 - When a user-facing change lands, add a **brief, laconic, one-line bullet** (no long descriptions, no examples) under `## [Unreleased]` in BOTH `Changelog_ENG.md` (English) and `Changelog_RU.md` (Russian) in the same commit (see root `AGENTS.md` → Changelog (between releases)).
+- **Notable changes only**: cosmetic polish (spacing, sizes, row or card layout, tab order, hint and label texts) gets no bullet — fold it into the bullet of the feature it belongs to, or skip it. The criteria and examples live in the root `AGENTS.md`.
 
 ## Desktop releases — always via `desktop/build-portable.sh`
 - Produce desktop artifacts **only** through `desktop/build-portable.sh` from

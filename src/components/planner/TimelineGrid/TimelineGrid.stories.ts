@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/vue3-vite'
 import { ref } from 'vue'
+import { expect } from 'storybook/test'
 import TimelineGrid from './TimelineGrid.vue'
 import Bar from '../Bar/Bar.vue'
 import { cellRangeForSpan, type PlanningUnit } from '../calendar'
@@ -198,7 +199,6 @@ export const MiddleButtonPan: Story = {
     `,
   }),
   play: async ({ canvasElement, step }) => {
-    const { expect } = await import('vitest')
     const sc = () => canvasElement.querySelector<HTMLElement>('.tg-scroll')!
     const bar = () => canvasElement.querySelector<HTMLElement>('.gantt-bar')!
     const fire = (type: string, init: PointerEventInit) =>

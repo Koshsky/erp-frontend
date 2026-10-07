@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/vue3-vite'
 import type { ConcreteComponent } from 'vue'
+import { expect } from 'storybook/test'
 import DataTable from './DataTable.vue'
 import dataTableArgTypes from './argTypes'
 import type { DataTableColumn, DataTableProps } from './types'
@@ -226,10 +227,6 @@ export const ManyColumnsScroll: ResourceStory = {
     `,
   }),
   play: async ({ canvasElement, step }) => {
-    // Imported lazily: a static vitest import would initialize the matchers
-    // during the docs render (outside the test runner) and crash with
-    // "globalThis[JEST_MATCHERS_OBJECT] is undefined".
-    const { expect } = await import('vitest')
     await step('many columns: the table area scrolls horizontally, the toolbar stays put', async () => {
       const scroll = canvasElement.querySelector<HTMLElement>('.dt-scroll')
       expect(scroll).toBeTruthy()
@@ -255,8 +252,6 @@ export const Sortable: StateStory = {
   args: { columns: stateColumns, rows: stateRows, title: 'Статусы', emptyText: 'Нет данных о статусах' },
   render: stateRender,
   play: async ({ canvasElement, step }) => {
-    // Lazily imported — see the comment in ManyColumnsScroll.play.
-    const { expect } = await import('vitest')
     const headerButtons = () => [...canvasElement.querySelectorAll<HTMLButtonElement>('button.dt-th-label')]
     const firstCodes = () =>
       [...canvasElement.querySelectorAll<HTMLElement>('.dt-tr:not(.dt-th) .dt-cell:first-child')].map(
@@ -328,7 +323,6 @@ export const ResizableColumns: StoryObj<{
     `,
   }),
   play: async ({ canvasElement, step }) => {
-    const { expect } = await import('vitest')
     const firstHeader = () => canvasElement.querySelector<HTMLElement>('.dt-th-cell')
     const widthOf = () => firstHeader()!.getBoundingClientRect().width
     const fire = (type: string, x: number) =>
@@ -390,7 +384,6 @@ export const MiddleButtonPan: StoryObj<{
     `,
   }),
   play: async ({ canvasElement, step }) => {
-    const { expect } = await import('vitest')
     const sc = () => canvasElement.querySelector<HTMLElement>('.dt-scroll')!
     const fire = (type: string, init: PointerEventInit) =>
       window.dispatchEvent(new PointerEvent(type, init))
@@ -464,7 +457,6 @@ export const Expandable: StoryObj<{
     `,
   }),
   play: async ({ canvasElement, step }) => {
-    const { expect } = await import('vitest')
     const detail = () => canvasElement.querySelector<HTMLElement>('.dt-detail')
     const firstRow = () => canvasElement.querySelector<HTMLElement>('.dt-tr:not(.dt-th):not(.dt-detail):not(.dt-filters)')
 
@@ -510,7 +502,6 @@ export const Filters: StoryObj<{
     `,
   }),
   play: async ({ canvasElement, step }) => {
-    const { expect } = await import('vitest')
     await step('every filter sits inside its column header cell', async () => {
       const cells = [...canvasElement.querySelectorAll<HTMLElement>('.dt-th-cell')]
       expect(cells.length).toBe(3)
