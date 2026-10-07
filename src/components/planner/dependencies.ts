@@ -9,6 +9,9 @@
  *       ss — S must NOT start before P starts  (bound = S.start, anchor = P.start)
  *       ff — S must NOT end   before P ends    (bound = S.end,   anchor = P.end)
  *       sf — S must NOT end   before P starts  (bound = S.end,   anchor = P.start)
+ *   - the rules are INCLUSIVE (`>=`): a bound that lands exactly on the anchor
+ *     date is valid, there is no minimum one-day lag — only a strictly earlier
+ *     bound is a violation and gets shifted right;
  *   - a move of one task re-resolves the subgraph to a fixpoint, shifting
  *     successors right when a bound is violated and clamping a task that is
  *     dragged before its own predecessor bound (see the 16-case matrix in
