@@ -135,7 +135,7 @@ function fmt(d: string | Date | number | null | undefined): string {
   right: 0;
   height: 1px;
   background: var(--ui-border);
-  z-index: 3;
+  z-index: var(--z-content-top);
 }
 .gg-overlay {
   position: absolute;
@@ -143,7 +143,7 @@ function fmt(d: string | Date | number | null | undefined): string {
   bottom: 0;
   background: var(--ui-overlay);
   pointer-events: none;
-  z-index: 0;
+  z-index: var(--z-cell-overlay);
 }
 .gg-merged {
   position: sticky;
@@ -151,8 +151,8 @@ function fmt(d: string | Date | number | null | undefined): string {
   /* Width comes from LABEL_WIDTH through the inline style — never repeat the
      number here, the side panel is built from the same one. */
   background: var(--ui-surface);
-  /* Side panel — above the today line (35) */
-  z-index: 70;
+  /* Side panel — above the today line (--z-today) */
+  z-index: var(--z-side-merged);
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -176,8 +176,8 @@ function fmt(d: string | Date | number | null | undefined): string {
      number here, the side panel is built from the same one. */
   height: 100%;
   background: var(--ui-surface);
-  /* Side panel — above the today line (35) */
-  z-index: 65;
+  /* Side panel — above the today line (--z-today) */
+  z-index: var(--z-side-row);
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -212,7 +212,7 @@ function fmt(d: string | Date | number | null | undefined): string {
 .gg-bars {
   position: absolute;
   inset: 0;
-  z-index: 2;
+  z-index: var(--z-bar);
 }
 .drop-line {
   position: absolute;
@@ -220,7 +220,7 @@ function fmt(d: string | Date | number | null | undefined): string {
   right: 0;
   height: 2px;
   background: var(--ui-drop);
-  z-index: 12;
+  z-index: var(--z-drop-line);
   pointer-events: none;
 }
 </style>

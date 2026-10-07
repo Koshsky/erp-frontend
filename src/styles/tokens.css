@@ -105,6 +105,39 @@
   /* Motion & focus */
   --ui-duration: 0.18s;
   --ui-focus: #1A73E8;
+
+  /* ==========================================================================
+   * z-index ladder — the stacking order of the diagram and its chrome.
+   *
+   * Components never write a raw number: they use these tokens, so the order is
+   * decided here once and stays greppable. The rules behind the order:
+   *   1. content first (grid, bars, milestones/links/separators, insertion line);
+   *   2. the side panel (row names, merged labels, resource codes) and the
+   *      calendar header are CHROME: they stay on screen while panning, so they
+   *      must win over content;
+   *   3. the today line is content drawn across the diagram — above the bars,
+   *      below the chrome (that is why it sits between --z-header and the panel);
+   *   4. the corner cell belongs to the side panel AND the header, so it is the
+   *      highest layer of the diagram (90).
+   * The values are spaced apart on purpose: a new layer can be inserted between
+   * two levels without renumbering the rest. Popups, toasts and the PDF preview
+   * live above this range (they are app-level overlays, not diagram layers).
+   * src/styles/zIndex.test.ts keeps the ladder honest (no raw numbers, every
+   * token defined, strictly increasing order).
+   * ========================================================================== */
+  --z-cell-overlay: 0; /* row background/overlay inside a group */
+  --z-grid: 1; /* grid lines, the bar's focus ring */
+  --z-bar: 2; /* bars, resize handles, the selected timesheet cell */
+  --z-content-top: 3; /* milestones, dependency links, group divider */
+  --z-drop-line: 12; /* insertion line while dragging rows */
+  --z-resource-cells: 20; /* resource load cells (side panel) */
+  --z-header: 30; /* calendar header */
+  --z-today: 35; /* the today line */
+  --z-scale-badge: 50; /* the zoom percentage pill */
+  --z-side-row: 65; /* sticky row names, milestone band label */
+  --z-side-merged: 70; /* merged group labels */
+  --z-side-panel: 80; /* resource codes layer, timesheet names panel */
+  --z-corner: 90; /* the corner cell (side panel + header) */
 }
 
 /* OS fallback (no explicit data-scheme yet) — dark */

@@ -93,15 +93,15 @@ const showWdRow = computed(() => props.t.unit === 'day' && props.t.cellPx >= CEL
 .tg-head {
   position: sticky;
   top: 0;
-  z-index: 30;
+  z-index: var(--z-header);
   background: var(--ui-surface-2);
 }
 /* Corner — part of the side panel: sticks to the left and top edges, sits above
- * all side-panel layers (rows 65, merged labels 70, resource codes 80)
- * and the today line (35), but outside the header stacking context (30). Otherwise
- * on vertical scroll group labels pass over it — the corner looks like
+ * all side-panel layers (--z-side-row, --z-side-merged, --z-side-panel) and the
+ * today line (--z-today), but outside the header stacking context (--z-header).
+ * Otherwise on vertical scroll group labels pass over it — the corner looks like
  * a "punched-out window". Height and negative margin are set inline so the
- * header is not shifted. The full ladder lives in TodayLine.vue. */
+ * header is not shifted. The ladder itself lives in styles/tokens.css. */
 .th-corner {
   position: sticky;
   top: 0;
@@ -109,7 +109,7 @@ const showWdRow = computed(() => props.t.unit === 'day' && props.t.cellPx >= CEL
   /* Width comes from LABEL_WIDTH through the inline style (see the template) —
      never repeat the number here, the side panel is built from the same one. */
   background: var(--ui-surface-2);
-  z-index: 90;
+  z-index: var(--z-corner);
   display: flex;
   align-items: center;
   padding: 0 10px;

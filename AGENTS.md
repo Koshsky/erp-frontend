@@ -75,6 +75,7 @@ Frontend service of the MVS ERP monorepo (repo root is `../..`, sibling `service
 
 ## Component conventions
 - Each component dir ships `X.vue` + `types.ts` + `argTypes.ts` + `X.stories.ts` + `index.ts` (barrel re-export, aggregated in `src/components/planner/index.ts`).
+- **Stacking order is a token, never a number**: `z-index` comes from the `--z-*` ladder in `styles/tokens.css` (documented there in the order content → resource cells → header → today line → scale badge → side panel → corner). A raw numeric `z-index` in a component fails the gate `src/styles/zIndex.test.ts`, which also checks that every used token is declared and that the ladder stays strictly increasing.
 - Storybook exposes global `theme` (default/compact/minimal) and `scheme` (light/dark) toolbars via decorators in `.storybook/decorators/`; new components/stories must work in all combos.
 - Gantt positioning uses cell offsets from an `anchor` reference for a `mode` (`quarter`/`half`/`year` = number of calendar months from the anchor's month) and a `unit` (`day`/`decade`). Decade cells are aligned to calendar months (1–10, 11–20, 21–end); the first decade of the anchor month is partial (starts at the anchor). Keep date math in `src/components/planner/calendar.ts`, not the store.
 

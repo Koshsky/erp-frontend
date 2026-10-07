@@ -356,7 +356,7 @@ function onContextMenu(e: MouseEvent) {
 .gantt-bar:focus-visible {
   outline: 2px solid var(--ui-focus);
   outline-offset: 1px;
-  z-index: 1;
+  z-index: var(--z-grid);
 }
 .gb-draggable {
   touch-action: none;
@@ -374,7 +374,7 @@ function onContextMenu(e: MouseEvent) {
   top: 0;
   bottom: 0;
   width: 6px;
-  z-index: 2;
+  z-index: var(--z-bar);
   touch-action: none;
 }
 .gb-handle-l {

@@ -286,7 +286,7 @@ function onContextMenu(e: MouseEvent) {
   position: absolute;
   top: 0;
   bottom: 0;
-  z-index: 1;
+  z-index: var(--z-grid);
   pointer-events: none;
 }
 .tg-line {

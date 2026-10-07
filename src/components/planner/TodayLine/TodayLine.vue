@@ -57,13 +57,14 @@ const lineStyle = computed<Record<string, string> | null>(() =>
   position: absolute;
   top: 0;
   bottom: 0;
-  /* Its own level: above the content (bars 2, milestones 3), the resource
-     cells (20) and the calendar date header (30) — the line crosses the
-     header on top. Still below the scale badge (50) and the side-panel
-     label layers (65/70/80/90: merged/row labels, resource codes, corner),
-     and below popups (30000+). The label layers never overlap the line in X
-     (it starts after LABEL_WIDTH), but keep the ordering strict anyway. */
-  z-index: 35;
+  /* Its own level: above the content (--z-bar, --z-content-top), the resource
+     cells (--z-resource-cells) and the calendar header (--z-header) — the line
+     crosses the header on top. Still below the scale badge (--z-scale-badge)
+     and the side-panel label layers (--z-side-row, --z-side-merged,
+     --z-side-panel, --z-corner), and below popups. The label layers never
+     overlap the line in X (it starts after LABEL_WIDTH), but keep the ordering
+     strict anyway. The whole ladder is documented in styles/tokens.css. */
+  z-index: var(--z-today);
   pointer-events: none;
 }
 </style>

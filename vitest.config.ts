@@ -43,6 +43,10 @@ export default defineConfig({
           name: 'unit',
           include: ['src/**/*.test.ts'],
           environment: 'node',
+          // Stylesheets are read as text by the z-index gate (src/styles/zIndex.test.ts
+          // parses the --z-* ladder out of styles/tokens.css). Without this Vitest
+          // replaces every CSS import with an empty stub, so `?raw` yields "".
+          css: true,
           // Russian is the product default: pin it so the suite does not depend
           // on the Node navigator.language ("en-US") through the "auto" setting.
           setupFiles: ['src/i18n/testLocale.ts'],

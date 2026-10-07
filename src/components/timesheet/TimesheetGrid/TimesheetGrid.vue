@@ -419,12 +419,12 @@ const labelsH = computed(() => props.employees.length * ROW_H)
   position: relative;
 }
 /* Side names panel: sticks to the left, above the content (cells/lines), the calendar header
-   (30) and the current-date line (35), but below the corner (90). The column is LABEL_WIDTH wide, so
+   (--z-header) and the current-date line (--z-today), but below the corner (--z-corner). The column is LABEL_WIDTH wide, so
    it does not overlap the header (the header has a corner on its left), and the "today" line runs from x>=180. */
 .ts-labels {
   position: sticky;
   left: 0;
-  z-index: 80;
+  z-index: var(--z-side-panel);
   background: var(--ui-surface);
   box-sizing: border-box;
   user-select: none;

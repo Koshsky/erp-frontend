@@ -103,7 +103,7 @@ const emptyLabel = computed(() => (props.isWeekend ? t('timesheet.cell.weekend')
 .tsc--selected {
   outline: 2px solid var(--ui-accent);
   outline-offset: -2px;
-  z-index: 2;
+  z-index: var(--z-bar);
 }
 .tsc-code {
   font-size: calc(var(--ui-font-scale, 1) * 10px);
