@@ -16,9 +16,13 @@ import type { BadgePreviewTask } from './types'
  */
 const ORIGIN = '2026-01-01'
 const CELL_PX = 32
-/** Ten day cells — the bar is 320 px wide, which fits the settings card. */
+/**
+ * Fourteen day cells — the bar is 448px wide, which fits the settings card
+ * (640px) and still has room for every badge the preview demonstrates: with a
+ * narrower bar the trailing badges would be cut off by the bar's own edge.
+ */
 const START_DATE = '2026-01-01'
-const END_DATE = '2026-01-10'
+const END_DATE = '2026-01-14'
 const PROJECT_CODE = 'KO-1001'
 
 const timeline = makeDemoTimeline(ORIGIN, 'day', { cellPx: CELL_PX, viewportCells: 16 })

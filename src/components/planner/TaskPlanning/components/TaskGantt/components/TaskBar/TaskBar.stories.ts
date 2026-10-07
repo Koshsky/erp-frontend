@@ -177,3 +177,102 @@ export const BadgeVisibility: Story = {
     expect(edit).toBeNull()
   },
 }
+
+/** Every switchable badge, with the element it renders. */
+const BADGE_ELEMENTS = ['.tb-proj', '.tb-owner', '.tb-progress', '.tb-badge', '.tb-comments']
+
+/** A task carrying data for all five badges at once, spanning `spanDays` days. */
+function fullBadgeTask(title: string, spanDays: number) {
+  return {
+    id: 1,
+    title,
+    start_date: iso(day(1, 6)),
+    end_date: iso(day(1, 5 + spanDays)),
+    owner_short: 'Иванов И.И.',
+    owner_name: 'Иванов Иван Иванович',
+    resources: [
+      { resource_id: 1, assignment_id: 1, quantity: 2, code: 'MK' },
+      { resource_id: 2, assignment_id: 2, quantity: 1, code: 'SV' },
+    ],
+    subtasks: [
+      { id: -1, status: 'done' },
+      { id: -2, status: 'in_progress' },
+    ],
+    comments_count: 3,
+  }
+}
+
+function renderBar(cellPx: number, title: string, spanDays: number): Story['render'] {
+  return () => ({
+    components: { TaskBar },
+    data: () => ({
+      timeline: makeDemoTimeline(iso(day(1, 1)), 'day', { cellPx, viewportCells: 60 }),
+      task: fullBadgeTask(title, spanDays),
+      projectCode: 'KO-1001',
+    }),
+    template: `
+      <div style="max-width:800px;margin:0 auto;font-family:sans-serif;overflow-x:auto;">
+        <div data-testid="lane" style="position:relative;width:1200px;height:40px;background:#f0f0f0;border-radius:6px;">
+          <TaskBar :timeline="timeline" :task="task" :projectCode="projectCode" :draggable="false" />
+        </div>
+      </div>
+    `,
+  })
+}
+
+/**
+ * Fine zoom: the three-day bar is ~30px wide while the title is far longer.
+ * A badge is never dropped because the text does not fit — the title is what
+ * gives up its space (it is the only flexible element in the row), so all five
+ * badges stay on the bar; the resource chips overlap, since they no longer fit
+ * next to the rest.
+ */
+export const NarrowBarKeepsEveryBadge: Story = {
+  render: renderBar(10, 'Монтаж металлоконструкций цеха №3, вторая очередь', 3),
+  play: async ({ canvasElement, step }) => {
+    await new Promise((r) => setTimeout(r, 60))
+
+    await step('the bar is genuinely tiny and the title is truncated', () => {
+      const bar = canvasElement.querySelector<HTMLElement>('.gantt-bar')
+      expect(bar).toBeTruthy()
+      expect(bar!.getBoundingClientRect().width).toBeLessThan(60)
+
+      const title = canvasElement.querySelector<HTMLElement>('.tb-title')
+      expect(title!.scrollWidth).toBeGreaterThan(title!.clientWidth)
+    })
+
+    await step('every enabled badge is still on the bar', () => {
+      for (const selector of BADGE_ELEMENTS) {
+        expect(canvasElement.querySelector(selector), selector).toBeTruthy()
+      }
+      expect(canvasElement.querySelector('.tb-proj')?.textContent?.trim()).toBe('KO-1001')
+      expect(canvasElement.querySelector('.tb-owner')?.textContent?.trim()).toBe('Иванов И.И.')
+      expect(canvasElement.querySelector('.tb-progress')?.textContent?.trim()).toBe('50%')
+      expect(canvasElement.querySelectorAll('.tb-badge').length).toBe(2)
+      expect(canvasElement.querySelector('.tb-comments')?.textContent?.trim()).toBe('3')
+    })
+
+    await step('chips that cannot fit overlap instead of being dropped', () => {
+      expect(canvasElement.querySelector('.tb-badges')?.classList.contains('is-stacked')).toBe(true)
+    })
+  },
+}
+
+/** The same task on a wide bar: nothing is truncated, chips sit side by side. */
+export const WideBarKeepsBadgesApart: Story = {
+  render: renderBar(32, 'Монтаж', 30),
+  play: async ({ canvasElement, step }) => {
+    await new Promise((r) => setTimeout(r, 60))
+
+    await step('all five badges are present', () => {
+      for (const selector of BADGE_ELEMENTS) {
+        expect(canvasElement.querySelector(selector), selector).toBeTruthy()
+      }
+    })
+
+    await step('with room to spare the chips stay side by side', () => {
+      const strip = canvasElement.querySelector<HTMLElement>('.tb-badges')
+      expect(strip?.classList.contains('is-stacked')).toBe(false)
+    })
+  },
+}

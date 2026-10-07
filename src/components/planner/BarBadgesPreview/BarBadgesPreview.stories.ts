@@ -67,6 +67,20 @@ export const Default: Story = {
         expect(bar?.getAttribute('tabindex')).toBeNull()
         expect(bar?.getAttribute('role')).toBeNull()
       })
+
+      await step('the demo bar is wide enough: no badge is cut off', () => {
+        // A badge the bar cannot hold would be clipped by the bar's own edge,
+        // which reads as "the setting does nothing" in the settings screen.
+        const bar = canvasElement.querySelector<HTMLElement>('.bbp-preview .gantt-bar')
+        expect(bar).toBeTruthy()
+        const barRight = bar!.getBoundingClientRect().right
+        for (const selector of Object.values(FLAGS)) {
+          for (const badge of Array.from(canvasElement.querySelectorAll<HTMLElement>(selector))) {
+            const right = badge.getBoundingClientRect().right
+            expect(right, `${selector} ("${badge.textContent?.trim()}") ends at ${right}px`).toBeLessThanOrEqual(barRight + 0.5)
+          }
+        }
+      })
     } finally {
       Object.assign(viewSettings, initial)
     }
