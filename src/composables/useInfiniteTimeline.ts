@@ -4,7 +4,8 @@ import {
   cellEndDate,
   cellIndexForDate,
   cellStartDate,
-  dateForPointer,
+  dateAtCellCoord,
+  fmtDate,
   windowCells,
   toDate,
   type CalendarCell,
@@ -12,7 +13,14 @@ import {
 } from '../components/planner/calendar'
 import { CELL_WIDTH, LABEL_WIDTH } from '../components/planner/layout'
 import { viewSettings, MAX_CELL_PX } from '../settings'
-import { ensureRange, growStep, readRootCellWidth, windowStartFor, type TimelineRange } from './timelineHelpers'
+import {
+  cellCoordAtViewportX,
+  ensureRange,
+  growStep,
+  readRootCellWidth,
+  windowStartFor,
+  type TimelineRange,
+} from './timelineHelpers'
 import { useTableState } from './useTableState'
 import { useTimelineZoom } from './useTimelineZoom'
 
@@ -52,8 +60,10 @@ export interface InfiniteTimeline {
   cellEnd: (i: number) => Date
   /** Date under the pointer (for context menu) */
   dateAtPointer: (rect: DOMRect | null, clientX: number) => string | null
-  /** Exact date at a local container coordinate (for centering when the scale changes) */
-  dateAtLocalX: (localX: number, unit?: PlanningUnit) => Date | null
+  /** Date at a viewport x inside the container (for centering when the unit changes) */
+  dateAtViewportX: (viewportX: number, unit?: PlanningUnit) => Date | null
+  /** Fractional absolute cell coordinate under the pointer (null — left of the grid) */
+  cellCoordAtPointer: (clientX: number, rect?: DOMRect | null) => number | null
   /** Programmatic scroll to a date (the cell with the date lands at the window's left edge) */
   scrollToDate: (date: Date | string | number) => void
   /** Programmatic scroll: the date becomes the window center (day/decade scale change) */
@@ -138,28 +148,47 @@ export function useInfiniteTimeline(
     return cellEndDate(toDate(origin), unit.value, i)
   }
 
-  function dateAtPointer(rect: DOMRect | null, clientX: number): string | null {
-    return dateForPointer(
-      toDate(origin),
-      unit.value,
-      windowStart.value,
-      cellPx.value,
-      rect,
-      clientX,
+  /**
+   * Fractional absolute cell coordinate under the pointer (scroll- and zoom-aware):
+   * `cellLeft(floor(value))` is the left edge of the cell under the pointer, the
+   * fraction is the position inside it. null — the pointer is left of the timeline
+   * area (over the label column).
+   *
+   * Everything that turns a pointer position into a cell or a date goes through
+   * this function (context menu, bar drag): the visible window is scrolled by an
+   * arbitrary fraction of a cell, so a formula that only looks at the pointer
+   * offset from the container edge and adds `windowStart` silently resolves clicks
+   * near the left edge of a cell to the previous one.
+   */
+  function cellCoordAtPointer(clientX: number, rect?: DOMRect | null): number | null {
+    const el = container.value
+    if (!el) return null
+    const r = rect ?? el.getBoundingClientRect()
+    return cellCoordAtViewportX(
+      clientX - r.left,
+      el.scrollLeft,
       tableScale.value,
+      cellPx.value,
+      leftPad.value,
     )
   }
 
+  function dateAtPointer(rect: DOMRect | null, clientX: number): string | null {
+    const coord = cellCoordAtPointer(clientX, rect)
+    return coord == null ? null : fmtDate(dateAtCellCoord(toDate(origin), unit.value, coord))
+  }
+
   /**
-   * Exact date at a local x-coordinate of the container (px, unscaled), consistent
-   * with the rendered cells: accounts for the actual scrollLeft/leftPad/cellPx.
-   * Unlike dateAtPointer, the fractional position inside a cell is computed
-   * correctly — important for centering on day/decade scale changes.
+   * Date at a viewport x-coordinate inside the container (px as rendered, i.e. from
+   * the container's left edge), with the fractional position inside the cell
+   * preserved — used to keep the timeline centered on the same date when the unit
+   * changes. Accounts for scrollLeft, the zoom and leftPad.
    */
-  function dateAtLocalX(localX: number, u: PlanningUnit = unit.value): Date | null {
+  function dateAtViewportX(viewportX: number, u: PlanningUnit = unit.value): Date | null {
     const el = container.value
     if (!el) return null
-    const contentX = el.scrollLeft / tableScale.value + localX
+    const scale = tableScale.value || 1
+    const contentX = (el.scrollLeft + viewportX) / scale
     if (contentX < LABEL_WIDTH) return null
     const cell = Math.floor((contentX - LABEL_WIDTH) / cellPx.value) - leftPad.value
     const s = cellStartDate(toDate(origin), u, cell).getTime()
@@ -411,7 +440,8 @@ export function useInfiniteTimeline(
     cellStart,
     cellEnd,
     dateAtPointer,
-    dateAtLocalX,
+    dateAtViewportX,
+    cellCoordAtPointer,
     scrollToDate,
     scrollToCenterDate,
     initialize,

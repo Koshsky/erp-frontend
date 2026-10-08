@@ -135,7 +135,7 @@ watch(
   async (newUnit, oldUnit) => {
     const sc = scrollEl.value
     if (!sc || newUnit === oldUnit) return
-    const centerDate = tl.dateAtLocalX(sc.clientWidth / 2, oldUnit)
+    const centerDate = tl.dateAtViewportX(sc.clientWidth / 2, oldUnit)
     await nextTick()
     if (centerDate) tl.scrollToCenterDate(centerDate)
   },
@@ -216,6 +216,7 @@ const ctx: TimelineCtx = reactive({
   cellStart: tl.cellStart,
   cellEnd: tl.cellEnd,
   dateAtPointer: tl.dateAtPointer,
+  cellCoordAtPointer: tl.cellCoordAtPointer,
 })
 
 /** Right-click on empty timeline space (bars/labels/milestones intercept it themselves via .stop).

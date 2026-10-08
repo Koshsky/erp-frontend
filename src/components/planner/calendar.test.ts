@@ -14,7 +14,9 @@
  *  - tiling & monotonicity: consecutive cells are contiguous (end + 1 day ===
  *    next start), indices strictly follow the calendar order, negative
  *    indices work both for day and decade units;
- *  - spanToDates / cellRangeForSpan round-trips on the split-anchor layout.
+ *  - spanToDates / cellRangeForSpan round-trips on the split-anchor layout;
+ *  - dateAtCellCoord: the date under a fractional cell coordinate (the pointer
+ *    conversion feeding the context menu and the bar drag).
  */
 import { describe, expect, it } from 'vitest'
 import {
@@ -23,6 +25,7 @@ import {
   cellIndexForDate,
   cellRangeForSpan,
   cellStartDate,
+  dateAtCellCoord,
   spanToDates,
   windowCells,
   type PlanningUnit,
@@ -236,5 +239,51 @@ describe('day-step sanity', () => {
   it('steps by calendar days, never by 23/25 h', () => {
     expect(addDaysISO('2025-03-08', 4)).toBe('2025-03-12')
     expect(addDaysISO('2025-03-08', 1)).toBe('2025-03-09')
+  })
+})
+/**
+ * dateAtCellCoord turns the fractional cell coordinate produced by
+ * cellCoordAtViewportX (composables/timelineHelpers) into a date. For a day cell
+ * the result must be that cell's own day for EVERY position inside it — the
+ * coordinate already carries the scroll phase, so the date may not shift by a day
+ * when the click lands near the cell's left edge.
+ */
+describe('dateAtCellCoord', () => {
+  const origin = '2026-07-01'
+
+  it('day unit: the whole cell maps to its own day, fractions included', () => {
+    expect(fmt(dateAtCellCoord(origin, 'day', 0))).toBe('2026-07-01')
+    expect(fmt(dateAtCellCoord(origin, 'day', 0.001))).toBe('2026-07-01')
+    expect(fmt(dateAtCellCoord(origin, 'day', 0.999))).toBe('2026-07-01')
+    expect(fmt(dateAtCellCoord(origin, 'day', 1))).toBe('2026-07-02')
+    expect(fmt(dateAtCellCoord(origin, 'day', 15.4))).toBe('2026-07-16')
+  })
+
+  it('day unit: negative coordinates (cells before the origin) floor towards -infinity', () => {
+    // Cell -1 spans coordinates [-1, 0), cell -2 spans [-2, -1): a coordinate of
+    // -1.5 lies inside cell -2, exactly as the positive side behaves.
+    expect(fmt(dateAtCellCoord(origin, 'day', -1))).toBe('2026-06-30')
+    expect(fmt(dateAtCellCoord(origin, 'day', -0.001))).toBe('2026-06-30')
+    expect(fmt(dateAtCellCoord(origin, 'day', -1.5))).toBe('2026-06-29')
+    expect(fmt(dateAtCellCoord(origin, 'day', -1.999))).toBe('2026-06-29')
+  })
+
+  it('decade unit: the fraction marks a day inside the decade, never the neighbour', () => {
+    const cellStart = cellStartDate(origin, 'decade', 1)
+    const cellEnd = cellEndDate(origin, 'decade', 1)
+    for (const frac of [0, 0.25, 0.5, 0.99]) {
+      const d = dateAtCellCoord('2026-07-01', 'decade', 1 + frac)
+      const cell = cellIndexForDate('2026-07-01', 'decade', d)
+      expect(cell, `coord ${1 + frac} landed in cell ${cell}`).toBe(1)
+      expect(d.getTime()).toBeGreaterThanOrEqual(cellStart.getTime())
+      expect(d.getTime()).toBeLessThanOrEqual(cellEnd.getTime())
+    }
+  })
+
+  it('decade unit: the very start of a cell is its first day', () => {
+    for (const i of [-2, 0, 1, 4]) {
+      expect(dateAtCellCoord('2026-07-01', 'decade', i).getTime())
+        .toBe(cellStartDate('2026-07-01', 'decade', i).getTime())
+    }
   })
 })

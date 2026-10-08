@@ -1,7 +1,6 @@
 /** Timeline cell unit: day or decade (10 days) */
 export type PlanningUnit = 'day' | 'decade'
 
-import { LABEL_WIDTH } from './layout'
 import { DAY_MS, clamp } from '../../utils'
 import { fmtDateRange } from '@/i18n/date'
 
@@ -358,28 +357,21 @@ export function shiftSpanDates(
 }
 
 /**
- * Date under the mouse pointer on the infinite timeline.
- * windowStartCell — absolute cell index at the left edge of the timeline (visible window),
- * cellPx — cell width in px, rect — the container (including the LABEL_WIDTH label column),
- * scale — CSS zoom of the container (viewport coordinates are divided by the scale).
- * Returns YYYY-MM-DD (local timezone) or null if the click is left of the timeline.
+ * Date under a fractional absolute cell coordinate (as produced by
+ * `cellCoordAtViewportX` in composables/timelineHelpers): the cell's own day for a
+ * day cell (its start and end dates coincide), or the day the fraction marks inside
+ * a decade cell. The coordinate comes from the CONTENT position, so the fractional
+ * scroll of the visible window is already accounted for — the caller must not add
+ * a window start of its own.
  */
-export function dateForPointer(
+export function dateAtCellCoord(
   origin: Date | string | number,
   unit: PlanningUnit,
-  windowStartCell: number,
-  cellPx: number,
-  rect: DOMRect | null,
-  clientX: number,
-  scale = 1,
-): string | null {
-  if (!rect || cellPx <= 0) return null
-  const x = (clientX - rect.left) / scale
-  if (x < LABEL_WIDTH) return null
-  const raw = (x - LABEL_WIDTH) / cellPx
-  const i = Math.floor(raw)
-  const frac = raw - i
-  const start = cellStartDate(origin, unit, windowStartCell + i).getTime()
-  const end = cellEndDate(origin, unit, windowStartCell + i).getTime()
-  return fmtDate(new Date(start + Math.round(frac * (end - start))))
+  coord: number,
+): Date {
+  const i = Math.floor(coord)
+  const frac = coord - i
+  const start = cellStartDate(origin, unit, i).getTime()
+  const end = cellEndDate(origin, unit, i).getTime()
+  return new Date(start + Math.round(frac * (end - start)))
 }

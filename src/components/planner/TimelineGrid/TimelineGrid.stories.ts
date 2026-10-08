@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import { expect } from 'storybook/test'
 import TimelineGrid from './TimelineGrid.vue'
 import Bar from '../Bar/Bar.vue'
+import CalendarHeader from '../CalendarHeader/CalendarHeader.vue'
 import { cellRangeForSpan, type PlanningUnit } from '../calendar'
 import { LABEL_WIDTH } from '../layout'
 
@@ -408,6 +409,120 @@ export const LayersFitTheVisibleHeightWhenZoomed: Story = {
       const bandBox = band().getBoundingClientRect()
       expect(Math.round(bandBox.top), 'sticky at the bottom').toBe(Math.round(box.top))
       expect(Math.round(bandBox.bottom), 'covers the bottom edge').toBeGreaterThanOrEqual(Math.round(box.bottom) - 1)
+    })
+  },
+}
+
+/**
+ * The date under the cursor must not depend on the scroll phase or on the zoom.
+ *
+ * The visible window is scrolled by an arbitrary fraction of a cell, so the first
+ * rendered cell usually starts left of the label column edge. A conversion that
+ * only looks at the pointer offset from the container edge and adds `windowStart`
+ * therefore resolves a click near the LEFT edge of a cell to the previous one — a
+ * project/process/task created from the context menu starts one column earlier
+ * than the clicked one (the reported bug).
+ *
+ * Each click lands 2px inside the left edge of a fully visible cell; the emitted
+ * date has to be that cell's own day in every phase.
+ */
+export const CtxMenuDateFollowsTheClickedCell: Story = {
+  tags: ['vitest'],
+  render: () => ({
+    components: { TimelineGrid, CalendarHeader },
+    setup() {
+      /** Collects the dates the grid emits for context menu clicks */
+      function onCtx(p: { date: string | null }) {
+        const sink = document.querySelector<HTMLTextAreaElement>('.ctx-sink')
+        if (sink) sink.value += `${p.date ?? 'null'}\n`
+      }
+      return { origin: monthStart, onCtx }
+    },
+    template: `
+      <div style="font-family:sans-serif;">
+        <TimelineGrid :origin="origin" unit="day" @ctxmenu="onCtx">
+          <template #default="{ t }">
+            <CalendarHeader :t="t" />
+            <div v-for="n in 3" :key="n" style="position:relative;height:40px;border-bottom:1px solid #f0f0f0;"></div>
+          </template>
+        </TimelineGrid>
+        <textarea class="ctx-sink" style="display:none"></textarea>
+      </div>
+    `,
+  }),
+  play: async ({ canvasElement, step }) => {
+    const sc = () => canvasElement.querySelector<HTMLElement>('.tg-scroll')!
+    const sink = () => document.querySelector<HTMLTextAreaElement>('.ctx-sink')!
+    const frame = () => new Promise((r) => requestAnimationFrame(() => r(null)))
+    const settle = async () => {
+      await new Promise((r) => setTimeout(r, 90))
+      await frame()
+    }
+    const dates = () => sink().value.trim().split('\n').filter(Boolean)
+
+    /**
+     * Click 2px inside the left edge of the first cell that is fully right of the
+     * label column (the column is inside the zoomed content, so its rendered width
+     * is LABEL_WIDTH * scale) and return the emitted date with the cell's day number.
+     */
+    const clickLeftEdgeOfVisibleCell = async (): Promise<{ date: string; day: number }> => {
+      const box = sc().getBoundingClientRect()
+      const column = canvasElement.querySelector<HTMLElement>('.tg-side-col')!.getBoundingClientRect()
+      const cell = Array.from(canvasElement.querySelectorAll<HTMLElement>('.th-num')).find(
+        (c) => c.getBoundingClientRect().left - box.left >= column.width + 2,
+      )
+      expect(cell, 'a fully visible day cell is rendered').toBeDefined()
+      const cellBox = cell!.getBoundingClientRect()
+      const clientX = cellBox.left + 2
+      const clientY = box.top + Math.round(box.height / 2)
+      const target = document.elementFromPoint(clientX, clientY) ?? sc()
+      const before = dates().length
+      target.dispatchEvent(
+        new MouseEvent('contextmenu', { clientX, clientY, bubbles: true, cancelable: true }),
+      )
+      await settle()
+      const list = dates()
+      expect(list.length, 'the context menu event reached the grid').toBe(before + 1)
+      return { date: list[list.length - 1], day: Number(cell!.textContent!.trim()) }
+    }
+
+    await step('aligned scroll: the date is the clicked cell', async () => {
+      await settle()
+      const { date, day } = await clickLeftEdgeOfVisibleCell()
+      expect(new Date(date).getDate(), `emitted ${date}, clicked day ${day}`).toBe(day)
+    })
+
+    await step('off-grid scroll (click 2px inside a cell): still the clicked cell', async () => {
+      sc().scrollLeft += 20 // 0.625 of a 32px cell — the phase that used to shift the date left
+      await settle()
+      // the step only tests something if the window really is off the cell grid
+      expect(sc().scrollLeft % 32, 'the scroll phase is off-grid').not.toBe(0)
+      const { date, day } = await clickLeftEdgeOfVisibleCell()
+      expect(new Date(date).getDate(), `emitted ${date}, clicked day ${day}`).toBe(day)
+    })
+
+    await step('zoomed out: still the clicked cell', async () => {
+      const el = sc()
+      const box = el.getBoundingClientRect()
+      for (let i = 0; i < 7; i++) {
+        el.dispatchEvent(
+          new WheelEvent('wheel', {
+            ctrlKey: true,
+            deltaY: -120,
+            deltaMode: 0,
+            clientX: box.left + 300,
+            clientY: box.top + 100,
+            bubbles: true,
+            cancelable: true,
+          }),
+        )
+        await frame()
+      }
+      await settle()
+      const content = canvasElement.querySelector<HTMLElement>('.tg-content')!
+      expect(Number.parseFloat(content.style.zoom || '1'), 'the grid is zoomed out').toBeLessThan(0.6)
+      const { date, day } = await clickLeftEdgeOfVisibleCell()
+      expect(new Date(date).getDate(), `emitted ${date}, clicked day ${day}`).toBe(day)
     })
   },
 }

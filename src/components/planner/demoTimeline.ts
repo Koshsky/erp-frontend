@@ -39,5 +39,7 @@ export function makeDemoTimeline(
     cellStart: (i) => cellStartDate(o, unit, i),
     cellEnd: (i) => cellEndDate(o, unit, i),
     dateAtPointer: () => null,
+    // A demo timeline has no scroll container, so pointer mapping is unavailable
+    cellCoordAtPointer: () => null,
   }
 }
