@@ -53,6 +53,17 @@ const showNumRow = computed(() =>
   props.t.cellPx >= (props.t.unit === 'day' ? CELL_PX_NUM_DAY : CELL_PX_NUM_DECADE),
 )
 const showWdRow = computed(() => props.t.unit === 'day' && props.t.cellPx >= CELL_PX_WD_DAY)
+
+/**
+ * Left border of a header cell. The window's first cell (windowStart) starts at or
+ * left of the column edge, and the corner cell already draws that line: with the
+ * scroll aligned to the cell grid (the default "scroll to today") both 1px lines
+ * land side by side at the joint, which looks twice as thick as any other grid
+ * line. Every cell further right keeps its own border.
+ */
+function edgeBorder(i: number): string | undefined {
+  return i <= props.t.windowStart ? 'none' : undefined
+}
 </script>
 
 <template>
@@ -73,7 +84,7 @@ const showWdRow = computed(() => props.t.unit === 'day' && props.t.cellPx >= CEL
     <template v-if="showNumRow">
       <div v-for="i in t.visibleIndices" :key="'n' + i"
         class="th-num"
-        :style="{ left: t.cellLeft(i) + 'px', width: t.cellPx + 'px' }">
+        :style="{ left: t.cellLeft(i) + 'px', width: t.cellPx + 'px', borderLeft: edgeBorder(i) }">
         {{ numLabel(i) }}
       </div>
     </template>
@@ -81,7 +92,7 @@ const showWdRow = computed(() => props.t.unit === 'day' && props.t.cellPx >= CEL
     <template v-if="showWdRow">
       <div v-for="i in t.visibleIndices" :key="'w' + i"
         class="th-wd"
-        :style="{ left: t.cellLeft(i) + 'px', width: t.cellPx + 'px' }">
+        :style="{ left: t.cellLeft(i) + 'px', width: t.cellPx + 'px', borderLeft: edgeBorder(i) }">
         {{ dowMap[t.cellStart(i).getDay()] }}
       </div>
     </template>
@@ -95,6 +106,19 @@ const showWdRow = computed(() => props.t.unit === 'day' && props.t.cellPx >= CEL
   top: 0;
   z-index: var(--z-header);
   background: var(--ui-surface-2);
+}
+/* Bottom edge of the header: the same 1px line the corner cell draws, so the two
+   meet without a step. Painted as a pseudo-element over the cell backgrounds
+   rather than as a border: a border would either change the height or be covered
+   by the rows' own backgrounds in the collapsed header states (20/38px). */
+.tg-head::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: var(--ui-border);
 }
 /* Corner — part of the side panel: sticks to the left and top edges, sits above
  * all side-panel layers (--z-side-row, --z-side-merged, --z-side-panel) and the
