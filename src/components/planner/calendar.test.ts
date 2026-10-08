@@ -16,7 +16,9 @@
  *    indices work both for day and decade units;
  *  - spanToDates / cellRangeForSpan round-trips on the split-anchor layout;
  *  - dateAtCellCoord: the date under a fractional cell coordinate (the pointer
- *    conversion feeding the context menu and the bar drag).
+ *    conversion feeding the context menu and the bar drag);
+ *  - fitSpanDates: span of an item created by a right click inside its parent
+ *    (start stays at the clicked cell, the length is truncated by the parent).
  */
 import { describe, expect, it } from 'vitest'
 import {
@@ -26,6 +28,7 @@ import {
   cellRangeForSpan,
   cellStartDate,
   dateAtCellCoord,
+  fitSpanDates,
   spanToDates,
   windowCells,
   type PlanningUnit,
@@ -285,5 +288,62 @@ describe('dateAtCellCoord', () => {
       expect(dateAtCellCoord('2026-07-01', 'decade', i).getTime())
         .toBe(cellStartDate('2026-07-01', 'decade', i).getTime())
     }
+  })
+})
+
+/**
+ * fitSpanDates decides where a right-click-created item lands. The start must be the
+ * clicked cell: fitting the default length into the parent may only truncate the
+ * length, never slide the start left. The old shiftSpanDates moved the whole span,
+ * so a task created near the end of its process started up to a full default length
+ * earlier — e.g. a click on the process's last day produced a 7-day task beginning a
+ * week before the click, and a click 6 days before the end began exactly one cell
+ * early (the reported "starts at t-1").
+ */
+describe('fitSpanDates', () => {
+  const proc = ['2026-07-15', '2026-08-22'] as const
+
+  it('keeps the clicked start when the default length fits', () => {
+    expect(fitSpanDates('2026-08-10', '2026-08-17', ...proc))
+      .toEqual({ start_date: '2026-08-10', end_date: '2026-08-17' })
+    expect(fitSpanDates('2026-08-15', '2026-08-22', ...proc))
+      .toEqual({ start_date: '2026-08-15', end_date: '2026-08-22' })
+  })
+
+  it('truncates the length at the parent end instead of moving the start', () => {
+    // 08-16 + 7 days sticks out of the process: the old code started at 08-15
+    expect(fitSpanDates('2026-08-16', '2026-08-23', ...proc))
+      .toEqual({ start_date: '2026-08-16', end_date: '2026-08-22' })
+    expect(fitSpanDates('2026-08-22', '2026-08-29', ...proc))
+      .toEqual({ start_date: '2026-08-22', end_date: '2026-08-22' })
+  })
+
+  it('clamps the start only when the click is outside the parent', () => {
+    expect(fitSpanDates('2026-07-10', '2026-07-17', ...proc))
+      .toEqual({ start_date: '2026-07-15', end_date: '2026-07-17' })
+    // past the parent end: one day on the last day, not a week earlier
+    expect(fitSpanDates('2026-08-25', '2026-09-01', ...proc))
+      .toEqual({ start_date: '2026-08-22', end_date: '2026-08-22' })
+  })
+
+  it('keeps the whole parent when the default length exceeds it', () => {
+    const short = ['2026-07-15', '2026-07-19'] as const
+    expect(fitSpanDates('2026-07-16', '2026-07-23', ...short))
+      .toEqual({ start_date: '2026-07-16', end_date: '2026-07-19' })
+    expect(fitSpanDates('2026-07-15', '2026-07-23', ...short))
+      .toEqual({ start_date: '2026-07-15', end_date: '2026-07-19' })
+  })
+
+  it('returns the span untouched without bounds', () => {
+    expect(fitSpanDates('2026-08-16', '2026-08-23'))
+      .toEqual({ start_date: '2026-08-16', end_date: '2026-08-23' })
+    expect(fitSpanDates('2026-08-16', '2026-08-23', null, null))
+      .toEqual({ start_date: '2026-08-16', end_date: '2026-08-23' })
+  })
+
+  it('accepts Date objects and mixed inputs', () => {
+    const d = new Date(2026, 7, 16) // 2026-08-16, local midnight
+    expect(fitSpanDates(d, '2026-08-23', new Date(2026, 6, 15), new Date(2026, 7, 22)))
+      .toEqual({ start_date: '2026-08-16', end_date: '2026-08-22' })
   })
 })

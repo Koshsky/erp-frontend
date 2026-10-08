@@ -29,7 +29,7 @@ import { useFindPlanningItem } from '../composables/useFindPlanningItem'
 import { usePlanningStore, useAppStore, useRbacStore } from '../store'
 import { compareByName } from '../utils'
 import { t } from '../i18n'
-import { addDaysISO, shiftSpanDates, clampDateToBounds } from '../components/planner/calendar'
+import { addDaysISO, fitSpanDates, clampDateToBounds } from '../components/planner/calendar'
 import type { DependencyType } from '../components/planner/dependencies'
 import { CELL_WIDTH } from '../components/planner/layout'
 import { randomPaletteColor } from '../components/common/ColorField/palette'
@@ -388,9 +388,10 @@ async function handleSelect(id: string) {
   if (id === 'create-task') {
     if (processId == null || date == null) return
     const proc = planning.taskPlanning?.processes?.find((p: DtoDetailedProcess) => p.id === processId)
-    // A task is created within the bounds of the parent process keeping the default length:
-    // a click outside the bounds clamps the span to the parent start/end but does not shrink it.
-    const { start_date, end_date } = shiftSpanDates(
+    // A task starts exactly in the cell the user right-clicked and keeps the default
+    // length; near the process end the length is truncated by the process end (the
+    // start never slides left), and a click outside the process is clamped to it.
+    const { start_date, end_date } = fitSpanDates(
       date,
       addDaysISO(date, 7),
       proc?.start_date,

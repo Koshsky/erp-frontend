@@ -317,14 +317,16 @@ export function clampDateToBounds(
 }
 
 /**
- * Fits the interval [start, end] into the parent bounds [bStart, bEnd], preserving
- * duration (unlike clampSpanDates, which truncates): if the interval lies entirely
- * (or sticks out) left of the parent start — it is pushed to the start and grows
- * right by its own length; right of the end — pushed to the end and grows left;
- * if the duration exceeds the parent — it occupies the parent entirely.
- * If the bounds are not set — the interval is unchanged.
+ * Fits a NEW item created at `start` with the default length [start, end] into the
+ * parent bounds [bStart, bEnd] WITHOUT moving the start: the start is the cell the
+ * user clicked, and only containment may move it (a click outside the parent is
+ * clamped to the nearest bound). The default length is truncated by the parent's
+ * end — the item gets shorter instead of sliding left, which used to make a task
+ * created near the end of its process start several cells earlier than the click
+ * (a click on the last day produced a task starting a week before it). Never
+ * shorter than one day. If the bounds are not set — the interval is unchanged.
  */
-export function shiftSpanDates(
+export function fitSpanDates(
   start: Date | string | number,
   end: Date | string | number,
   bStart?: Date | string | number | null,
@@ -337,22 +339,8 @@ export function shiftSpanDates(
   }
   const bs = toDayStart(bStart).getTime()
   const be = toDayStart(bEnd).getTime()
-  const len = e.getTime() - s.getTime()
-  let ns = s.getTime()
-  let ne = ns + len
-  if (len >= be - bs) {
-    ns = bs
-    ne = be
-  } else {
-    if (ns < bs) {
-      ns = bs
-      ne = ns + len
-    }
-    if (ne > be) {
-      ne = be
-      ns = ne - len
-    }
-  }
+  const ns = clamp(s.getTime(), bs, be)
+  const ne = clamp(e.getTime(), ns, be)
   return { start_date: fmtDate(new Date(ns)), end_date: fmtDate(new Date(ne)) }
 }
 

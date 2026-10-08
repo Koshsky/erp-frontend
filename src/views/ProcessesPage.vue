@@ -19,7 +19,7 @@ import { usePlanningStore, useAppStore } from '../store'
 import { isOffline } from '../offline/state'
 import { scheduleNamedRefresh } from '../offline/sync'
 import { t } from '../i18n'
-import { addMonthsISO, shiftSpanDates } from '../components/planner/calendar'
+import { addMonthsISO, fitSpanDates } from '../components/planner/calendar'
 import { CELL_WIDTH } from '../components/planner/layout'
 import type { DtoDetailedProject, DtoProcess } from '@/api'
 
@@ -188,9 +188,10 @@ async function handleSelect(id: string) {
   if (id === 'create-process') {
     if (projectId == null || date == null) return
     const project = store.processPlanning?.projects?.find((p: DtoDetailedProject) => p.id === projectId)
-    // A process is created within the bounds of the parent project keeping the default length:
-    // a click outside the bounds clamps the span to the parent start/end but does not shrink it.
-    const { start_date, end_date } = shiftSpanDates(
+    // A process starts exactly in the cell the user right-clicked and keeps the default
+    // length; near the project end the length is truncated by the project end (the
+    // start never slides left), and a click outside the project is clamped to it.
+    const { start_date, end_date } = fitSpanDates(
       date,
       addMonthsISO(date, 3),
       project?.start_date,

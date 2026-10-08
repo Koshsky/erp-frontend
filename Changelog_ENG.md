@@ -14,7 +14,7 @@ The web app and the desktop wrapper are versioned together.
 - The Resources page no longer paints "Loading…" over a filled table on a background refresh.
 - Diagrams: the side column of names is an opaque band for the whole area height at any zoom — the content underneath no longer shows through.
 - Diagrams: when zoomed, the "today" line and the grid lines no longer stop halfway down, and no empty scroll area is left below the last row.
-- Diagrams: an object created from the context menu (project/process/task/milestone) starts exactly in the clicked cell, at any scroll offset and zoom.
+- Diagrams: an object created from the context menu (project/process/task/milestone) starts exactly in the clicked cell, at any scroll offset and zoom; at the parent's edge its length is truncated instead of moving the start.
 
 ## [1.3.0] - 2026-10-07
 
