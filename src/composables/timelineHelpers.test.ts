@@ -91,3 +91,82 @@ describe('growStep / windowStartFor', () => {
     expect(windowStartFor(32 * 7 + 5, 32, 3)).toBe(4)
   })
 })
+
+/**
+ * The view anchor of a table — what useInfiniteTimeline saves on unmount and
+ * restores on the next mount (a tab switch). It must be a fixed point: save →
+ * restore → save has to yield the SAME cell, otherwise the view walks one cell
+ * further left on every switch.
+ *
+ * The old save path sampled the first visible date with its own arithmetic
+ * (`Math.floor` of a coordinate built by multiplying by the zoom and dividing it
+ * back), which lands a hair below a cell boundary for ~30% of zoom/width/position
+ * combinations: 583 of 1944 cases stepped one cell left per cycle — narrow columns
+ * made the drift obvious because a cell is a whole day there.
+ */
+describe('view anchor round trip (save -> restore)', () => {
+  /** What the timeline stores: the first visible cell plus the position inside it */
+  function saveAnchor(scrollLeft: number, scale: number, cellPx: number, leftPad: number) {
+    const coord = cellCoordAtViewportX(LABEL_WIDTH * scale, scrollLeft, scale, cellPx, leftPad)!
+    const cell = Math.floor(coord)
+    return { cell, fraction: coord - cell }
+  }
+
+  /** What the restore does: scrollToCell(cell, fraction) */
+  function restoreScrollLeft(cell: number, fraction: number, cellPx: number, scale: number, leftPad: number) {
+    return (cell + fraction + leftPad) * cellPx * scale
+  }
+
+  const SCALES = [1, 1.1, 1.21, 1.4641, 0.909091, 0.826446, 0.620921, 0.513158]
+  const CELLS = [2, 3, 4, 6, 8, 12, 16, 24, 32]
+  const PADS = [7, 12, 20, 33]
+  const POSITIONS = [-140, -10, 0, 3, 50, 200]
+
+  /** scrollToCell grows the range until the target is reachable (scrollLeft >= 0) */
+  const reachablePad = (cell: number, step: number) => Math.max(step, step - cell)
+
+  it('saves the cell it was opened at, for every zoom, width and position', () => {
+    for (const scale of SCALES) {
+      for (const cellPx of CELLS) {
+        for (const step of PADS) {
+          for (const cell of POSITIONS) {
+            const leftPad = reachablePad(cell, step)
+            const scrollLeft = restoreScrollLeft(cell, 0, cellPx, scale, leftPad)
+            const saved = saveAnchor(scrollLeft, scale, cellPx, leftPad)
+            expect(saved.cell, `scale ${scale}, cellPx ${cellPx}, step ${step}: cell ${cell}`)
+              .toBe(cell)
+          }
+        }
+      }
+    }
+  })
+
+  it('does not step one cell left on a position that sits exactly on a boundary', () => {
+    // These are the combinations whose coordinate comes out a hair below the integer
+    // (49.999999999999986 and -3.55e-15) — the boundary guard has to absorb that
+    expect(saveAnchor(restoreScrollLeft(50, 0, 4, 1.1, 20), 1.1, 4, 20).cell).toBe(50)
+    expect(saveAnchor(restoreScrollLeft(50, 0, 8, 1.1, 20), 1.1, 8, 20).cell).toBe(50)
+    expect(saveAnchor(restoreScrollLeft(-10, 0, 6, 1.1, 20), 1.1, 6, 20).cell).toBe(-10)
+    expect(saveAnchor(restoreScrollLeft(0, 0, 32, 1.1, 20), 1.1, 32, 20).cell).toBe(0)
+  })
+
+  it('stays put across repeated switches, even from a mid-cell position', () => {
+    for (const scale of SCALES) {
+      for (const cellPx of CELLS) {
+        const leftPad = 20
+        // Opened mid-cell (as after a pan or a cell-width change); the position is
+        // built here directly so the restore helper below is the only thing under test
+        let { cell, fraction } = saveAnchor((37 + 0.4 + leftPad) * cellPx * scale, scale, cellPx, leftPad)
+        expect(Math.abs(fraction - 0.4), 'the mid-cell position was saved').toBeLessThan(1e-4)
+        expect(Number.isFinite(fraction), 'the anchor is reachable').toBe(true)
+        for (let round = 0; round < 5; round++) {
+          const next = saveAnchor(restoreScrollLeft(cell, fraction, cellPx, scale, leftPad), scale, cellPx, leftPad)
+          expect(next.cell, `scale ${scale}, cellPx ${cellPx}, round ${round}`).toBe(cell)
+          expect(Math.abs(next.fraction - fraction), `fraction drifted`).toBeLessThan(1e-4)
+          cell = next.cell
+          fraction = next.fraction
+        }
+      }
+    }
+  })
+})

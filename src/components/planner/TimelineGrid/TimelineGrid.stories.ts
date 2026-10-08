@@ -614,14 +614,21 @@ export const ViewStateIsSharedAcrossTabs: Story = {
       await settle()
     }
 
-    /** Ctrl+wheel — the table zoom; Ctrl+Shift+wheel — the cell width (column compression) */
+    /** Ctrl+wheel — the table zoom; Ctrl+Shift+wheel — the cell width (column compression).
+     *  Negative ticks zoom out / narrow the columns. */
     const wheelZoom = async (shift: boolean, ticks: number) => {
       const el = sc()
       const box = el.getBoundingClientRect()
-      for (let i = 0; i < ticks; i++) {
+      for (let i = 0; i < Math.abs(ticks); i++) {
         el.dispatchEvent(new WheelEvent('wheel', {
-          ctrlKey: true, shiftKey: shift, deltaY: 120, deltaMode: 0,
-          clientX: box.left + 400, clientY: box.top + 100, bubbles: true, cancelable: true,
+          ctrlKey: true,
+          shiftKey: shift,
+          deltaY: ticks > 0 ? 120 : -120,
+          deltaMode: 0,
+          clientX: box.left + 400,
+          clientY: box.top + 100,
+          bubbles: true,
+          cancelable: true,
         }))
         await frame()
       }
@@ -670,6 +677,22 @@ export const ViewStateIsSharedAcrossTabs: Story = {
       await switchTo('project')
       expect(lastFrom('project'), 'the projects tab kept the visible date').toBe(from)
       expect(content().style.zoom, 'the projects tab kept the zoom').toBe(zoom)
+    })
+
+    await step('repeated switches with narrow columns do not drift', async () => {
+      // The reported setup: narrow columns, where a one-cell slip is a whole day
+      await wheelZoom(true, -8)
+      const cellWidth = Number.parseFloat(sc().style.getPropertyValue('--cell-width') || '32')
+      expect(cellWidth, 'the columns are narrow').toBeLessThan(24)
+      const from = lastFrom('project')
+      expect(from, 'the position before the switches').toBeDefined()
+
+      for (let round = 0; round < 3; round++) {
+        await switchTo('process')
+        expect(lastFrom('process'), `round ${round}: processes kept the date`).toBe(from)
+        await switchTo('project')
+        expect(lastFrom('project'), `round ${round}: projects kept the date`).toBe(from)
+      }
     })
   },
 }

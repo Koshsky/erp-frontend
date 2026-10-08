@@ -9,8 +9,16 @@
  * from another tab showed future dates only.
  */
 export interface TimelineViewState {
-  /** Date at the left edge of the visible window (YYYY-MM-DD); null — unknown */
+  /** Date of the first visible cell (YYYY-MM-DD); null — unknown */
   firstDate: string | null
+  /**
+   * Position inside that cell (0..1). Kept so that save → restore is EXACT: the
+   * cell index alone snaps the view to the cell start (up to ten days for decade
+   * cells), and an exactly cell-aligned anchor is fragile — multiplying by the zoom
+   * and dividing it back can land a hair below the boundary, so the next save would
+   * step one more cell to the left on every switch.
+   */
+  firstFraction: number
   /** Cell width in px (--cell-width, "column compression") */
   cellPx: number
   /** Table scale (CSS zoom of .tg-content) */

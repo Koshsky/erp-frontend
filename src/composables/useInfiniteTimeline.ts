@@ -240,11 +240,12 @@ export function useInfiniteTimeline(
   }
 
   /**
-   * Programmatic scroll to cell i: the cell becomes the left edge of the visible window.
-   * The range is extended to cover the target position (including far past — leftPad
-   * grows to step − i); applied after the DOM flush.
+   * Programmatic scroll to cell i (optionally `fraction` cells further, 0..1): the
+   * cell becomes the left edge of the visible window. The range is extended to
+   * cover the target position (including far past — leftPad grows to step − i);
+   * applied after the DOM flush.
    */
-  function scrollToCell(i: number) {
+  function scrollToCell(i: number, fraction = 0) {
     const el = container.value
     if (!el) return
     const step = growStep(viewportCells.value)
@@ -254,7 +255,7 @@ export function useInfiniteTimeline(
     if (needLeft > leftPad.value) leftPad.value = needLeft
     const scale = tableScale.value
     void nextTick().then(() => {
-      el.scrollLeft = (i + leftPad.value) * cellPx.value * scale
+      el.scrollLeft = (i + fraction + leftPad.value) * cellPx.value * scale
       sync()
     })
   }
@@ -381,7 +382,10 @@ export function useInfiniteTimeline(
       if (stored?.firstDate) {
         // Restore by DATE: a saved scrollLeft in px would mean a different date,
         // because the range grown to the left is re-seeded on every mount.
-        scrollToCell(cellIndexForDate(toDate(origin), unit.value, stored.firstDate))
+        scrollToCell(
+          cellIndexForDate(toDate(origin), unit.value, stored.firstDate),
+          stored.firstFraction,
+        )
       } else {
         // Fresh open (or a state without a date): the origin sits at the left edge.
         // Re-applied here, after the content width has been patched into the DOM:
@@ -416,11 +420,25 @@ export function useInfiniteTimeline(
     // If the restore has not applied yet (fast remount due to a loading flip),
     // the store state is still valid — do not overwrite it.
     if (id && el && stateReady) {
-      // The first VISIBLE date: the label column lives inside the zoomed content, so
-      // the timeline area starts at LABEL_WIDTH * scale rendered px, not at 0.
-      const first = dateAtViewportX(LABEL_WIDTH * (tableScale.value || 1))
+      // The first VISIBLE cell: the label column lives inside the zoomed content, so
+      // the timeline area starts at LABEL_WIDTH * scale rendered px, not at 0. The
+      // coordinate goes through the same primitive as the pointer mapping — it
+      // carries the boundary guard, without which a position exactly on a cell edge
+      // is saved one cell short and the view walks left on every tab switch.
+      const scale = tableScale.value || 1
+      const coord = cellCoordAtViewportX(
+        LABEL_WIDTH * scale,
+        el.scrollLeft,
+        scale,
+        cellPx.value,
+        leftPad.value,
+      )
+      const cell = coord == null ? null : Math.floor(coord)
       tableState.save(id, {
-        firstDate: first ? fmtDate(first) : null,
+        firstDate: cell == null
+          ? null
+          : fmtDate(cellStartDate(toDate(origin), unit.value, cell)),
+        firstFraction: cell == null || coord == null ? 0 : coord - cell,
         cellPx: cellPx.value,
         scale: tableScale.value,
       })
