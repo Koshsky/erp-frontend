@@ -8,6 +8,10 @@ The web app and the desktop wrapper are versioned together.
 
 ## [Unreleased]
 
+### Changed
+
+- Diagrams: Projects, Processes and Tasks share one view position — the first visible date, the zoom and the cell width survive switching between the tabs.
+
 ### Fixed
 
 - Badges on task bars are no longer dropped at fine zoom: the markers enabled in the settings always stay visible.

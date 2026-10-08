@@ -1,30 +1,56 @@
-/** Scale/scroll state of a single table (kept across unmounts) */
-export interface TableScaleState {
-  /** Cell width in px (--cell-width) */
+/**
+ * Timeline view state kept across mounts (tab switches).
+ *
+ * The horizontal position is stored as a DATE, never as a scroll offset in px: a
+ * px offset only means something together with the range grown to the left
+ * (`leftPad`, the cells materialized before the origin), and that range is
+ * re-seeded on every mount. Restoring `scrollLeft` alone therefore landed at a
+ * later date on every switch — after panning ten days into the past, coming back
+ * from another tab showed future dates only.
+ */
+export interface TimelineViewState {
+  /** Date at the left edge of the visible window (YYYY-MM-DD); null — unknown */
+  firstDate: string | null
+  /** Cell width in px (--cell-width, "column compression") */
   cellPx: number
-  /** Table scale (zoom on .tg-content) */
+  /** Table scale (CSS zoom of .tg-content) */
   scale: number
-  /** Horizontal scroll (in scaled px) */
-  scrollLeft: number
-  /** Vertical scroll */
-  scrollTop: number
 }
 
 /**
- * In-memory per-id table state storage: survives unmounting
- * (tab switches), but is reset by a page reload.
+ * Ids that share ONE view position: projects, processes and tasks are the same
+ * timeline at different levels, so moving through them must not re-anchor the
+ * view. The timesheet keeps its own state (a different roster and page).
  */
-const tableStates = new Map<string, TableScaleState>()
+const SHARED_TIMELINE_IDS = new Set(['project', 'process', 'task'])
 
-/** Persist table scale/scroll between mounts (keyed by a stable id) */
+/** State key of a table: the three planner diagrams share one, the rest are separate */
+function viewKey(id: string): string {
+  return SHARED_TIMELINE_IDS.has(id) ? 'planner' : id
+}
+
+/** View state per key (in memory: survives unmounts, reset by a page reload) */
+const views = new Map<string, TimelineViewState>()
+/** Vertical scroll stays per table — different tables have different rows */
+const scrollTops = new Map<string, number>()
+
+/** Persist the timeline view (first visible date, scale, cell width) between mounts */
 export function useTableState() {
-  function get(id: string | undefined): TableScaleState | undefined {
-    return id ? tableStates.get(id) : undefined
+  function get(id: string | undefined): TimelineViewState | undefined {
+    return id ? views.get(viewKey(id)) : undefined
   }
 
-  function save(id: string | undefined, state: TableScaleState): void {
-    if (id) tableStates.set(id, state)
+  function save(id: string | undefined, state: TimelineViewState): void {
+    if (id) views.set(viewKey(id), state)
   }
 
-  return { get, save }
+  function getScrollTop(id: string | undefined): number {
+    return id ? scrollTops.get(id) ?? 0 : 0
+  }
+
+  function saveScrollTop(id: string | undefined, px: number): void {
+    if (id) scrollTops.set(id, px)
+  }
+
+  return { get, save, getScrollTop, saveScrollTop }
 }

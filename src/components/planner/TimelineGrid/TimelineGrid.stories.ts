@@ -526,3 +526,150 @@ export const CtxMenuDateFollowsTheClickedCell: Story = {
     })
   },
 }
+
+/**
+ * The three planner diagrams (Projects / Processes / Tasks) share ONE view state:
+ * the first visible date, the table zoom and the cell width — paging between the
+ * tabs must not re-anchor the timeline.
+ *
+ * The position is stored as a date, not as a scroll offset in px: a px offset only
+ * means something together with the range grown to the left (leftPad), and that
+ * range is re-seeded on every mount. Restoring px therefore landed at a later date
+ * on every switch — after panning ten days into the past, coming back from another
+ * tab showed future dates only.
+ */
+export const ViewStateIsSharedAcrossTabs: Story = {
+  tags: ['vitest'],
+  render: () => ({
+    components: { TimelineGrid, CalendarHeader },
+    setup() {
+      const tab = ref<'project' | 'process'>('project')
+      /** "<id> <first visible date>" per emitted range — read back by the play function */
+      function onRange(id: string, p: { from: string }) {
+        const sink = document.querySelector<HTMLTextAreaElement>('.state-sink')
+        if (sink) sink.value += `${id} ${p.from}\n`
+      }
+      return { tab, origin: monthStart, onRange }
+    },
+    template: `
+      <div style="font-family:sans-serif;">
+        <div style="display:flex;gap:8px;margin-bottom:8px;">
+          <button class="tab-project" @click="tab = 'project'">Проекты</button>
+          <button class="tab-process" @click="tab = 'process'">Процессы</button>
+        </div>
+        <TimelineGrid
+          :key="tab"
+          :id="tab"
+          :origin="origin"
+          unit="day"
+          @visible-range="(p) => onRange(tab, p)"
+        >
+          <template #default="{ t }">
+            <CalendarHeader :t="t" />
+            <div v-for="n in 3" :key="n" style="position:relative;height:40px;border-bottom:1px solid #f0f0f0;"></div>
+          </template>
+        </TimelineGrid>
+        <textarea class="state-sink" style="display:none"></textarea>
+      </div>
+    `,
+  }),
+  play: async ({ canvasElement, step }) => {
+    const sc = () => canvasElement.querySelector<HTMLElement>('.tg-scroll')!
+    const content = () => canvasElement.querySelector<HTMLElement>('.tg-content')!
+    const sink = () => document.querySelector<HTMLTextAreaElement>('.state-sink')!
+    const frame = () => new Promise((r) => requestAnimationFrame(() => r(null)))
+    /** The visible range is debounced by ~150ms in TimelineGrid */
+    const settle = async () => {
+      await new Promise((r) => setTimeout(r, 300))
+      await frame()
+    }
+    const rows = () =>
+      sink().value.trim().split('\n').filter(Boolean).map((line) => {
+        const [id, from] = line.split(' ')
+        return { id, from }
+      })
+    const lastFrom = (id: string) => {
+      const list = rows().filter((r) => r.id === id)
+      return list.length ? list[list.length - 1]!.from : undefined
+    }
+
+    /** Middle-button pan of dx px; the view moves backwards when the mouse goes right */
+    const panBy = async (dx: number) => {
+      const el = sc()
+      const box = el.getBoundingClientRect()
+      const x0 = box.left + 600
+      const y = box.top + 100
+      el.dispatchEvent(new PointerEvent('pointerdown', {
+        button: 1, buttons: 4, pointerType: 'mouse', bubbles: true, clientX: x0, clientY: y,
+      }))
+      for (const half of [0.5, 1]) {
+        window.dispatchEvent(new PointerEvent('pointermove', {
+          button: 1, buttons: 4, pointerType: 'mouse', clientX: x0 + dx * half, clientY: y,
+        }))
+        await frame()
+      }
+      window.dispatchEvent(new PointerEvent('pointerup', {
+        button: 1, buttons: 0, pointerType: 'mouse', clientX: x0 + dx, clientY: y,
+      }))
+      await settle()
+    }
+
+    /** Ctrl+wheel — the table zoom; Ctrl+Shift+wheel — the cell width (column compression) */
+    const wheelZoom = async (shift: boolean, ticks: number) => {
+      const el = sc()
+      const box = el.getBoundingClientRect()
+      for (let i = 0; i < ticks; i++) {
+        el.dispatchEvent(new WheelEvent('wheel', {
+          ctrlKey: true, shiftKey: shift, deltaY: 120, deltaMode: 0,
+          clientX: box.left + 400, clientY: box.top + 100, bubbles: true, cancelable: true,
+        }))
+        await frame()
+      }
+      await settle()
+    }
+
+    /** Switch tabs by clicking the tab button (the grid is remounted with another id) */
+    const switchTo = async (tab: 'project' | 'process') => {
+      canvasElement.querySelector<HTMLButtonElement>(`.tab-${tab}`)!.click()
+      await settle()
+      await settle()
+    }
+
+    await step('panning into the past moves the first visible date back', async () => {
+      await settle()
+      const before = lastFrom('project')
+      expect(before, 'the first visible range was emitted').toBeDefined()
+      const widthBefore = content().getBoundingClientRect().width
+      await panBy(260) // ~8 days at 32px, ending up before the origin so leftPad grows
+      const after = lastFrom('project')
+      expect(after, 'a range was emitted after panning').toBeDefined()
+      expect(after! < before!, `${after} is not earlier than ${before}`).toBe(true)
+      expect(content().getBoundingClientRect().width, 'the range grew to the left')
+        .toBeGreaterThan(widthBefore)
+    })
+
+    await step('zoom and cell width are part of the state', async () => {
+      await wheelZoom(false, 3)
+      await wheelZoom(true, 3)
+      expect(Number.parseFloat(content().style.zoom || '1'), 'zoomed in').toBeGreaterThan(1)
+      expect(sc().style.getPropertyValue('--cell-width'), 'cell width set').not.toBe('')
+    })
+
+    await step('another tab opens at the same date, zoom and cell width', async () => {
+      const from = lastFrom('project')
+      const zoom = content().style.zoom
+      const cellWidth = sc().style.getPropertyValue('--cell-width')
+      expect(from, 'the position to remember').toBeDefined()
+
+      await switchTo('process')
+      expect(lastFrom('process'), 'the processes tab kept the visible date').toBe(from)
+      expect(content().style.zoom, 'the processes tab kept the zoom').toBe(zoom)
+      expect(sc().style.getPropertyValue('--cell-width'), 'the processes tab kept the cell width')
+        .toBe(cellWidth)
+
+      await switchTo('project')
+      expect(lastFrom('project'), 'the projects tab kept the visible date').toBe(from)
+      expect(content().style.zoom, 'the projects tab kept the zoom').toBe(zoom)
+    })
+  },
+}

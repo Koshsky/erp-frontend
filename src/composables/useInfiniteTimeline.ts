@@ -347,24 +347,21 @@ export function useInfiniteTimeline(
     const step = growStep(viewportCells.value)
     leftPad.value = step
     rightCells.value = viewportCells.value + step * 2
-    // Extend the range for the saved scrollLeft up front (before flush), otherwise
-    // the browser clamps scrollLeft to the smaller content width and the position is lost.
-    const restoreLeft = stored ? stored.scrollLeft : 0
-    if (restoreLeft > 0 || openedScale > 1) {
-      const local = (restoreLeft / (stored ? tableScale.value : openedScale)) || 0
-      const vs = windowStartFor(local, cellPx.value, leftPad.value)
-      ensureRange(vs, range)
+    // The horizontal position is restored in mount(), after the content width has
+    // been applied: only the saved DATE is meaningful (see useTableState), and
+    // scrollToCell extends the range before setting scrollLeft.
+    if (!stored) {
+      const el = container.value
+      // Fresh open (no state at all): the origin sits at the left edge, scaled by the
+      // opening zoom so the initial picture is identical at any default scale.
+      if (el) el.scrollLeft = leftPad.value * cellPx.value * openedScale
+      windowStart.value = 0
     }
-    const el = container.value
-    // scrollLeft is in scaled px — multiply by the active scale so the opening
-    // position (origin near the left edge) is identical at any default zoom.
-    if (el) el.scrollLeft = leftPad.value * cellPx.value * (stored ? tableScale.value : openedScale)
-    windowStart.value = 0
   }
 
   let observer: ResizeObserver | null = null
 
-  /** scrollLeft/scrollTop restore has been applied (otherwise unmount overwrites the store with defaults) */
+  /** view restore has been applied (otherwise unmount overwrites the store with defaults) */
   let stateReady = false
 
   function onScroll() {
@@ -376,22 +373,30 @@ export function useInfiniteTimeline(
     if (!el) return
     initialize()
     const stored = tableState.get(id)
-    // Content width updates reactively (leftPad/rightCells) — wait for the DOM
-    // to apply, otherwise scrollLeft clamps to the old (zero) width and origin does not reach the left edge.
+    // Content width updates reactively (leftPad/rightCells) — wait for the DOM to
+    // apply, otherwise scrollLeft clamps to the old (zero) width and the position
+    // does not reach its cell. scrollToCell extends the range itself (a date far in
+    // the past needs a large leftPad), so it runs on its own tick as well.
     void nextTick().then(() => {
-      if (stored) {
-        el.scrollLeft = stored.scrollLeft
-        // The table may have changed size since the state was saved: a vertical
-        // position beyond the current scrollable range would be silently clamped
-        // by the browser to the bottom, pinning the last rows into view with no
-        // user scroll. A stale position is meaningless — open at the top.
-        const maxScroll = el.scrollHeight - el.clientHeight
-        el.scrollTop = stored.scrollTop <= maxScroll ? stored.scrollTop : 0
-        sync()
+      if (stored?.firstDate) {
+        // Restore by DATE: a saved scrollLeft in px would mean a different date,
+        // because the range grown to the left is re-seeded on every mount.
+        scrollToCell(cellIndexForDate(toDate(origin), unit.value, stored.firstDate))
       } else {
+        // Fresh open (or a state without a date): the origin sits at the left edge.
+        // Re-applied here, after the content width has been patched into the DOM:
+        // before the flush the browser clamps scrollLeft to the old width.
         el.scrollLeft = leftPad.value * cellPx.value * openedScale
         windowStart.value = 0
       }
+      // The table may have changed size since the state was saved: a vertical
+      // position beyond the current scrollable range would be silently clamped
+      // by the browser to the bottom, pinning the last rows into view with no
+      // user scroll. A stale position is meaningless — open at the top.
+      const savedTop = tableState.getScrollTop(id)
+      const maxScroll = el.scrollHeight - el.clientHeight
+      el.scrollTop = savedTop <= maxScroll ? savedTop : 0
+      sync()
       stateReady = true
     })
     observer = new ResizeObserver(() => {
@@ -411,12 +416,15 @@ export function useInfiniteTimeline(
     // If the restore has not applied yet (fast remount due to a loading flip),
     // the store state is still valid — do not overwrite it.
     if (id && el && stateReady) {
+      // The first VISIBLE date: the label column lives inside the zoomed content, so
+      // the timeline area starts at LABEL_WIDTH * scale rendered px, not at 0.
+      const first = dateAtViewportX(LABEL_WIDTH * (tableScale.value || 1))
       tableState.save(id, {
+        firstDate: first ? fmtDate(first) : null,
         cellPx: cellPx.value,
         scale: tableScale.value,
-        scrollLeft: el.scrollLeft,
-        scrollTop: el.scrollTop,
       })
+      tableState.saveScrollTop(id, el.scrollTop)
     }
     stateReady = false
     el?.removeEventListener('scroll', onScroll)
