@@ -235,8 +235,8 @@ export const MiddleButtonPan: Story = {
  * the today line, dependency links and group overlays that fall left of the
  * column edge used to show through the column (which read as a transparent
  * strip). The band sits above the content and below the sticky labels, spans the
- * viewport height (clipped by the scroll container) and never intercepts pointer
- * events, so panning and the context menu are unchanged.
+ * visible height (measured px, see LayersFitTheVisibleHeightWhenZoomed) and never
+ * intercepts pointer events, so panning and the context menu are unchanged.
  */
 export const SideColumnIsOpaque: Story = {
   tags: ['vitest'],
@@ -265,17 +265,18 @@ export const SideColumnIsOpaque: Story = {
       expect(cs.width).toBe(`${LABEL_WIDTH}px`)
     })
 
-    await step('it is sticky and closes the full viewport height without moving the layout', () => {
+    await step('it is sticky and closes the full visible height without moving the layout', () => {
       const cs = getComputedStyle(band())
       expect(cs.position).toBe('sticky')
       expect(cs.top).toBe('0px')
       expect(cs.left).toBe('0px')
-      // Taller than the container on purpose (the overflow clips it); the
-      // negative margin keeps its flow contribution at zero.
+      // Height comes from --tg-fit-height (visible height / zoom, see the zoom
+      // guard below); the negative margin keeps its flow contribution at zero.
       const height = Number.parseFloat(cs.height)
       const margin = Number.parseFloat(cs.marginBottom)
       expect(height).toBeGreaterThan(0)
       expect(margin).toBe(-height)
+      expect(cs.height).toBe(getComputedStyle(band().parentElement!).getPropertyValue('--tg-fit-height').trim())
     })
 
     await step('it hides the content, not the labels, and never eats clicks', () => {
@@ -285,6 +286,128 @@ export const SideColumnIsOpaque: Story = {
       expect(tokenValue('--z-side-backdrop')).toBeGreaterThan(tokenValue('--z-today'))
       expect(tokenValue('--z-side-row')).toBeGreaterThan(tokenValue('--z-side-backdrop'))
       expect(cs.pointerEvents).toBe('none')
+    })
+  },
+}
+
+const now = new Date()
+const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
+
+/**
+ * The layers that have to cover the visible height — the side column, the today
+ * line and the grid lines — are sized in measured px, never in a percentage or a
+ * viewport unit.
+ *
+ * Everything inside `.tg-content` is multiplied by the CSS zoom of the table
+ * scale (Ctrl+wheel), and browsers disagree on whether relative units compensate
+ * that factor: Firefox does not, so at 50% zoom `min-height: 100%` shrank the
+ * content box, and with it the today line and the grid drawn from that box, to
+ * half the visible height; `100dvh` did the same to the side column in every
+ * engine. TimelineGrid therefore publishes `--tg-fit-height` = container
+ * clientHeight / zoom, and this guard pins the behaviour at the zoom levels users
+ * reach, failing if a relative unit comes back.
+ */
+export const LayersFitTheVisibleHeightWhenZoomed: Story = {
+  tags: ['vitest'],
+  render: () => ({
+    components: { TimelineGrid },
+    setup() {
+      // Today has to be inside the window — the today line is what the bug cut in half
+      return { origin: monthStart }
+    },
+    template: `
+      <div style="height:640px;display:flex;flex-direction:column;font-family:sans-serif;">
+        <TimelineGrid :origin="origin" unit="day" :style="{ flex: '1 1 auto', maxHeight: 'none' }">
+          <template #default="{ t }">
+            <div style="position:sticky;top:0;z-index:30;background:#f8f9fa;border-bottom:1px solid #e6e8ec;height:20px;">
+              <div style="position:sticky;left:0;width:${LABEL_WIDTH}px;height:100%;background:#f8f9fa;z-index:3;display:flex;align-items:center;padding:0 10px;font-weight:700;font-size: calc(var(--ui-font-scale, 1) * 12px);">Задачи</div>
+            </div>
+            <div v-for="n in 3" :key="n" style="position:relative;height:40px;border-bottom:1px solid #f0f0f0;">
+              <div style="position:sticky;left:0;width:${LABEL_WIDTH}px;height:100%;background:#fff;z-index:10;display:flex;align-items:center;padding:0 10px;font-size: calc(var(--ui-font-scale, 1) * 12px);font-weight:600;">Задача {{ n }}</div>
+              <div :style="{ position:'absolute', left: t.cellLeft(n * 2) + 'px', width: t.cellPx * 4 + 'px', top:4, height:30, background:'#1a73e8', borderRadius:5 }"></div>
+            </div>
+          </template>
+        </TimelineGrid>
+      </div>
+    `,
+  }),
+  play: async ({ canvasElement, step }) => {
+    const sc = () => canvasElement.querySelector<HTMLElement>('.tg-scroll')!
+    const content = () => canvasElement.querySelector<HTMLElement>('.tg-content')!
+    const band = () => canvasElement.querySelector<HTMLElement>('.tg-side-col')!
+    const line = () => canvasElement.querySelector<HTMLElement>('.tl-line')
+    const frame = () => new Promise((r) => requestAnimationFrame(() => r(null)))
+
+    /** Ctrl+wheel through the real zoom path (useTimelineZoom.onWheel) */
+    const zoomBy = async (ticks: number) => {
+      const box = sc().getBoundingClientRect()
+      for (let i = 0; i < Math.abs(ticks); i++) {
+        sc().dispatchEvent(
+          new WheelEvent('wheel', {
+            ctrlKey: true,
+            deltaY: ticks > 0 ? 120 : -120,
+            deltaMode: 0,
+            clientX: box.left + 200,
+            clientY: box.top + 100,
+            bubbles: true,
+            cancelable: true,
+          }),
+        )
+        await frame()
+      }
+      // the zoom applies its scroll compensation in nextTick — let it settle
+      await new Promise((r) => setTimeout(r, 60))
+      await frame()
+    }
+
+    const scale = () => Number.parseFloat(content().style.zoom || '1')
+
+    /** Every layer covers the visible height, and the content box does not stretch it */
+    const expectFullHeight = (label: string, withTodayLine: boolean) => {
+      const h = sc().clientHeight
+      const bandBox = band().getBoundingClientRect()
+      expect(Math.round(bandBox.height), `${label}: side column height`).toBeGreaterThanOrEqual(h - 1)
+      expect(Math.round(bandBox.height), `${label}: side column overshoot`).toBeLessThanOrEqual(h + 1)
+      expect(Math.round(bandBox.top), `${label}: the column sticks to the top`).toBe(
+        Math.round(sc().getBoundingClientRect().top),
+      )
+      const gridBox = canvasElement.querySelector<HTMLElement>('.tg-gridlines')!.getBoundingClientRect()
+      expect(Math.round(gridBox.height), `${label}: grid lines height`).toBeGreaterThanOrEqual(h - 1)
+      // the rows are shorter than the container: the content box must not add an empty scroll area
+      const contentBox = content().getBoundingClientRect()
+      expect(Math.round(contentBox.height), `${label}: content box height`).toBeLessThanOrEqual(h + 1)
+      if (withTodayLine) {
+        const lineEl = line()
+        expect(lineEl, `${label}: today line is inside the window`).not.toBeNull()
+        expect(Math.round(lineEl!.getBoundingClientRect().height), `${label}: today line height`)
+          .toBeGreaterThanOrEqual(h - 1)
+      }
+    }
+
+    await step('at 100% every layer covers the visible height', async () => {
+      expectFullHeight('100%', true)
+    })
+
+    await step('zoomed out to ~50% they still do (Firefox used to cut them in half)', async () => {
+      await zoomBy(-7)
+      expect(scale(), 'zoomed out').toBeLessThan(0.6)
+      expectFullHeight('50%', true)
+    })
+
+    await step('zoomed in the column keeps covering, without an empty scroll area', async () => {
+      await zoomBy(12)
+      expect(scale(), 'zoomed in').toBeGreaterThan(1.5)
+      expectFullHeight('zoom in', false)
+    })
+
+    await step('scrolled to the bottom the column still covers the visible area', async () => {
+      const el = sc()
+      el.scrollTop = el.scrollHeight
+      await frame()
+      const box = el.getBoundingClientRect()
+      const bandBox = band().getBoundingClientRect()
+      expect(Math.round(bandBox.top), 'sticky at the bottom').toBe(Math.round(box.top))
+      expect(Math.round(bandBox.bottom), 'covers the bottom edge').toBeGreaterThanOrEqual(Math.round(box.bottom) - 1)
     })
   },
 }

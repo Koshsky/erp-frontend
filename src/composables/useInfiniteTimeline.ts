@@ -27,6 +27,13 @@ export interface InfiniteTimeline {
   windowStart: Ref<number>
   /** How many cells fit in the visible timeline area */
   viewportCells: ComputedRef<number>
+  /**
+   * Height of the visible timeline area in px (clientHeight, horizontal scrollbar
+   * excluded). Unscaled: lengths inside the zoomed content (.tg-content) are
+   * multiplied by tableScale, so a consumer that has to cover the visible area
+   * divides this by tableScale (see TimelineGrid's --tg-fit-height).
+   */
+  viewportHeight: Ref<number>
   /** Cells "materialized" to the left of the origin (origin is index 0) */
   leftPad: Ref<number>
   /** Total content width in px: LABEL_WIDTH + (leftPad+rightCells)*cellPx */
@@ -84,6 +91,7 @@ export function useInfiniteTimeline(
   const rightCells = ref(0)
   const windowStart = ref(0)
   const viewportWidth = ref(0)
+  const viewportHeight = ref(0)
   const tableScale = ref(1)
   /** Incremented on every actual scale change (zoom/reset) */
   const scaleBump = ref(0)
@@ -175,11 +183,12 @@ export function useInfiniteTimeline(
     sync,
   })
 
-  /** Update container width and cellPx from the CSS variable */
+  /** Update container size and cellPx from the CSS variable */
   function measure() {
     const el = container.value
     if (!el) return
     viewportWidth.value = el.clientWidth
+    viewportHeight.value = el.clientHeight
     const raw = getComputedStyle(el).getPropertyValue('--cell-width').trim()
     const px = raw ? parseFloat(raw) : CELL_WIDTH
     if (px > 0 && !Number.isNaN(px)) cellPx.value = px
@@ -392,6 +401,7 @@ export function useInfiniteTimeline(
     scaleBump,
     windowStart,
     viewportCells,
+    viewportHeight,
     leftPad,
     contentWidth,
     visibleCells,
