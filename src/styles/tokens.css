@@ -133,6 +133,7 @@
   --z-resource-cells: 20; /* resource load cells (side panel) */
   --z-header: 30; /* calendar header */
   --z-today: 35; /* the today line */
+  --z-side-backdrop: 45; /* opaque band of the side column: hides content under it */
   --z-scale-badge: 50; /* the zoom percentage pill */
   --z-side-row: 65; /* sticky row names, milestone band label */
   --z-side-merged: 70; /* merged group labels */

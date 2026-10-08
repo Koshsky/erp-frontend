@@ -244,6 +244,12 @@ function onContextMenu(e: MouseEvent) {
     @contextmenu.prevent="onContextMenu"
   >
     <div ref="contentEl" class="tg-content" :style="{ width: ctx.contentWidth + 'px' }">
+      <!-- Opaque band of the side column: covers the whole visible height so the
+           grid, the today line and the row backgrounds never show through it.
+           Sits above the content (--z-side-backdrop) and below the sticky labels,
+           and lets every pointer event reach what is underneath. -->
+      <div class="tg-side-col" aria-hidden="true" />
+
       <!-- Grid lines for the visible window only (under the content) -->
       <div
         class="tg-gridlines"
@@ -273,20 +279,27 @@ function onContextMenu(e: MouseEvent) {
 .tg-scroll {
   overflow: auto;
   max-height: var(--planner-max-height, calc(100vh - 160px));
-  /* The side column of names runs to the bottom edge of the area: its surface
-     and its right border are painted as background layers of the scroll
-     container. Rows end where they end (on the vh-locked pages the area below
-     them is tall), and without this the table looked cut off under the column.
-     A background of a scroll container is painted in its padding box and does
-     NOT scroll with the content, so the column stays continuous while panning —
-     no extra sticky layer and no new z-index level. Only the column strip is
-     painted: the diagram space to the right keeps the page/card background. */
-  background-image:
-    linear-gradient(var(--ui-border), var(--ui-border)),
-    linear-gradient(var(--ui-surface), var(--ui-surface));
-  background-size: 1px 100%, var(--label-width, 0px) 100%;
-  background-position: calc(var(--label-width, 0px) - 1px) 0, 0 0;
-  background-repeat: no-repeat;
+}
+/* The side column of names is one opaque band for the whole visible height:
+   the rows paint their own labels only where rows exist, so everywhere else the
+   grid, the today line and the group backgrounds used to show through the
+   column. The band is sticky (stays at the left edge while panning) and as tall
+   as the viewport — taller than the container on purpose, the overflow clips it —
+   while the negative margin keeps its flow contribution at zero. It never
+   intercepts pointer events: panning, the context menu and bar interactions are
+   unchanged. */
+.tg-side-col {
+  position: sticky;
+  top: 0;
+  left: 0;
+  width: var(--label-width, 0px);
+  height: 100dvh;
+  margin-bottom: -100dvh;
+  background: var(--ui-surface);
+  border-right: 1px solid var(--ui-border);
+  box-sizing: border-box;
+  z-index: var(--z-side-backdrop);
+  pointer-events: none;
 }
 /* Resting state is the plain arrow cursor everywhere (headers, rows, the empty
    strip below the rows); the "drag hand" appears only while MMB panning. */

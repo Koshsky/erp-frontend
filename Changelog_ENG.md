@@ -12,7 +12,7 @@ The web app and the desktop wrapper are versioned together.
 
 - Badges on task bars are no longer dropped at fine zoom: the markers enabled in the settings always stay visible.
 - The Resources page no longer paints "Loading…" over a filled table on a background refresh.
-- Diagrams: the side column of names runs down to the bottom edge of the diagram area.
+- Diagrams: the side column of names is an opaque band for the whole area height — the content underneath no longer shows through.
 
 ## [1.3.0] - 2026-10-07
 

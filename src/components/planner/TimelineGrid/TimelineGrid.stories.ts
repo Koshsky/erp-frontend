@@ -229,18 +229,20 @@ export const MiddleButtonPan: Story = {
 }
 
 /**
- * On the vh-locked pages (Tasks / Processes / Projects) the diagram fills the
- * viewport, so rows end well above the bottom edge. The side column of names has
- * to run all the way down with them — otherwise the table looks cut off under
- * the column. It is painted as background layers of the scroll container (which
- * does not travel with the content), and ONLY the column strip: the diagram
- * space to the right must keep the card/page background.
+ * The side column of names is an OPAQUE band for the whole visible height.
+ *
+ * Rows paint their own labels only where rows exist; everywhere else the grid,
+ * the today line, dependency links and group overlays that fall left of the
+ * column edge used to show through the column (which read as a transparent
+ * strip). The band sits above the content and below the sticky labels, spans the
+ * viewport height (clipped by the scroll container) and never intercepts pointer
+ * events, so panning and the context menu are unchanged.
  */
-export const SideColumnRunsToTheBottom: Story = {
+export const SideColumnIsOpaque: Story = {
   tags: ['vitest'],
   render: Days.render,
   play: async ({ canvasElement, step }) => {
-    const sc = () => canvasElement.querySelector<HTMLElement>('.tg-scroll')!
+    const band = () => canvasElement.querySelector<HTMLElement>('.tg-side-col')!
 
     /** The token as the browser computes it (tokens are hex, computed styles rgb()) */
     const resolveColor = (token: string): string => {
@@ -252,26 +254,37 @@ export const SideColumnRunsToTheBottom: Story = {
       return value
     }
 
-    await step('the column surface and its border are painted to the bottom edge', () => {
-      const cs = getComputedStyle(sc())
-      const border = resolveColor('--ui-border')
-      const surface = resolveColor('--ui-surface')
-      expect(cs.getPropertyValue('--label-width').trim()).toBe(`${LABEL_WIDTH}px`)
-      expect(cs.backgroundImage).toBe(
-        `linear-gradient(${border}, ${border}), linear-gradient(${surface}, ${surface})`,
-      )
-      // border 1px wide at the column edge, surface exactly the column strip, both full height
-      expect(cs.backgroundSize).toBe(`1px 100%, ${LABEL_WIDTH}px 100%`)
-      expect(cs.backgroundPosition).toBe(`${LABEL_WIDTH - 1}px 0px, 0px 0px`)
-      expect(cs.backgroundRepeat).toBe('no-repeat, no-repeat')
-      // Painted in the padding box: it does not travel with the content.
-      expect(cs.backgroundAttachment === '' || cs.backgroundAttachment.includes('scroll')).toBe(true)
+    const tokenValue = (token: string): number =>
+      Number(getComputedStyle(document.documentElement).getPropertyValue(token).trim())
+
+    await step('the band paints the column surface and its border', () => {
+      const cs = getComputedStyle(band())
+      expect(cs.backgroundColor).toBe(resolveColor('--ui-surface'))
+      expect(cs.borderRightWidth).toBe('1px')
+      expect(cs.borderRightColor).toBe(resolveColor('--ui-border'))
+      expect(cs.width).toBe(`${LABEL_WIDTH}px`)
     })
 
-    await step('the diagram space keeps its own background', () => {
-      // Only the strip is painted: no background-color on the container, so the
-      // card/page background stays visible to the right of the column.
-      expect(getComputedStyle(sc()).backgroundColor).toBe('rgba(0, 0, 0, 0)')
+    await step('it is sticky and closes the full viewport height without moving the layout', () => {
+      const cs = getComputedStyle(band())
+      expect(cs.position).toBe('sticky')
+      expect(cs.top).toBe('0px')
+      expect(cs.left).toBe('0px')
+      // Taller than the container on purpose (the overflow clips it); the
+      // negative margin keeps its flow contribution at zero.
+      const height = Number.parseFloat(cs.height)
+      const margin = Number.parseFloat(cs.marginBottom)
+      expect(height).toBeGreaterThan(0)
+      expect(margin).toBe(-height)
+    })
+
+    await step('it hides the content, not the labels, and never eats clicks', () => {
+      const cs = getComputedStyle(band())
+      expect(cs.zIndex).toBe('45')
+      // above the today line and the content, below every sticky label layer
+      expect(tokenValue('--z-side-backdrop')).toBeGreaterThan(tokenValue('--z-today'))
+      expect(tokenValue('--z-side-row')).toBeGreaterThan(tokenValue('--z-side-backdrop'))
+      expect(cs.pointerEvents).toBe('none')
     })
   },
 }

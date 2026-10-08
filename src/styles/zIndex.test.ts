@@ -75,6 +75,7 @@ const LADDER = [
   '--z-resource-cells',
   '--z-header',
   '--z-today',
+  '--z-side-backdrop',
   '--z-scale-badge',
   '--z-side-row',
   '--z-side-merged',
