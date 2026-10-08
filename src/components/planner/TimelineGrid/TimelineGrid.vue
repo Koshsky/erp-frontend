@@ -10,6 +10,7 @@ import {
   type TimelineCtx,
 } from '../../../composables/timeline-context'
 import { useTimelinePan } from '../../../composables/useTimelinePan'
+import { LABEL_WIDTH } from '../layout'
 import TodayLine from '../TodayLine/TodayLine.vue'
 import ScaleBadge from '../ScaleBadge/ScaleBadge.vue'
 
@@ -236,7 +237,12 @@ function onContextMenu(e: MouseEvent) {
 </script>
 
 <template>
-  <div ref="scrollEl" class="tg-scroll" @contextmenu.prevent="onContextMenu">
+  <div
+    ref="scrollEl"
+    class="tg-scroll"
+    :style="{ '--label-width': LABEL_WIDTH + 'px' }"
+    @contextmenu.prevent="onContextMenu"
+  >
     <div ref="contentEl" class="tg-content" :style="{ width: ctx.contentWidth + 'px' }">
       <!-- Grid lines for the visible window only (under the content) -->
       <div
@@ -267,6 +273,20 @@ function onContextMenu(e: MouseEvent) {
 .tg-scroll {
   overflow: auto;
   max-height: var(--planner-max-height, calc(100vh - 160px));
+  /* The side column of names runs to the bottom edge of the area: its surface
+     and its right border are painted as background layers of the scroll
+     container. Rows end where they end (on the vh-locked pages the area below
+     them is tall), and without this the table looked cut off under the column.
+     A background of a scroll container is painted in its padding box and does
+     NOT scroll with the content, so the column stays continuous while panning —
+     no extra sticky layer and no new z-index level. Only the column strip is
+     painted: the diagram space to the right keeps the page/card background. */
+  background-image:
+    linear-gradient(var(--ui-border), var(--ui-border)),
+    linear-gradient(var(--ui-surface), var(--ui-surface));
+  background-size: 1px 100%, var(--label-width, 0px) 100%;
+  background-position: calc(var(--label-width, 0px) - 1px) 0, 0 0;
+  background-repeat: no-repeat;
 }
 /* Resting state is the plain arrow cursor everywhere (headers, rows, the empty
    strip below the rows); the "drag hand" appears only while MMB panning. */

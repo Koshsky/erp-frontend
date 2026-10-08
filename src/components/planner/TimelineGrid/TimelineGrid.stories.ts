@@ -227,3 +227,51 @@ export const MiddleButtonPan: Story = {
     })
   },
 }
+
+/**
+ * On the vh-locked pages (Tasks / Processes / Projects) the diagram fills the
+ * viewport, so rows end well above the bottom edge. The side column of names has
+ * to run all the way down with them — otherwise the table looks cut off under
+ * the column. It is painted as background layers of the scroll container (which
+ * does not travel with the content), and ONLY the column strip: the diagram
+ * space to the right must keep the card/page background.
+ */
+export const SideColumnRunsToTheBottom: Story = {
+  tags: ['vitest'],
+  render: Days.render,
+  play: async ({ canvasElement, step }) => {
+    const sc = () => canvasElement.querySelector<HTMLElement>('.tg-scroll')!
+
+    /** The token as the browser computes it (tokens are hex, computed styles rgb()) */
+    const resolveColor = (token: string): string => {
+      const probe = document.createElement('div')
+      probe.style.color = `var(${token})`
+      document.body.appendChild(probe)
+      const value = getComputedStyle(probe).color
+      probe.remove()
+      return value
+    }
+
+    await step('the column surface and its border are painted to the bottom edge', () => {
+      const cs = getComputedStyle(sc())
+      const border = resolveColor('--ui-border')
+      const surface = resolveColor('--ui-surface')
+      expect(cs.getPropertyValue('--label-width').trim()).toBe(`${LABEL_WIDTH}px`)
+      expect(cs.backgroundImage).toBe(
+        `linear-gradient(${border}, ${border}), linear-gradient(${surface}, ${surface})`,
+      )
+      // border 1px wide at the column edge, surface exactly the column strip, both full height
+      expect(cs.backgroundSize).toBe(`1px 100%, ${LABEL_WIDTH}px 100%`)
+      expect(cs.backgroundPosition).toBe(`${LABEL_WIDTH - 1}px 0px, 0px 0px`)
+      expect(cs.backgroundRepeat).toBe('no-repeat, no-repeat')
+      // Painted in the padding box: it does not travel with the content.
+      expect(cs.backgroundAttachment === '' || cs.backgroundAttachment.includes('scroll')).toBe(true)
+    })
+
+    await step('the diagram space keeps its own background', () => {
+      // Only the strip is painted: no background-color on the container, so the
+      // card/page background stays visible to the right of the column.
+      expect(getComputedStyle(sc()).backgroundColor).toBe('rgba(0, 0, 0, 0)')
+    })
+  },
+}
