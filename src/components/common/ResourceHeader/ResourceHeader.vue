@@ -7,6 +7,8 @@ import type { TimelineCtx } from '@/composables/timeline-context'
 import { LABEL_WIDTH, headerHeight } from '@/components/planner/layout'
 import type { DtoResourceAbsenceResponse } from '@/api'
 import type { Resource } from './types'
+// `t` is the timeline context prop of this component, so the translator is aliased.
+import { t as translate } from '../../../i18n'
 
 const props = defineProps<{
   t: TimelineCtx
@@ -99,7 +101,7 @@ const labelsH = computed(() => resourceCells.value.length * rowH.value)
       <TooltipCell v-if="showText" :multiline="true">
         <span class="rs-code">{{ rc.res.code }}</span>
         <template #popup>
-          <InfoTooltip :title="rc.res.title" :lines="[`Всего: ${rc.res.employeesCount}`]" />
+          <InfoTooltip :title="rc.res.title" :lines="[translate('ui.resource.total', { count: rc.res.employeesCount })]" />
         </template>
       </TooltipCell>
     </div>

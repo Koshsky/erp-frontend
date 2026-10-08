@@ -2,6 +2,7 @@ import '../src/styles/tokens.css'
 import { setup } from '@storybook/vue3'
 import { createRouter, createMemoryHistory } from 'vue-router'
 import { createPinia } from 'pinia'
+import { i18n, setAppLocale } from '../src/i18n'
 import { withCustomTheme } from './decorators/withCustomTheme'
 import { withColorScheme } from './decorators/withColorScheme'
 
@@ -19,7 +20,16 @@ const storyRouter = createRouter({
 setup((app) => {
   app.use(storyRouter)
   app.use(createPinia())
+  app.use(i18n)
 })
+
+/**
+ * Stories run in Russian: the interface-language setting defaults to "auto",
+ * which resolves to English inside the Playwright chromium, so without pinning
+ * the locale every story would render in English. A story that exercises the
+ * language switcher sets the locale itself.
+ */
+setAppLocale('ru')
 
 /** @type { import('@storybook/vue3-vite').Preview } */
 const preview = {

@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { openHintPage, hintOpen, hintPageRef } from '@/composables/useHints'
 import { hintPage } from '@/hints/registry'
+import { t } from '../../../i18n'
 
 const props = withDefaults(defineProps<{
   /** Hint page id from the central registry (src/hints/registry.ts). */
@@ -24,7 +25,7 @@ const expanded = computed(() => hintOpen.value && hintPageRef.value === props.hi
     type="button"
     class="hb"
     :class="`is-${size}`"
-    :aria-label="`Подсказка: ${label}`"
+    :aria-label="t('ui.hint.aria', { label })"
     aria-haspopup="dialog"
     :aria-expanded="expanded"
     @click="openHintPage(hint)"

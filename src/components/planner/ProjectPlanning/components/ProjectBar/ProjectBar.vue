@@ -1,10 +1,12 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import LabeledBar from '../../../Bar/Bar.vue'
 import { BarTooltip } from '@/components/common'
+import { t } from '@/i18n'
 import { viewSettings } from '@/settings'
 import type { ProjectBarProps } from './types'
 
-withDefaults(defineProps<ProjectBarProps>(), {
+const props = withDefaults(defineProps<ProjectBarProps>(), {
   color: 'var(--ui-gantt-project)',
   opacity: 0.85,
   draggable: true,
@@ -15,6 +17,10 @@ const emit = defineEmits<{
   contextmenu: [payload: { clientX: number; clientY: number }]
   click: []
 }>()
+
+/** Tooltip rows, rebuilt on a language switch */
+const priorityRow = computed(() => t('planner.bar.priority', { value: props.priority }))
+const ownerRow = computed(() => t('planner.bar.owner', { owner: props.ownerName }))
 </script>
 
 <template>
@@ -38,8 +44,8 @@ const emit = defineEmits<{
         :title="projectCode"
         :accent="color || 'var(--ui-gantt-project)'"
         :rows="[
-          priority != null ? `Приоритет: ${priority}` : '',
-          viewSettings.badgeOwner && ownerName ? `Владелец: ${ownerName}` : '',
+          props.priority != null ? priorityRow : '',
+          viewSettings.badgeOwner && props.ownerName ? ownerRow : '',
           dateRange,
         ].filter(Boolean)"
       />

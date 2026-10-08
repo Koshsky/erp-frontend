@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/vue3-vite'
 import type { ConcreteComponent } from 'vue'
+import { expect } from 'storybook/test'
 import DataTable from './DataTable.vue'
 import dataTableArgTypes from './argTypes'
 import type { DataTableColumn, DataTableProps } from './types'
@@ -69,6 +70,19 @@ const stateColumns: DataTableColumn[] = [
   { key: 'name', label: 'Название', width: 'fit-content(420px)' },
   { key: 'available', label: 'Доступность', width: '160px' },
 ]
+
+// Wide table for the MMB pan story: 14 fixed 200px columns (~2800px) guarantee
+// horizontal overflow of the scroll wrapper even in a wide browser window.
+const panColumns: DataTableColumn[] = Array.from({ length: 14 }, (_, i) => ({
+  key: `c${i}`,
+  label: `Колонка ${i + 1}`,
+  width: '200px',
+}))
+const panRows: Record<string, string>[] = Array.from({ length: 3 }, (_, r) => {
+  const row: Record<string, string> = { id: String(r + 1) }
+  for (let c = 0; c < 14; c++) row[`c${c}`] = `Ячейка ${r + 1}.${c + 1}`
+  return row
+})
 
 const stateTemplate = `
   <DataTable :columns="args.columns" :rows="args.rows" :title="args.title" :empty-text="args.emptyText" :resizable="args.resizable">
@@ -213,10 +227,6 @@ export const ManyColumnsScroll: ResourceStory = {
     `,
   }),
   play: async ({ canvasElement, step }) => {
-    // Imported lazily: a static vitest import would initialize the matchers
-    // during the docs render (outside the test runner) and crash with
-    // "globalThis[JEST_MATCHERS_OBJECT] is undefined".
-    const { expect } = await import('vitest')
     await step('many columns: the table area scrolls horizontally, the toolbar stays put', async () => {
       const scroll = canvasElement.querySelector<HTMLElement>('.dt-scroll')
       expect(scroll).toBeTruthy()
@@ -242,8 +252,6 @@ export const Sortable: StateStory = {
   args: { columns: stateColumns, rows: stateRows, title: 'Статусы', emptyText: 'Нет данных о статусах' },
   render: stateRender,
   play: async ({ canvasElement, step }) => {
-    // Lazily imported — see the comment in ManyColumnsScroll.play.
-    const { expect } = await import('vitest')
     const headerButtons = () => [...canvasElement.querySelectorAll<HTMLButtonElement>('button.dt-th-label')]
     const firstCodes = () =>
       [...canvasElement.querySelectorAll<HTMLElement>('.dt-tr:not(.dt-th) .dt-cell:first-child')].map(
@@ -315,7 +323,6 @@ export const ResizableColumns: StoryObj<{
     `,
   }),
   play: async ({ canvasElement, step }) => {
-    const { expect } = await import('vitest')
     const firstHeader = () => canvasElement.querySelector<HTMLElement>('.dt-th-cell')
     const widthOf = () => firstHeader()!.getBoundingClientRect().width
     const fire = (type: string, x: number) =>
@@ -355,6 +362,76 @@ export const ResizableColumns: StoryObj<{
   },
 }
 
+/** Средняя кнопка мыши (СКМ): зажатие и перетаскивание двигает таблицу. */
+export const MiddleButtonPan: StoryObj<{
+  columns: DataTableColumn[]
+  rows: Record<string, string>[]
+}> = {
+  name: 'Перемещение средней кнопкой мыши',
+  tags: ['vitest'],
+  args: { columns: panColumns, rows: panRows },
+  render: (args: DataTableProps<Record<string, string>>) => ({
+    components: { DataTable },
+    setup: () => ({ args }),
+    template: `
+      <DataTable :columns="args.columns" :rows="args.rows" title="Широкая таблица" expandable>
+        <template #expanded="{ row }">
+          <div style="font-size: calc(var(--ui-font-scale, 1) * 13px); color: var(--ui-text-2);">
+            Детали строки {{ row.id }}.
+          </div>
+        </template>
+      </DataTable>
+    `,
+  }),
+  play: async ({ canvasElement, step }) => {
+    const sc = () => canvasElement.querySelector<HTMLElement>('.dt-scroll')!
+    const fire = (type: string, init: PointerEventInit) =>
+      window.dispatchEvent(new PointerEvent(type, init))
+
+    await step('MMB press + drag scrolls the table, LMB does not', async () => {
+      // Dragging LEFT (content follows the pointer) scrolls the table rightward
+      // — scrollLeft grows from the edge.
+      sc().dispatchEvent(
+        new PointerEvent('pointerdown', { button: 1, buttons: 4, pointerType: 'mouse', clientX: 400, clientY: 80, bubbles: true }),
+      )
+      fire('pointermove', { button: 1, buttons: 4, pointerType: 'mouse', clientX: 340, clientY: 80 })
+      expect(sc().classList.contains('dt-panning')).toBe(true)
+      expect(sc().scrollLeft).toBeGreaterThan(0)
+      // global grabbing cursor while MMB is held
+      expect(document.body.classList.contains('pan-grabbing')).toBe(true)
+      fire('pointerup', { button: 1, buttons: 0, pointerType: 'mouse', clientX: 340, clientY: 80 })
+      expect(sc().classList.contains('dt-panning')).toBe(false)
+      expect(document.body.classList.contains('pan-grabbing')).toBe(false)
+
+      // LMB drag must not pan — it keeps its own interactions (sort/expand)
+      const before = sc().scrollLeft
+      sc().dispatchEvent(
+        new PointerEvent('pointerdown', { button: 0, buttons: 1, pointerType: 'mouse', clientX: 400, clientY: 120, bubbles: true }),
+      )
+      fire('pointermove', { button: 0, buttons: 1, pointerType: 'mouse', clientX: 340, clientY: 120 })
+      fire('pointerup', { button: 0, buttons: 0, pointerType: 'mouse', clientX: 340, clientY: 120 })
+      expect(sc().classList.contains('dt-panning')).toBe(false)
+      expect(sc().scrollLeft).toBe(before)
+    })
+
+    await step('a click that follows an MMB drag does not expand the row; a normal click does', async () => {
+      const firstRow = () => canvasElement.querySelector<HTMLElement>('.dt-tr:not(.dt-th):not(.dt-detail)')!
+      firstRow().dispatchEvent(
+        new PointerEvent('pointerdown', { button: 1, buttons: 4, pointerType: 'mouse', clientX: 400, clientY: 140, bubbles: true }),
+      )
+      fire('pointermove', { button: 1, buttons: 4, pointerType: 'mouse', clientX: 340, clientY: 140 })
+      fire('pointerup', { button: 1, buttons: 0, pointerType: 'mouse', clientX: 340, clientY: 140 })
+      firstRow().dispatchEvent(new MouseEvent('click', { bubbles: true, button: 1 }))
+      await new Promise((r) => setTimeout(r, 30))
+      expect(canvasElement.querySelector('.dt-detail')).toBeNull()
+
+      firstRow().click()
+      await new Promise((r) => setTimeout(r, 30))
+      expect(canvasElement.querySelector('.dt-detail')).toBeTruthy()
+    })
+  },
+}
+
 /** Раскрываемые строки: клик по строке показывает деталь под ней. */
 export const Expandable: StoryObj<{
   columns: DataTableColumn[]
@@ -380,7 +457,6 @@ export const Expandable: StoryObj<{
     `,
   }),
   play: async ({ canvasElement, step }) => {
-    const { expect } = await import('vitest')
     const detail = () => canvasElement.querySelector<HTMLElement>('.dt-detail')
     const firstRow = () => canvasElement.querySelector<HTMLElement>('.dt-tr:not(.dt-th):not(.dt-detail):not(.dt-filters)')
 
@@ -426,7 +502,6 @@ export const Filters: StoryObj<{
     `,
   }),
   play: async ({ canvasElement, step }) => {
-    const { expect } = await import('vitest')
     await step('every filter sits inside its column header cell', async () => {
       const cells = [...canvasElement.querySelectorAll<HTMLElement>('.dt-th-cell')]
       expect(cells.length).toBe(3)

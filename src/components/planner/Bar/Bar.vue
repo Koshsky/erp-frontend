@@ -4,6 +4,7 @@ import { cellRangeForSpan, clampSpanDates, spanToDates, formatDateRange, fmtDate
 import { useTimelineItem } from '../../../composables/useTimelineItem'
 import { useWindowPointerTrack } from '../../../utils'
 import { TooltipCell } from '../../common'
+import { t } from '@/i18n'
 import { viewSettings } from '@/settings'
 import type { BarProps } from './types'
 
@@ -177,8 +178,8 @@ const ariaValueText = computed(() => span.value ? formatDateRange(props.startDat
 /** Accessible name of the bar (role="slider"): range + title, overridable */
 const ariaLabel = computed(() => {
   if (props.ariaLabel) return props.ariaLabel
-  const name = props.title ? `«${props.title}»` : 'Задача'
-  return `Задача ${name}: ${dateRange.value}`
+  const name = props.title ? `«${props.title}»` : t('planner.bar.task')
+  return t('planner.bar.taskNamed', { title: name, range: dateRange.value })
 })
 
 /** aria-value* bounds: the parent (process/project) span when it is known */
@@ -248,7 +249,9 @@ const barStyle = computed<Record<string, string | number> | null>(() => {
 
 const cursorStyle = computed<Record<string, string>>(() => {
   if (cursor.value) return { cursor: cursor.value }
-  if (props.draggable) return { cursor: 'grab' }
+  // Resting state: the bar "can be clicked" (navigation/editor) — a pointer,
+  // not a drag hand; the drag hand appears only while dragging.
+  if (props.draggable) return { cursor: 'pointer' }
   return { cursor: 'default' }
 })
 

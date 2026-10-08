@@ -174,11 +174,13 @@ onBeforeUnmount(() => {
 })
 
 /**
- * Elements from which panning must not start: they have their own interaction
- * (bars, milestones, row reorder, sticky columns, resource row). The .tg-head header
- * can be dragged — it is the timeline's "empty space"; the .tg-ms-label strip is not.
+ * MMB panning starts from ANY point of the table: empty space, bars,
+ * milestones, reorder handles, sticky labels, the calendar header and the
+ * resource ribbon. Content must not block moving the table left/right — the
+ * LMB interactions of those elements (drag, resize, reorder) are guarded by
+ * the components themselves and are unaffected.
  */
-const PAN_IGNORE = INTERACTIVE_SELECTOR + ', .tg-ms-label'
+const PAN_IGNORE = ''
 
 const pan = useTimelinePan(scrollEl, PAN_IGNORE)
 
@@ -266,9 +268,8 @@ function onContextMenu(e: MouseEvent) {
   overflow: auto;
   max-height: var(--planner-max-height, calc(100vh - 160px));
 }
-.tg-scroll :deep(.gg-bars) {
-  cursor: grab;
-}
+/* Resting state is the plain arrow cursor everywhere (headers, rows, the empty
+   strip below the rows); the "drag hand" appears only while MMB panning. */
 .tg-scroll.tg-panning,
 .tg-scroll.tg-panning :deep(.gg-bars) {
   cursor: grabbing;

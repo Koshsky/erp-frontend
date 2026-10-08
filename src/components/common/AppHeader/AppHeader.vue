@@ -1,25 +1,45 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../../../store'
 import { resolvedScheme, toggleScheme } from '../../../theme'
 import { isNavOpen, toggleNav } from '../../../composables/useNavDrawer'
 import { AppIcon } from '../AppIcon'
+import { ChangelogDialog } from '../ChangelogDialog'
+import { appLocale, t } from '../../../i18n'
+import { uiLanguage } from '../../../settings'
 
 const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
 
-// Theme toggle label (Russian UI copy)
-const themeLabel = computed(() => (resolvedScheme.value === 'dark' ? 'Светлая' : 'Тёмная'))
+// Theme toggle label (the switch shows the scheme it will move to)
+const themeLabel = computed(() => t(resolvedScheme.value === 'dark' ? 'header.themeDark' : 'header.themeLight'))
+const themeToggleTitle = computed(() => t('header.themeToggle', { theme: themeLabel.value }))
+
+/** Name of the language the interface is rendered in (for the tooltip). */
+const langLabel = computed(() => t(appLocale.value === 'ru' ? 'header.langRu' : 'header.langEn'))
+const langToggleTitle = computed(() => t('header.languageToggle', { language: langLabel.value }))
+
+/**
+ * Language toggle — a plain switch like the theme toggle: only two languages
+ * are available, so the button flips to the other one. The first flip leaves
+ * the "system" mode of the Settings select and pins an explicit language.
+ */
+function toggleLanguage(): void {
+  uiLanguage.value = appLocale.value === 'ru' ? 'en' : 'ru'
+}
+
+/** Whether the centered changelog dialog is visible (header icon) */
+const changelogOpen = ref(false)
 
 function onLogout(): void {
   authStore.logout()
   router.push('/login')
 }
 
-const burgerTitle = 'Меню (Ctrl+B)'
-const burgerLabel = computed(() => (isNavOpen.value ? 'Закрыть меню' : 'Открыть меню'))
+const burgerTitle = computed(() => t('header.menuShortcut'))
+const burgerLabel = computed(() => (isNavOpen.value ? t('header.menuClose') : t('header.menuOpen')))
 </script>
 
 <template>
@@ -58,27 +78,47 @@ const burgerLabel = computed(() => (isNavOpen.value ? 'Закрыть меню' 
     <div class="ah-actions">
       <RouterLink to="/profile" class="ah-act" :class="{ active: route.name === 'profile' }">
         <AppIcon name="user" :size="18" />
-        <span>Профиль</span>
+        <span>{{ t('header.profile') }}</span>
       </RouterLink>
       <button
         type="button"
         class="ah-act ah-act--icon"
-        :title="'Переключить тему (сейчас ' + themeLabel.toLowerCase() + ')'"
-        :aria-label="'Переключить тему'"
+        :title="themeToggleTitle"
+        :aria-label="t('header.themeAria')"
         @click="toggleScheme"
       >
         <AppIcon :name="resolvedScheme === 'dark' ? 'sun' : 'moon'" :size="18" />
       </button>
       <button
         type="button"
+        class="ah-act ah-act--icon"
+        :title="langToggleTitle"
+        :aria-label="t('header.languageAria')"
+        @click="toggleLanguage"
+      >
+        <AppIcon name="languages" :size="18" />
+      </button>
+      <button
+        type="button"
+        class="ah-act ah-act--icon"
+        :title="t('header.changelog')"
+        :aria-label="t('header.changelog')"
+        @click="changelogOpen = true"
+      >
+        <AppIcon name="scroll" :size="18" />
+      </button>
+      <button
+        type="button"
         class="ah-act ah-act--icon ah-act--logout"
-        :title="'Выйти из системы'"
-        :aria-label="'Выйти из системы'"
+        :title="t('header.logout')"
+        :aria-label="t('header.logout')"
         @click="onLogout"
       >
         <AppIcon name="logout" :size="18" />
       </button>
     </div>
+
+    <ChangelogDialog :open="changelogOpen" @close="changelogOpen = false" />
   </header>
 </template>
 

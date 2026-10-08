@@ -1,6 +1,7 @@
 import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios'
 import router from './router'
 import { apiErrorMessage } from './utils'
+import { currentLocale, t } from './i18n'
 import { notifyError } from './notify/state'
 import { cacheGet, cacheGetByPath, cachePut, userCachePrefix } from './offline/cache'
 import { replayOutboxToCache, scheduleReplayOutboxToCache } from './offline/outbox'
@@ -59,6 +60,10 @@ export function setupHttp() {
       delete config.headers['authorization']
       delete config.headers['Authorization']
     }
+    // The backend localizes its messages per request (pkg/messages): send the
+    // interface language so error texts arrive already translated. Resolved per
+    // request, so a language switch applies to the next call.
+    config.headers['Accept-Language'] = currentLocale()
     return config
   })
 
@@ -123,14 +128,14 @@ export function setupHttp() {
               request: error.request,
             }
           }
-          ;(error as AxiosError & { message: string }).message =
-            'Нет сохранённых данных: откройте эту страницу онлайн хотя бы раз'
+          ;(error as AxiosError & { message: string }).message = t('offline.noCachedData')
           console.log(`[offline] cache miss: ${key}`)
         }
         // Network error diagnostics (timeout/drop/CORS/abort) — detailed output to the console.
         const ax = error as AxiosError & { code?: string; timeout?: number }
         console.error(
-          `[http] сетевая ошибка (нет HTTP-ответа): ${(config.method || 'get').toUpperCase()} ${config.url ?? ''}`,
+          // i18n-allow: developer console diagnostics, never rendered in the UI
+          `[http] network error (no HTTP response): ${(config.method || 'get').toUpperCase()} ${config.url ?? ''}`,
           {
             kind: 'network',
             code: ax.code,

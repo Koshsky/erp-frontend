@@ -9,133 +9,20 @@
  */
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
-import { ConfirmDialog, ContextMenu, HintButton, ModalForm } from '../components/common'
-import { SCOPE_OPTIONS as SCOPE_CHIPS } from '../components/common/UserPermissionsEditor/labels'
+import { ConfirmDialog, ContextMenu, HintButton, InfoTooltip, ModalForm, TooltipCell } from '../components/common'
+import { GROUPS, ACTIONS, SCOPE_OPTIONS as SCOPE_CHIPS, resourceLabel, resourceTitle, actionTitle, scopeLabel } from '../components/common/UserPermissionsEditor/labels'
 import { canonicalScope, scopeMoves, toggleScopeMove } from '@/rbacScope'
 import { useRbacStore } from '../store'
 import { useConfirm } from '../composables/useConfirm'
+import { notifyError, notifySuccess } from '../notify/state'
+import { presetDisplayName } from '../utils/presets'
+import { t } from '@/i18n'
 
 const rbac = useRbacStore()
 const { presets, presetRules, matrix, loading, error, saving } = storeToRefs(rbac)
 
 /** Selected preset (by default — the first one from the catalog, not admin). */
 const selected = ref('')
-
-/** Resource and action codes (mirror the backend codecs). */
-const ACTION_LABELS: Record<string, string> = {
-  view: 'Просмотр',
-  create: 'Создание',
-  update: 'Изменение',
-  delete: 'Удаление',
-}
-
-// Resource → human-readable name (genitive case for phrases like "View …").
-const RESOURCE_LABELS: Record<string, string> = {
-  project: 'проектов',
-  process: 'процессов',
-  task: 'задач',
-  milestone: 'вех',
-  assignment: 'назначений ресурсов',
-  state: 'статусов',
-  resource: 'ресурсов табеля',
-  worker: 'сотрудников',
-  user_catalog: 'каталога пользователей',
-  user_admin: 'пользователей',
-  rbac_config: 'настроек администрирования',
-}
-
-/** Entity names (nominative) for the collapsible group headers. */
-const ENTITY_NAMES: Record<string, string> = {
-  project: 'Проекты',
-  process: 'Процессы',
-  task: 'Задачи',
-  milestone: 'Вехи',
-  assignment: 'Назначения ресурсов',
-  state: 'Статусы',
-  resource: 'Ресурсы табеля',
-  worker: 'Сотрудники',
-  user_catalog: 'Каталог пользователей',
-  user_admin: 'Пользователи (администрирование)',
-  rbac_config: 'Настройки администрирования',
-}
-
-/**
- * Available scopes with human-readable labels in the resource context.
- * The scope set mirrors policies.ScopeApplicable on the backend; the wording
- * itself explains the owner ("in own processes" = process owner, etc.).
- */
-const SCOPE_OPTIONS: Record<string, { value: string; label: string }[]> = {
-  project: [
-    { value: 'none', label: 'Нет доступа' },
-    { value: 'self', label: 'Только свои' },
-    { value: 'all', label: 'Все' },
-  ],
-  process: [
-    { value: 'none', label: 'Нет доступа' },
-    { value: 'self', label: 'Только своё' },
-    { value: 'up1', label: 'В своих проектах' },
-    { value: 'up', label: 'Свои и любые предки' },
-    { value: 'sib', label: 'Свои и сиблинги' },
-    { value: 'down', label: 'Своё поддерево' },
-    { value: 'all', label: 'Все' },
-  ],
-  task: [
-    { value: 'none', label: 'Нет доступа' },
-    { value: 'self', label: 'Только своё' },
-    { value: 'up1', label: 'В своих процессах' },
-    { value: 'up', label: 'Свои и любые предки' },
-    { value: 'sib', label: 'Свои и сиблинги' },
-    { value: 'down', label: 'Свои подзадачи' },
-    { value: 'all', label: 'Все' },
-  ],
-  milestone: [
-    { value: 'none', label: 'Нет доступа' },
-    { value: 'up1', label: 'В своих процессах' },
-    { value: 'up', label: 'Свои и любые предки' },
-    { value: 'all', label: 'Все' },
-  ],
-  assignment: [
-    { value: 'none', label: 'Нет доступа' },
-    { value: 'up1', label: 'В своих процессах' },
-    { value: 'up', label: 'Свои и любые предки' },
-    { value: 'all', label: 'Все' },
-  ],
-  state: [
-    { value: 'none', label: 'Нет доступа' },
-    { value: 'all', label: 'Всё' },
-  ],
-  resource: [
-    { value: 'none', label: 'Нет доступа' },
-    { value: 'self', label: 'Только свои' },
-    { value: 'all', label: 'Все' },
-  ],
-  worker: [
-    { value: 'none', label: 'Нет доступа' },
-    { value: 'self', label: 'Только свои (подчинённые)' },
-    { value: 'all', label: 'Все' },
-  ],
-  user_catalog: [
-    { value: 'none', label: 'Нет доступа' },
-    { value: 'all', label: 'Доступен' },
-  ],
-  user_admin: [
-    { value: 'none', label: 'Нет доступа' },
-    { value: 'all', label: 'Доступен' },
-  ],
-  rbac_config: [
-    { value: 'none', label: 'Нет доступа' },
-    { value: 'all', label: 'Доступен' },
-  ],
-}
-
-/** Page sections. */
-const GROUPS = [
-  { key: 'planning', title: 'Планирование', resources: ['project', 'process', 'task', 'milestone', 'assignment'] },
-  { key: 'timesheet', title: 'Табель', resources: ['state', 'resource', 'worker'] },
-  { key: 'advanced', title: 'Дополнительные ресурсы', resources: ['user_catalog', 'user_admin', 'rbac_config'] },
-] as const
-
-const ACTIONS = ['view', 'create', 'update', 'delete'] as const
 
 /** Effective cell scope from the matrix (no rule = "no access"). */
 const effective = computed<Record<string, string>>(() => {
@@ -165,32 +52,30 @@ function cellValue(preset: string, resource: string, action: string): string {
   return staged[cellKey(preset, resource, action)] ?? effective.value[cellKey(preset, resource, action)] ?? 'none'
 }
 
-/** Human-readable scope label in the resource context. */
-function scopeLabel(resource: string, scope: string): string {
-  const opt = SCOPE_OPTIONS[resource]?.find((o) => o.value === scope)
-  return opt?.label ?? 'Нет доступа'
+/** Human-readable name of a preset catalog entry: the stored name, else a
+ *  fallback for a built-in tag, else the tag itself. */
+function presetName(tag: string): string {
+  return presetDisplayName(presetEntry(tag) ?? { tag })
 }
 
-/** Human-readable names of known presets (the DB catalog keeps descriptions in English). */
-const PRESET_TITLES: Record<string, string> = {
-  admin: 'Администратор',
-  dp: 'Директор проектов',
-  rp: 'Руководитель проекта',
-  vp: 'Владелец процесса',
-  worker: 'Работник',
+/** Catalog entry of the selected tag (name/description) or undefined. */
+function presetEntry(tag: string) {
+  return presets.value.find((p) => p.tag === tag)
 }
 
-function presetTitle(code: string): string {
-  return PRESET_TITLES[code] ?? code
+/** Tooltip lines of a preset: its description, else the tag itself. */
+function presetTooltipLines(tag: string): string[] {
+  const description = presetEntry(tag)?.description?.trim()
+  return description ? [description] : [tag]
 }
 
 /** Preset tabs: the catalog without the admin bypass (admin is a code invariant, not an editable tab). */
 const presetList = computed(() => {
-  const names: string[] = []
-  for (const r of presets.value) {
-    if (r.name && r.name !== 'admin' && !names.includes(r.name)) names.push(r.name)
+  const tags: string[] = []
+  for (const p of presets.value) {
+    if (p.tag && p.tag !== 'admin' && !tags.includes(p.tag)) tags.push(p.tag)
   }
-  return names
+  return tags
 })
 
 /** Changed cells. */
@@ -257,8 +142,10 @@ function isDirtyCell(preset: string, resource: string, action: string): boolean 
 function cardSummary(resource: string): string {
   const granted = ACTIONS.filter((a) => cellValue(selected.value, resource, a) !== 'none').length
   const edited = ACTIONS.filter((a) => isDirtyCell(selected.value, resource, a)).length
-  const base = granted ? `${granted} из ${ACTIONS.length} — с доступом` : 'без доступа'
-  return edited ? `${base} · ${edited} изм.` : base
+  const base = granted
+    ? t('adminConfig.presets.cardSummaryGranted', { granted, total: ACTIONS.length })
+    : t('adminConfig.presets.cardSummaryDenied')
+  return edited ? base + t('adminConfig.presets.cardSummaryEdited', { count: edited }) : base
 }
 
 /** Change descriptions for the save bar. */
@@ -267,21 +154,17 @@ const dirtyChanges = computed(() =>
     const [, resource, action] = key.split('|')
     const from = effective.value[key] ?? 'none'
     const to = staged[key]
-    return `${ACTION_LABELS[action] ?? action} ${RESOURCE_LABELS[resource] ?? resource}: ${scopeLabel(resource, to)}${from !== 'none' ? ` (было: ${scopeLabel(resource, from)})` : ''}`
+    const label = `${actionTitle(action) || action} ${resourceLabel(resource) || resource}`
+    return from !== 'none'
+      ? `${label}: ${t('adminConfig.presets.changeLineFrom', { to: scopeLabel(resource, to), from: scopeLabel(resource, from) })}`
+      : `${label}: ${scopeLabel(resource, to)}`
   }),
 )
-
-interface SaveMsg {
-  ok: boolean
-  text: string
-}
-const saveMsg = ref<SaveMsg | null>(null)
 
 async function save() {
   const keys = dirtyKeys.value
   if (!keys.length || saving.value) return
   saving.value = true
-  saveMsg.value = null
   const failures: string[] = []
   for (const key of keys) {
     const [preset, resource, action] = key.split('|')
@@ -294,22 +177,21 @@ async function save() {
       ok = await rbac.upsertRule({ preset, resource, action, scope })
     }
     if (!ok) {
-      failures.push(`${preset} · ${ACTION_LABELS[action] ?? action} ${RESOURCE_LABELS[resource] ?? resource}`)
+      failures.push(`${preset} · ${actionTitle(action) || action} ${resourceLabel(resource) || resource}`)
     }
   }
   await rbac.reloadRules()
   saving.value = false
   if (failures.length) {
-    saveMsg.value = { ok: false, text: `Не сохранилось: ${failures.join('; ')}` }
+    notifyError(t('adminConfig.presets.saveFailed', { list: failures.join('; ') }))
     return
   }
   for (const key of keys) delete staged[key]
-  saveMsg.value = { ok: true, text: 'Права обновлены и применены' }
+  notifySuccess(t('adminConfig.presets.changesSaved'))
 }
 
 function cancelDirty() {
   for (const key of dirtyKeys.value) delete staged[key]
-  saveMsg.value = null
 }
 
 // Reset to defaults.
@@ -324,85 +206,97 @@ const BUILTIN_PRESETS = new Set(['admin'])
 
 /** Preset name pattern: letters of any script (latin/cyrillic), digits, «-», «_»
  *  (mirrors the backend codec). */
-const PRESET_NAME_RE = /^[\p{L}\p{N}_-]+$/u
-const presetMsg = ref<{ ok: boolean; text: string } | null>(null)
+const PRESET_TAG_RE = /^[\p{L}\p{N}_-]+$/u
 
-function validatePresetNameInput(name: string): string | null {
-  const trimmed = name.trim()
-  if (!trimmed) return 'Укажите имя пресета (буквы, цифры, «-», «_»), описание можно не заполнять'
-  if (!PRESET_NAME_RE.test(trimmed)) return 'Имя пресета: буквы (латиница/кириллица), цифры, «-», «_»'
-  if (rbac.presets.some((r) => r.name === trimmed)) return 'Пресет с таким именем уже существует'
+/** Validates the create/rename form: tag (code) + display name. excludeTag —
+ *  the rename target's own tag (collision with itself is allowed). */
+function validatePresetForm(tag: string, name: string, excludeTag?: string): string | null {
+  const trimmed = tag.trim()
+  if (!trimmed) return t('adminConfig.presets.validationTagRequired')
+  if (!PRESET_TAG_RE.test(trimmed)) return t('adminConfig.presets.validationTagFormat')
+  if (excludeTag !== trimmed && rbac.presets.some((r) => r.tag === trimmed)) {
+    return t('adminConfig.presets.validationTagDuplicate')
+  }
+  if (!name.trim()) return t('adminConfig.presets.validationNameRequired')
   return null
 }
 
 /* — create modal — */
 const createOpen = ref(false)
-const createForm = reactive({ name: '', description: '' })
-/** Local validation message (empty/invalid/duplicate name); mutation errors
- *  are surfaced by the global toast (http.ts) instead. */
+const createForm = reactive({ tag: '', name: '', description: '' })
+/** Local validation message (empty/invalid/duplicate tag, empty name);
+ *  mutation errors are surfaced by the global toast (http.ts) instead. */
 const createError = ref<string | null>(null)
 const createBusy = ref(false)
 
 async function onCreatePreset() {
+  const tag = createForm.tag.trim()
   const name = createForm.name.trim()
-  const localError = validatePresetNameInput(name)
+  const localError = validatePresetForm(tag, name)
   if (localError) {
     createError.value = localError
     return
   }
   createBusy.value = true
-  const ok = await rbac.createPreset({ name, description: createForm.description.trim() })
+  const ok = await rbac.createPreset({ tag, name, description: createForm.description.trim() })
   createBusy.value = false
   if (!ok) return
-  presetMsg.value = { ok: true, text: `Пресет «${name}» создан` }
+  notifySuccess(t('adminConfig.presets.created', { name }))
   createOpen.value = false
-  selected.value = name
+  selected.value = tag
   void rbac.loadRbac()
 }
 
-/* — rename modal (name + description) — */
+/* — rename modal (tag + name + description) — */
 const renameOpen = ref(false)
 const renameTarget = ref<string>('')
-const renameForm = reactive({ name: '', description: '' })
+const renameForm = reactive({ tag: '', name: '', description: '' })
 /** Local validation message; mutation errors — to the toast. */
 const renameError = ref<string | null>(null)
 const renameBusy = ref(false)
 
-function openRename(presetName: string) {
-  if (BUILTIN_PRESETS.has(presetName)) return
-  renameTarget.value = presetName
-  renameForm.name = presetName
-  renameForm.description = rbac.presets.find((r) => r.name === presetName)?.description ?? ''
+function openRename(presetTag: string) {
+  if (BUILTIN_PRESETS.has(presetTag)) return
+  const entry = presetEntry(presetTag)
+  renameTarget.value = presetTag
+  renameForm.tag = presetTag
+  renameForm.name = entry?.name ?? ''
+  renameForm.description = entry?.description ?? ''
   renameError.value = null
   renameOpen.value = true
 }
 
 async function onRenamePreset() {
+  const tag = renameForm.tag.trim()
   const name = renameForm.name.trim()
-  const localError = validatePresetNameInput(name)
+  const localError = validatePresetForm(tag, name, renameTarget.value)
   if (localError) {
     renameError.value = localError
     return
   }
   renameBusy.value = true
-  const ok = await rbac.updatePreset(renameTarget.value, { name, description: renameForm.description.trim() })
+  const ok = await rbac.updatePreset(renameTarget.value, {
+    tag,
+    name,
+    description: renameForm.description.trim(),
+  })
   renameBusy.value = false
   if (!ok) return
-  presetMsg.value = ok ? { ok: true, text: `Пресет переименован в «${name}»` } : null
+  notifySuccess(t('adminConfig.presets.renamed', { name }))
   renameOpen.value = false
-  if (selected.value === renameTarget.value) selected.value = name
+  if (selected.value === renameTarget.value) selected.value = tag
   void rbac.loadRbac()
 }
 
-/* — delete modal (confirmation by typing the preset name) — */
+/* — delete modal (confirmation by typing the preset tag) — */
 const deleteOpen = ref(false)
 const deleteTarget = ref<string>('')
 const deleteConfirm = ref('')
 const deleteBusy = ref(false)
 
-function openDelete(presetName: string) {
-  if (BUILTIN_PRESETS.has(presetName)) return
-  deleteTarget.value = presetName
+function openDelete(presetTag: string) {
+  if (BUILTIN_PRESETS.has(presetTag)) return
+  deleteTarget.value = presetTag
   deleteConfirm.value = ''
   deleteOpen.value = true
 }
@@ -413,7 +307,7 @@ async function onDeletePreset() {
   const ok = await rbac.deletePreset(deleteTarget.value)
   deleteBusy.value = false
   if (!ok) return
-  presetMsg.value = { ok: true, text: `Пресет «${deleteTarget.value}» удалён` }
+  notifySuccess(t('adminConfig.presets.deleted', { name: presetName(deleteTarget.value) }))
   deleteOpen.value = false
   if (selected.value === deleteTarget.value) {
     const rest = presetList.value.filter((p) => p !== deleteTarget.value)
@@ -425,12 +319,12 @@ async function onDeletePreset() {
 /* — context menu (ПКМ) — */
 const ctxMenu = reactive({ open: false, x: 0, y: 0, preset: '' })
 
-function onPresetContextMenu(e: MouseEvent, presetName: string) {
-  if (BUILTIN_PRESETS.has(presetName)) return
+function onPresetContextMenu(e: MouseEvent, presetTag: string) {
+  if (BUILTIN_PRESETS.has(presetTag)) return
   ctxMenu.open = true
   ctxMenu.x = e.clientX
   ctxMenu.y = e.clientY
-  ctxMenu.preset = presetName
+  ctxMenu.preset = presetTag
 }
 
 function onCtxSelect(id: string) {
@@ -441,13 +335,13 @@ function onCtxSelect(id: string) {
 }
 
 function onReset() {
-  ask('Вернуть все права и маршрутные проверки к значениям по умолчанию?', () => {
+  ask(t('adminConfig.presets.resetConfirm'), () => {
     void (async () => {
-      saveMsg.value = (await rbac.resetRbac())
-        ? { ok: true, text: 'Права сброшены к значениям по умолчанию' }
-        : { ok: false, text: error.value ?? 'Не удалось сбросить права' }
+      const ok = await rbac.resetRbac()
+      if (ok) notifySuccess(t('adminConfig.presets.resetDone'))
+      else notifyError(error.value ?? t('adminConfig.presets.resetFailed'))
     })()
-  }, 'Сбросить')
+  }, t('adminConfig.presets.resetButton'))
 }
 
 /** Select the default preset after the catalog is loaded. */
@@ -467,13 +361,11 @@ onMounted(() => {
 <template>
   <section class="pm">
     <div class="pm-head">
-      <h2 class="pm-title">Пресеты прав</h2>
+      <h2 class="pm-title">{{ t('adminConfig.presets.title') }}</h2>
       <HintButton hint="presets-editor" />
     </div>
 
-    <p v-if="presetMsg" class="pm-save-msg" :class="{ er: !presetMsg.ok }">{{ presetMsg.text }}</p>
-
-    <p v-if="loading && !presetRules.length" class="pm-load">Загрузка...</p>
+    <p v-if="loading && !presetRules.length" class="pm-load">{{ t('adminConfig.presets.loading') }}</p>
     <p v-if="error && !presetRules.length" class="pm-load er">{{ error }}</p>
 
     <div v-if="presetRules.length && presetList.length" class="pm-layout">
@@ -488,30 +380,35 @@ onMounted(() => {
           @click="selected = preset"
           @contextmenu.prevent="onPresetContextMenu($event, preset)"
         >
-          <span class="pm-preset-code">{{ preset }}</span>
-          <span class="pm-preset-name">
-            {{ presetTitle(preset) }}
-          </span>
+          <TooltipCell :multiline="true">
+            <span class="pm-preset-code">{{ preset }}</span>
+            <span class="pm-preset-name">
+              {{ presetName(preset) }}
+            </span>
+            <template #popup>
+              <InfoTooltip :title="presetName(preset)" :lines="presetTooltipLines(preset)" />
+            </template>
+          </TooltipCell>
           <span
             v-if="!BUILTIN_PRESETS.has(preset)"
             class="pm-preset-remove"
             role="button"
             tabindex="0"
-            :title="'Удалить пресет ' + preset"
+            :title="t('adminConfig.presets.removeTitle', { name: presetName(preset) })"
             @click.stop="openDelete(preset)"
             @keydown.enter.stop.prevent="openDelete(preset)"
           >✕</span>
         </button>
         <button type="button" class="pm-preset-add" @click="createError = null; createOpen = true">
-          + Добавить
+          {{ t('adminConfig.presets.add') }}
         </button>
         <ContextMenu
           :open="ctxMenu.open"
           :x="ctxMenu.x"
           :y="ctxMenu.y"
           :items="[
-            { id: 'rename', label: 'Переименовать' },
-            { id: 'delete', label: 'Удалить' },
+            { id: 'rename', label: t('adminConfig.presets.ctxRename') },
+            { id: 'delete', label: t('adminConfig.presets.ctxDelete') },
           ]"
           @select="onCtxSelect"
           @close="ctxMenu.open = false"
@@ -521,10 +418,10 @@ onMounted(() => {
       <!-- Editor of the selected preset -->
       <div class="pm-editor">
         <div v-for="group in GROUPS" :key="group.key" class="pm-group">
-          <h3 class="pm-group-title">{{ group.title }}</h3>
+          <h3 class="pm-group-title">{{ t(`adminConfig.perm.group.${group.key}`) }}</h3>
           <div v-for="resource in group.resources" :key="resource" class="pm-block">
             <div class="pm-block-head">
-              <span class="pm-block-title">{{ ENTITY_NAMES[resource] ?? resource }}</span>
+              <span class="pm-block-title">{{ resourceTitle(resource) }}</span>
               <span class="pm-block-summary">{{ cardSummary(resource) }}</span>
             </div>
             <div
@@ -533,7 +430,7 @@ onMounted(() => {
               class="pm-row"
               :class="{ dirty: isDirtyCell(selected, resource, action) }"
             >
-              <span class="pm-row-label">{{ ACTION_LABELS[action] }}</span>
+              <span class="pm-row-label">{{ actionTitle(action) }}</span>
               <div class="pm-chips">
                 <button
                   v-for="opt in SCOPE_CHIPS[resource] ?? []"
@@ -543,15 +440,15 @@ onMounted(() => {
                   :class="{ on: isChipOn(resource, action, opt.value) }"
                   @click="onChipClick(resource, action, opt.value)"
                 >
-                  {{ opt.label }}
+                  {{ scopeLabel(resource, opt.value) }}
                 </button>
                 <button
                   type="button"
                   class="pm-chip rev"
                   :class="{ on: isZoneActive(resource, action, 'none') }"
-                  :title="isZoneActive(resource, action, 'none') ? 'Вернуть' : 'Нет доступа'"
+                  :title="isZoneActive(resource, action, 'none') ? t('adminConfig.presets.revertTitle') : t('adminConfig.presets.revokeTitle')"
                   @click="onRevokeClick(resource, action)"
-                >⛔ нет доступа</button>
+                >{{ t('adminConfig.presets.revokeChip') }}</button>
                 <!-- Собранное выражение при множественном выборе -->
                 <span v-if="scopeMoves(rowText(resource, action)).length > 1" class="pm-zone-mini">
                   {{ rowText(resource, action) }}
@@ -564,45 +461,46 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- Preset management modals: create / rename / delete (type the name).
+    <!-- Preset management modals: create / rename / delete (type the tag).
          Mutation failures are surfaced by the global toast (http.ts); the
          modal error line shows LOCAL validation only (empty/invalid/duplicate
-         name) — e.g. a cyrillic preset name is valid and must be sent. -->
+         tag, empty name) — e.g. a cyrillic preset tag is valid and must be sent. -->
     <ModalForm
       :open="createOpen"
-      title="Создать пресет"
-      submit-label="Создать пресет"
+      :title="t('adminConfig.presets.createTitle')"
+      :submit-label="t('adminConfig.presets.createSubmit')"
       :busy="createBusy"
       :error="createError"
       :fields="[
-        { key: 'name', label: 'Имя пресета', type: 'text', required: true, placeholder: 'имя пресета, напр. auditor' },
-        { key: 'description', label: 'Описание', type: 'textarea', placeholder: 'описание' },
+        { key: 'name', label: t('adminConfig.presets.fieldName'), type: 'text', required: true, placeholder: t('adminConfig.presets.fieldNamePlaceholder') },
+        { key: 'tag', label: t('adminConfig.presets.fieldTag'), type: 'text', required: true, placeholder: t('adminConfig.presets.fieldTagPlaceholder') },
+        { key: 'description', label: t('adminConfig.presets.fieldDescription'), type: 'textarea', placeholder: t('adminConfig.presets.fieldDescriptionPlaceholder') },
       ]"
-      @save="(v: Record<string, string | number>) => { createForm.name = String(v.name ?? ''); createForm.description = String(v.description ?? ''); void onCreatePreset() }"
+      @save="(v: Record<string, string | number>) => { createForm.name = String(v.name ?? ''); createForm.tag = String(v.tag ?? ''); createForm.description = String(v.description ?? ''); void onCreatePreset() }"
       @close="createOpen = false"
     />
 
     <ModalForm
       :open="renameOpen"
-      title="Переименовать пресет"
-      submit-label="Переименовать"
+      :title="t('adminConfig.presets.renameTitle')"
+      :submit-label="t('adminConfig.presets.renameSubmit')"
       :busy="renameBusy"
       :error="renameError"
       :fields="[
-        { key: 'name', label: 'Имя пресета', type: 'text', required: true, value: renameForm.name, placeholder: 'имя пресета' },
-        { key: 'description', label: 'Описание', type: 'textarea', value: renameForm.description, placeholder: 'описание' },
+        { key: 'name', label: t('adminConfig.presets.fieldName'), type: 'text', required: true, value: renameForm.name, placeholder: t('adminConfig.presets.renameNamePlaceholder') },
+        { key: 'tag', label: t('adminConfig.presets.fieldTag'), type: 'text', required: true, value: renameForm.tag, placeholder: t('adminConfig.presets.renameTagPlaceholder') },
+        { key: 'description', label: t('adminConfig.presets.fieldDescription'), type: 'textarea', value: renameForm.description, placeholder: t('adminConfig.presets.fieldDescriptionPlaceholder') },
       ]"
-      @save="(v: Record<string, string | number>) => { renameForm.name = String(v.name ?? ''); renameForm.description = String(v.description ?? ''); void onRenamePreset() }"
+      @save="(v: Record<string, string | number>) => { renameForm.name = String(v.name ?? ''); renameForm.tag = String(v.tag ?? ''); renameForm.description = String(v.description ?? ''); void onRenamePreset() }"
       @close="renameOpen = false"
     />
 
-    <!-- Удаление с подтверждением: нужно ввести имя пресета -->
+    <!-- Удаление с подтверждением: нужно ввести тэг пресета -->
     <div v-if="deleteOpen" class="pm-del-overlay" @mousedown.self="deleteOpen = false">
-      <div class="pm-del" role="dialog" aria-modal="true" aria-label="Удалить пресет">
-        <h3 class="pm-del-title">Удалить пресет «{{ deleteTarget }}»?</h3>
+      <div class="pm-del" role="dialog" aria-modal="true" :aria-label="t('adminConfig.presets.deleteAria')">
+        <h3 class="pm-del-title">{{ t('adminConfig.presets.deleteTitle', { tag: deleteTarget }) }}</h3>
         <p class="pm-del-text">
-          Назначенные пользователи сохранятся, но потеряют базовые права этого пресета;
-          правила пресета будут удалены. Введите имя пресета, чтобы подтвердить:
+          {{ t('adminConfig.presets.deleteText') }}
         </p>
         <input
           v-model="deleteConfirm"
@@ -612,14 +510,14 @@ onMounted(() => {
           :placeholder="deleteTarget"
         />
         <div class="pm-del-actions">
-          <button type="button" class="pm-btn" @click="deleteOpen = false">Отмена</button>
+          <button type="button" class="pm-btn" @click="deleteOpen = false">{{ t('common.cancel') }}</button>
           <button
             type="button"
             class="pm-btn danger"
             :disabled="deleteConfirm !== deleteTarget || deleteBusy"
             @click="onDeletePreset"
           >
-            {{ deleteBusy ? 'Удаление…' : 'Удалить' }}
+            {{ deleteBusy ? t('adminConfig.presets.deleting') : t('common.delete') }}
           </button>
         </div>
       </div>
@@ -628,19 +526,17 @@ onMounted(() => {
     <!-- Save bar -->
     <div v-if="dirtyKeys.length" class="pm-savebar">
       <div class="pm-savebar-info">
-        <strong>Изменения ({{ dirtyKeys.length }}):</strong>
+        <strong>{{ t('adminConfig.presets.changes', { count: dirtyKeys.length }) }}</strong>
         <ul>
           <li v-for="c in dirtyChanges" :key="c">{{ c }}</li>
         </ul>
       </div>
       <div class="pm-savebar-actions">
-        <button type="button" class="pm-btn primary" :disabled="saving" @click="save">{{ saving ? 'Сохранение...' : 'Сохранить' }}</button>
-        <button type="button" class="pm-btn" :disabled="saving" @click="cancelDirty">Отменить</button>
-        <button type="button" class="pm-btn danger" :disabled="saving" @click="onReset">Сбросить всё к дефолтам</button>
+        <button type="button" class="pm-btn primary" :disabled="saving" @click="save">{{ saving ? t('adminConfig.presets.saving') : t('adminConfig.presets.save') }}</button>
+        <button type="button" class="pm-btn" :disabled="saving" @click="cancelDirty">{{ t('adminConfig.presets.cancel') }}</button>
+        <button type="button" class="pm-btn danger" :disabled="saving" @click="onReset">{{ t('adminConfig.presets.resetAll') }}</button>
       </div>
     </div>
-
-    <p v-if="saveMsg && !dirtyKeys.length" class="pm-save-msg" :class="{ er: !saveMsg.ok }">{{ saveMsg.text }}</p>
 
     <ConfirmDialog
       :open="!!confirmDialog"

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { ModalForm } from '../../common'
+import { t } from '@/i18n'
 import type {
   ResourceManagerModalProps,
   AssignedResource,
@@ -60,12 +61,12 @@ function onSubmit() {
 }
 
 function resourceTitle(r: AssignedResource): string {
-  return r.title || r.code || `Ресурс #${r.resource_id}`
+  return r.title || r.code || t('planner.resourceModal.itemFallback', { id: r.resource_id })
 }
 </script>
 
 <template>
-  <ModalForm :open="open" :title="`Ресурсы задачи: ${taskTitle}`" @close="emit('close')">
+  <ModalForm :open="open" :title="t('planner.resourceModal.title', { title: taskTitle })" @close="emit('close')">
     <div class="rm-body">
       <p v-if="error" class="rm-error">{{ error }}</p>
 
@@ -77,12 +78,12 @@ function resourceTitle(r: AssignedResource): string {
             type="button"
             class="rm-remove"
             :disabled="busy"
-            aria-label="Убрать ресурс"
+            :aria-label="t('planner.resourceModal.removeAria')"
             @click="emit('remove', { resource_id: a.resource_id })"
           >✕</button>
         </div>
       </div>
-      <div v-else class="rm-empty">Ресурсы не назначены</div>
+      <div v-else class="rm-empty">{{ t('planner.resourceModal.empty') }}</div>
 
       <div class="rm-add">
         <div class="rm-fields">
@@ -91,13 +92,13 @@ function resourceTitle(r: AssignedResource): string {
             class="rm-input rm-select"
             :disabled="busy"
           >
-            <option value="">— выберите ресурс —</option>
+            <option value="">{{ t('planner.resourceModal.selectPlaceholder') }}</option>
             <option
               v-for="r in available"
               :key="r.id"
               :value="r.id"
             >
-              {{ r.title || r.code || `Ресурс #${r.id}` }}
+              {{ r.title || r.code || t('planner.resourceModal.itemFallback', { id: r.id }) }}
             </option>
           </select>
           <input
@@ -115,7 +116,7 @@ function resourceTitle(r: AssignedResource): string {
           @click="onSubmit"
         >
           <span v-if="busy" class="rm-spinner" />
-          Добавить
+          {{ t('common.add') }}
         </button>
       </div>
     </div>

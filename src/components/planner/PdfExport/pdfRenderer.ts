@@ -14,6 +14,8 @@
 import fontkit from '@pdf-lib/fontkit'
 import { PDFDocument, rgb, type PDFFont, type PDFPage } from 'pdf-lib'
 import { cellIndexForDate, cellStartDate, cellEndDate, fmtDate, toDate, type PlanningUnit } from '../calendar'
+import { t, currentLocale, type AppLocale } from '@/i18n'
+import { fmtDateRange, fmtMonthLong, weekdayShort } from '@/i18n/date'
 import { DAY_MS } from '../../../utils'
 import {
   CELL_PX_NUM_DAY,
@@ -297,8 +299,6 @@ export interface PdfGanttRenderResult extends Uint8Array {
 /** Shared empty per-resource usage map (read-only outside the precompute) */
 const NO_RESOURCE_USAGE: ReadonlyMap<number, number> = new Map<number, number>()
 
-const dowMap = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб']
-
 /** Module-level font cache: loaded once, embedded into each document */
 let fontBytesCache: { regular: Uint8Array; bold: Uint8Array } | null = null
 
@@ -334,6 +334,8 @@ interface DrawCtx {
   layout: PdfLayout
   /** Palette of the current style (color / mono) */
   palette: Palette
+  /** Interface language of the generation run (resolved once per render) */
+  locale: AppLocale
 }
 
 /** Diagram content sizes (pt), already multiplied by scale z */
@@ -420,8 +422,8 @@ function numLabel(origin: Date | string, unit: PlanningUnit, i: number): string 
   return s.getDate() === e.getDate() ? String(s.getDate()) : `${s.getDate()}-${e.getDate()}`
 }
 
-function monthLabel(d: Date): string {
-  const m = d.toLocaleDateString('ru', { month: 'long' })
+function monthLabel(d: Date, locale: AppLocale): string {
+  const m = fmtMonthLong(d, locale)
   return m.charAt(0).toUpperCase() + m.slice(1) + ' ' + d.getFullYear()
 }
 
@@ -617,7 +619,7 @@ function drawResourceHeader(
 
 /** Draws the calendar header: month/numbers/weekdays + cell borders */
 function drawHeader(ctx: DrawCtx, colFrom: number, colTo: number, cellWidthPx: number) {
-  const { page, font, bold, unit, cellW, headerH, contentW, layout, z, palette } = ctx
+  const { page, font, bold, unit, cellW, headerH, contentW, layout, z, palette, locale } = ctx
   const bands: { top: number; h: number }[] = [{ top: 0, h: layout.monthRowH }]
   const showNumRow = cellWidthPx >= (unit === 'day' ? CELL_PX_NUM_DAY : CELL_PX_NUM_DECADE)
   const showWdRow = unit === 'day' && cellWidthPx >= CELL_PX_WD_DAY
@@ -641,7 +643,7 @@ function drawHeader(ctx: DrawCtx, colFrom: number, colTo: number, cellWidthPx: n
     while (j <= colTo && monthKey(ctx.origin, unit, j) === key) j++
     const x0 = MARGIN + labelW + (i - colFrom) * cellW
     const x1 = MARGIN + labelW + (j - colFrom) * cellW
-    const label = monthLabel(cellStartDate(ctx.origin, unit, i))
+    const label = monthLabel(cellStartDate(ctx.origin, unit, i), locale)
     const maxW = Math.max(x1 - x0 - 2, 6)
     let size = 8.25 * z
     while (size > 4.5 * z && bold.widthOfTextAtSize(label, size) > maxW) size -= 0.5 * z
@@ -670,6 +672,8 @@ function drawHeader(ctx: DrawCtx, colFrom: number, colTo: number, cellWidthPx: n
     }
   }
   if (showWdRow) {
+    // Weekday names follow the interface language active at generation time
+    const dowMap = weekdayShort(locale)
     for (let k = colFrom; k <= colTo; k++) {
       const x = MARGIN + labelW + (k - colFrom) * cellW
       const label = dowMap[cellStartDate(ctx.origin, unit, k).getDay()]
@@ -707,7 +711,7 @@ function drawGrid(ctx: DrawCtx, colFrom: number, colTo: number, winTop: number, 
 
 /** Draws a group (milestone strip, merged label, task bars), clipped to the visible window */
 function drawGroup(ctx: DrawCtx, gl: GroupLayout, colFrom: number, colTo: number, winTop: number, winBottom: number) {
-  const { page, font, bold, unit, cellW, groupsStart, layout, z, palette } = ctx
+  const { page, font, bold, unit, cellW, groupsStart, layout, z, palette, locale } = ctx
   const g = gl.group
   const strip = gl.stripH
   const top = gl.top
@@ -762,7 +766,7 @@ function drawGroup(ctx: DrawCtx, gl: GroupLayout, colFrom: number, colTo: number
       cursor += titleSize * 1.3
       if (g.start_date && g.end_date) {
         const dSize = 7.5 * z
-        const range = `${toDate(g.start_date).toLocaleDateString('ru')} — ${toDate(g.end_date).toLocaleDateString('ru')}`
+        const range = fmtDateRange(toDate(g.start_date), toDate(g.end_date), locale)
         page.drawText(truncate(font, range, dSize, maxW), { x: MARGIN + padX, y: pdfY(cursor + dSize * 0.8), size: dSize, font, color: palette.textDim })
       }
     }
@@ -922,15 +926,15 @@ function drawToday(ctx: DrawCtx, colFrom: number, colTo: number, winTop: number,
   })
 }
 
-function drawFooter(page: PDFPage, font: PDFFont, bold: PDFFont, pageNo: number, pageCount: number, opts: PdfGanttOptions, palette: Palette) {
+function drawFooter(page: PDFPage, font: PDFFont, bold: PDFFont, pageNo: number, pageCount: number, opts: PdfGanttOptions, palette: Palette, locale: AppLocale) {
   const y = MARGIN + FOOTER_H
   page.drawLine({ start: { x: MARGIN, y }, end: { x: PAGE_W - MARGIN, y }, thickness: 0.5, color: palette.gridLine })
   const size = 7.5
   const title = opts.pageTitle ?? ''
-  const range = `${toDate(opts.from).toLocaleDateString('ru')} — ${toDate(opts.to).toLocaleDateString('ru')}`
+  const range = fmtDateRange(toDate(opts.from), toDate(opts.to), locale)
   page.drawText(title, { x: MARGIN, y: y - size * 1.1, size, font: bold, color: palette.textDim })
   page.drawText(range, { x: MARGIN + bold.widthOfTextAtSize(title, size) + 12, y: y - size * 1.1, size, font, color: palette.textFaint })
-  const pg = `Страница ${pageNo} из ${pageCount}`
+  const pg = t('pdf.render.page', { page: pageNo, total: pageCount })
   const pw = font.widthOfTextAtSize(pg, size)
   page.drawText(pg, { x: PAGE_W - MARGIN - pw, y: y - size * 1.1, size, font, color: palette.textDim })
 }
@@ -941,6 +945,9 @@ function drawFooter(page: PDFPage, font: PDFFont, bold: PDFFont, pageNo: number,
  * exceeds the column capacity of one page width, only its initial part is printed.
  */
 export async function renderGanttPdf(groups: PdfGanttGroup[], opts: PdfGanttOptions): Promise<PdfGanttRenderResult> {
+  // Resolve the language at generation time: the renderer may be called long
+  // after a language switch, so nothing here may be captured at module scope.
+  const locale = currentLocale()
   const doc = await PDFDocument.create()
   doc.registerFontkit(fontkit)
   const bytes = await loadFontBytes()
@@ -1077,6 +1084,7 @@ export async function renderGanttPdf(groups: PdfGanttGroup[], opts: PdfGanttOpti
         z,
         layout,
         palette,
+        locale,
       }
       // Absolute cell indices: the (possibly truncated) range — one page across the width.
       const colFrom = fromCell
@@ -1110,7 +1118,7 @@ export async function renderGanttPdf(groups: PdfGanttGroup[], opts: PdfGanttOpti
       // it does not cross the label column (starts at x >= labelW)
       if (opts.showTodayLine !== false) drawToday(ctx, colFrom, colTo, winTop, winBottom)
 
-      drawFooter(page, font, bold, r * pagesAcross + c + 1, pagesDown * pagesAcross, opts, palette)
+      drawFooter(page, font, bold, r * pagesAcross + c + 1, pagesDown * pagesAcross, opts, palette, locale)
     }
   }
 

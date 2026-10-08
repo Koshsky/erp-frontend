@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { ModalForm, ColorField, PendingMark, TooltipCell } from '../../common'
+import { t } from '@/i18n'
 import type {
   TaskEditorProps,
   NewSubtaskPayload,
@@ -8,7 +9,7 @@ import type {
   TaskEditorPatch,
 } from './types'
 import type { DependencyType } from '../dependencies'
-import { DEPENDENCY_LABELS, DEPENDENCY_TYPES } from '../dependencies'
+import { dependencyLabel, DEPENDENCY_TYPES } from '../dependencies'
 
 const props = withDefaults(defineProps<TaskEditorProps>(), {
   task: null,
@@ -39,12 +40,13 @@ const color = ref('')
 const status = ref('')
 const ownerId = ref<number | ''>('')
 
-// Status catalog (fixed 3-set, mirrors the backend CHECK).
-const statusOptions = [
-  { value: 'not_started', label: 'Не начата' },
-  { value: 'in_progress', label: 'В работе' },
-  { value: 'done', label: 'Завершена' },
-]
+// Status catalog (fixed 3-set, mirrors the backend CHECK). Computed so the
+// labels re-render after a language switch.
+const statusOptions = computed(() => [
+  { value: 'not_started', label: t('planner.taskStatus.notStarted') },
+  { value: 'in_progress', label: t('planner.taskStatus.inProgress') },
+  { value: 'done', label: t('planner.taskStatus.done') },
+])
 
 watch(
   () => props.open,
@@ -90,11 +92,11 @@ function onAddSubtask() {
 function subtaskStatusLabel(s: { status?: string }): string {
   switch (s.status) {
     case 'done':
-      return 'Завершена'
+      return t('planner.taskStatus.done')
     case 'in_progress':
-      return 'В работе'
+      return t('planner.taskStatus.inProgress')
     default:
-      return 'Не начата'
+      return t('planner.taskStatus.notStarted')
   }
 }
 
@@ -117,8 +119,11 @@ function onDeleteSubtask(id: number) {
 const newDepTaskId = ref<number | ''>('')
 const newDepType = ref<DependencyType>('fs')
 
-/** Type options with the localized labels (Окончание → Начало, ...). */
-const depTypeOptions = DEPENDENCY_TYPES.map((t) => ({ value: t, label: DEPENDENCY_LABELS[t] }))
+/** Type options with the localized labels (Finish → Start, ...). Computed
+ *  so the option labels re-render after a language switch. */
+const depTypeOptions = computed(() =>
+  DEPENDENCY_TYPES.map((type) => ({ value: type, label: dependencyLabel(type) })),
+)
 
 const canAddDependency = computed(
   () =>
@@ -148,25 +153,25 @@ function onDeleteDependency(id: number) {
 <template>
   <ModalForm
     :open="open"
-    :title="task ? `Задача: ${task.title}` : 'Задача'"
+    :title="task ? t('planner.taskEditor.titleNamed', { title: task.title }) : t('planner.taskEditor.title')"
     :max-width="'960px'"
     @close="emit('close')"
   >
     <div class="te-body">
       <div class="te-left">
         <label class="te-field">
-          <span class="te-label">Название</span>
+          <span class="te-label">{{ t('planner.taskEditor.field.name') }}</span>
           <input
             v-model="title"
             class="te-input"
             type="text"
             :disabled="!canManage || busy"
-            :placeholder="task?.title || 'Название задачи'"
+            :placeholder="task?.title || t('planner.taskEditor.field.namePlaceholder')"
           />
         </label>
 
         <div class="te-field">
-          <span class="te-label">Статус</span>
+          <span class="te-label">{{ t('planner.taskEditor.field.status') }}</span>
           <select
             v-model="status"
             class="te-input te-select"
@@ -179,13 +184,13 @@ function onDeleteDependency(id: number) {
         </div>
 
         <div class="te-field">
-          <span class="te-label">Ответственный</span>
+          <span class="te-label">{{ t('planner.taskEditor.field.owner') }}</span>
           <select
             v-model="ownerId"
             class="te-input te-select"
             :disabled="!canManage || busy"
           >
-            <option value="">— не выбран —</option>
+            <option value="">{{ t('planner.taskEditor.field.ownerNone') }}</option>
             <option v-for="o in ownerOptions" :key="o.value" :value="o.value">
               {{ o.label }}
             </option>
@@ -193,12 +198,12 @@ function onDeleteDependency(id: number) {
         </div>
 
         <div class="te-field">
-          <span class="te-label">Цвет</span>
-          <ColorField v-model="color" label="Цвет задачи" />
+          <span class="te-label">{{ t('planner.taskEditor.field.color') }}</span>
+          <ColorField v-model="color" :label="t('planner.taskEditor.field.colorLabel')" />
         </div>
 
         <p v-if="!canManage && !disabledReason" class="te-note">
-          Нет права на изменение задачи — режим просмотра
+          {{ t('planner.taskEditor.readonly') }}
         </p>
 
         <div class="te-actions">
@@ -207,7 +212,7 @@ function onDeleteDependency(id: number) {
             class="te-cancel"
             @click="emit('close')"
           >
-            Отмена
+            {{ t('common.cancel') }}
           </button>
           <button
             type="button"
@@ -216,23 +221,23 @@ function onDeleteDependency(id: number) {
             @click="onSave"
           >
             <span v-if="busy" class="te-spinner" />
-            Сохранить
+            {{ t('common.save') }}
           </button>
         </div>
       </div>
 
       <div class="te-right">
-        <h4 class="te-subtitle">Операции</h4>
+        <h4 class="te-subtitle">{{ t('planner.taskEditor.subtasksTitle') }}</h4>
         <p v-if="error" class="te-error">{{ error }}</p>
 
         <div v-if="subtasks.length" class="te-list">
           <div v-for="s in subtasks" :key="s.id" class="te-item">
-            <TooltipCell :text="`Статус: ${subtaskStatusLabel(s)} (нажмите, чтобы изменить)`" multiline>
+            <TooltipCell :text="t('planner.taskEditor.subtaskStatusHint', { status: subtaskStatusLabel(s) })" multiline>
               <button
                 type="button"
                 class="te-status"
                 :class="`is-${s.status || 'not_started'}`"
-                :title="`Статус: ${subtaskStatusLabel(s)} (нажмите, чтобы изменить)`"
+                :title="t('planner.taskEditor.subtaskStatusHint', { status: subtaskStatusLabel(s) })"
                 :disabled="!canManage || busy"
                 @click="cycleStatus(s)"
               />
@@ -243,19 +248,19 @@ function onDeleteDependency(id: number) {
               type="button"
               class="te-remove"
               :disabled="!canManage || busy"
-              :aria-label="`Удалить операцию ${s.title}`"
+              :aria-label="t('planner.taskEditor.subtask.deleteAria', { title: s.title })"
               @click="onDeleteSubtask(s.id)"
             >✕</button>
           </div>
         </div>
-        <div v-else class="te-empty">Операций нет</div>
+        <div v-else class="te-empty">{{ t('planner.taskEditor.subtask.empty') }}</div>
 
         <div class="te-add">
           <input
             v-model="newTitle"
             class="te-input"
             type="text"
-            placeholder="Новая операция…"
+            :placeholder="t('planner.taskEditor.subtask.newPlaceholder')"
             :disabled="!canCreateSubtask || busy"
             @keyup.enter="onAddSubtask"
           />
@@ -265,12 +270,12 @@ function onDeleteDependency(id: number) {
             :disabled="!canAdd"
             @click="onAddSubtask"
           >
-            Добавить
+            {{ t('common.add') }}
           </button>
         </div>
         <p v-if="disabledReason" class="te-note">{{ disabledReason }}</p>
 
-        <h4 class="te-subtitle">Зависимости</h4>
+        <h4 class="te-subtitle">{{ t('planner.taskEditor.dependenciesTitle') }}</h4>
 
         <div v-if="dependencies.length" class="te-list">
           <div v-for="d in dependencies" :key="d.id" class="te-item">
@@ -279,7 +284,7 @@ function onDeleteDependency(id: number) {
               class="te-input te-select te-dep-type"
               :value="d.type"
               :disabled="!canManageDependencies || busy"
-              :aria-label="`Тип связи с «${d.title}»`"
+              :aria-label="t('planner.taskEditor.dependency.typeAria', { title: d.title })"
               @change="onDepTypeChange(d, ($event.target as HTMLSelectElement).value as DependencyType)"
             >
               <option v-for="o in depTypeOptions" :key="o.value" :value="o.value">
@@ -290,21 +295,21 @@ function onDeleteDependency(id: number) {
               type="button"
               class="te-remove"
               :disabled="!canManageDependencies || busy"
-              :aria-label="`Удалить связь с «${d.title}»`"
+              :aria-label="t('planner.taskEditor.dependency.deleteAria', { title: d.title })"
               @click="onDeleteDependency(d.id)"
             >✕</button>
           </div>
         </div>
-        <div v-else class="te-empty">Зависимостей нет</div>
+        <div v-else class="te-empty">{{ t('planner.taskEditor.dependency.empty') }}</div>
 
         <div class="te-dep-add">
           <select
             v-model="newDepTaskId"
             class="te-input te-select"
             :disabled="!canManageDependencies || busy"
-            :aria-label="'Задача-предшественник'"
+            :aria-label="t('planner.taskEditor.dependency.predecessorAria')"
           >
-            <option value="">— предшественник —</option>
+            <option value="">{{ t('planner.taskEditor.dependency.predecessorNone') }}</option>
             <option v-for="o in dependencyOptions" :key="o.value" :value="o.value">
               {{ o.label }}
             </option>
@@ -313,7 +318,7 @@ function onDeleteDependency(id: number) {
             v-model="newDepType"
             class="te-input te-select te-dep-type"
             :disabled="!canManageDependencies || busy"
-            :aria-label="'Тип связи'"
+            :aria-label="t('planner.taskEditor.dependency.typeAriaShort')"
           >
             <option v-for="o in depTypeOptions" :key="o.value" :value="o.value">
               {{ o.label }}
@@ -325,10 +330,10 @@ function onDeleteDependency(id: number) {
             :disabled="!canAddDependency"
             @click="onAddDependency"
           >
-            Добавить
+            {{ t('common.add') }}
           </button>
         </div>
-        <p class="te-note">При добавлении или изменении связи даты задач корректируются автоматически.</p>
+        <p class="te-note">{{ t('planner.taskEditor.dependencyNote') }}</p>
       </div>
     </div>
   </ModalForm>

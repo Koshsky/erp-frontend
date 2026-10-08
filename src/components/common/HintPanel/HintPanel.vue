@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 import { closeHints, hintOpen, hintPageContent } from '@/composables/useHints'
 import { useModalFocus } from '@/composables/useModalFocus'
 import MarkdownView from '../MarkdownView/MarkdownView.vue'
+import { t } from '../../../i18n'
 
 defineOptions({ name: 'HintPanel' })
 
@@ -42,7 +43,7 @@ onBeforeUnmount(() => stopRouteWatch?.())
         >
           <div class="hp-head">
             <h3 class="hp-title">{{ hintPageContent.title }}</h3>
-            <button type="button" class="hp-close" aria-label="Закрыть подсказку" @click="closeHints">✕</button>
+            <button type="button" class="hp-close" :aria-label="t('ui.hint.close')" @click="closeHints">✕</button>
           </div>
 
           <div class="hp-body">

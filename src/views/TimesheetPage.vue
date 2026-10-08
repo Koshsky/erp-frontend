@@ -13,6 +13,7 @@ import { useRoleAccess } from '../composables/useRoleAccess'
 import { useAppStore, useRbacStore, useTimesheetStore } from '../store'
 import { isOffline } from '../offline/state'
 import { scheduleNamedRefresh } from '../offline/sync'
+import { t as $t } from '../i18n'
 
 const ts = useTimesheetStore()
 const { timesheetRows, states, loading, busy, error } = storeToRefs(ts)
@@ -114,7 +115,7 @@ const stateColorMap = computed<Record<number, string>>(() => {
 <template>
   <section class="tp">
     <div class="tp-head">
-      <h2 class="tp-title">Табель</h2>
+      <h2 class="tp-title">{{ $t('timesheet.page.title') }}</h2>
       <div class="tp-legend">
         <span v-for="st in states" :key="'lg' + st.id" class="tp-legend-item">
           <span
@@ -124,19 +125,19 @@ const stateColorMap = computed<Record<number, string>>(() => {
           {{ st.name }}
         </span>
       </div>
-      <span v-if="seesAllEmployees" class="tp-note">Все сотрудники</span>
+      <span v-if="seesAllEmployees" class="tp-note">{{ $t('timesheet.page.allEmployees') }}</span>
     </div>
 
     <div class="tp-filters">
-      <input v-model="search" type="search" class="tp-search" placeholder="Поиск по ФИО или должности" />
+      <input v-model="search" type="search" class="tp-search" :placeholder="$t('timesheet.page.searchPlaceholder')" />
       <select v-if="seesAllEmployees" v-model="managerFilter" class="tp-filter">
-        <option value="">Все руководители</option>
-        <option value="none">Без руководителя</option>
+        <option value="">{{ $t('timesheet.page.managerAll') }}</option>
+        <option value="none">{{ $t('timesheet.page.managerNone') }}</option>
         <option v-for="u in managerFilterOptions" :key="u.id" :value="u.id">{{ u.name ?? `#${u.id}` }}</option>
       </select>
-      <select v-if="resources.length" v-model="resourceFilter" class="tp-filter" title="Фильтр по ресурсу">
-        <option value="">Все ресурсы</option>
-        <option value="none">Без ресурса</option>
+      <select v-if="resources.length" v-model="resourceFilter" class="tp-filter" :title="$t('timesheet.page.resourceFilterTitle')">
+        <option value="">{{ $t('timesheet.page.resourceAll') }}</option>
+        <option value="none">{{ $t('timesheet.page.resourceNone') }}</option>
         <option v-for="r in resourceFilterOptions" :key="r.id" :value="r.id">{{ r.code }} — {{ r.title }}</option>
       </select>
     </div>
@@ -180,7 +181,7 @@ const stateColorMap = computed<Record<number, string>>(() => {
               width: t.viewportCells * t.cellPx + 'px',
             }"
           >
-            {{ timesheetRows.length ? 'Ничего не найдено' : 'Нет данных о сотрудниках' }}
+            {{ timesheetRows.length ? $t('timesheet.page.emptyFiltered') : $t('timesheet.page.emptyRoster') }}
           </p>
         </template>
       </TimelineGrid>
@@ -190,7 +191,7 @@ const stateColorMap = computed<Record<number, string>>(() => {
          total; the rest is appended on demand, then their states are pulled. -->
     <div v-if="ts.employeesHasMore" class="tp-more">
       <button type="button" class="tp-more-btn" :disabled="ts.employeesLoadingMore" @click="onLoadMoreEmployees">
-        {{ ts.employeesLoadingMore ? 'Загрузка…' : `Показать ещё (${timesheetRows.length} из ${ts.employeesTotal})` }}
+        {{ ts.employeesLoadingMore ? $t('common.loading') : $t('timesheet.page.more', { shown: timesheetRows.length, total: ts.employeesTotal }) }}
       </button>
     </div>
 

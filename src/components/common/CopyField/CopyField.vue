@@ -1,12 +1,16 @@
 <script setup lang="ts">
-import { ref, onBeforeUnmount } from 'vue'
+import { computed, ref, onBeforeUnmount } from 'vue'
+import { t } from '../../../i18n'
 import type { CopyFieldProps } from './types'
 
 const props = withDefaults(defineProps<CopyFieldProps>(), {
   label: '',
   monospace: true,
-  copyLabel: 'Скопировать',
+  copyLabel: '',
 })
+
+/** Button text: an explicit label wins, otherwise the localized default. */
+const copyText = computed(() => props.copyLabel || t('common.copy'))
 
 const copied = ref(false)
 const fieldRef = ref<HTMLElement | null>(null)
@@ -56,8 +60,8 @@ onBeforeUnmount(() => {
         class="cf-copy"
         :class="{ 'cf-copy--done': copied }"
         :disabled="!value"
-        :aria-label="copied ? 'Скопировано' : copyLabel"
-        :title="copied ? 'Скопировано' : copyLabel"
+        :aria-label="copied ? t('common.copied') : copyText"
+        :title="copied ? t('common.copied') : copyText"
         @click.stop="onCopy"
       >
         <svg

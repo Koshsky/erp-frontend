@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { usageState, usagePercent, USAGE_STATE_META } from '../UsageCell/usageState'
+import { usageState, usagePercent, usageStateLabel, USAGE_STATE_COLOR } from '../UsageCell/usageState'
 import type { UsageTooltipProps } from './types'
 import type { DtoResourceAbsenceResponse } from '@/api'
+import { t } from '../../../i18n'
 
 const props = withDefaults(defineProps<UsageTooltipProps>(), {
   absentees: () => [],
@@ -10,7 +11,8 @@ const props = withDefaults(defineProps<UsageTooltipProps>(), {
 
 const state = computed(() => usageState({ used: props.used, available: props.available }))
 const pct = computed(() => usagePercent(props.used, props.available))
-const meta = computed(() => USAGE_STATE_META[state.value])
+const color = computed(() => USAGE_STATE_COLOR[state.value])
+const label = computed(() => usageStateLabel(state.value))
 
 const fraction = computed(() =>
   props.available == null ? `${props.used}` : `${props.used}/${props.available}`,
@@ -32,13 +34,13 @@ function absenceLabel(a: DtoResourceAbsenceResponse): string {
 
 <template>
   <div class="ut">
-    <span class="ut-marker" :style="{ background: meta.color }" />
+    <span class="ut-marker" :style="{ background: color }" />
     <div class="ut-body">
       <div class="ut-fraction">{{ fraction }} <span class="ut-pct">{{ percent }}</span></div>
-      <div class="ut-label" :style="{ color: meta.color }">{{ meta.label }}</div>
+      <div class="ut-label" :style="{ color }">{{ label }}</div>
     </div>
     <div v-if="absentees.length" class="ut-absences">
-      <div class="ut-absences-title">Отсутствуют:</div>
+      <div class="ut-absences-title">{{ t('ui.usage.absencesTitle') }}</div>
       <div v-for="(a, i) in absentees" :key="i" class="ut-absence">{{ absenceLabel(a) }}</div>
     </div>
   </div>

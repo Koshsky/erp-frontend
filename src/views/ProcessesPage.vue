@@ -18,6 +18,7 @@ import { useFindPlanningItem } from '../composables/useFindPlanningItem'
 import { usePlanningStore, useAppStore } from '../store'
 import { isOffline } from '../offline/state'
 import { scheduleNamedRefresh } from '../offline/sync'
+import { t } from '../i18n'
 import { addMonthsISO, shiftSpanDates } from '../components/planner/calendar'
 import { CELL_WIDTH } from '../components/planner/layout'
 import type { DtoDetailedProject, DtoProcess } from '@/api'
@@ -114,12 +115,12 @@ const { confirm: confirmDialog, ask, proceed, cancel } = useConfirm()
 
 const menuItems = computed<ContextMenuItem[]>(() => {
   if (menu.value?.processId == null) {
-    return canCreateProcess.value ? [{ id: 'create-process', label: 'Создать процесс' }] : []
+    return canCreateProcess.value ? [{ id: 'create-process', label: t('plannerViews.processes.menu.create') }] : []
   }
   const processId = menu.value.processId
   const items: ContextMenuItem[] = []
-  if (canManageProcess(processId)) items.push({ id: 'edit-process', label: 'Редактировать' })
-  if (canDeleteProcess(processId)) items.push({ id: 'delete-process', label: 'Удалить процесс' })
+  if (canManageProcess(processId)) items.push({ id: 'edit-process', label: t('plannerViews.processes.menu.edit') })
+  if (canDeleteProcess(processId)) items.push({ id: 'delete-process', label: t('plannerViews.processes.menu.delete') })
   return items
 })
 
@@ -139,9 +140,9 @@ interface EditState {
 }
 const { open: openEdit, close: closeEdit, submit: submitEdit, bind: editBind } = useEditModal<EditState>(
   (state) => [
-    { key: 'title', label: 'Название', type: 'text', value: state.title, required: true },
-    { key: 'color', label: 'Цвет', type: 'color', value: state.color ?? '' },
-    { key: 'owner_id', label: 'Владелец', type: 'select', value: state.ownerId, options: ownerOptions.value },
+    { key: 'title', label: t('plannerViews.processes.field.title'), type: 'text', value: state.title, required: true },
+    { key: 'color', label: t('plannerViews.processes.field.color'), type: 'color', value: state.color ?? '' },
+    { key: 'owner_id', label: t('plannerViews.processes.field.owner'), type: 'select', value: state.ownerId, options: ownerOptions.value },
   ],
   async (state, values) => {
     const ownerId = values.owner_id !== '' ? Number(values.owner_id) : undefined
@@ -152,7 +153,7 @@ const { open: openEdit, close: closeEdit, submit: submitEdit, bind: editBind } =
     })
     return { ok, error: ok ? null : store.error }
   },
-  () => 'Редактировать процесс',
+  () => t('plannerViews.processes.edit'),
 )
 
 function onContextMenu(p: { clientX: number; clientY: number; date: string | null; rowIndex: number; projectId?: number; processId?: number }) {
@@ -196,7 +197,7 @@ async function handleSelect(id: string) {
       project?.end_date,
     )
     await store.createProcess({
-      title: 'Новый процесс',
+      title: t('plannerViews.processes.defaultTitle'),
       project_id: projectId,
       start_date,
       end_date,
@@ -205,7 +206,7 @@ async function handleSelect(id: string) {
   } else if (id === 'edit-process' && processId != null) {
     openProcessEdit(processId)
   } else if (id === 'delete-process' && processId != null) {
-    ask('Удалить процесс? Это удалит все его задачи и вехи.', () => {
+    ask(t('plannerViews.processes.confirm.delete'), () => {
       void store.deleteProcess(processId)
     })
   }
@@ -235,7 +236,7 @@ onMounted(() => {
         :period-from="viewRange.from"
         :period-to="viewRange.to"
         :scale="viewRange.scale"
-        page-title="Диаграмма процессов"
+        :page-title="t('plannerViews.pdf.processes')"
       />
     </div>
 

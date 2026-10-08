@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { t } from '@/i18n'
 import { getServerBase, getApiUrl, setServerBase, httpSchemeWarning } from '../config'
 import { isElectron } from '../electron'
 
@@ -27,7 +28,7 @@ function applyAndStore(url: string): boolean {
   const saved = setServerBase(url, true)
   warning.value = httpSchemeWarning(url)
   if (!saved) {
-    msg.value = 'Некорректный адрес: ожидается http(s)://host (или http(s)://host:port)'
+    msg.value = t('adminSystem.server.invalidAddress')
     ok.value = false
   }
   return saved
@@ -62,11 +63,10 @@ async function onCheck() {
     if (!applyAndStore(serverBase.value)) return
     const reachable = await probeServer()
     if (reachable) {
-      msg.value = 'Сервер доступен'
+      msg.value = t('adminSystem.server.reachable')
       ok.value = true
     } else {
-      msg.value =
-        'Сервер недоступен по указанному адресу. Проверьте URL и то, что сервер запущен.'
+      msg.value = t('adminSystem.server.unreachable')
       ok.value = false
     }
   } finally {
@@ -84,50 +84,50 @@ function onSave() {
   <div class="lp ss">
     <div class="lp-brand">
       <div class="lp-logo">MVS</div>
-      <h1 class="lp-btitle">Настройки сервера</h1>
-      <p class="lp-bsub">Укажите адрес вашего сервера MVS ERP</p>
+      <h1 class="lp-btitle">{{ t('adminSystem.server.brandTitle') }}</h1>
+      <p class="lp-bsub">{{ t('adminSystem.server.brandSubtitle') }}</p>
 
       <ul class="lp-features">
         <li class="feature">
           <span class="feature-icon">🌐</span>
           <span class="feature-body">
-            <strong>Локальный сервер</strong>
-            <em>например, https://localhost</em>
+            <strong>{{ t('adminSystem.server.featureLocal') }}</strong>
+            <em>{{ t('adminSystem.server.featureLocalExample') }}</em>
           </span>
         </li>
         <li class="feature">
           <span class="feature-icon">🏢</span>
           <span class="feature-body">
-            <strong>Удалённый сервер</strong>
-            <em>например, https://erp.example.ru</em>
+            <strong>{{ t('adminSystem.server.featureRemote') }}</strong>
+            <em>{{ t('adminSystem.server.featureRemoteExample') }}</em>
           </span>
         </li>
         <li class="feature">
           <span class="feature-icon">🔐</span>
           <span class="feature-body">
-            <strong>Безопасно</strong>
-            <em>приложение само добавит /api/v1</em>
+            <strong>{{ t('adminSystem.server.featureSecure') }}</strong>
+            <em>{{ t('adminSystem.server.featureSecureNote') }}</em>
           </span>
         </li>
       </ul>
     </div>
 
     <div class="lp-form-side">
-      <h2 class="lp-title">Адрес сервера</h2>
+      <h2 class="lp-title">{{ t('adminSystem.server.title') }}</h2>
 
       <!-- Electron: the address can be set (the exe connects to an external backend) -->
       <template v-if="isElectron">
-        <p class="lp-subtitle">Адрес подключаемого бэкенда. Сохраняется на этом устройстве.</p>
+        <p class="lp-subtitle">{{ t('adminSystem.server.subtitle') }}</p>
 
         <form class="lp-form" @submit.prevent="onSave">
           <label class="lp-field">
-            <span>Адрес сервера</span>
+            <span>{{ t('adminSystem.server.address') }}</span>
             <input
               v-model="serverBase"
               type="text"
               spellcheck="false"
               autocomplete="url"
-              placeholder="https://localhost"
+              :placeholder="t('adminSystem.server.addressPlaceholder')"
             />
           </label>
 
@@ -135,21 +135,22 @@ function onSave() {
           <p v-if="msg" class="lp-error" :class="{ ok }">{{ msg }}</p>
 
           <button type="button" class="lp-btn" :disabled="busy" @click="onCheck">
-            {{ busy ? 'Проверяю…' : 'Проверить соединение' }}
+            {{ busy ? t('adminSystem.server.checking') : t('adminSystem.server.check') }}
           </button>
-          <button type="submit" class="lp-btn" :disabled="busy">Сохранить и перейти ко входу</button>
+          <button type="submit" class="lp-btn" :disabled="busy">
+            {{ t('adminSystem.server.save') }}
+          </button>
         </form>
       </template>
 
       <!-- Web: the address is set by the deployment (same-origin nginx proxy) — information only -->
       <template v-else>
         <p class="lp-subtitle">
-          Браузерная версия подключается к API того же адреса, с которого открыта
-          (nginx-прокси /api/v1). Адрес задаётся при развёртывании и изменению не подлежит.
+          {{ t('adminSystem.server.webSubtitle') }}
         </p>
 
         <div class="ss-info">
-          <span class="ss-label">Сервер</span>
+          <span class="ss-label">{{ t('adminSystem.server.serverLabel') }}</span>
           <code class="ss-value">{{ serverBase || '—' }}</code>
         </div>
         <div class="ss-info">
@@ -158,7 +159,7 @@ function onSave() {
         </div>
       </template>
 
-      <RouterLink to="/login" class="ss-back">← Назад ко входу</RouterLink>
+      <RouterLink to="/login" class="ss-back">{{ t('adminSystem.server.backToLogin') }}</RouterLink>
     </div>
   </div>
 </template>

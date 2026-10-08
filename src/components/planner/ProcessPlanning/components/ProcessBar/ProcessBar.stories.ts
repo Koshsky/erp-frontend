@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/vue3-vite'
 import ProcessBar from './ProcessBar.vue'
 import type { ProcessBarProps } from './types'
-import { makeDemoTimeline } from '@/components/planner/plannerStoryHelpers'
+import { makeDemoTimeline } from '@/components/planner/demoTimeline'
 
 const now = new Date()
 const y = now.getFullYear()

@@ -141,6 +141,34 @@ describe('add-link auto-adjustment', () => {
     expect(result.size).toBe(0)
   })
 
+  it('accepts the bound landing exactly on the anchor (soft >= rule, every type)', () => {
+    // The constraints are INCLUSIVE: touching dates are valid, only a strictly
+    // earlier bound is a violation. Tightening this to ">" (a minimum one-day
+    // lag) is a semantics change, not a fix — see dependencies.ts.
+    const pred: TaskDates = { id: 1, start_date: '2026-01-01', end_date: '2026-01-10' }
+    const touching: Array<{ type: DependencyType; succ: TaskDates }> = [
+      // fs: successor starts on the predecessor's end day
+      { type: 'fs', succ: { id: 2, start_date: '2026-01-10', end_date: '2026-01-15' } },
+      // ss: both start on the same day
+      { type: 'ss', succ: { id: 2, start_date: '2026-01-01', end_date: '2026-01-06' } },
+      // ff: both end on the same day
+      { type: 'ff', succ: { id: 2, start_date: '2026-01-05', end_date: '2026-01-10' } },
+      // sf: successor ends on the predecessor's start day
+      { type: 'sf', succ: { id: 2, start_date: '2025-12-28', end_date: '2026-01-01' } },
+    ]
+    for (const c of touching) {
+      expect(resolveAddDependency([pred, c.succ], [], 2, 1, c.type).size, c.type).toBe(0)
+    }
+  })
+
+  it('pushes a successor that falls one day short up to the touching date', () => {
+    const pred: TaskDates = { id: 1, start_date: '2026-01-01', end_date: '2026-01-10' }
+    const succ: TaskDates = { id: 2, start_date: '2026-01-09', end_date: '2026-01-14' }
+    const result = resolveAddDependency([pred, succ], [], 2, 1, 'fs')
+    // Exactly one day: the bound lands ON the anchor, not one day past it.
+    expect(patchOf(result, 2)).toEqual({ start_date: '2026-01-10', end_date: '2026-01-15' })
+  })
+
   it('ff link pushes the successor until its end reaches the predecessor end', () => {
     const tasks: TaskDates[] = [T1, T2]
     // B.end (01-20) ≥ A.end (01-10) holds → no change

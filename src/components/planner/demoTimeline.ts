@@ -9,8 +9,10 @@ import {
 import { CELL_WIDTH, LABEL_WIDTH } from './layout'
 
 /**
- * Demo infinite-timeline context for Storybook: fixed parameters,
- * no scroll container (bars are positioned from the left edge, no label column).
+ * Minimal `TimelineCtx` for previews and Storybook demos: fixed parameters, no
+ * scroll container (bars are positioned from the left edge). Used by the
+ * settings previews (dependency lines, bar badges) and by the component stories,
+ * so a preview always measures itself with the planner's own math.
  */
 export function makeDemoTimeline(
   origin: string | Date,

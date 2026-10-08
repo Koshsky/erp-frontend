@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import { GroupGantt } from '../../../GroupGantt'
 import ProcessBar from '../ProcessBar/ProcessBar.vue'
 import type { ProcessGanttProps } from './types'
-import { toDate } from '../../../calendar'
+import { fmtDate as fmtDateLocale } from '@/i18n/date'
 
 const props = withDefaults(defineProps<ProcessGanttProps>(), {
   canManage: true,
@@ -25,7 +25,7 @@ const groupItems = computed(() => props.processes)
 const MIN_LABEL_HEIGHT = 46
 
 function fmtDate(d: string | Date | number | null | undefined): string {
-  return d ? toDate(d).toLocaleDateString('ru') : ''
+  return d ? fmtDateLocale(d) : ''
 }
 
 function onBarChange(id: number, d: { start_date: string; end_date: string }) {

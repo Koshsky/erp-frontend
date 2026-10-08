@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/vue3-vite'
-import { expect } from 'vitest'
+import { expect } from 'storybook/test'
 import BarTooltip from './BarTooltip.vue'
 import UsageTooltip from './UsageTooltip.vue'
 import InfoTooltip from './InfoTooltip.vue'

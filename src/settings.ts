@@ -1,5 +1,6 @@
 import { reactive, ref, watch } from 'vue'
 import type { PlanningUnit } from './components/planner/calendar'
+import { LINK_STYLE_DEFAULT, normalizeLinkStyle, type LinkStyle } from './components/planner/linkStyle'
 
 /**
  * Sync settings (the "Sync" screen). Stored in localStorage
@@ -10,6 +11,36 @@ import type { PlanningUnit } from './components/planner/calendar'
  */
 
 const AUTO_SYNC_KEY = 'mvs_erp_auto_sync'
+
+// --- Interface language ------------------------------------------------------
+
+export type UiLanguage = 'auto' | 'ru' | 'en'
+
+const UI_LANG_KEY = 'mvs_erp_ui_lang'
+
+function readUiLanguage(): UiLanguage {
+  try {
+    const raw = localStorage.getItem(UI_LANG_KEY)
+    return raw === 'ru' || raw === 'en' || raw === 'auto' ? raw : 'auto'
+  } catch {
+    return 'auto'
+  }
+}
+
+/** Interface language setting: 'auto' — follow the browser language. */
+export const uiLanguage = ref<UiLanguage>(readUiLanguage())
+
+watch(
+  uiLanguage,
+  (v) => {
+    try {
+      localStorage.setItem(UI_LANG_KEY, v)
+    } catch {
+      // not critical
+    }
+  },
+  { immediate: true },
+)
 
 function readBool(key: string, fallback: boolean): boolean {
   try {
@@ -156,6 +187,9 @@ export interface ViewSettings {
   badgeProgress: boolean
   /** Gantt badges/labels: assignee on tasks, owner on process/project bars */
   badgeOwner: boolean
+  /** Gantt badge: the comments bubble + counter on task bars (the panel itself
+   *  stays reachable from the bar context menu either way) */
+  badgeComments: boolean
   /** Timeline unit the diagrams open in: day cells or decade cells */
   defaultUnit: PlanningUnit
   /** Initial table zoom (%) applied when a diagram is first opened in a session */
@@ -163,8 +197,12 @@ export interface ViewSettings {
   /** Initial cell width at open (% of the responsive base column width for the
    *  current window). 50–200%; 100 keeps the adaptive default (no fixed cell). */
   defaultCellZoom: number
+  /** How long a project created from the UI lasts, in days (the "Создать" button / right-click) */
+  defaultProjectDays: number
   /** Whether the visible "Save to PDF / Print" toolbar buttons are shown */
   showPdfButtons: boolean
+  /** How the task dependency links are drawn in the diagrams */
+  connector: LinkStyle
 }
 
 const DEFAULT_VIEW_SETTINGS: ViewSettings = {
@@ -172,17 +210,22 @@ const DEFAULT_VIEW_SETTINGS: ViewSettings = {
   badgeProjectCode: true,
   badgeProgress: true,
   badgeOwner: true,
+  badgeComments: true,
   defaultUnit: 'day',
   defaultScale: 100,
   defaultCellZoom: 100,
+  defaultProjectDays: 180,
   showPdfButtons: true,
+  connector: LINK_STYLE_DEFAULT,
 }
 
 function readViewSettings(): ViewSettings {
   try {
     const raw = localStorage.getItem(VIEW_SETTINGS_KEY)
     if (raw == null) return { ...DEFAULT_VIEW_SETTINGS }
-    return { ...DEFAULT_VIEW_SETTINGS, ...(JSON.parse(raw) as Partial<ViewSettings>) }
+    const parsed = JSON.parse(raw) as Partial<ViewSettings>
+    // The stored blob may predate this key (or hold garbage) — never trust it.
+    return { ...DEFAULT_VIEW_SETTINGS, ...parsed, connector: normalizeLinkStyle(parsed.connector) }
   } catch {
     return { ...DEFAULT_VIEW_SETTINGS }
   }
@@ -215,6 +258,11 @@ export const SCALE_STEP = 5
 export const CELL_ZOOM_MIN = 50
 export const CELL_ZOOM_MAX = 200
 export const CELL_ZOOM_STEP = 5
+
+/** Default project duration offered by the UI (days, used on project create). */
+export const PROJECT_DAYS_MIN = 1
+export const PROJECT_DAYS_MAX = 1095
+export const PROJECT_DAYS_STEP = 1
 
 /** Hard upper bound of the physical cell width in px (mirrors ZOOM_MAX in useTimelineZoom). */
 export const MAX_CELL_PX = 100
