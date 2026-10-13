@@ -62,13 +62,31 @@ export const SCOPE_OPTIONS: Record<string, ScopeOption[]> = {
   user_catalog: [{ value: 'all', label: 'available' }],
   user_admin: [{ value: 'all', label: 'available' }],
   rbac_config: [{ value: 'all', label: 'available' }],
+  // Page guards and derived resources: no owner, no parent — "all" only
+  // (mirrors engine/tree.go: nodeHasOwner / nodeHasParent are false).
+  state_admin: [{ value: 'all', label: 'available' }],
+  org_structure: [{ value: 'all', label: 'available' }],
+  audit: [{ value: 'all', label: 'available' }],
+  comment: [{ value: 'all', label: 'available' }],
 }
+
+/** Scope chips of a resource the dictionary does not describe: "all" is the
+ *  one move applicable to every resource, so a resource added on the backend
+ *  stays editable instead of rendering an empty chooser. */
+export const FALLBACK_SCOPE_OPTIONS: readonly ScopeOption[] = [{ value: 'all', label: 'available' }]
 
 /** Page sections of the matrix (`key` is the catalog key of the title). */
 export const GROUPS: ReadonlyArray<{ key: string; resources: readonly string[] }> = [
   { key: 'planning', resources: ['project', 'process', 'task', 'milestone', 'assignment'] },
   { key: 'timesheet', resources: ['state', 'resource', 'worker'] },
-  { key: 'advanced', resources: ['user_catalog', 'user_admin', 'rbac_config'] },
+  // Virtual resources: no ownership chain of their own (the only applicable
+  // scope is "all"), so they share one section. The backend matrix is the
+  // source of truth for WHICH of them exist — a resource missing here still
+  // renders, in the trailing fallback section of the grid.
+  {
+    key: 'advanced',
+    resources: ['user_catalog', 'user_admin', 'rbac_config', 'state_admin', 'org_structure', 'audit', 'comment'],
+  },
 ]
 
 export const ACTIONS = ['view', 'create', 'update', 'delete'] as const
@@ -118,4 +136,8 @@ export const DEFAULT_GRANT_ZONE: Record<string, string> = {
   user_catalog: 'all',
   user_admin: 'all',
   rbac_config: 'all',
+  state_admin: 'all',
+  org_structure: 'all',
+  audit: 'all',
+  comment: 'all',
 }

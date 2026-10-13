@@ -22,6 +22,7 @@ import { computed, onMounted, reactive, watch } from 'vue'
 import { useRbacStore } from '../../../store'
 import type { PermissionCell, PermissionOverride, UserPermissionsModel } from './types'
 import { GROUPS, ACTIONS, SCOPE_OPTIONS, resourceTitle, actionTitle, scopeOptionLabel } from './labels'
+import { NO_ACCESS } from '@/utils/rbacGrid'
 import { canonicalScope, scopeMoves, toggleScopeMove } from '@/rbacScope'
 import { t } from '@/i18n'
 import HintButton from '../HintButton/HintButton.vue'
@@ -92,6 +93,14 @@ const presetMap = computed<Record<string, string>>(() => {
   return m
 })
 
+/** Baseline scope of a cell as a real zone ('' — the preset holds no right).
+ *  The served matrix spells a denial out as "none", which is a truthy string:
+ *  read it through here so a denial never looks like a granted preset zone. */
+function presetZone(resource: string, action: string): string {
+  const scope = presetMap.value[key(resource, action)] ?? ''
+  return scope === NO_ACCESS ? '' : scope
+}
+
 const staged = reactive<Record<string, PermissionOverride>>({})
 
 function fromView(): Record<string, PermissionOverride> {
@@ -149,13 +158,13 @@ function overrideOf(r: string, a: string) { return staged[key(r, a)] }
 function effectiveZone(r: string, a: string): string {
   const ov = overrideOf(r, a)
   if (ov) return ov.granted ? ov.scope ?? '' : ''
-  return presetMap.value[key(r, a)] ?? ''
+  return presetZone(r, a)
 }
 type Src = 'preset' | 'override' | 'revoked' | 'none'
 function rowSource(r: string, a: string): Src {
   const ov = overrideOf(r, a)
   if (ov) { if (!ov.granted) return 'revoked'; return ov.scope ? 'override' : 'none' }
-  return presetMap.value[key(r, a)] ? 'preset' : 'none'
+  return presetZone(r, a) ? 'preset' : 'none'
 }
 function hasAccess(r: string, a: string) { return effectiveZone(r, a) !== '' }
 
@@ -190,7 +199,7 @@ function isChipOn(r: string, a: string, value: string): boolean {
 function onChipClick(r: string, a: string, value: string) {
   const next = toggleScopeMove(effectiveZone(r, a), value)
   if (next === '') { pick(r, a, 'revert'); return }
-  const preset = presetMap.value[key(r, a)] ?? ''
+  const preset = presetZone(r, a)
   if (preset && canonicalScope(next) === canonicalScope(preset)) { pick(r, a, 'revert'); return }
   pick(r, a, next)
 }
@@ -244,14 +253,14 @@ function isChangedCell(r: string, a: string): boolean {
     const s = rowSource(r, a)
     if (s === 'revoked') return true
     if (s !== 'override') return false
-    return canonicalScope(effectiveZone(r, a)) !== canonicalScope(presetMap.value[key(r, a)] ?? '')
+    return canonicalScope(effectiveZone(r, a)) !== canonicalScope(presetZone(r, a))
   }
   // User mode: yellow only when the staged row differs from what the backend
   // holds (the server snapshot); a saved row matches the snapshot → not yellow.
   const ov = overrideOf(r, a)
   let stagedScope: string
   if (ov) stagedScope = ov.granted ? ov.scope ?? '' : ''
-  else stagedScope = presetMap.value[key(r, a)] ?? ''
+  else stagedScope = presetZone(r, a)
   return canonicalScope(stagedScope) !== canonicalScope(serverSnapshot.value[key(r, a)] ?? '')
 }
 

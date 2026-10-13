@@ -25,6 +25,10 @@ export default {
       user_catalog: 'каталога пользователей',
       user_admin: 'пользователей',
       rbac_config: 'настроек администрирования',
+      state_admin: 'статусов (администрирование)',
+      org_structure: 'орг. структуры',
+      audit: 'журнала аудита',
+      comment: 'комментариев',
     },
     /** Resource names in the nominative case (cards and section headers). */
     resourceTitle: {
@@ -39,6 +43,10 @@ export default {
       user_catalog: 'Каталог пользователей',
       user_admin: 'Пользователи (администрирование)',
       rbac_config: 'Настройки администрирования',
+      state_admin: 'Статусы (администрирование)',
+      org_structure: 'Орг. структура',
+      audit: 'Журнал аудита',
+      comment: 'Комментарии',
     },
     /** Human-readable labels of the scope zones (tree moves). */
     zone: {
@@ -63,6 +71,9 @@ export default {
       planning: 'Планирование',
       timesheet: 'Табель',
       advanced: 'Дополнительные ресурсы',
+      // Fallback section: resources the frontend dictionary does not know yet
+      // (the grid is built from the backend payload, so they must not vanish).
+      other: 'Прочие ресурсы',
     },
   },
 

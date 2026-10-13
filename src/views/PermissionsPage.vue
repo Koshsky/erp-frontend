@@ -10,7 +10,17 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { ConfirmDialog, ContextMenu, HintButton, InfoTooltip, ModalForm, TooltipCell } from '../components/common'
-import { GROUPS, ACTIONS, SCOPE_OPTIONS as SCOPE_CHIPS, resourceLabel, resourceTitle, actionTitle, scopeLabel } from '../components/common/UserPermissionsEditor/labels'
+import {
+  GROUPS,
+  ACTIONS,
+  SCOPE_OPTIONS as SCOPE_CHIPS,
+  FALLBACK_SCOPE_OPTIONS,
+  resourceLabel,
+  resourceTitle,
+  actionTitle,
+  scopeLabel,
+} from '../components/common/UserPermissionsEditor/labels'
+import { NO_ACCESS, cellKey as gridCellKey, gridActions, gridSections, scopeByCell } from '../utils/rbacGrid'
 import { canonicalScope, scopeMoves, toggleScopeMove } from '@/rbacScope'
 import { useRbacStore } from '../store'
 import { useConfirm } from '../composables/useConfirm'
@@ -24,15 +34,22 @@ const { presets, presetRules, matrix, loading, error, saving } = storeToRefs(rba
 /** Selected preset (by default — the first one from the catalog, not admin). */
 const selected = ref('')
 
+/**
+ * Sections and actions of the grid come from the backend payload (the complete
+ * effective matrix), so a resource or action the engine gains shows up without
+ * a frontend change; the local dictionaries only order and label them.
+ */
+const sections = computed(() => gridSections(matrix.value, GROUPS))
+const actions = computed(() => gridActions(matrix.value, ACTIONS))
+
+/** Scope chips of a resource: its dictionary entry, else "all" (applicable to
+ *  every resource) so an unknown resource stays editable. */
+function scopeChips(resource: string) {
+  return SCOPE_CHIPS[resource] ?? FALLBACK_SCOPE_OPTIONS
+}
+
 /** Effective cell scope from the matrix (no rule = "no access"). */
-const effective = computed<Record<string, string>>(() => {
-  const map: Record<string, string> = {}
-  for (const cell of matrix.value) {
-    if (!cell.preset || !cell.resource || !cell.action || !cell.scope) continue
-    map[cellKey(cell.preset, cell.resource, cell.action)] = cell.scope
-  }
-  return map
-})
+const effective = computed<Record<string, string>>(() => scopeByCell(matrix.value))
 
 /** Rule id for deletion. */
 const ruleIdByCell = computed<Record<string, number>>(() => {
@@ -45,11 +62,11 @@ const ruleIdByCell = computed<Record<string, number>>(() => {
 })
 
 function cellKey(preset: string, resource: string, action: string): string {
-  return `${preset}|${resource}|${action}`
+  return gridCellKey(preset, resource, action)
 }
 
 function cellValue(preset: string, resource: string, action: string): string {
-  return staged[cellKey(preset, resource, action)] ?? effective.value[cellKey(preset, resource, action)] ?? 'none'
+  return staged[cellKey(preset, resource, action)] ?? effective.value[cellKey(preset, resource, action)] ?? NO_ACCESS
 }
 
 /** Human-readable name of a preset catalog entry: the stored name, else a
@@ -81,7 +98,7 @@ const presetList = computed(() => {
 /** Changed cells. */
 const staged = reactive<Record<string, string>>({})
 const dirtyKeys = computed<string[]>(() =>
-  Object.keys(staged).filter((key) => staged[key] !== (effective.value[key] ?? 'none')),
+  Object.keys(staged).filter((key) => staged[key] !== (effective.value[key] ?? NO_ACCESS)),
 )
 
 /** Canonical form of a scope expression (legacy zones normalize; "all"/"none"
@@ -93,7 +110,7 @@ function canon(scope: string): string {
 /** The row zone as an expression ('' — no access). */
 function rowText(resource: string, action: string): string {
   const v = cellValue(selected.value, resource, action)
-  return v === 'none' ? '' : v
+  return v === NO_ACCESS ? '' : v
 }
 
 /** Спец-чип активен (каноническое сравнение: «⛔ нет доступа» = none). */
@@ -114,7 +131,7 @@ function onChipClick(resource: string, action: string, value: string) {
   const key = cellKey(selected.value, resource, action)
   const next = toggleScopeMove(cellValue(selected.value, resource, action), value)
   if (next === '') { delete staged[key]; return }
-  const eff = effective.value[key] ?? 'none'
+  const eff = effective.value[key] ?? NO_ACCESS
   if (canon(next) === canon(eff)) { delete staged[key]; return }
   staged[key] = next
 }
@@ -122,28 +139,28 @@ function onChipClick(resource: string, action: string, value: string) {
 /** «⛔ запрет» toggle: stage none; clicking again removes the staged edit. */
 function onRevokeClick(resource: string, action: string) {
   const key = cellKey(selected.value, resource, action)
-  if (isZoneActive(resource, action, 'none')) {
+  if (isZoneActive(resource, action, NO_ACCESS)) {
     if (staged[key] !== undefined) delete staged[key]
     return
   }
-  const eff = effective.value[key] ?? 'none'
-  if (canon('none') === canon(eff)) { delete staged[key]; return }
-  staged[key] = 'none'
+  const eff = effective.value[key] ?? NO_ACCESS
+  if (canon(NO_ACCESS) === canon(eff)) { delete staged[key]; return }
+  staged[key] = NO_ACCESS
 }
 
 /** A cell holds a REAL change: its staged value differs from the effective
  *  one (an entry equal to the effective value is not a change). */
 function isDirtyCell(preset: string, resource: string, action: string): boolean {
   const key = cellKey(preset, resource, action)
-  return staged[key] !== undefined && staged[key] !== (effective.value[key] ?? 'none')
+  return staged[key] !== undefined && staged[key] !== (effective.value[key] ?? NO_ACCESS)
 }
 
 /** Card-header summary: grants + staged edits of the resource. */
 function cardSummary(resource: string): string {
-  const granted = ACTIONS.filter((a) => cellValue(selected.value, resource, a) !== 'none').length
-  const edited = ACTIONS.filter((a) => isDirtyCell(selected.value, resource, a)).length
+  const granted = actions.value.filter((a) => cellValue(selected.value, resource, a) !== NO_ACCESS).length
+  const edited = actions.value.filter((a) => isDirtyCell(selected.value, resource, a)).length
   const base = granted
-    ? t('adminConfig.presets.cardSummaryGranted', { granted, total: ACTIONS.length })
+    ? t('adminConfig.presets.cardSummaryGranted', { granted, total: actions.value.length })
     : t('adminConfig.presets.cardSummaryDenied')
   return edited ? base + t('adminConfig.presets.cardSummaryEdited', { count: edited }) : base
 }
@@ -152,10 +169,10 @@ function cardSummary(resource: string): string {
 const dirtyChanges = computed(() =>
   dirtyKeys.value.map((key) => {
     const [, resource, action] = key.split('|')
-    const from = effective.value[key] ?? 'none'
+    const from = effective.value[key] ?? NO_ACCESS
     const to = staged[key]
     const label = `${actionTitle(action) || action} ${resourceLabel(resource) || resource}`
-    return from !== 'none'
+    return from !== NO_ACCESS
       ? `${label}: ${t('adminConfig.presets.changeLineFrom', { to: scopeLabel(resource, to), from: scopeLabel(resource, from) })}`
       : `${label}: ${scopeLabel(resource, to)}`
   }),
@@ -170,7 +187,7 @@ async function save() {
     const [preset, resource, action] = key.split('|')
     const scope = staged[key]
     let ok: boolean
-    if (scope === 'none') {
+    if (scope === NO_ACCESS) {
       const id = ruleIdByCell.value[key]
       ok = id != null ? await rbac.deleteRule(id) : true
     } else {
@@ -417,7 +434,7 @@ onMounted(() => {
 
       <!-- Editor of the selected preset -->
       <div class="pm-editor">
-        <div v-for="group in GROUPS" :key="group.key" class="pm-group">
+        <div v-for="group in sections" :key="group.key" class="pm-group">
           <h3 class="pm-group-title">{{ t(`adminConfig.perm.group.${group.key}`) }}</h3>
           <div v-for="resource in group.resources" :key="resource" class="pm-block">
             <div class="pm-block-head">
@@ -425,7 +442,7 @@ onMounted(() => {
               <span class="pm-block-summary">{{ cardSummary(resource) }}</span>
             </div>
             <div
-              v-for="action in ACTIONS"
+              v-for="action in actions"
               :key="action"
               class="pm-row"
               :class="{ dirty: isDirtyCell(selected, resource, action) }"
@@ -433,7 +450,7 @@ onMounted(() => {
               <span class="pm-row-label">{{ actionTitle(action) }}</span>
               <div class="pm-chips">
                 <button
-                  v-for="opt in SCOPE_CHIPS[resource] ?? []"
+                  v-for="opt in scopeChips(resource)"
                   :key="opt.value"
                   type="button"
                   class="pm-chip"
@@ -445,8 +462,8 @@ onMounted(() => {
                 <button
                   type="button"
                   class="pm-chip rev"
-                  :class="{ on: isZoneActive(resource, action, 'none') }"
-                  :title="isZoneActive(resource, action, 'none') ? t('adminConfig.presets.revertTitle') : t('adminConfig.presets.revokeTitle')"
+                  :class="{ on: isZoneActive(resource, action, NO_ACCESS) }"
+                  :title="isZoneActive(resource, action, NO_ACCESS) ? t('adminConfig.presets.revertTitle') : t('adminConfig.presets.revokeTitle')"
                   @click="onRevokeClick(resource, action)"
                 >{{ t('adminConfig.presets.revokeChip') }}</button>
                 <!-- Собранное выражение при множественном выборе -->

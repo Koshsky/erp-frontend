@@ -22,6 +22,10 @@ export default {
       user_catalog: 'user catalog',
       user_admin: 'users',
       rbac_config: 'administration settings',
+      state_admin: 'statuses (administration)',
+      org_structure: 'org structure',
+      audit: 'audit log',
+      comment: 'comments',
     },
     resourceTitle: {
       project: 'Projects',
@@ -35,6 +39,10 @@ export default {
       user_catalog: 'User catalog',
       user_admin: 'Users (administration)',
       rbac_config: 'Administration settings',
+      state_admin: 'Statuses (administration)',
+      org_structure: 'Org structure',
+      audit: 'Audit log',
+      comment: 'Comments',
     },
     zone: {
       none: 'No access',
@@ -58,6 +66,8 @@ export default {
       planning: 'Planning',
       timesheet: 'Timesheet',
       advanced: 'Additional resources',
+      // Fallback section for resources the frontend dictionary does not know yet.
+      other: 'Other resources',
     },
   },
 
