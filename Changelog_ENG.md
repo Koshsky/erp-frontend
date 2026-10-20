@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 The web app and the desktop wrapper are versioned together.
 
+## [Unreleased]
+
+### Fixed
+
+- Dragging a project or process bar applies the new dates at once: the bar stays where it was dropped instead of jumping back to the old span until the change is saved.
+- Renaming a project offline shows the new code immediately.
+
 ## [1.3.2] - 2026-10-13
 
 ### Fixed

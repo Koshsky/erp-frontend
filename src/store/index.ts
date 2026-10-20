@@ -2108,20 +2108,44 @@ export const usePlanningStore = defineStore('planning', () => {
     return undefined
   }
 
-  /** Bar date shift: PUT the dates + silent reload (online) / local edit (offline) */
+  /**
+   * Local-first patch of a dragged bar/marker row: the diagram must show the
+   * dropped dates AT ONCE, because the drag preview is cleared on pointer-up
+   * while the PUT and the following re-read still lie ahead — without the patch
+   * the bar snaps back to the old span and only then jumps to the new one. The
+   * task cascade already works this way (persistDatePatches); the process,
+   * project and milestone paths join it here. A move the server rejects is
+   * rolled back by the silent reload in onError (the server dates win).
+   *
+   * `undefined` values are skipped: apply() feeds this with a server payload,
+   * where an absent field must not overwrite a known value with undefined.
+   */
+  function patchRow<T extends object>(row: T | null | undefined, patch: Partial<T>): void {
+    if (!row) return
+    for (const [key, value] of Object.entries(patch)) {
+      if (value !== undefined) (row as Record<string, unknown>)[key] = value
+    }
+  }
+
+  /** Bar date shift: local edit first (see patchRow), then the PUT. */
   async function updateTaskDates(id: number, start_date: string, end_date: string): Promise<boolean> {
+    const applyLocally = () => patchRow(findTaskRow(id), { start_date, end_date })
+    applyLocally()
     return runMutation({
       entity: 'task',
       call: () => new TasksApi(apiConfig()).taskIdPut(id, { start_date, end_date }),
-      apply: async () => {
-        await refreshTaskPlanning(true)
+      // The PUT echoes the stored row — apply it locally. The aggregate itself is
+      // re-read ONCE by the coalesced post-mutation refresh (scheduleDomainRefresh),
+      // so refreshing here as well would only duplicate that GET.
+      apply: (dto) => {
+        const d = dto as { start_date?: string; end_date?: string } | null
+        patchRow(findTaskRow(id), { start_date: d?.start_date, end_date: d?.end_date })
       },
-      optimistic: () => {
-        const t = findTaskRow(id)
-        if (t) Object.assign(t, { start_date, end_date })
-      },
+      optimistic: applyLocally,
       onError: (m) => {
         error.value = m
+        // A rejected span must not stick in the diagram: the server dates win.
+        void refreshTaskPlanning(true)
       },
     })
   }
@@ -2161,8 +2185,9 @@ export const usePlanningStore = defineStore('planning', () => {
 
   /** Persists a Map of date patches in predecessor-first order (the backend
    *  guard validates a successor against its predecessors' committed dates).
-   *  Optimistic patches are applied immediately; a silent refresh after each
-   *  write settles the server state (offline — each PUT goes to the outbox). */
+   *  Optimistic patches are applied immediately; each PUT applies its own echoed
+   *  row locally, and the coalesced post-mutation refresh re-reads the whole
+   *  aggregate ONCE per burst (offline — each PUT goes to the outbox). */
   async function persistDatePatches(changes: Map<number, TaskDatePatch>): Promise<boolean> {
     if (changes.size === 0) return true
     for (const [tid, patch] of changes) {
@@ -2181,8 +2206,12 @@ export const usePlanningStore = defineStore('planning', () => {
             start_date: patch.start_date,
             end_date: patch.end_date,
           }),
-        apply: async () => {
-          await refreshTaskPlanning(true)
+        // The echoed row (already clamped by the server) lands locally; the
+        // aggregate is re-read once by the coalesced refresh — a per-task GET
+        // here would multiply into one request per cascaded task.
+        apply: (dto) => {
+          const d = dto as { start_date?: string; end_date?: string } | null
+          patchRow(findTaskRow(tid), { start_date: d?.start_date, end_date: d?.end_date })
         },
         optimistic: () => {
           const t = findTaskRow(tid)
@@ -2305,53 +2334,73 @@ export const usePlanningStore = defineStore('planning', () => {
   }
 
   async function updateProcessDates(id: number, start_date: string, end_date: string): Promise<boolean> {
+    const applyLocally = () => patchRow(findProcessRow(id), { start_date, end_date })
+    applyLocally()
     return runMutation({
       entity: 'process',
       call: () => new ProcessesApi(apiConfig()).processIdPut(id, { start_date, end_date }),
-      apply: async () => {
-        await refreshProcessPlanning(true)
+      // The echoed row (already clamped into the project) lands locally; the
+      // aggregate is re-read once by the coalesced refresh below.
+      apply: (dto) => {
+        const d = dto as { start_date?: string; end_date?: string } | null
+        patchRow(findProcessRow(id), { start_date: d?.start_date, end_date: d?.end_date })
       },
-      optimistic: () => {
-        const pr = findProcessRow(id)
-        if (pr) Object.assign(pr, { start_date, end_date })
-      },
+      optimistic: applyLocally,
       onError: (m) => {
         error.value = m
+        // A rejected span must not stick in the diagram: the server dates win.
+        void refreshProcessPlanning(true)
       },
     })
   }
 
   async function updateProjectDates(id: number, start_date: string, end_date: string): Promise<boolean> {
+    // The bar renders from the planning aggregate; the projects table reads the
+    // app store list, so both copies take the drop immediately (same pairing as
+    // updateProjectMeta — and both are restored on a rejected move).
+    const applyLocally = () => {
+      const d = { start_date, end_date }
+      patchRow(findProjectRow(id), d)
+      patchRow(useAppStore().projects.find((x) => x.id === id), { ...d })
+    }
+    applyLocally()
     return runMutation({
       entity: 'project',
       call: () => new ProjectsApi(apiConfig()).projectIdPut(id, { start_date, end_date }),
-      apply: async () => {
-        await refreshProjectPlanning(true)
+      apply: (dto) => {
+        const d = dto as { start_date?: string; end_date?: string } | null
+        const patch = { start_date: d?.start_date, end_date: d?.end_date }
+        patchRow(findProjectRow(id), patch)
+        patchRow(useAppStore().projects.find((x) => x.id === id), patch)
       },
-      optimistic: () => {
-        const p = findProjectRow(id)
-        if (p) Object.assign(p, { start_date, end_date })
-      },
+      optimistic: applyLocally,
       onError: (m) => {
         error.value = m
+        // A rejected span must not stick in the diagram: the server dates win.
+        void refreshProjectPlanning(true)
+        void useAppStore().refreshProjects()
       },
     })
   }
 
-  /** Milestone shift (single date): PUT /milestone/{id} + silent reload of tasks */
+  /** Milestone shift (single date): PUT /milestone/{id}, applied locally. */
   async function updateMilestoneDate(id: number, date: string): Promise<boolean> {
+    const applyLocally = () => patchRow(findMilestoneRow(id), { date })
+    applyLocally()
     return runMutation({
       entity: 'milestone',
       call: () => new MilestonesApi(apiConfig()).milestoneIdPut(id, { date }),
-      apply: async () => {
-        await refreshTaskPlanning(true)
+      // The echoed row lands locally; tasks are re-read once by the coalesced
+      // post-mutation refresh (the V4 trigger may shift the process's tasks).
+      apply: (dto) => {
+        const d = dto as { date?: string } | null
+        patchRow(findMilestoneRow(id), { date: d?.date })
       },
-      optimistic: () => {
-        const m = findMilestoneRow(id)
-        if (m) m.date = date
-      },
+      optimistic: applyLocally,
       onError: (m) => {
         error.value = m
+        // A rejected date must not stick in the diagram: the server date wins.
+        void refreshTaskPlanning(true)
       },
     })
   }
@@ -2360,18 +2409,20 @@ export const usePlanningStore = defineStore('planning', () => {
     id: number,
     patch: { code?: string; owner_id?: number; color?: string },
   ): Promise<boolean> {
+    /** The PUT echoes the applied values; the aggregate and the app store list
+     *  are re-read once by the coalesced post-mutation refresh. The rows carry
+     *  `project_code`, while the request payload uses `code` — the previous
+     *  optimistic patch wrote a stray `code` and left the shown code stale. */
+    const applyLocally = () => {
+      const row = { project_code: patch.code, owner_id: patch.owner_id, color: patch.color }
+      patchRow(findProjectRow(id), row)
+      patchRow(useAppStore().projects.find((x) => x.id === id), { ...row })
+    }
     return runMutation({
       entity: 'project',
       call: () => new ProjectsApi(apiConfig()).projectIdPut(id, patch),
-      apply: async () => {
-        await refreshProjectPlanning(true)
-      },
-      optimistic: () => {
-        const p = findProjectRow(id)
-        if (p) Object.assign(p, patch)
-        const ap = useAppStore().projects.find((x) => x.id === id)
-        if (ap) Object.assign(ap, patch)
-      },
+      apply: applyLocally,
+      optimistic: applyLocally,
       onError: (m) => {
         error.value = m
       },
@@ -2382,16 +2433,12 @@ export const usePlanningStore = defineStore('planning', () => {
     id: number,
     patch: { title?: string; owner_id?: number; color?: string },
   ): Promise<boolean> {
+    const applyLocally = () => patchRow(findProcessRow(id), patch)
     return runMutation({
       entity: 'process',
       call: () => new ProcessesApi(apiConfig()).processIdPut(id, patch),
-      apply: async () => {
-        await refreshProcessPlanning(true)
-      },
-      optimistic: () => {
-        const pr = findProcessRow(id)
-        if (pr) Object.assign(pr, patch)
-      },
+      apply: applyLocally,
+      optimistic: applyLocally,
       onError: (m) => {
         error.value = m
       },
@@ -2402,16 +2449,12 @@ export const usePlanningStore = defineStore('planning', () => {
     id: number,
     patch: { title?: string; owner_id?: number; color?: string; status?: string },
   ): Promise<boolean> {
+    const applyLocally = () => patchRow(findTaskRow(id), patch)
     return runMutation({
       entity: 'task',
       call: () => new TasksApi(apiConfig()).taskIdPut(id, patch),
-      apply: async () => {
-        await refreshTaskPlanning(true)
-      },
-      optimistic: () => {
-        const t = findTaskRow(id)
-        if (t) Object.assign(t, patch)
-      },
+      apply: applyLocally,
+      optimistic: applyLocally,
       onError: (m) => {
         error.value = m
       },
@@ -2422,16 +2465,12 @@ export const usePlanningStore = defineStore('planning', () => {
     id: number,
     patch: { title?: string; content?: string; color?: string },
   ): Promise<boolean> {
+    const applyLocally = () => patchRow(findMilestoneRow(id), patch)
     return runMutation({
       entity: 'milestone',
       call: () => new MilestonesApi(apiConfig()).milestoneIdPut(id, patch),
-      apply: async () => {
-        await refreshTaskPlanning(true)
-      },
-      optimistic: () => {
-        const m = findMilestoneRow(id)
-        if (m) Object.assign(m, patch)
-      },
+      apply: applyLocally,
+      optimistic: applyLocally,
       onError: (m) => {
         error.value = m
       },
@@ -2700,16 +2739,12 @@ export const usePlanningStore = defineStore('planning', () => {
     id: number,
     patch: { title?: string; color?: string; status?: string },
   ): Promise<boolean> {
+    const applyLocally = () => patchRow(findTaskRow(id), patch)
     return runMutation({
       entity: 'task',
       call: () => new TasksApi(apiConfig()).taskIdPut(id, patch),
-      apply: async () => {
-        await refreshTaskPlanning(true)
-      },
-      optimistic: () => {
-        const s = findTaskRow(id)
-        if (s) Object.assign(s, patch)
-      },
+      apply: applyLocally,
+      optimistic: applyLocally,
       onError: (m) => {
         error.value = m
       },
