@@ -8,6 +8,8 @@ export interface ProcessItem {
   end_date: string
   owner_id?: number
   owner_name?: string
+  responsible_id?: number
+  responsible_name?: string
   project_id?: number
   /** Order of the process within the project (ascending display order) */
   order?: number

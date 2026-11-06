@@ -21,6 +21,7 @@ const emit = defineEmits<{
 /** Tooltip rows, rebuilt on a language switch */
 const priorityRow = computed(() => t('planner.bar.priority', { value: props.priority }))
 const ownerRow = computed(() => t('planner.bar.owner', { owner: props.ownerName }))
+const responsibleRow = computed(() => t('planner.bar.responsible', { name: props.responsibleName }))
 </script>
 
 <template>
@@ -45,7 +46,8 @@ const ownerRow = computed(() => t('planner.bar.owner', { owner: props.ownerName 
         :accent="color || 'var(--ui-gantt-project)'"
         :rows="[
           props.priority != null ? priorityRow : '',
-          viewSettings.badgeOwner && props.ownerName ? ownerRow : '',
+          viewSettings.badgeProjectOwner && props.ownerName ? ownerRow : '',
+          viewSettings.badgeProjectResponsible && props.responsibleName ? responsibleRow : '',
           dateRange,
         ].filter(Boolean)"
       />

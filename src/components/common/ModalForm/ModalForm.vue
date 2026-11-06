@@ -77,9 +77,10 @@ function onOverlayClick(e: MouseEvent) {
 
         <form v-else class="mf-form" @submit.prevent="onSubmit">
           <!-- A label is invalid around an interactive color trigger: the color
-               field renders as a plain div, everything else keeps <label> -->
-          <component :is="f.type === 'color' ? 'div' : 'label'" v-for="f in fields" :key="f.key" class="mf-field">
-            <span class="mf-label">
+               field renders as a plain div, everything else keeps <label>; a
+               display field is pure text (no label, no control). -->
+          <component :is="f.type === 'color' || f.type === 'display' ? 'div' : 'label'" v-for="f in fields" :key="f.key" class="mf-field">
+            <span v-if="f.type !== 'display'" class="mf-label">
               {{ f.label }}
               <span v-if="f.required" class="mf-req">*</span>
             </span>
@@ -89,6 +90,10 @@ function onOverlayClick(e: MouseEvent) {
               :label="f.label"
               @update:model-value="values[f.key] = $event"
             />
+            <span
+              v-else-if="f.type === 'display'"
+              class="mf-display"
+            >{{ f.value }}</span>
             <textarea
               v-else-if="f.type === 'textarea'"
               v-model="values[f.key]"
@@ -114,6 +119,7 @@ function onOverlayClick(e: MouseEvent) {
               v-model="values[f.key]"
               class="mf-input"
               type="date"
+              :readonly="f.readonly"
               :placeholder="f.placeholder"
             />
             <input
@@ -122,6 +128,7 @@ function onOverlayClick(e: MouseEvent) {
               class="mf-input"
               type="number"
               min="1"
+              :readonly="f.readonly"
               :placeholder="f.placeholder"
             />
             <input
@@ -211,6 +218,12 @@ function onOverlayClick(e: MouseEvent) {
   font-size: calc(var(--ui-font-scale, 1) * 13px);
   color: var(--ui-text-2);
   font-weight: 500;
+}
+/* Display-only field: a plain line of text instead of an input control. */
+.mf-display {
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
+  color: var(--ui-text);
+  line-height: 1.4;
 }
 .mf-req {
   color: var(--ui-danger);

@@ -37,6 +37,14 @@ export function useRoleAccess() {
     return project?.owner_id ?? null
   }
 
+  /** The process row's own owner (L0) from the planning aggregate. */
+  function processOwnerFromPlanning(processId: number): OwnerId {
+    const project = planning.processPlanning?.projects?.find((p: DtoDetailedProject) =>
+      (p.processes ?? []).some((pr: DtoProcess) => pr.id === processId),
+    )
+    return project?.processes?.find((pr: DtoProcess) => pr.id === processId)?.owner_id ?? null
+  }
+
   /** Process owner of a task/milestone (task/milestone.update — parent scope) */
   function processOwner(processId: OwnerId): OwnerId {
     if (processId == null) return null
@@ -60,14 +68,20 @@ export function useRoleAccess() {
   /** Create process: process.create */
   const canCreateProcess = computed(() => rbac.can('process', 'create'))
 
-  /** Edit process: process.update + parent (the parent project owner) */
+  /** Edit process: process.update + ownership (self = process owner, up1 = project owner) */
   function canManageProcess(processId: number): boolean {
-    return rbac.canOwn('process', 'update', { projectOwner: processProjectOwner(processId) })
+    return rbac.canOwn('process', 'update', {
+      processOwner: processOwnerFromPlanning(processId),
+      projectOwner: processProjectOwner(processId),
+    })
   }
 
-  /** Delete process: process.delete + parent (the parent project owner) */
+  /** Delete process: process.delete + ownership (self = process owner, up1 = project owner) */
   function canDeleteProcess(processId: number): boolean {
-    return rbac.canOwn('process', 'delete', { projectOwner: processProjectOwner(processId) })
+    return rbac.canOwn('process', 'delete', {
+      processOwner: processOwnerFromPlanning(processId),
+      projectOwner: processProjectOwner(processId),
+    })
   }
 
   /** Reorder processes of a project: process.update + parent */

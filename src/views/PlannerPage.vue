@@ -221,6 +221,7 @@ const taskEditorTask = computed<TaskEditorTask | null>(() => {
     color: t.color ?? '',
     status: t.status ?? 'not_started',
     owner_id: t.owner_id ?? null,
+    responsible_id: t.responsible_id ?? null,
     process_id: t.process_id ?? 0,
   }
 })

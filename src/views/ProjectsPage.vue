@@ -10,7 +10,7 @@ import type { ContextMenuItem } from '../components/common/ContextMenu'
 import type { ModalField } from '../components/common/ModalForm'
 import { useConfirm } from '../composables/useConfirm'
 import { useContextMenu } from '../composables/useContextMenu'
-import { compareByName } from '../utils'
+import { compareByName, DAY_MS } from '../utils'
 import { useEditModal } from '../composables/useEditModal'
 import { usePlanningOrigin } from '../composables/usePlanningOrigin'
 import { useUnitMenu } from '../composables/useUnitMenu'
@@ -20,9 +20,10 @@ import { usePlanningStore, useAppStore, useRbacStore } from '../store'
 import { isOffline } from '../offline/state'
 import { scheduleNamedRefresh } from '../offline/sync'
 import { t } from '../i18n'
-import { addDaysISO, fmtDate } from '../components/planner/calendar'
+import { addDaysISO, fmtDate, toDate } from '../components/planner/calendar'
 import { CELL_WIDTH } from '../components/planner/layout'
 import { viewSettings } from '../settings'
+import { isWorkerPreset } from '../rbac/presets'
 import type { DtoProject } from '@/api'
 
 const store = usePlanningStore()
@@ -122,23 +123,65 @@ const menuItems = computed<ContextMenuItem[]>(() => {
 
 const ownerOptions = computed(() =>
   app.users
-    .filter((u) => u.preset !== 'worker')
+    .filter((u) => !isWorkerPreset(u.preset))
     .sort(compareByName)
     .map((u) => ({ value: u.id ?? 0, label: u.name ?? '' })),
 )
 
-// Project edit modal (code, owner, color)
+/** Candidates for the project "responsible" — own employees only (direct
+ *  subordinates; admin — everyone), mirroring the task-assignee pool. */
+const responsibleOptions = computed(() => {
+  const options = [...app.myStaff]
+    .sort(compareByName)
+    .map((u) => ({ value: u.id ?? 0, label: u.name ?? '' }))
+  return [{ value: 0, label: t('plannerViews.projects.field.noResponsible') }, ...options]
+})
+
+/** Duration in days from an inclusive date range (end - start + 1). */
+function durationDaysOf(start: string, end: string): number {
+  const startMs = toDate(start).getTime()
+  const endMs = toDate(end).getTime()
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs < startMs) return 1
+  return Math.round((endMs - startMs) / DAY_MS) + 1
+}
+
+// Project edit modal (code, color, dates, owner, responsible)
 interface EditState {
   id: number
   code: string
   ownerId?: number
+  responsibleId?: number
   color?: string
+  startDate: string
+  endDate: string
+  durationDays: number
 }
 const { open: openEdit, close: closeEdit, submit: submitEdit, bind: editBind } = useEditModal<EditState>(
   (state) => {
     const fields: ModalField[] = [
       { key: 'code', label: t('plannerViews.projects.field.code'), type: 'text', value: state.code, required: true },
       { key: 'color', label: t('plannerViews.projects.field.color'), type: 'color', value: state.color ?? '' },
+      { key: 'start_date', label: t('plannerViews.projects.field.startDate'), type: 'date', value: state.startDate, required: true },
+      {
+        key: 'end_date',
+        label: t('plannerViews.projects.field.endDate'),
+        type: 'date',
+        value: state.endDate,
+        required: true,
+      },
+      {
+        key: 'duration_days',
+        label: '',
+        type: 'display',
+        value: t('plannerViews.projects.field.duration', { days: state.durationDays }),
+      },
+      {
+        key: 'responsible_id',
+        label: `${t('plannerViews.projects.field.responsible')} (${t('plannerViews.projects.field.responsibleHint')})`,
+        type: 'select',
+        value: state.responsibleId ?? 0,
+        options: responsibleOptions.value,
+      },
     ]
     // The project owner cannot be changed: the field is hidden unless the
     // matrix grants project.update with scope all
@@ -154,9 +197,23 @@ const { open: openEdit, close: closeEdit, submit: submitEdit, bind: editBind } =
     return fields
   },
   async (state, values) => {
-    const patch: { code: string; owner_id?: number; color?: string } = { code: String(values.code ?? '') }
+    const patch: {
+      code: string
+      owner_id?: number
+      responsible_id?: number
+      color?: string
+      start_date?: string
+      end_date?: string
+    } = { code: String(values.code ?? '') }
     // '' means "no custom color" → the backend stores NULL (standard color)
     patch.color = String(values.color ?? '')
+    // Dates are picked directly in the calendar fields; duration is display-only.
+    patch.start_date = String(values.start_date ?? state.startDate)
+    patch.end_date = String(values.end_date ?? state.endDate)
+    // 0 is the "clear responsible" sentinel (no responsible person).
+    patch.responsible_id = values.responsible_id !== '' && values.responsible_id != null
+      ? Number(values.responsible_id)
+      : 0
     // The project owner cannot be changed: owner_id is sent only with the all scope
     if (canChangeProjectOwner.value && values.owner_id !== '' && values.owner_id != null) {
       patch.owner_id = Number(values.owner_id)
@@ -190,7 +247,18 @@ const { open: openMenu, close: closeMenu, select, bind: menuBind } = useContextM
 function openProjectEdit(id: number) {
   const p = findProject(id)
   if (p) {
-    openEdit({ id, code: p.project_code ?? '', ownerId: p.owner_id, color: p.color ?? '' })
+    const start = p.start_date ?? ''
+    const end = p.end_date ?? ''
+    openEdit({
+      id,
+      code: p.project_code ?? '',
+      ownerId: p.owner_id,
+      responsibleId: p.responsible_id,
+      color: p.color ?? '',
+      startDate: start,
+      endDate: end,
+      durationDays: durationDaysOf(start, end),
+    })
   }
 }
 
@@ -242,10 +310,12 @@ function goToProcesses(projectId: number) {
 onMounted(() => {
   store.loadProjectPlanning()
   if (!app.users.length) void app.loadUsers()
+  // The responsible picker needs the "own staff" pool (direct subordinates).
+  if (!app.myStaff.length) void app.loadMyStaff()
   // Page-entry SWR: render from cache instantly, then re-read the domains the
   // page displays while online (backend > cache) — own mutations and foreign
   // changes both land within one network round-trip.
-  if (!isOffline.value) void scheduleNamedRefresh(['project-plan', 'projects', 'process-plan'])
+  if (!isOffline.value) void scheduleNamedRefresh(['project-plan', 'projects', 'process-plan', 'myStaff'])
 })
 </script>
 

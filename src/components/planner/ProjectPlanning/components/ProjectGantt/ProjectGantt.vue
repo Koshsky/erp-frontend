@@ -27,6 +27,7 @@ const groupItems = computed(() =>
     end_date: p.end_date || '',
     priority: p.priority,
     owner_name: p.owner_name,
+    responsible_name: p.responsible_name,
   })),
 )
 
@@ -70,6 +71,7 @@ function fmt(d: string): string {
         :projectCode="item.title"
         :priority="item.priority"
         :ownerName="item.owner_name"
+        :responsibleName="item.responsible_name"
         :color="item.color"
         :draggable="canManage(item.id)"
         :start-row-reorder="reorderable ? startReorder : null"

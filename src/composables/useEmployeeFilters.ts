@@ -12,6 +12,7 @@ import type { ComputedRef, Ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useAppStore, useTimesheetStore } from '../store'
 import { compareByName } from '../utils'
+import { isWorkerPreset } from '../rbac/presets'
 import type { DtoResourceResponse, DtoUserResponse } from '@/api'
 import type { DtoUserInfo } from '@/api'
 
@@ -70,7 +71,7 @@ export function useEmployeeFilters(): EmployeeFilters {
       .filter(
         (u) =>
           u.id != null &&
-          u.preset !== 'worker' &&
+          !isWorkerPreset(u.preset) &&
           managerPool.value.some((e) => e.manager_id === u.id),
       )
       .sort(compareByName),

@@ -2407,14 +2407,21 @@ export const usePlanningStore = defineStore('planning', () => {
 
   async function updateProjectMeta(
     id: number,
-    patch: { code?: string; owner_id?: number; color?: string },
+    patch: { code?: string; owner_id?: number; responsible_id?: number; color?: string; start_date?: string; end_date?: string },
   ): Promise<boolean> {
     /** The PUT echoes the applied values; the aggregate and the app store list
      *  are re-read once by the coalesced post-mutation refresh. The rows carry
      *  `project_code`, while the request payload uses `code` — the previous
      *  optimistic patch wrote a stray `code` and left the shown code stale. */
     const applyLocally = () => {
-      const row = { project_code: patch.code, owner_id: patch.owner_id, color: patch.color }
+      const row = {
+        project_code: patch.code,
+        owner_id: patch.owner_id,
+        responsible_id: patch.responsible_id,
+        color: patch.color,
+        start_date: patch.start_date,
+        end_date: patch.end_date,
+      }
       patchRow(findProjectRow(id), row)
       patchRow(useAppStore().projects.find((x) => x.id === id), { ...row })
     }
@@ -2431,7 +2438,7 @@ export const usePlanningStore = defineStore('planning', () => {
 
   async function updateProcessMeta(
     id: number,
-    patch: { title?: string; owner_id?: number; color?: string },
+    patch: { title?: string; owner_id?: number; responsible_id?: number; color?: string; start_date?: string; end_date?: string },
   ): Promise<boolean> {
     const applyLocally = () => patchRow(findProcessRow(id), patch)
     return runMutation({
@@ -2447,7 +2454,7 @@ export const usePlanningStore = defineStore('planning', () => {
 
   async function updateTaskMeta(
     id: number,
-    patch: { title?: string; owner_id?: number; color?: string; status?: string },
+    patch: { title?: string; owner_id?: number; responsible_id?: number; color?: string; status?: string },
   ): Promise<boolean> {
     const applyLocally = () => patchRow(findTaskRow(id), patch)
     return runMutation({

@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 The web app and the desktop wrapper are versioned together.
 
+## [1.4.0] - 2026-11-06
+
+### Added
+
+- The project and process editors show the start/end dates with a computed duration.
+- Projects, processes and tasks expose a responsible-person picker; owner and responsible badges are toggled per entity in Settings → Diagrams.
+
 ## [1.3.3] - 2026-10-20
 
 ### Fixed

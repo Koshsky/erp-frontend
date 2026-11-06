@@ -39,6 +39,7 @@ const title = ref('')
 const color = ref('')
 const status = ref('')
 const ownerId = ref<number | ''>('')
+const responsibleId = ref<number | ''>('')
 
 // Status catalog (fixed 3-set, mirrors the backend CHECK). Computed so the
 // labels re-render after a language switch.
@@ -56,6 +57,7 @@ watch(
     color.value = props.task.color ?? ''
     status.value = props.task.status ?? 'not_started'
     ownerId.value = props.task.owner_id ?? ''
+    responsibleId.value = props.task.responsible_id ?? ''
   },
 )
 
@@ -66,12 +68,14 @@ function onSave() {
   const owner =
     ownerId.value === '' ? null : Number(ownerId.value)
   // Owner cannot be removed: null means "not sent" (the backend keeps the old).
-  const patch: { title?: string; color?: string; status?: string; owner_id?: number } = {
+  const patch: { title?: string; color?: string; status?: string; owner_id?: number; responsible_id?: number } = {
     title: title.value.trim(),
     color: color.value || undefined,
     status: status.value,
   }
   if (owner != null) patch.owner_id = owner
+  // 0 is the "clear responsible" sentinel (no responsible person).
+  patch.responsible_id = responsibleId.value === '' ? 0 : Number(responsibleId.value)
   emit('save', patch)
 }
 
@@ -191,6 +195,20 @@ function onDeleteDependency(id: number) {
             :disabled="!canManage || busy"
           >
             <option value="">{{ t('planner.taskEditor.field.ownerNone') }}</option>
+            <option v-for="o in ownerOptions" :key="o.value" :value="o.value">
+              {{ o.label }}
+            </option>
+          </select>
+        </div>
+
+        <div class="te-field">
+          <span class="te-label">{{ t('planner.taskEditor.field.responsible') }}</span>
+          <select
+            v-model="responsibleId"
+            class="te-input te-select"
+            :disabled="!canManage || busy"
+          >
+            <option value="">{{ t('planner.taskEditor.field.responsibleNone') }}</option>
             <option v-for="o in ownerOptions" :key="o.value" :value="o.value">
               {{ o.label }}
             </option>

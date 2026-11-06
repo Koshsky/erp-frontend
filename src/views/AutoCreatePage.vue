@@ -4,6 +4,7 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import { useAppStore } from '../store'
+import { isWorkerPreset } from '../rbac/presets'
 import { ColorField, ConfirmDialog } from '../components/common'
 import { randomPaletteColor } from '../components/common/ColorField/palette'
 import { useConfirm } from '../composables/useConfirm'
@@ -78,7 +79,7 @@ const { confirm: confirmDialog, ask, proceed, cancel } = useConfirm()
 /** Process owner candidates (excluding workers) */
 const ownerOptions = computed(() =>
   users.value
-    .filter((u) => u.preset !== 'worker')
+    .filter((u) => !isWorkerPreset(u.preset))
     .sort((a, b) => (a.name ?? '').localeCompare(b.name ?? '', 'ru'))
     .map((u) => ({ value: u.id as number, label: u.name ?? `#${u.id}` })),
 )

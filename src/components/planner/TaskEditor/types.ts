@@ -15,6 +15,7 @@ export interface TaskEditorTask {
   color?: string
   status?: string
   owner_id?: number | null
+  responsible_id?: number | null
   process_id: number
 }
 
@@ -23,13 +24,15 @@ export interface OwnerOption {
   label: string
 }
 
-/** Patch emitted by the left panel (status/owner/title/color). owner_id is
- *  included only when a user is actually selected (null — not sent). */
+/** Patch emitted by the left panel (status/owner/responsible/title/color).
+ *  owner_id is included only when a user is actually selected (null — not
+ *  sent); responsible_id=0 clears the responsible person. */
 export interface TaskEditorPatch {
   title?: string
   color?: string
   status?: string
   owner_id?: number
+  responsible_id?: number
 }
 
 export interface NewSubtaskPayload {

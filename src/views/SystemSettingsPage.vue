@@ -178,8 +178,28 @@ onMounted(() => {
             <span>{{ t('adminSystem.settings.badges.progress') }}</span>
           </label>
           <label class="st-option">
-            <input v-model="viewSettings.badgeOwner" type="checkbox" />
-            <span>{{ t('adminSystem.settings.badges.owner') }}</span>
+            <input v-model="viewSettings.badgeProjectOwner" type="checkbox" />
+            <span>{{ t('adminSystem.settings.badges.projectOwner') }}</span>
+          </label>
+          <label class="st-option">
+            <input v-model="viewSettings.badgeProjectResponsible" type="checkbox" />
+            <span>{{ t('adminSystem.settings.badges.projectResponsible') }}</span>
+          </label>
+          <label class="st-option">
+            <input v-model="viewSettings.badgeProcessOwner" type="checkbox" />
+            <span>{{ t('adminSystem.settings.badges.processOwner') }}</span>
+          </label>
+          <label class="st-option">
+            <input v-model="viewSettings.badgeProcessResponsible" type="checkbox" />
+            <span>{{ t('adminSystem.settings.badges.processResponsible') }}</span>
+          </label>
+          <label class="st-option">
+            <input v-model="viewSettings.badgeTaskOwner" type="checkbox" />
+            <span>{{ t('adminSystem.settings.badges.taskOwner') }}</span>
+          </label>
+          <label class="st-option">
+            <input v-model="viewSettings.badgeTaskResponsible" type="checkbox" />
+            <span>{{ t('adminSystem.settings.badges.taskResponsible') }}</span>
           </label>
           <label class="st-option">
             <input v-model="viewSettings.badgeComments" type="checkbox" />

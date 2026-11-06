@@ -56,6 +56,12 @@ export default {
       code: 'Project code',
       color: 'Color',
       owner: 'Owner',
+      startDate: 'Start date',
+      endDate: 'End date',
+      duration: 'Duration: {days} days',
+      responsible: 'Responsible',
+      responsibleHint: 'group lead',
+      noResponsible: '— none —',
     },
     pdfGroup: 'Projects',
     confirm: {
@@ -73,7 +79,13 @@ export default {
     field: {
       title: 'Name',
       color: 'Color',
+      startDate: 'Start date',
+      endDate: 'End date',
+      duration: 'Duration: {days} days',
       owner: 'Owner',
+      responsible: 'Responsible',
+      responsibleHint: 'group lead',
+      noResponsible: '— none —',
     },
     defaultTitle: 'New process',
     confirm: {

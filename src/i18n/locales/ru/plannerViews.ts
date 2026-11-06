@@ -62,6 +62,12 @@ export default {
       code: 'Код проекта',
       color: 'Цвет',
       owner: 'Владелец',
+      startDate: 'Дата начала',
+      endDate: 'Дата завершения',
+      duration: 'Длительность: {days} дн.',
+      responsible: 'Ответственный',
+      responsibleHint: 'руководитель группы',
+      noResponsible: '— не выбран —',
     },
     /** Code of the print model group of the projects diagram */
     pdfGroup: 'Проекты',
@@ -82,7 +88,13 @@ export default {
     field: {
       title: 'Название',
       color: 'Цвет',
+      startDate: 'Дата начала',
+      endDate: 'Дата завершения',
+      duration: 'Длительность: {days} дн.',
       owner: 'Владелец',
+      responsible: 'Ответственный',
+      responsibleHint: 'руководитель группы',
+      noResponsible: '— не выбран —',
     },
     /** Server-side name of a newly created record — translated at creation time */
     defaultTitle: 'Новый процесс',

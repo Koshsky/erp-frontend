@@ -8,6 +8,7 @@ export interface ProcessBarProps {
   title: string
   projectCode?: string
   ownerName?: string
+  responsibleName?: string
   color?: string
   opacity?: number
   /** Enables dragging and duration-resize handles */

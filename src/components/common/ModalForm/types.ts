@@ -7,13 +7,15 @@ export interface ModalField {
   /** Field key — name in the payload when saving (save(values)) */
   key: string
   label: string
-  type: 'text' | 'textarea' | 'select' | 'number' | 'date' | 'color'
+  type: 'text' | 'textarea' | 'select' | 'number' | 'date' | 'color' | 'display'
   /** Initial value (applied when opened) */
   value?: number | string
   /** Options for type: 'select' */
   options?: ModalFieldOption[]
   required?: boolean
   placeholder?: string
+  /** Render the input read-only (display of a computed value). */
+  readonly?: boolean
 }
 
 export interface ModalFormProps {

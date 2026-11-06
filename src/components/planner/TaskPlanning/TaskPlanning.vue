@@ -94,6 +94,7 @@ const displayProcesses = computed<Process[]>(() =>
       .sort((a, b) => (a.order ?? a.id ?? 0) - (b.order ?? b.id ?? 0))
       .map((t) => {
         const owner = t.owner_id != null ? userById.value.get(t.owner_id) : undefined
+        const responsible = t.responsible_id != null ? userById.value.get(t.responsible_id) : undefined
         return {
           id: t.id ?? 0,
           title: t.title ?? '',
@@ -103,6 +104,9 @@ const displayProcesses = computed<Process[]>(() =>
           owner_id: t.owner_id ?? null,
           owner_name: owner?.name,
           owner_short: owner ? shortName(owner) : undefined,
+          responsible_id: t.responsible_id ?? null,
+          responsible_name: responsible?.name,
+          responsible_short: responsible ? shortName(responsible) : undefined,
           comments_count: t.comments_count ?? 0,
           status: t.status ?? 'not_started',
           subtasks: (t.subtasks || []).map((s: DtoDetailedTask) => ({

@@ -185,8 +185,14 @@ export interface ViewSettings {
   badgeProjectCode: boolean
   /** Gantt badge: "% of completed operations" on task bars */
   badgeProgress: boolean
-  /** Gantt badges/labels: assignee on tasks, owner on process/project bars */
-  badgeOwner: boolean
+  /** Gantt badges/labels — per entity: owner (assignee/владелец) and
+   *  responsible (ответственный), toggled independently per entity. */
+  badgeProjectOwner: boolean
+  badgeProjectResponsible: boolean
+  badgeProcessOwner: boolean
+  badgeProcessResponsible: boolean
+  badgeTaskOwner: boolean
+  badgeTaskResponsible: boolean
   /** Gantt badge: the comments bubble + counter on task bars (the panel itself
    *  stays reachable from the bar context menu either way) */
   badgeComments: boolean
@@ -209,7 +215,12 @@ const DEFAULT_VIEW_SETTINGS: ViewSettings = {
   badgeResource: true,
   badgeProjectCode: true,
   badgeProgress: true,
-  badgeOwner: true,
+  badgeProjectOwner: true,
+  badgeProjectResponsible: true,
+  badgeProcessOwner: true,
+  badgeProcessResponsible: true,
+  badgeTaskOwner: true,
+  badgeTaskResponsible: true,
   badgeComments: true,
   defaultUnit: 'day',
   defaultScale: 100,

@@ -25,6 +25,12 @@ export interface Task {
   owner_name?: string
   /** Short owner name "Lastname I.O." — for the badge on the task bar */
   owner_short?: string
+  /** Task responsible: id of the accountable user */
+  responsible_id?: number | null
+  /** Responsible name (resolved from responsible_id) */
+  responsible_name?: string
+  /** Short responsible name "Lastname I.O." — for the badge on the task bar */
+  responsible_short?: string
   /** Number of active task comments (from /planning/tasks); 0 — no badge */
   comments_count?: number
   /** Execution status: not_started | in_progress | done (fixed catalog) */

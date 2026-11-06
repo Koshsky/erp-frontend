@@ -9,6 +9,7 @@ export interface ProjectGanttItem {
   end_date: string
   priority?: number
   owner_name?: string
+  responsible_name?: string
 }
 
 export interface ProjectGanttProps {

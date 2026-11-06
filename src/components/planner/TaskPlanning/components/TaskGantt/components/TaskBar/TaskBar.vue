@@ -53,12 +53,16 @@ const emit = defineEmits<{
   'keyboardmove': [payload: { start_date: string; end_date: string }]
 }>()
 
-/** Tooltip rows: owner (if assigned) + execution status + progress + date range */
+/** Tooltip rows: owner + responsible (if assigned) + execution status + progress + date range */
 const tooltipRows = (dateRange: string): string[] =>
-  [taskOwnerLabel.value, statusLabel.value, progressLabel.value, dateRange].filter(Boolean)
+  [taskOwnerLabel.value, taskResponsibleLabel.value, statusLabel.value, progressLabel.value, dateRange].filter(Boolean)
 
 const taskOwnerLabel = computed<string>(() =>
   props.task.owner_name ? t('planner.taskBar.owner', { owner: props.task.owner_name }) : '',
+)
+
+const taskResponsibleLabel = computed<string>(() =>
+  props.task.responsible_name ? t('planner.taskBar.responsible', { name: props.task.responsible_name }) : '',
 )
 
 /** Execution status label + color (fixed catalog, mirrors the badge stripe) */
@@ -212,7 +216,7 @@ watch(
   () => requestAnimationFrame(updateStacked),
 )
 watch(
-  () => [props.task.owner_short, props.task.owner_name],
+  () => [props.task.owner_short, props.task.owner_name, props.task.responsible_short, props.task.responsible_name],
   () => requestAnimationFrame(updateStacked),
 )
 // The title's own width moves the resource strip (the title is the flexible
@@ -257,10 +261,15 @@ watch(
         class="tb-proj"
       >{{ projectCode }}</span>
       <span
-        v-if="viewSettings.badgeOwner && task.owner_short"
+        v-if="viewSettings.badgeTaskOwner && task.owner_short"
         class="tb-owner"
         :title="task.owner_name"
       >{{ task.owner_short }}</span>
+      <span
+        v-if="viewSettings.badgeTaskResponsible && task.responsible_short"
+        class="tb-responsible"
+        :title="task.responsible_name"
+      >{{ task.responsible_short }}</span>
       <span
         v-if="taskProgress != null && viewSettings.badgeProgress"
         class="tb-progress"
@@ -358,6 +367,20 @@ watch(
   line-height: 1.6;
   color: #fff;
   background: rgba(13, 102, 134, 0.85);
+  border-radius: 10px;
+  padding: 0 7px;
+  margin-left: 6px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+/* Responsible person badge — distinct tint from the owner chip */
+.tb-responsible {
+  flex-shrink: 0;
+  font-size: calc(var(--ui-font-scale, 1) * 10px);
+  font-weight: 600;
+  line-height: 1.6;
+  color: #fff;
+  background: rgba(99, 76, 170, 0.85);
   border-radius: 10px;
   padding: 0 7px;
   margin-left: 6px;

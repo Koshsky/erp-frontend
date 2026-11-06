@@ -70,6 +70,8 @@ const displayProjects = computed(() =>
         end_date: p.end_date ?? '',
         owner_id: p.owner_id,
         owner_name: p.owner_id != null ? userNames.value.get(p.owner_id) : undefined,
+        responsible_id: p.responsible_id,
+        responsible_name: p.responsible_id != null ? userNames.value.get(p.responsible_id) : undefined,
         project_id: p.project_id,
         order: p.order,
       })),

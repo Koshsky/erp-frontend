@@ -44,6 +44,8 @@ const task = computed<BadgePreviewTask>(() => ({
   ],
   owner_short: t('adminSystem.settings.badges.demoOwner'),
   owner_name: t('adminSystem.settings.badges.demoOwner'),
+  responsible_short: t('adminSystem.settings.badges.demoResponsible'),
+  responsible_name: t('adminSystem.settings.badges.demoResponsible'),
   // One of two operations done — the progress badge shows 50%.
   subtasks: [
     { id: -1, status: 'done' },

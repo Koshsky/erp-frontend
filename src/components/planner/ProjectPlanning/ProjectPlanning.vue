@@ -65,6 +65,7 @@ const displayProjects = computed(() =>
     end_date: dto.end_date ?? '',
     priority: dto.priority,
     owner_name: dto.owner_id != null ? userNames.value.get(dto.owner_id) : undefined,
+    responsible_name: dto.responsible_id != null ? userNames.value.get(dto.responsible_id) : undefined,
   })),
 )
 
