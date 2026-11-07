@@ -16,7 +16,7 @@ export interface UnitOption {
  */
 export const UNIT_OPTIONS: UnitOption[] = [
   { value: 'day', get label() { return t('plannerViews.unit.day') } },
-  { value: 'decade', get label() { return t('plannerViews.unit.decade') } },
+  { value: 'week', get label() { return t('plannerViews.unit.week') } },
 ]
 
 /** Timeline scale and anchor for planning diagrams (shared across three pages) */
@@ -24,7 +24,7 @@ export function usePlanningOrigin() {
   // The opening unit comes from the user's view settings ("Единица календаря по
   // умолчанию"); in-session the unit is still freely switchable via the header.
   const unit = ref<PlanningUnit>(
-    viewSettings.defaultUnit === 'decade' ? 'decade' : 'day',
+    viewSettings.defaultUnit === 'week' ? 'week' : 'day',
   )
 
   /** Timeline anchor: two days before today — so on open the first columns are the day before yesterday, yesterday */

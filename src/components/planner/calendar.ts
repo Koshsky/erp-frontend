@@ -1,5 +1,5 @@
-/** Timeline cell unit: day or decade (10 days) */
-export type PlanningUnit = 'day' | 'decade'
+/** Timeline cell unit: day, decade (10 days) or week (Monday-start 7 days) */
+export type PlanningUnit = 'day' | 'decade' | 'week'
 
 import { DAY_MS, clamp } from '../../utils'
 import { fmtDateRange } from '@/i18n/date'
@@ -160,6 +160,7 @@ export function cellIndexForDate(
   const o = toDayStart(origin)
   const d = toDayStart(date)
   if (unit === 'day') return Math.round((d.getTime() - o.getTime()) / DAY_MS)
+  if (unit === 'week') return weekIndexForDate(o, d)
   const { month, anchorDay, anchorDec, split, base, cells } = decadeLayout(o)
   const dm = monthNumber(d)
   if (dm === month) {
@@ -177,6 +178,7 @@ export function cellIndexForDate(
 export function cellStartDate(origin: Date | string | number, unit: PlanningUnit, i: number): Date {
   const o = toDayStart(origin)
   if (unit === 'day') return new Date(o.getFullYear(), o.getMonth(), o.getDate() + i)
+  if (unit === 'week') return weekCellStart(o, i)
   const { month, anchorDec, base, cells } = decadeLayout(o)
   if (i >= base + cells) {
     const rel = i - (base + cells)
@@ -200,6 +202,7 @@ export function cellStartDate(origin: Date | string | number, unit: PlanningUnit
 /** End date of cell i (inclusive, local midnight). */
 export function cellEndDate(origin: Date | string | number, unit: PlanningUnit, i: number): Date {
   if (unit === 'day') return cellStartDate(origin, unit, i)
+  if (unit === 'week') return weekCellEnd(toDayStart(origin), i)
   const o = toDayStart(origin)
   const { anchorDay, anchorDec, split, base } = decadeLayout(o)
   const start = cellStartDate(origin, unit, i)
@@ -214,6 +217,74 @@ export function cellEndDate(origin: Date | string | number, unit: PlanningUnit, 
   }
   if (decadeOfCell(o, i) === 2) return lastDayOfMonth(start)
   return new Date(start.getFullYear(), start.getMonth(), start.getDate() + 9)
+}
+
+// ============================================================================
+// Week layout (Monday-start). Mirrors the decade layout: the anchor's week is
+// partial — cell 0 is [anchor … Sunday], and when the anchor is not a Monday
+// the days before it in that week get cell -1. Every other cell is a full
+// Monday–Sunday week.
+// ============================================================================
+
+/** Day-of-week with Monday = 0 … Sunday = 6. */
+function dowMonday(d: Date): number {
+  return (d.getDay() + 6) % 7
+}
+
+/** Monday of the week containing d (local midnight). */
+function mondayOfWeek(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() - dowMonday(d))
+}
+
+/** Whether the anchor splits its own week (the anchor is not a Monday). */
+function weekSplit(origin: Date): boolean {
+  return dowMonday(origin) > 0
+}
+
+/** Absolute cell index of the week containing d (mirror of the decade anchor split). */
+function weekIndexForDate(origin: Date, d: Date): number {
+  const om = mondayOfWeek(origin)
+  const dm = mondayOfWeek(d)
+  const diff = Math.round((dm.getTime() - om.getTime()) / (7 * DAY_MS))
+  if (diff === 0) return d.getTime() < origin.getTime() && weekSplit(origin) ? -1 : 0
+  return diff < 0 ? diff - (weekSplit(origin) ? 1 : 0) : diff
+}
+
+/** Start date of a week cell (the partial first anchor week, Monday elsewhere). */
+function weekCellStart(origin: Date, i: number): Date {
+  const monday = mondayOfWeek(origin)
+  if (i === 0) return origin
+  if (i === -1 && weekSplit(origin)) return monday
+  const offset = i < 0 ? i + (weekSplit(origin) ? 1 : 0) : i
+  return new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 7 * offset)
+}
+
+/** End date of a week cell (inclusive). */
+function weekCellEnd(origin: Date, i: number): Date {
+  if (i === -1) return new Date(origin.getFullYear(), origin.getMonth(), origin.getDate() - 1)
+  const start = weekCellStart(origin, i)
+  return new Date(start.getFullYear(), start.getMonth(), start.getDate() + (6 - dowMonday(start)))
+}
+
+/** Thursday of the week containing d (the week's ISO-style month anchor). */
+function thursdayOfWeek(d: Date): Date {
+  const monday = mondayOfWeek(d)
+  return new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 3)
+}
+
+/** 1-based ordinal of the week within its month: the week containing the month's
+ *  1st day is #1; the month is taken from the week's Thursday (ISO week convention),
+ *  so a week straddling two months is counted for the month holding its majority. */
+export function weekOfMonth(d: Date): number {
+  const thursday = thursdayOfWeek(d)
+  return Math.floor((thursday.getDate() - 1) / 7) + 1
+}
+
+const ROMAN_NUMERALS = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII']
+
+/** Week-of-month ordinal as a Roman numeral (I…VI for a calendar month). */
+export function romanNumeral(n: number): string {
+  return ROMAN_NUMERALS[n] ?? String(n)
 }
 
 /** count consecutive cells starting from fromCell (absolute indices). */

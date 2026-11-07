@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 The web app and the desktop wrapper are versioned together.
 
+## [1.5.0] - 2026-11-07
+
+### Added
+
+- A Week timeline scale (week-of-month numbered in Roman numerals), with the today line placed precisely inside the current week and highlighting it.
+
+### Changed
+
+- The Decade scale is no longer offered in the scale menu or as the default unit (day/week only).
+
 ## [1.4.0] - 2026-11-06
 
 ### Added

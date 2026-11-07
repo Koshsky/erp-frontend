@@ -277,8 +277,8 @@ onMounted(() => {
                   <span>{{ t('adminSystem.settings.defaults.unitDay') }}</span>
                 </label>
                 <label class="st-radio">
-                  <input v-model="viewSettings.defaultUnit" type="radio" value="decade" />
-                  <span>{{ t('adminSystem.settings.defaults.unitDecade') }}</span>
+                  <input v-model="viewSettings.defaultUnit" type="radio" value="week" />
+                  <span>{{ t('adminSystem.settings.defaults.unitWeek') }}</span>
                 </label>
               </div>
             </div>

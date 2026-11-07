@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { TimelineCtx } from '../../../composables/timeline-context'
-import { cellIndexForDate } from '../calendar'
+import { cellIndexForDate, romanNumeral, weekOfMonth } from '../calendar'
 import { appLocale } from '@/i18n'
 import { fmtMonthLong, weekdayShort } from '@/i18n/date'
 import {
@@ -9,6 +9,7 @@ import {
   headerHeight,
   CELL_PX_NUM_DAY,
   CELL_PX_NUM_DECADE,
+  CELL_PX_NUM_WEEK,
   CELL_PX_WD_DAY,
 } from '../layout'
 
@@ -19,8 +20,12 @@ const props = defineProps<{
 /** Short weekday names indexed by `Date.getDay()` — follow the interface language */
 const dowMap = computed(() => weekdayShort(appLocale.value))
 
-/** Cell number label: for a day — the number; for a decade — the day range (1-10, 11-20, 21-end) */
+/** Cell number label: day — the number; decade — the day range (1-10, 11-20, 21-end);
+ *  week — the week-of-month ordinal as a Roman numeral (I…VI). */
 function numLabel(i: number): string {
+  if (props.t.unit === 'week') {
+    return romanNumeral(weekOfMonth(props.t.cellStart(i)))
+  }
   const s = props.t.cellStart(i)
   const e = props.t.cellEnd(i)
   return s.getDate() === e.getDate() ? s.getDate().toString() : `${s.getDate()}-${e.getDate()}`
@@ -49,9 +54,10 @@ const monthGroups = computed(() => {
 })
 
 /** The number and weekday rows are hidden when the cell is too narrow for their labels */
-const showNumRow = computed(() =>
-  props.t.cellPx >= (props.t.unit === 'day' ? CELL_PX_NUM_DAY : CELL_PX_NUM_DECADE),
+const numRowThreshold = computed(() =>
+  props.t.unit === 'day' ? CELL_PX_NUM_DAY : props.t.unit === 'week' ? CELL_PX_NUM_WEEK : CELL_PX_NUM_DECADE,
 )
+const showNumRow = computed(() => props.t.cellPx >= numRowThreshold.value)
 const showWdRow = computed(() => props.t.unit === 'day' && props.t.cellPx >= CELL_PX_WD_DAY)
 
 /**

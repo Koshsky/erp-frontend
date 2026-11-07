@@ -236,7 +236,10 @@ function readViewSettings(): ViewSettings {
     if (raw == null) return { ...DEFAULT_VIEW_SETTINGS }
     const parsed = JSON.parse(raw) as Partial<ViewSettings>
     // The stored blob may predate this key (or hold garbage) — never trust it.
-    return { ...DEFAULT_VIEW_SETTINGS, ...parsed, connector: normalizeLinkStyle(parsed.connector) }
+    // A stale "decade" default is coerced to day: the default unit is now
+    // only day or week (decade stays an in-session scale, not a default).
+    const defaultUnit = parsed.defaultUnit === 'week' ? 'week' : 'day'
+    return { ...DEFAULT_VIEW_SETTINGS, ...parsed, defaultUnit, connector: normalizeLinkStyle(parsed.connector) }
   } catch {
     return { ...DEFAULT_VIEW_SETTINGS }
   }

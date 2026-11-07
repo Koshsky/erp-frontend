@@ -29,7 +29,9 @@ import {
   cellStartDate,
   dateAtCellCoord,
   fitSpanDates,
+  romanNumeral,
   spanToDates,
+  weekOfMonth,
   windowCells,
   type PlanningUnit,
 } from './calendar'
@@ -179,6 +181,80 @@ describe('decade unit — leap-month end anchor (Feb 29, split at month end)', (
     expect(cellIndexForDate(origin, 'decade', '2024-02-20')).toBe(-2)
     expect(cellIndexForDate(origin, 'decade', '2024-02-21')).toBe(-1)
     expect(cellIndexForDate(origin, 'decade', '2024-02-29')).toBe(0)
+  })
+})
+
+describe('week unit — Monday anchor (no split)', () => {
+  const origin = '2026-07-06' // Monday
+
+  it('cell 0 is the full Monday–Sunday week', () => {
+    expect(fmt(cellStartDate(origin, 'week', 0))).toBe('2026-07-06')
+    expect(fmt(cellEndDate(origin, 'week', 0))).toBe('2026-07-12')
+    expect(fmt(cellStartDate(origin, 'week', 1))).toBe('2026-07-13')
+    expect(fmt(cellEndDate(origin, 'week', 1))).toBe('2026-07-19')
+    expect(fmt(cellStartDate(origin, 'week', -1))).toBe('2026-06-29')
+    expect(fmt(cellEndDate(origin, 'week', -1))).toBe('2026-07-05')
+  })
+
+  it('maps dates to weeks', () => {
+    expect(cellIndexForDate(origin, 'week', '2026-07-06')).toBe(0)
+    expect(cellIndexForDate(origin, 'week', '2026-07-12')).toBe(0)
+    expect(cellIndexForDate(origin, 'week', '2026-07-13')).toBe(1)
+    expect(cellIndexForDate(origin, 'week', '2026-07-05')).toBe(-1)
+    expect(cellIndexForDate(origin, 'week', '2026-06-29')).toBe(-1)
+  })
+
+  it('tiles contiguously across month boundaries', () => {
+    expectContiguous(origin, 'week', -4, 9)
+  })
+})
+
+describe('week unit — mid-week anchor (split)', () => {
+  const origin = '2026-07-01' // Wednesday
+
+  it('cell 0 starts at the anchor day and ends on Sunday', () => {
+    expect(fmt(cellStartDate(origin, 'week', 0))).toBe('2026-07-01')
+    expect(fmt(cellEndDate(origin, 'week', 0))).toBe('2026-07-05')
+  })
+
+  it('the before-anchor part covers Monday … anchor-1', () => {
+    expect(fmt(cellStartDate(origin, 'week', -1))).toBe('2026-06-29')
+    expect(fmt(cellEndDate(origin, 'week', -1))).toBe('2026-06-30')
+    expect(fmt(cellStartDate(origin, 'week', -2))).toBe('2026-06-22')
+  })
+
+  it('maps dates to the split cells', () => {
+    expect(cellIndexForDate(origin, 'week', '2026-06-29')).toBe(-1)
+    expect(cellIndexForDate(origin, 'week', '2026-06-30')).toBe(-1)
+    expect(cellIndexForDate(origin, 'week', '2026-07-01')).toBe(0)
+    expect(cellIndexForDate(origin, 'week', '2026-07-05')).toBe(0)
+    expect(cellIndexForDate(origin, 'week', '2026-07-06')).toBe(1)
+    expect(cellIndexForDate(origin, 'week', '2026-06-25')).toBe(-2)
+  })
+
+  it('tiles contiguously across the split', () => {
+    expectContiguous(origin, 'week', -3, 8)
+  })
+})
+
+describe('week-of-month ordinal and Roman numerals', () => {
+  it('numbers the week containing the 1st as I, incrementing per Monday week', () => {
+    expect(weekOfMonth(new Date(2026, 6, 1))).toBe(1) // Wed Jul 1 → I (Thu Jul 2)
+    expect(weekOfMonth(new Date(2026, 6, 6))).toBe(2)
+    expect(weekOfMonth(new Date(2026, 6, 13))).toBe(3)
+    expect(weekOfMonth(new Date(2026, 6, 20))).toBe(4)
+    expect(weekOfMonth(new Date(2026, 6, 27))).toBe(5)
+  })
+
+  it('resets to I in a new month (week belonging to August)', () => {
+    expect(weekOfMonth(new Date(2026, 7, 3))).toBe(1) // Mon Aug 3 → Thu Aug 6 → I
+  })
+
+  it('romanNumeral renders I…VI', () => {
+    expect(romanNumeral(1)).toBe('I')
+    expect(romanNumeral(4)).toBe('IV')
+    expect(romanNumeral(5)).toBe('V')
+    expect(romanNumeral(6)).toBe('VI')
   })
 })
 

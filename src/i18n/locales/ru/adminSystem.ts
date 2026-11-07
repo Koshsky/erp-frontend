@@ -72,7 +72,7 @@ export default {
       daysUnit: 'дн.',
       unit: 'Единица календаря по умолчанию',
       unitDay: 'Дни',
-      unitDecade: 'Декады',
+      unitWeek: 'Недели',
       connector: 'Стиль линий связей задач',
       connectorSharp: 'Прямая',
       connectorRounded: 'Закруглённая',

@@ -5,7 +5,7 @@ export default {
   /** Timeline scale units of the planning pages (right-click on the table header) */
   unit: {
     day: 'День',
-    decade: 'Декада',
+    week: 'Неделя',
   },
   /** PDF export page title of each planning page */
   pdf: {

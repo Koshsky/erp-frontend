@@ -5,7 +5,7 @@ import type { Translation } from '../types'
 export default {
   unit: {
     day: 'Day',
-    decade: 'Decade',
+    week: 'Week',
   },
   pdf: {
     tasks: 'Task chart',

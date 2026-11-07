@@ -70,7 +70,7 @@ export default {
       daysUnit: 'days',
       unit: 'Default calendar unit',
       unitDay: 'Days',
-      unitDecade: 'Decades',
+      unitWeek: 'Weeks',
       connector: 'Task dependency line style',
       connectorSharp: 'Straight',
       connectorRounded: 'Rounded',

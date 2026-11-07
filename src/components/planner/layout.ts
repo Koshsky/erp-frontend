@@ -9,9 +9,10 @@ export const LABEL_WIDTH = 180
  *  this fallback takes effect. Tracks always have a fixed width and don't depend on content. */
 export const CELL_WIDTH = 32
 
-/** Calendar header height (px): day — 3 rows (month/day-of-month/weekday), decade — 2 rows */
+/** Calendar header height (px): day — 3 rows (month/day-of-month/weekday), decade/week — 2 rows */
 export const HEADER_HEIGHT_DAY = 56
 export const HEADER_HEIGHT_DECADE = 38
+export const HEADER_HEIGHT_WEEK = 38
 
 /** Collapsed header heights (px): month only, month + day numbers */
 export const HEADER_HEIGHT_MONTH = 20
@@ -21,6 +22,7 @@ export const HEADER_HEIGHT_DAY_NUM = 38
 export const CELL_PX_NUM_DAY = 6
 export const CELL_PX_WD_DAY = 10
 export const CELL_PX_NUM_DECADE = 14
+export const CELL_PX_NUM_WEEK = 14
 
 /**
  * Calendar header height for a cell unit. Given a cell width (cellPx),
@@ -34,7 +36,8 @@ export function headerHeight(unit: PlanningUnit, cellPx?: number): number {
     if (cellPx < CELL_PX_WD_DAY) return HEADER_HEIGHT_DAY_NUM
     return HEADER_HEIGHT_DAY
   }
-  if (cellPx == null) return HEADER_HEIGHT_DECADE
-  if (cellPx < CELL_PX_NUM_DECADE) return HEADER_HEIGHT_MONTH
-  return HEADER_HEIGHT_DECADE
+  if (cellPx == null) return unit === 'week' ? HEADER_HEIGHT_WEEK : HEADER_HEIGHT_DECADE
+  const threshold = unit === 'week' ? CELL_PX_NUM_WEEK : CELL_PX_NUM_DECADE
+  if (cellPx < threshold) return HEADER_HEIGHT_MONTH
+  return unit === 'week' ? HEADER_HEIGHT_WEEK : HEADER_HEIGHT_DECADE
 }
