@@ -158,7 +158,6 @@ interface EditState {
   color?: string
   startDate: string
   endDate: string
-  durationDays: number
 }
 const { open: openEdit, close: closeEdit, submit: submitEdit, bind: editBind } = useEditModal<EditState>(
   (state) => [
@@ -170,7 +169,11 @@ const { open: openEdit, close: closeEdit, submit: submitEdit, bind: editBind } =
       key: 'duration_days',
       label: '',
       type: 'display',
-      value: t('plannerViews.processes.field.duration', { days: state.durationDays }),
+      displayValue: (values) => {
+        const start = String(values.start_date ?? state.startDate)
+        const end = String(values.end_date ?? state.endDate)
+        return t('plannerViews.processes.field.duration', { days: durationDaysOf(start, end) })
+      },
     },
     { key: 'owner_id', label: t('plannerViews.processes.field.owner'), type: 'select', value: state.ownerId, options: ownerOptions.value },
     {
@@ -231,7 +234,6 @@ function openProcessEdit(id: number) {
       color: proc.color ?? '',
       startDate: start,
       endDate: end,
-      durationDays: durationDaysOf(start, end),
     })
   }
 }

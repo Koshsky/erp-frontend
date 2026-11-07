@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { reactive, watch, computed } from 'vue'
-import type { ModalFormProps } from './types'
+import type { ModalField, ModalFormProps } from './types'
 import ColorField from '../ColorField/ColorField.vue'
 import { useModalFocus } from '../../../composables/useModalFocus'
 import { t } from '../../../i18n'
@@ -36,6 +36,12 @@ function resetValues() {
   for (const f of props.fields) {
     values[f.key] = f.value ?? ''
   }
+}
+
+/** Text of a display field — a static value, or a getter recomputed live from
+ *  the form values (reads `values` reactively, so it re-renders on edit). */
+function displayText(f: ModalField): string {
+  return f.displayValue ? f.displayValue(values) : String(f.value ?? '')
 }
 
 watch(
@@ -93,7 +99,7 @@ function onOverlayClick(e: MouseEvent) {
             <span
               v-else-if="f.type === 'display'"
               class="mf-display"
-            >{{ f.value }}</span>
+            >{{ displayText(f) }}</span>
             <textarea
               v-else-if="f.type === 'textarea'"
               v-model="values[f.key]"

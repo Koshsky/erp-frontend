@@ -16,6 +16,9 @@ export interface ModalField {
   placeholder?: string
   /** Render the input read-only (display of a computed value). */
   readonly?: boolean
+  /** For type 'display': a getter recomputing the shown text from the form's
+   *  current values (reactive — e.g. a duration derived from edited dates). */
+  displayValue?: (values: Record<string, string | number>) => string
 }
 
 export interface ModalFormProps {

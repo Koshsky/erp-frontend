@@ -154,7 +154,6 @@ interface EditState {
   color?: string
   startDate: string
   endDate: string
-  durationDays: number
 }
 const { open: openEdit, close: closeEdit, submit: submitEdit, bind: editBind } = useEditModal<EditState>(
   (state) => {
@@ -173,7 +172,11 @@ const { open: openEdit, close: closeEdit, submit: submitEdit, bind: editBind } =
         key: 'duration_days',
         label: '',
         type: 'display',
-        value: t('plannerViews.projects.field.duration', { days: state.durationDays }),
+        displayValue: (values) => {
+          const start = String(values.start_date ?? state.startDate)
+          const end = String(values.end_date ?? state.endDate)
+          return t('plannerViews.projects.field.duration', { days: durationDaysOf(start, end) })
+        },
       },
       {
         key: 'responsible_id',
@@ -257,7 +260,6 @@ function openProjectEdit(id: number) {
       color: p.color ?? '',
       startDate: start,
       endDate: end,
-      durationDays: durationDaysOf(start, end),
     })
   }
 }
