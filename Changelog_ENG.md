@@ -6,9 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 The web app and the desktop wrapper are versioned together.
 
-## [Unreleased]
+## [1.6.0] - 2026-11-09
+
+### Changed
+
+- The personal account groups user details, password security and application information into separate sections.
+
+## [1.5.1] - 2026-11-07
 
 ### Fixed
+
+- The project/process editor recalculates the displayed duration as the start/end dates change.
 
 - Person badges recover automatically when the local user catalog is empty.
 
@@ -23,12 +31,6 @@ The web app and the desktop wrapper are versioned together.
 - Project-code badges have independent settings for process and task bars.
 
 - Weekly timelines use ISO 8601 week numbers and continuous Monday–Sunday weeks, with month boundaries positioned within weeks.
-
-## [1.5.1] - 2026-11-07
-
-### Fixed
-
-- The project/process editor recalculates the displayed duration as the start/end dates change.
 
 ## [1.5.0] - 2026-11-07
 

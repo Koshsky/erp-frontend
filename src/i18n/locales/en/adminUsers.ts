@@ -77,13 +77,19 @@ export default {
     saved: 'Permissions saved ✓',
   },
   profile: {
-    title: 'Profile',
+    title: 'Personal account',
+    navigation: 'Account sections',
+    section: {
+      data: 'My details',
+      security: 'Security',
+      about: 'About the app',
+    },
     field: {
       login: 'Login',
-      name: 'Name',
-      preset: 'Permission preset',
+      name: 'Full name',
+      preset: 'System role',
       id: 'ID',
-      state: 'Status',
+      state: 'Connection',
       appVersion: 'Application version',
       buildVersion: 'Build version',
     },

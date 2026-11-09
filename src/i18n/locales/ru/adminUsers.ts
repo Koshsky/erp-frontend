@@ -77,13 +77,19 @@ export default {
     saved: 'Права сохранены ✓',
   },
   profile: {
-    title: 'Профиль',
+    title: 'Личная страница',
+    navigation: 'Разделы аккаунта',
+    section: {
+      data: 'Мои данные',
+      security: 'Безопасность',
+      about: 'О приложении',
+    },
     field: {
       login: 'Логин',
-      name: 'Имя',
-      preset: 'Пресет прав',
+      name: 'Фамилия, имя, отчество',
+      preset: 'Роль в системе',
       id: 'ID',
-      state: 'Состояние',
+      state: 'Подключение',
       appVersion: 'Версия приложения',
       buildVersion: 'Версия сборки',
     },

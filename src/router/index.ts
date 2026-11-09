@@ -138,7 +138,7 @@ const router = createRouter({
         {
           path: 'profile/edit',
           name: 'profile-edit',
-          component: () => import('../views/ProfileEditPage.vue'),
+          redirect: { name: 'profile', query: { section: 'security' } },
         },
         {
           path: 'system/console',
