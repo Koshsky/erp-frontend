@@ -1101,6 +1101,8 @@ export const useAppStore = defineStore('app', () => {
         },
       },
     ])
+    // A cold catalog must trigger the background PULL instead of hiding people indefinitely.
+    if (!users.value.length) scheduleWarmup()
   }
 
   async function refreshUsers(): Promise<void> {

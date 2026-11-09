@@ -1,4 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/vue3-vite'
+import { nextTick } from 'vue'
+import { expect } from 'storybook/test'
+import { viewSettings } from '@/settings'
 import ProjectBar from './ProjectBar.vue'
 import type { ProjectBarProps } from './types'
 import { makeDemoTimeline } from '@/components/planner/demoTimeline'
@@ -32,6 +35,8 @@ function withProject(props: Partial<ProjectBarProps>): Story['render'] {
             :projectCode="projectCode"
             :color="color"
             :opacity="opacity"
+            :ownerName="ownerName"
+            :responsibleName="responsibleName"
           />
         </div>
       </div>
@@ -53,3 +58,36 @@ export const ShortProject: Story = { render: withProject({ ...d.short, projectCo
 export const LateStart: Story = { render: withProject({ ...d.late, projectCode: 'PRJ-004' }) }
 export const CustomColor: Story = { render: withProject({ ...d.mid, projectCode: 'PRJ-005', color: '#ea4335' }) }
 export const CustomOpacity: Story = { render: withProject({ ...d.mid, projectCode: 'PRJ-006', color: '#1a73e8', opacity: 0.4 }) }
+
+export const PeopleBadgesFollowSettings: Story = {
+  render: withProject({
+    startDate: iso(day(1, 1)), endDate: iso(day(1, 25)),
+    projectCode: 'BADGES-DEMO',
+    ownerName: 'Owner Example', responsibleName: 'Responsible Example',
+  }),
+  play: async ({ canvasElement }) => {
+    const before = { owner: viewSettings.badgeProjectOwner, responsible: viewSettings.badgeProjectResponsible }
+    try {
+      viewSettings.badgeProjectOwner = true
+      viewSettings.badgeProjectResponsible = true
+      await nextTick()
+      expect(canvasElement.querySelector('.lb-owner')?.textContent).toBe('Owner E.')
+      expect(canvasElement.querySelector('.lb-responsible')?.textContent).toBe('Responsible E.')
+      viewSettings.badgeProjectOwner = false
+      await nextTick()
+      expect(canvasElement.querySelector('.lb-owner')).toBeNull()
+      expect(canvasElement.querySelector('.lb-responsible')).toBeTruthy()
+      viewSettings.badgeProjectResponsible = false
+      await nextTick()
+      expect(canvasElement.querySelector('.lb-responsible')).toBeNull()
+      viewSettings.badgeProjectOwner = true
+      viewSettings.badgeProjectResponsible = true
+      await nextTick()
+      expect(canvasElement.querySelector('.lb-owner')).toBeTruthy()
+      expect(canvasElement.querySelector('.lb-responsible')).toBeTruthy()
+    } finally {
+      viewSettings.badgeProjectOwner = before.owner
+      viewSettings.badgeProjectResponsible = before.responsible
+    }
+  },
+}

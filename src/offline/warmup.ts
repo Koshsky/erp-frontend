@@ -130,6 +130,9 @@ export function buildPullSteps(): PullStep[] {
     // same keys. Re-check both after regenerating src/api.
     steps.push({ name: 'projects', path: apiPath('/project'), refresh: () => app.refreshProjects() })
   }
+  if (resourceList || planningData) {
+    steps.push({ name: 'users', path: apiPath('/user/all'), refresh: () => app.refreshUsers() })
+  }
   if (resourceList) {
     steps.push({
       name: 'resources',
@@ -155,7 +158,6 @@ export function buildPullSteps(): PullStep[] {
       },
       cycle: false,
     })
-    steps.push({ name: 'users', path: apiPath('/user/all'), refresh: () => app.refreshUsers() })
     // Assignments reference (fallback in removeResource)
     steps.push({
       name: 'assignments',

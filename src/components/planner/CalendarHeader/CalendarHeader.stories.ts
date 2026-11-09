@@ -100,3 +100,32 @@ export const CornerMeetsCollapsedHeader: Story = {
   render: flushStory('day', 4),
   play: async ({ canvasElement }) => expectSeamlessJoint(canvasElement, HEADER_HEIGHT_MONTH),
 }
+
+export const IsoWeeksAcrossMonths: Story = {
+  render: () => ({
+    components: { CalendarHeader },
+    data: () => ({ t: makeDemoTimeline('2026-07-27', 'week', { cellPx: 110, viewportCells: 6 }) }),
+    template: '<div style="position:relative;width:660px;height:80px"><CalendarHeader :t="t" /></div>',
+  }),
+  play: async ({ canvasElement }) => {
+    const numbers = Array.from(canvasElement.querySelectorAll('.th-num'), (cell) => cell.textContent?.trim())
+    expect(numbers).toEqual(['31', '32', '33', '34', '35', '36'])
+    const months = canvasElement.querySelectorAll<HTMLElement>('.th-month')
+    expect(parseFloat(months[1].style.left)).toBeCloseTo(110 * 5 / 7)
+    expect(canvasElement.querySelectorAll('.th-wd')).toHaveLength(6)
+  },
+}
+
+export const IsoWeeksAcrossYears: Story = {
+  render: () => ({
+    components: { CalendarHeader },
+    data: () => ({ t: makeDemoTimeline('2026-12-28', 'week', { cellPx: 110, viewportCells: 3 }) }),
+    template: '<div style="position:relative;width:330px;height:80px"><CalendarHeader :t="t" /></div>',
+  }),
+  play: async ({ canvasElement }) => {
+    const numbers = Array.from(canvasElement.querySelectorAll('.th-num'), (cell) => cell.textContent?.trim())
+    expect(numbers).toEqual(['53', '1', '2'])
+    const months = canvasElement.querySelectorAll<HTMLElement>('.th-month')
+    expect(parseFloat(months[1].style.left)).toBeCloseTo(110 * 4 / 7)
+  },
+}

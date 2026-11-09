@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { TimelineCtx } from '../../../composables/timeline-context'
-import { cellIndexForDate, romanNumeral, weekOfMonth } from '../calendar'
+import { cellIndexForDate, isoWeek, weekCoordinate } from '../calendar'
 import { appLocale } from '@/i18n'
-import { fmtMonthLong, weekdayShort } from '@/i18n/date'
+import { dateLocale, fmtDateRange, fmtMonthLong, weekdayShort } from '@/i18n/date'
 import {
   LABEL_WIDTH,
   headerHeight,
@@ -11,6 +11,7 @@ import {
   CELL_PX_NUM_DECADE,
   CELL_PX_NUM_WEEK,
   CELL_PX_WD_DAY,
+  CELL_PX_WEEK_DATES,
 } from '../layout'
 
 const props = defineProps<{
@@ -21,10 +22,10 @@ const props = defineProps<{
 const dowMap = computed(() => weekdayShort(appLocale.value))
 
 /** Cell number label: day — the number; decade — the day range (1-10, 11-20, 21-end);
- *  week — the week-of-month ordinal as a Roman numeral (I…VI). */
+ *  week — the ISO 8601 week number. */
 function numLabel(i: number): string {
   if (props.t.unit === 'week') {
-    return romanNumeral(weekOfMonth(props.t.cellStart(i)))
+    return new Intl.NumberFormat(dateLocale()).format(isoWeek(props.t.cellStart(i)).week)
   }
   const s = props.t.cellStart(i)
   const e = props.t.cellEnd(i)
@@ -40,6 +41,17 @@ function monthLabel(d: Date): string {
  *  (from the month's first to last cell), not the visible window, so it does not "float" while scrolling */
 const monthGroups = computed(() => {
   const out: { key: string; label: string; from: number; to: number }[] = []
+  if (props.t.unit === 'week' && props.t.visibleIndices.length) {
+    const first = props.t.cellStart(props.t.visibleIndices[0])
+    const last = props.t.cellEnd(props.t.visibleIndices[props.t.visibleIndices.length - 1])
+    for (let d = new Date(first.getFullYear(), first.getMonth(), 1); d <= last;
+      d = new Date(d.getFullYear(), d.getMonth() + 1, 1)) {
+      const next = new Date(d.getFullYear(), d.getMonth() + 1, 1)
+      out.push({ key: `${d.getFullYear()}-${d.getMonth()}`, label: monthLabel(d),
+        from: weekCoordinate(props.t.origin, d), to: weekCoordinate(props.t.origin, next) })
+    }
+    return out
+  }
   const seen = new Set<string>()
   for (const i of props.t.visibleIndices) {
     const d = props.t.cellStart(i)
@@ -48,7 +60,7 @@ const monthGroups = computed(() => {
     seen.add(key)
     const firstOfMonth = cellIndexForDate(props.t.origin, props.t.unit, new Date(d.getFullYear(), d.getMonth(), 1))
     const lastOfMonth = cellIndexForDate(props.t.origin, props.t.unit, new Date(d.getFullYear(), d.getMonth() + 1, 0))
-    out.push({ key, label: monthLabel(d), from: firstOfMonth, to: lastOfMonth })
+    out.push({ key, label: monthLabel(d), from: firstOfMonth, to: lastOfMonth + 1 })
   }
   return out
 })
@@ -59,6 +71,12 @@ const numRowThreshold = computed(() =>
 )
 const showNumRow = computed(() => props.t.cellPx >= numRowThreshold.value)
 const showWdRow = computed(() => props.t.unit === 'day' && props.t.cellPx >= CELL_PX_WD_DAY)
+const showWeekDates = computed(() => props.t.unit === 'week' && props.t.cellPx >= CELL_PX_WEEK_DATES)
+
+function weekDates(i: number): string {
+  const formatter = new Intl.DateTimeFormat(dateLocale(), { day: '2-digit', month: '2-digit' })
+  return `${formatter.format(props.t.cellStart(i))}–${formatter.format(props.t.cellEnd(i))}`
+}
 
 /**
  * Left border of a header cell. The window's first cell (windowStart) starts at or
@@ -81,17 +99,26 @@ function edgeBorder(i: number): string | undefined {
     }"></div>
   <div class="tg-head" :style="{ height: headerHeight(t.unit, t.cellPx) + 'px' }">
 
-    <div v-for="m in monthGroups" :key="'m' + m.from"
+    <div v-for="m in monthGroups" :key="m.key"
       class="th-month"
-      :style="{ left: t.cellLeft(m.from) + 'px', width: (m.to - m.from + 1) * t.cellPx + 'px' }">
+      :style="{ left: t.cellLeft(m.from) + 'px', width: (m.to - m.from) * t.cellPx + 'px' }">
       {{ m.label }}
     </div>
 
     <template v-if="showNumRow">
       <div v-for="i in t.visibleIndices" :key="'n' + i"
         class="th-num"
+        :title="t.unit === 'week' ? fmtDateRange(t.cellStart(i), t.cellEnd(i)) : undefined"
         :style="{ left: t.cellLeft(i) + 'px', width: t.cellPx + 'px', borderLeft: edgeBorder(i) }">
         {{ numLabel(i) }}
+      </div>
+    </template>
+
+    <template v-if="showWeekDates">
+      <div v-for="i in t.visibleIndices" :key="'range' + i"
+        class="th-wd"
+        :style="{ left: t.cellLeft(i) + 'px', width: t.cellPx + 'px', borderLeft: edgeBorder(i) }">
+        {{ weekDates(i) }}
       </div>
     </template>
 

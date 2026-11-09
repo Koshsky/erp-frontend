@@ -29,6 +29,8 @@ import {
   cellStartDate,
   dateAtCellCoord,
   fitSpanDates,
+  isoWeek,
+  weekCoordinate,
   romanNumeral,
   spanToDates,
   weekOfMonth,
@@ -209,31 +211,56 @@ describe('week unit — Monday anchor (no split)', () => {
   })
 })
 
-describe('week unit — mid-week anchor (split)', () => {
+describe('week unit — mid-week anchor (full ISO weeks)', () => {
   const origin = '2026-07-01' // Wednesday
 
-  it('cell 0 starts at the anchor day and ends on Sunday', () => {
-    expect(fmt(cellStartDate(origin, 'week', 0))).toBe('2026-07-01')
+  it('cell 0 covers the full Monday–Sunday week containing the anchor', () => {
+    expect(fmt(cellStartDate(origin, 'week', 0))).toBe('2026-06-29')
     expect(fmt(cellEndDate(origin, 'week', 0))).toBe('2026-07-05')
   })
 
-  it('the before-anchor part covers Monday … anchor-1', () => {
-    expect(fmt(cellStartDate(origin, 'week', -1))).toBe('2026-06-29')
-    expect(fmt(cellEndDate(origin, 'week', -1))).toBe('2026-06-30')
-    expect(fmt(cellStartDate(origin, 'week', -2))).toBe('2026-06-22')
+  it('negative cells remain full weeks', () => {
+    expect(fmt(cellStartDate(origin, 'week', -1))).toBe('2026-06-22')
+    expect(fmt(cellEndDate(origin, 'week', -1))).toBe('2026-06-28')
+    expect(fmt(cellStartDate(origin, 'week', -2))).toBe('2026-06-15')
   })
 
-  it('maps dates to the split cells', () => {
-    expect(cellIndexForDate(origin, 'week', '2026-06-29')).toBe(-1)
-    expect(cellIndexForDate(origin, 'week', '2026-06-30')).toBe(-1)
+  it('maps dates before and after the anchor into the same week', () => {
+    expect(cellIndexForDate(origin, 'week', '2026-06-29')).toBe(0)
+    expect(cellIndexForDate(origin, 'week', '2026-06-30')).toBe(0)
     expect(cellIndexForDate(origin, 'week', '2026-07-01')).toBe(0)
     expect(cellIndexForDate(origin, 'week', '2026-07-05')).toBe(0)
     expect(cellIndexForDate(origin, 'week', '2026-07-06')).toBe(1)
-    expect(cellIndexForDate(origin, 'week', '2026-06-25')).toBe(-2)
+    expect(cellIndexForDate(origin, 'week', '2026-06-25')).toBe(-1)
   })
 
-  it('tiles contiguously across the split', () => {
+  it('tiles contiguously across the anchor', () => {
     expectContiguous(origin, 'week', -3, 8)
+  })
+})
+
+describe('ISO week numbering and month boundaries', () => {
+  it.each([
+    ['2026-07-27', 2026, 31],
+    ['2026-08-02', 2026, 31],
+    ['2026-12-28', 2026, 53],
+    ['2027-01-01', 2026, 53],
+    ['2027-01-03', 2026, 53],
+    ['2027-01-04', 2027, 1],
+    ['2024-12-30', 2025, 1],
+  ])('%s belongs to ISO year %i, week %i', (value, year, week) => {
+    expect(isoWeek(new Date(`${value}T12:00:00`))).toEqual({ year, week })
+  })
+
+  it('positions a month boundary inside an intact week', () => {
+    expect(weekCoordinate('2026-07-27', new Date(2026, 7, 1))).toBeCloseTo(5 / 7)
+    expect(cellIndexForDate('2026-07-27', 'week', '2026-08-01')).toBe(0)
+    expect(fmt(cellEndDate('2026-07-27', 'week', 0))).toBe('2026-08-02')
+  })
+
+  it('keeps weekly coordinates aligned across daylight-saving transitions', () => {
+    expect(weekCoordinate('2026-03-23', new Date(2026, 3, 1))).toBeCloseTo(9 / 7)
+    expect(cellIndexForDate('2026-03-23', 'week', '2026-03-30')).toBe(1)
   })
 })
 

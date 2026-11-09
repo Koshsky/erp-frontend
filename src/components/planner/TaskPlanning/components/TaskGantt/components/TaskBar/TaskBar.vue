@@ -257,7 +257,7 @@ watch(
       ></span>
       <span class="tb-title">{{ task.title }}</span>
       <span
-        v-if="viewSettings.badgeProjectCode && projectCode"
+        v-if="viewSettings.badgeTaskProjectCode && projectCode"
         class="tb-proj"
       >{{ projectCode }}</span>
       <span

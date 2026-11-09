@@ -181,8 +181,9 @@ export const VIEW_SETTINGS_KEY = 'mvs_erp_view_settings'
 export interface ViewSettings {
   /** Gantt badges: resource (specialization) on the task bars */
   badgeResource: boolean
-  /** Gantt badge: the project code on bars */
-  badgeProjectCode: boolean
+  /** Project-code badges are independent for process and task bars. */
+  badgeProcessProjectCode: boolean
+  badgeTaskProjectCode: boolean
   /** Gantt badge: "% of completed operations" on task bars */
   badgeProgress: boolean
   /** Gantt badges/labels — per entity: owner (assignee/владелец) and
@@ -213,7 +214,8 @@ export interface ViewSettings {
 
 const DEFAULT_VIEW_SETTINGS: ViewSettings = {
   badgeResource: true,
-  badgeProjectCode: true,
+  badgeProcessProjectCode: true,
+  badgeTaskProjectCode: true,
   badgeProgress: true,
   badgeProjectOwner: true,
   badgeProjectResponsible: true,
@@ -234,12 +236,18 @@ function readViewSettings(): ViewSettings {
   try {
     const raw = localStorage.getItem(VIEW_SETTINGS_KEY)
     if (raw == null) return { ...DEFAULT_VIEW_SETTINGS }
-    const parsed = JSON.parse(raw) as Partial<ViewSettings>
+    const parsed = JSON.parse(raw) as Partial<ViewSettings> & { badgeProjectCode?: boolean }
+    const { badgeProjectCode: legacyProjectCode, ...stored } = parsed
     // The stored blob may predate this key (or hold garbage) — never trust it.
     // A stale "decade" default is coerced to day: the default unit is now
     // only day or week (decade stays an in-session scale, not a default).
     const defaultUnit = parsed.defaultUnit === 'week' ? 'week' : 'day'
-    return { ...DEFAULT_VIEW_SETTINGS, ...parsed, defaultUnit, connector: normalizeLinkStyle(parsed.connector) }
+    return {
+      ...DEFAULT_VIEW_SETTINGS, ...stored, defaultUnit,
+      badgeProcessProjectCode: parsed.badgeProcessProjectCode ?? legacyProjectCode ?? true,
+      badgeTaskProjectCode: parsed.badgeTaskProjectCode ?? legacyProjectCode ?? true,
+      connector: normalizeLinkStyle(parsed.connector),
+    }
   } catch {
     return { ...DEFAULT_VIEW_SETTINGS }
   }

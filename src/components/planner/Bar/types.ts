@@ -11,6 +11,10 @@ export interface BarProps {
   title?: string
   /** Project code — badge after the title (in default content) */
   projectCode?: string
+  ownerName?: string
+  ownerShort?: string
+  responsibleName?: string
+  responsibleShort?: string
   color?: string
   opacity?: number
   /** Custom tooltip text (shown when no #tooltip slot is provided) */

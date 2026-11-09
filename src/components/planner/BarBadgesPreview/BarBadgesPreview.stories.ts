@@ -20,7 +20,7 @@ type Story = StoryObj<typeof meta>
 
 /** Every switchable badge and the element it renders. */
 const FLAGS = {
-  badgeProjectCode: '.tb-proj',
+  badgeTaskProjectCode: '.tb-proj',
   badgeTaskOwner: '.tb-owner',
   badgeTaskResponsible: '.tb-responsible',
   badgeProgress: '.tb-progress',
@@ -32,7 +32,7 @@ type BadgeFlag = keyof typeof FLAGS
 
 function snapshot(): Record<BadgeFlag, boolean> {
   return {
-    badgeProjectCode: viewSettings.badgeProjectCode,
+    badgeTaskProjectCode: viewSettings.badgeTaskProjectCode,
     badgeTaskOwner: viewSettings.badgeTaskOwner,
     badgeTaskResponsible: viewSettings.badgeTaskResponsible,
     badgeProgress: viewSettings.badgeProgress,

@@ -1,26 +1,21 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { t } from '@/i18n'
+import ProjectBar from '../ProjectPlanning/components/ProjectBar/ProjectBar.vue'
+import ProcessBar from '../ProcessPlanning/components/ProcessBar/ProcessBar.vue'
 import { TaskBar } from '../TaskPlanning/components/TaskGantt/components/TaskBar'
 import { cellRangeForSpan } from '../calendar'
 import { makeDemoTimeline } from '../demoTimeline'
 import type { BadgePreviewTask } from './types'
 
-/**
- * Live preview of the bar badges (Settings → Diagrams → "Badges on diagrams").
- *
- * It draws the REAL `TaskBar` over a demo timeline instead of a hand-made copy,
- * so the picture cannot diverge from the planner: the component reads the very
- * same `viewSettings` flags the checkboxes toggle. Dragging is disabled, which
- * also keeps the bar out of the tab order (no `tabindex`, no slider role).
- */
+// Use the real bars so settings previews cannot drift from the planner.
+const props = withDefaults(defineProps<{ kind?: 'project' | 'process' | 'task' }>(), {
+  kind: 'task',
+})
+
 const ORIGIN = '2026-01-01'
-const CELL_PX = 32
-/**
- * Fourteen day cells — the bar is 448px wide, which fits the settings card
- * (640px) and still has room for every badge the preview demonstrates: with a
- * narrower bar the trailing badges would be cut off by the bar's own edge.
- */
+const CELL_PX = 38
+// Leave enough space for the title when every badge is enabled.
 const START_DATE = '2026-01-01'
 const END_DATE = '2026-01-14'
 const PROJECT_CODE = 'KO-1001'
@@ -56,9 +51,31 @@ const task = computed<BadgePreviewTask>(() => ({
 </script>
 
 <template>
-  <div class="bbp-preview">
-    <div class="bbp-row" :style="{ width: barWidth + 'px' }">
+  <div class="bbp-preview" :data-kind="kind">
+    <div class="bbp-row" :style="{ width: barWidth + 'px', height: props.kind === 'project' ? '52px' : '26px' }">
+      <ProjectBar
+        v-if="kind === 'project'"
+        :timeline="timeline"
+        :start-date="START_DATE"
+        :end-date="END_DATE"
+        :project-code="PROJECT_CODE"
+        :owner-name="t('adminSystem.settings.badges.demoOwner')"
+        :responsible-name="t('adminSystem.settings.badges.demoResponsible')"
+        :draggable="false"
+      />
+      <ProcessBar
+        v-else-if="kind === 'process'"
+        :timeline="timeline"
+        :start-date="START_DATE"
+        :end-date="END_DATE"
+        :title="t('adminSystem.settings.badges.demoTitle')"
+        :project-code="PROJECT_CODE"
+        :owner-name="t('adminSystem.settings.badges.demoOwner')"
+        :responsible-name="t('adminSystem.settings.badges.demoResponsible')"
+        :draggable="false"
+      />
       <TaskBar
+        v-else
         :timeline="timeline"
         :task="task"
         :project-code="PROJECT_CODE"
@@ -72,8 +89,8 @@ const task = computed<BadgePreviewTask>(() => ({
 @import "../../../styles/tokens.css";
 .bbp-preview {
   box-sizing: border-box;
-  width: max-content;
-  max-width: 100%;
+  width: 100%;
+  overflow-x: auto;
   padding: 4px;
   border: 1px solid var(--ui-border);
   border-radius: var(--ui-radius-sm);

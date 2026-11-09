@@ -10,12 +10,18 @@ export function shortName(u?: {
   first_name?: string | null
   middle_name?: string | null
 } | null): string {
-  const hasStructured = Boolean(u && (u.last_name || u.first_name || u.middle_name))
-  const parts = hasStructured
-    ? [u?.last_name, u?.first_name, u?.middle_name].filter(Boolean) as string[]
-    : (u?.name ?? '').trim().split(/\s+/).filter(Boolean)
-  if (!parts.length) return ''
-  const [surname, ...rest] = parts
-  const initials = rest.map((p) => `${p[0].toUpperCase()}.`).join('')
-  return [surname, initials].filter(Boolean).join(' ')
+  const surname = u?.last_name?.trim() ?? ''
+  const first = u?.first_name?.trim() ?? ''
+  const middle = u?.middle_name?.trim() ?? ''
+  const initial = (value: string): string => {
+    const letter = value.match(/\p{L}/u)?.[0]
+    return letter ? `${letter.toUpperCase()}.` : ''
+  }
+  if (surname || first || middle) {
+    return [surname, initial(first) + initial(middle)].filter(Boolean).join(' ')
+  }
+  const [fallbackSurname, ...rest] = (u?.name ?? '').trim().split(/\s+/).filter(Boolean)
+  if (!fallbackSurname) return ''
+  const initials = rest.map((part) => /^(?:\p{L}\.)+$/u.test(part) ? part : initial(part)).join('')
+  return [fallbackSurname, initials].filter(Boolean).join(' ')
 }

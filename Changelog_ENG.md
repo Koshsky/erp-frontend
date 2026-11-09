@@ -6,6 +6,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 The web app and the desktop wrapper are versioned together.
 
+## [Unreleased]
+
+### Fixed
+
+- Person badges recover automatically when the local user catalog is empty.
+
+- Person badges consistently use surname and initials, omitting missing name parts without extra punctuation.
+
+- Project and process owner/responsible badges now appear on Gantt bars and follow their display settings.
+
+- The selected timeline unit, position and zoom are preserved when switching between projects, processes and tasks.
+
+### Changed
+
+- Project-code badges have independent settings for process and task bars.
+
+- Weekly timelines use ISO 8601 week numbers and continuous Monday–Sunday weeks, with month boundaries positioned within weeks.
+
 ## [1.5.1] - 2026-11-07
 
 ### Fixed

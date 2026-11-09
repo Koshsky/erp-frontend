@@ -220,10 +220,7 @@ export function cellEndDate(origin: Date | string | number, unit: PlanningUnit, 
 }
 
 // ============================================================================
-// Week layout (Monday-start). Mirrors the decade layout: the anchor's week is
-// partial — cell 0 is [anchor … Sunday], and when the anchor is not a Monday
-// the days before it in that week get cell -1. Every other cell is a full
-// Monday–Sunday week.
+// Weeks stay Monday–Sunday even when the timeline anchor falls mid-week.
 // ============================================================================
 
 /** Day-of-week with Monday = 0 … Sunday = 6. */
@@ -236,34 +233,36 @@ function mondayOfWeek(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate() - dowMonday(d))
 }
 
-/** Whether the anchor splits its own week (the anchor is not a Monday). */
-function weekSplit(origin: Date): boolean {
-  return dowMonday(origin) > 0
+/** Civil-day coordinates avoid daylight-saving shifts in calendar geometry. */
+function civilDay(d: Date): number {
+  return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / DAY_MS
 }
 
-/** Absolute cell index of the week containing d (mirror of the decade anchor split). */
 function weekIndexForDate(origin: Date, d: Date): number {
-  const om = mondayOfWeek(origin)
-  const dm = mondayOfWeek(d)
-  const diff = Math.round((dm.getTime() - om.getTime()) / (7 * DAY_MS))
-  if (diff === 0) return d.getTime() < origin.getTime() && weekSplit(origin) ? -1 : 0
-  return diff < 0 ? diff - (weekSplit(origin) ? 1 : 0) : diff
+  return (civilDay(mondayOfWeek(d)) - civilDay(mondayOfWeek(origin))) / 7
 }
 
-/** Start date of a week cell (the partial first anchor week, Monday elsewhere). */
 function weekCellStart(origin: Date, i: number): Date {
   const monday = mondayOfWeek(origin)
-  if (i === 0) return origin
-  if (i === -1 && weekSplit(origin)) return monday
-  const offset = i < 0 ? i + (weekSplit(origin) ? 1 : 0) : i
-  return new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 7 * offset)
+  return new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 7 * i)
 }
 
-/** End date of a week cell (inclusive). */
 function weekCellEnd(origin: Date, i: number): Date {
-  if (i === -1) return new Date(origin.getFullYear(), origin.getMonth(), origin.getDate() - 1)
   const start = weekCellStart(origin, i)
-  return new Date(start.getFullYear(), start.getMonth(), start.getDate() + (6 - dowMonday(start)))
+  return new Date(start.getFullYear(), start.getMonth(), start.getDate() + 6)
+}
+
+/** ISO 8601 assigns a week to the year containing its Thursday. */
+export function isoWeek(d: Date): { year: number; week: number } {
+  const thursday = thursdayOfWeek(d)
+  const year = thursday.getFullYear()
+  const firstMonday = mondayOfWeek(new Date(year, 0, 4))
+  return { year, week: Math.floor((civilDay(thursday) - civilDay(firstMonday)) / 7) + 1 }
+}
+
+/** Month boundaries can fall inside a weekly cell rather than on its edge. */
+export function weekCoordinate(origin: Date | string | number, date: Date): number {
+  return (civilDay(date) - civilDay(mondayOfWeek(toDayStart(origin)))) / 7
 }
 
 /** Thursday of the week containing d (the week's ISO-style month anchor). */

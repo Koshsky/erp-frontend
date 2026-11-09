@@ -17,7 +17,9 @@ export interface GroupGanttSlotItem extends GroupGanttItem {
   color?: string
   priority?: number
   owner_name?: string
+  owner_short?: string
   responsible_name?: string
+  responsible_short?: string
   resources: Array<{
     resource_id: number
     assignment_id: number
