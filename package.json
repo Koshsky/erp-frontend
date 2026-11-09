@@ -23,6 +23,7 @@
   "dependencies": {
     "@pdf-lib/fontkit": "^1.1.1",
     "axios": "^1.19.0",
+    "d3-hierarchy": "3.1.2",
     "marked": "^18.0.14",
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "4.10.38",
@@ -38,6 +39,7 @@
     "@storybook/addon-onboarding": "^10.5.2",
     "@storybook/addon-vitest": "^10.5.2",
     "@storybook/vue3-vite": "^10.5.2",
+    "@types/d3-hierarchy": "3.1.7",
     "@vitejs/plugin-vue": "^6.0.8",
     "@vitest/browser-playwright": "^4.1.10",
     "@vitest/coverage-v8": "^4.1.10",

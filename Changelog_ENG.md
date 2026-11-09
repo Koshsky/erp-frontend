@@ -10,6 +10,8 @@ The web app and the desktop wrapper are versioned together.
 
 ### Changed
 
+- The read-only company chart groups employees inside manager cards, initially shows two manager levels and preserves the table view.
+
 - The personal account groups user details, password security and application information into separate sections.
 
 ## [1.5.1] - 2026-11-07
