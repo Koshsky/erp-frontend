@@ -247,11 +247,9 @@ function waitForExternalToken(): Promise<boolean> {
 
 // === Auth ===
 export const useAuthStore = defineStore('auth', () => {
-  // At startup there is no access token in memory; "logged in" holds while a saved
-  // profile exists (not a secret). The guard restores the session via /auth/refresh
-  // using the HttpOnly cookie; without a cookie, refresh returns 401 and logs out.
+  // Cached identity supports session restoration, but cannot override a recorded logout.
   const user = ref<DtoUserInfo | null>(readStoredUser())
-  const isAuthenticated = ref<boolean>(Boolean(readStoredUser()))
+  const isAuthenticated = ref<boolean>(Boolean(user.value) && !isLoggedOut())
   // Neither the in-memory token nor the wall clock invalidates a Vue computed value.
   function accessExpired(): boolean { return accessTokenExpired() }
   /** Session mode: online — real (with token), offline — local without token */
@@ -354,15 +352,13 @@ export const useAuthStore = defineStore('auth', () => {
       const body = resp.data
       const errBody = body?.error as { code?: unknown; message?: string } | undefined
       if (errBody && errBody.code != null) throw new Error(apiErrorMessage(errBody))
-      // Manual login: the offline cache is warmed for the user's role.
-      applySession(body?.data, true)
-      // Persist the rotation-eligible refresh token (the backend returns it in
-      // the login body) so the session survives reloads without the cookie.
+      // Commit shared state before publishing authentication to navigation watchers.
       if (body?.data?.refresh_token) {
         await saveRefreshToken(body.data.refresh_token)
       }
-      // Manual login clears the "logged out" flag — auto-sync is allowed again
       clearLoggedOut()
+      // Manual login: the offline cache is warmed for the user's role.
+      applySession(body?.data, true)
       sessionMode.value = 'online'
       // A verified login orphans the queue entries of the previous account
       // (their session is revoked; the flush-time creator guard would park
@@ -438,9 +434,24 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  function invalidateOnlineSession() {
+    stopProactiveRefresh()
+    setAccessToken(null)
+    isAuthenticated.value = false
+    useRbacStore().resetPermissions()
+    useTimesheetStore().resetUserData()
+    useAppStore().resetUserData()
+    usePlanningStore().resetUserData()
+  }
+
   /** Renews the access token via the refresh token; on failure logs out.
    *  Parallel calls (timer/guard/interceptor) are deduplicated into a single request */
   async function refreshSession(): Promise<boolean> {
+    // A sibling logout can leave this tab's cached profile and memory intact.
+    if (isLoggedOut() && !isOffline.value) {
+      invalidateOnlineSession()
+      return false
+    }
     if (refreshInFlight) return refreshInFlight
     refreshInFlight = doRefresh()
     try {
@@ -461,7 +472,10 @@ export const useAuthStore = defineStore('auth', () => {
     // the request would return 401 and show a false "Session expired", and on the server reusing
     // the revoked token would trigger reuse detection (revoking all of the
     // user's sessions). We return false without the network — the caller is logged out.
-    if (isLoggedOut()) return false
+    if (isLoggedOut()) {
+      invalidateOnlineSession()
+      return false
+    }
     const renewed = await withRefreshLock(refreshOwnedSession)
     if (renewed != null) return renewed
     if (await waitForExternalToken()) return true
@@ -478,6 +492,11 @@ export const useAuthStore = defineStore('auth', () => {
       const body = resp.data
       const errBody = body?.error as { code?: unknown; message?: string } | undefined
       if (errBody && errBody.code != null) throw new Error(apiErrorMessage(errBody))
+      // A response issued before logout must not resurrect the online session.
+      if (isLoggedOut()) {
+        invalidateOnlineSession()
+        return false
+      }
       applySession(body?.data)
       // Rotate: persist the refresh token returned by the backend for the next refresh.
       if (body?.data?.refresh_token) {

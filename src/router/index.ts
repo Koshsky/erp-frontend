@@ -235,7 +235,7 @@ router.beforeEach(async (to) => {
 
   if (
     to.meta.requiresAuth &&
-    (!auth.isAuthenticated || auth.accessExpired()) &&
+    (!auth.isAuthenticated || auth.accessExpired() || isLoggedOut()) &&
     !isOffline.value
   ) {
     if (isElectron && shouldAutoSync() && !isLoggedOut()) {
@@ -272,7 +272,7 @@ router.beforeEach(async (to) => {
   }
 
   // Already-authenticated users are not allowed on the login page
-  if (to.name === 'login' && auth.isAuthenticated) {
+  if (to.name === 'login' && auth.isAuthenticated && !isLoggedOut()) {
     return { name: 'home' }
   }
 

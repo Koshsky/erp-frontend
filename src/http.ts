@@ -202,6 +202,8 @@ export function setupHttp() {
       // reuse (revoking ALL user sessions) — plus the UI would show a false
       // "Session expired" instead of the expected "logged out" state.
       if (isLoggedOut()) {
+        // The router must see the cleared in-memory state before entering /login.
+        await ensureAutoSession()
         redirectToLogin()
         return Promise.reject(error)
       }

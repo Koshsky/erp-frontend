@@ -31,3 +31,8 @@ Browser runtime errors fail the runner. Fresh backend reads verify final task id
 Unit tests cover atomic refresh ownership and lock release, abandoned leases, missing Web Locks, waiting without false success, expired broadcasts, connectivity/logout changes during renewal, durable 401 interruption for create/update/delete, and safe temporary-ID boundaries.
 
 The test uses full browser offline mode only for previously loaded routes. Reloads keep the frontend shell available and interrupt the API transport. It does not assert cold startup without network or installation of a service worker.
+
+
+## Stale logged-out profile regression
+
+Run `npm run test:session:stale` against the same local stack. It reproduces a cached profile with the shared logout flag, no bearer token and an empty cache, while retaining one offline task creation. Real 401 responses must open login without refreshing or bouncing back to planning. A second tab with a still-valid in-memory token must also respect the logout flag. A verified same-account login restores server data, preserves the queued task through reload, flushes it once and restores the sibling tab. Unit tests also reject late refresh responses after logout and ensure the shared refresh token and logout marker are committed before publishing manual-login authentication.

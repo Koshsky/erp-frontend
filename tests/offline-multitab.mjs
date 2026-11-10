@@ -212,7 +212,10 @@ try {
   await first.locator('input[autocomplete=current-password]').fill(userPassword)
   await first.locator('button[type=submit]').click()
   await expect(first).not.toHaveURL(/\/login/)
-  await navigate(second, '/processes')
+  // A sibling that observed logout must restore the newly verified shared session.
+  await second.goto(`${web}/processes`)
+  await expect(second.locator('.ah-burger')).toBeVisible()
+  await runtime(second)
   await expect.poll(() => second.evaluate(() => window.mt.auth.accessExpired())).toBe(false)
   expect((await queue(first))[0]?.idempotencyKey).toBe(c.idempotencyKey)
   await first.evaluate(() => window.mt.sync.syncNow())

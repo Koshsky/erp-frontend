@@ -1,20 +1,23 @@
-import axios, { AxiosError, type AxiosResponse } from 'axios'
+import axios, { AxiosError, type AxiosResponse, type InternalAxiosRequestConfig } from 'axios'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { beginMutation } from './offline/mutationGuard'
 
-const mocks = vi.hoisted(() => ({ put: vi.fn(), get: vi.fn(), byPath: vi.fn(), replay: vi.fn(), scheduledReplay: vi.fn(), offline: { value: false } }))
-vi.mock('./router', () => ({ default: { currentRoute: { value: { name: 'planner' } }, push: vi.fn() } }))
+const mocks = vi.hoisted(() => ({ put: vi.fn(), get: vi.fn(), byPath: vi.fn(), replay: vi.fn(), scheduledReplay: vi.fn(), offline: { value: false }, loggedOut: false, renew: vi.fn() }))
+vi.mock('./router', () => ({ default: { currentRoute: { value: { name: 'planner', fullPath: '/planner' } }, push: vi.fn() } }))
 vi.mock('./offline/cache', () => ({ cachePut: mocks.put, cacheGet: mocks.get, cacheGetByPath: mocks.byPath, userCachePrefix: () => 'u51:' }))
 vi.mock('./offline/outbox', () => ({ replayOutboxToCache: mocks.replay, scheduleReplayOutboxToCache: mocks.scheduledReplay, createMutationKey: () => crypto.randomUUID() }))
 vi.mock('./offline/state', () => ({ isOffline: mocks.offline }))
-vi.mock('./offline/sync', () => ({ ensureAutoSession: vi.fn() }))
+vi.mock('./offline/sync', () => ({ ensureAutoSession: mocks.renew }))
+vi.mock('./loggedOut', () => ({ isLoggedOut: () => mocks.loggedOut }))
 vi.mock('./token', () => ({ getAccessToken: () => 'test-token' }))
 import { setupHttp } from './http'
+import router from './router'
 
 const adapter = axios.defaults.adapter
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.offline.value = false
+  mocks.loggedOut = false
   mocks.get.mockResolvedValue(null)
   mocks.byPath.mockResolvedValue(null)
   axios.interceptors.request.clear()
@@ -91,4 +94,20 @@ it('never serves an administrator cache as a subject preview on a network failur
   axios.defaults.adapter = async (config) => { throw new AxiosError('Network Error', 'ERR_NETWORK', config) }
   await expect(axios.get('/api/v1/planning/tasks', { headers: { 'X-View-User-ID': '7' } })).rejects.toThrow()
   expect(mocks.get).not.toHaveBeenCalled()
+})
+
+
+it.each(['projects', 'processes', 'tasks'])('clears stale online auth before redirecting a logged-out %s request', async entity => {
+  mocks.loggedOut = true
+  mocks.renew.mockResolvedValue(false)
+  const send = vi.fn(async (config: InternalAxiosRequestConfig) => {
+    throw new AxiosError('Unauthorized', 'ERR_BAD_REQUEST', config, undefined, { config, status: 401, statusText: 'Unauthorized', headers: {}, data: {} })
+  })
+  axios.defaults.adapter = send
+
+  await expect(axios.get('/api/v1/planning/' + entity)).rejects.toMatchObject({ response: { status: 401 } })
+
+  expect(mocks.renew).toHaveBeenCalledTimes(1)
+  expect(send).toHaveBeenCalledTimes(1)
+  expect(router.push).toHaveBeenCalledWith({ name: 'login', query: { redirect: '/planner' } })
 })
