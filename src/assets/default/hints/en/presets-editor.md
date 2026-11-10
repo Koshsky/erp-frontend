@@ -8,6 +8,8 @@ Viewing a project opens all its processes, tasks, subtasks, milestones and resou
 
 **A child denial cannot cancel viewing inherited from a parent**, including an individual employee denial. If the parent is fully open, its content's View controls are disabled. With scoped parent access, Through parent only removes an additional grant while keeping inherited visibility.
 
+**Through parent only means No access with an exception:** it removes a separate viewing grant, but an object remains visible inside an accessible parent project, process or task. For example, a task is visible when its containing process or project is accessible; if neither is accessible, this setting does not grant access to the task. Parent means the containing object, not the employee’s manager. Parent-derived viewing always applies: this button neither enables nor disables inheritance. To restrict that viewing, change the parent permissions. Creation, editing and deletion are configured separately.
+
 This applies only to viewing. Seeing an entire project does not grant permission to edit it or manage its contents.
 
 ## Main conditions

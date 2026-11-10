@@ -4,6 +4,8 @@ A role supplies initial permissions. Individual settings add grants or remove se
 
 **Viewing inherits downward:** a project opens all processes, tasks, subtasks, milestones and assignments; a process opens its contents; a task opens its subtasks and assignments. An individual child denial **cannot cancel** parent-derived viewing. View controls are disabled when the parent is fully open. Through parent only removes an additional grant while preserving inherited access.
 
+**Through parent only means No access with an exception:** it removes a separate viewing grant, but an object remains visible inside an accessible parent project, process or task. For example, a task is visible when its containing process or project is accessible; if neither is accessible, this setting does not grant access to the task. Parent means the containing object, not the employee’s manager. Parent-derived viewing always applies: this button neither enables nor disables inheritance. To restrict that viewing, change the parent permissions. Creation, editing and deletion are configured separately.
+
 Management does not inherit: creation, editing and deletion are checked separately. Seeing a colleague's process does not permit editing it.
 
 Main conditions are **All**, **In employee-owned projects**, **In employee-owned processes**, and owned projects or resources. Nested records may have different owners. The project condition **Containing employee-owned processes** requires an owned process, not merely a task; the whole project then becomes visible.
