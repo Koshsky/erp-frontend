@@ -1,41 +1,40 @@
-# Set up a role
+# Roles and permissions
 
-Select a role on the left. Each block has **View** and **Manage**. Manage groups creation, editing and deletion; expand Different permissions when their saved conditions differ. They stay unchanged until a common condition is chosen.
+Select a role and configure its capabilities. Saved rights apply to its employees unless individually overridden.
 
-## Viewing opens the contents
+## Planning
 
-Viewing a project opens all its processes, tasks, subtasks, milestones and resource assignments. Viewing a process opens everything inside it. Viewing a task opens its subtasks and assignments.
+View opens records. Manage groups creation, editing and deletion, while the server checks each action separately. Mixed permissions preserve previously different action settings until an explicit common choice is made.
 
-**A child denial cannot cancel viewing inherited from a parent**, including an individual employee denial. If the parent is fully open, its content's View controls are disabled. With scoped parent access, Through parent only removes an additional grant while keeping inherited visibility.
+Viewing a project opens all its processes, tasks, subtasks, milestones and assignments. Viewing a process opens its contents; viewing a task opens its subtasks and assignments. A child denial cannot cancel parent visibility. Disabled controls explain this on hover. Through parent only removes an independent grant while retaining inherited visibility. Management never inherits this way.
 
-**Through parent only means No access with an exception:** it removes a separate viewing grant, but an object remains visible inside an accessible parent project, process or task. For example, a task is visible when its containing process or project is accessible; if neither is accessible, this setting does not grant access to the task. Parent means the containing object, not the employee’s manager. Parent-derived viewing always applies: this button neither enables nor disables inheritance. To restrict that viewing, change the parent permissions. Creation, editing and deletion are configured separately.
+In employee projects checks the project owner; In employee processes checks the process owner. Nested records may have different owners. With employee processes opens a project containing that employee's process and thus the entire project for viewing; owning only a task is insufficient. Selected conditions are combined with OR. Previously stored advanced conditions remain effective until replaced.
 
-This applies only to viewing. Seeing an entire project does not grant permission to edit it or manage its contents.
+Project priority is separate from other edits. An assigned resource and its process must always share an owner, even for administrators.
 
-## Main conditions
+## Employees, timesheets and resources
 
-- **All** covers any objects.
-- **In employee-owned projects** checks the project owner, regardless of process or task owners.
-- **In employee-owned processes** checks the process owner, regardless of task owners.
-- **Own** checks ownership of the project or resource itself.
-- **Containing employee-owned processes** opens projects containing an employee's process. Owning a task alone does not qualify. A project opened this way becomes fully visible.
+- **Employees and timesheet** controls employee visibility and attendance or absence periods. Own means direct subordinates, not the employee's own account.
+- **Timesheet day types** provides working-day, vacation, sickness and other day labels, unrelated to task statuses. Dictionary access does not allow changing employee calendars.
+- **Planning resources** groups employees assigned to tasks and used for capacity calculations. Own means resources owned by the employee. Resource management and task assignment are separate rights.
+- **Employee selection in forms** provides candidates for owners, responsible people and similar fields. It does not open accounts, timesheets or the company chart.
 
-Selected conditions use OR. Peer and other complex conditions are no longer offered. Previously saved special rules remain visible separately and stay effective until explicitly replaced.
+## Administration
 
-## Predefined roles
+One card contains independent capabilities:
 
-- **Project director** views all planning and changes project priorities. Other changes are forbidden.
-- **Project manager** manages owned projects and all their contents, regardless of nested owners. Does not manage resources.
-- **Process owner** manages owned processes and resources. Projects containing their processes are fully visible; other processes remain read-only.
-- **Worker** has no initial permissions.
-- **Administrator** has full access.
+- **View user accounts** opens the directory, profile details and roles. No password or profile changes, and no timesheet access.
+- **Manage user accounts** allows creation, editing, password resets and deletion. The UI also requires account viewing. Only administrators may assign roles.
+- **Roles and permissions** allows full role and individual permission configuration, including your own. It is an administrative capability, not a read-only mode. It also opens profiles needed for permission editing. It does not allow password resets or template changes by itself.
+- **New-project template** allows viewing and configuring processes and tasks automatically created with a project, independently of role management. Legacy read-only access remains read-only until configuration is explicitly granted.
+- **Edit timesheet day types** allows creating, editing and deleting day labels. The dictionary opens with Day types inside the timesheet; there is no separate page. Viewing day types is also required. Dictionary-only administrators do not see employees or their calendars. It does not allow changing employee calendars.
+- **View company structure** opens the reporting hierarchy without logins, passwords or timesheet entries. It does not allow manager changes; those require account editing.
+- **View activity log** opens user activity history; request and response bodies may contain operational data. It grants no other administrative access.
 
-Resource assignment always requires matching resource and process owners, for every role. Project managers may read resources belonging to process owners in their projects for assignment; process owners manage those resources. A regular user's resource header shows only their own resources.
+Choose Available or No access for each common setting. Mixed permissions show the individual saved actions. Choosing a common setting replaces only its own actions and preserves unrelated permissions.
 
-Projects have a separate **Change priority** permission. It does not allow changing names, dates or owners.
+## Saving
 
-New custom roles initially access owned projects and resources, manage processes in owned projects and tasks in owned processes. Assignments default to owned resources in owned tasks; matching resource and process owners remains mandatory. Viewing follows the inheritance rule above.
+Save applies role changes. Cancel discards unsaved changes. The page reset restores built-in defaults after confirmation.
 
-**Save** applies changes. **Cancel** restores saved values. A role applies to all its employees; individual settings may change additional permissions but cannot cancel parent-derived viewing.
-
-Locked controls are muted and labelled as inherited viewing. Hover over their group for the reason and how to change access: edit the parent project or process View permission. Reset all to defaults is in the page header; the unsaved-changes panel contains only Save and Cancel.
+Administrators always retain full access. Permissions are enforced on the server; hidden pages and controls are additional UI checks.

@@ -29,7 +29,7 @@ const { adminUsers, users } = storeToRefs(app)
  */
 const permsReady = computed(() => rbac.permsLoaded || rbac.myPermissions.length > 0)
 const canManageUserRights = computed(() =>
-  permsReady.value ? rbac.can('rbac_config', 'view') : auth.user?.preset === 'admin',
+  permsReady.value ? rbac.can('rbac_config', 'update') : auth.user?.preset === 'admin',
 )
 
 /**

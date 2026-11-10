@@ -101,7 +101,8 @@ export function buildPullSteps(): PullStep[] {
     permsReady ? rbac.can(resource, 'view') : roles.includes(preset)
 
   // Which data domains the user actually reads, per the matrix:
-  const timesheet = canView('worker', ['vp', 'admin']) // states / employees / periods
+  const timesheet = canView('worker', ['vp', 'admin']) // employees / periods
+  const dayTypes = canView('state', ['vp', 'admin'])
   const resourceList = canView('resource', ['vp', 'admin']) || canView('task', ['dp', 'rp', 'admin', 'vp'])
   const planningData =
     canView('task', ['dp', 'rp', 'admin', 'vp']) ||
@@ -193,12 +194,14 @@ export function buildPullSteps(): PullStep[] {
       refresh: () => planning.refreshTaskPlanning(true),
     })
   }
-  if (timesheet) {
+  if (dayTypes) {
     steps.push({
       name: 'states',
       path: apiPath('/timesheet/states'),
       refresh: () => ts.refreshStates(),
     })
+  }
+  if (timesheet) {
     steps.push({
       name: 'employees',
       path: apiPath('/user'),

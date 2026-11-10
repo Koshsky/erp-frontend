@@ -55,7 +55,7 @@ async function contextMenu(text, expected) {
   await expect(page.getByRole('menuitem')).toHaveText(expected)
   checks++
 }
-const protectedPages = ['/projects', '/processes', '/planner', '/resources', '/timesheet', '/employees', '/statuses', '/users', '/users/new', '/structure', '/auto-create', '/permissions', '/audit']
+const protectedPages = ['/projects', '/processes', '/planner', '/resources', '/timesheet', '/employees', '/users', '/users/new', '/structure', '/auto-create', '/permissions', '/audit']
 try {
   const login = await call(null, 'POST', 'auth/login', { username: 'admin', password: process.env.RBAC_TEST_ADMIN_PASSWORD })
   check(login.status, 200, 'administrator fixture login')
@@ -89,7 +89,7 @@ try {
     checks++
   }
   for (const [resource, paths] of [['project', ['/projects', '/processes', '/planner']], ['process', ['/processes', '/planner']], ['task', ['/planner']], ['worker', ['/timesheet', '/employees']], ['resource', ['/resources']], ['user_admin', ['/users']]]) {
-    await rights([grant(resource, 'view')])
+    await rights([grant(resource, resource === 'rbac_config' ? 'update' : 'view')])
     for (const path of paths) {
       await navigate(path)
       await expect(page).toHaveURL(new RegExp(`${path}$`))

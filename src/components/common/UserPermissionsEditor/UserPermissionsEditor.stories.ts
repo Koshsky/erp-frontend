@@ -1,3 +1,4 @@
+import { ref } from 'vue'
 import type { Meta, StoryObj } from '@storybook/vue3'
 import { expect } from 'storybook/test'
 
@@ -153,5 +154,58 @@ export const ChipMultiSelect: Story = {
       await wait(30)
       expect(rev?.classList.contains('on')).toBe(false)
     })
+  },
+}
+export const Administration: Story = {
+  render: () => ({
+    components: { UserPermissionsEditor },
+    setup() {
+      const model = sampleModel()
+      model.overrides = []
+      model.presetScope = [
+        { resource: 'auto_create', action: 'view', scope: 'all' },
+        { resource: 'user_admin', action: 'create', scope: 'all' },
+        { resource: 'user_admin', action: 'delete', scope: 'all' },
+      ]
+      return { model, overrides: ref([]) }
+    },
+    template: `<div><UserPermissionsEditor :user-id="101" :preview="model" @update:overrides="overrides = $event" /><output data-admin-overrides>{{ JSON.stringify(overrides) }}</output></div>`,
+  }),
+  play: async ({ canvasElement, step }) => {
+    const root = canvasElement
+    const wait = () => new Promise((resolve) => setTimeout(resolve, 40))
+    await step('one shared card exposes seven concrete capabilities', async () => {
+      expect(root.querySelectorAll('[data-resource="administration"]')).toHaveLength(1)
+      expect(root.querySelectorAll('[data-resource="administration"] .ur-row')).toHaveLength(7)
+      expect(root.querySelectorAll('[data-resource="state_admin"], [data-resource="rbac_config"], [data-resource="user_admin"]')).toHaveLength(0)
+    })
+    await step('partial account management and read-only template remain visibly mixed', async () => {
+      expect(root.querySelector('[data-action-group="accounts-manage"] .ur-mixed')).not.toBeNull()
+      expect(root.querySelector('[data-action-group="template"] .ur-mixed')).not.toBeNull()
+    })
+    const cases = [
+      ['accounts-view', 'user_admin', ['view']],
+      ['accounts-manage', 'user_admin', ['update']],
+      ['roles', 'rbac_config', ['update']],
+      ['template', 'auto_create', ['update']],
+      ['day-types', 'state', ['create', 'update', 'delete']],
+      ['structure', 'org_structure', ['view']],
+      ['audit', 'audit', ['view']],
+    ] as const
+    for (const [key, resource, actions] of cases) {
+      await step(`${key}: change only its own actions, toggle off, then revert`, async () => {
+        const row = root.querySelector(`[data-action-group="${key}"]`)!
+        const allow = row.querySelector<HTMLButtonElement>('[data-scope="all"]')!
+        allow.click(); await wait()
+        const rules = JSON.parse(root.querySelector('[data-admin-overrides]')!.textContent!) as Array<{ resource: string; action: string; granted: boolean }>
+        expect(rules.map((r) => `${r.resource}/${r.action}`).sort()).toEqual(actions.map((a) => `${resource}/${a}`).sort())
+        expect(rules.every((r) => r.granted)).toBe(true)
+        expect(row.querySelector('.ur-mixed')).toBeNull()
+        allow.click(); await wait()
+        expect(row.querySelector('[data-scope="none"]')?.getAttribute('aria-pressed')).toBe('true')
+        row.querySelector<HTMLButtonElement>('.ur-revert')?.click(); await wait()
+        expect(JSON.parse(root.querySelector('[data-admin-overrides]')!.textContent!)).toEqual([])
+      })
+    }
   },
 }

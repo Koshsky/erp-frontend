@@ -11,10 +11,11 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { AppIcon, ConfirmDialog, ContextMenu, HintButton, InfoTooltip, ModalForm, TooltipCell } from '../components/common'
 import {
-  GROUPS,
-  ACTIONS,
+  permissionBlocks,
+  permissionActionGroups,
   SCOPE_OPTIONS as SCOPE_CHIPS,
   FALLBACK_SCOPE_OPTIONS,
+  resourceDescription,
   resourceLabel,
   resourceTitle,
   actionTitle,
@@ -24,7 +25,7 @@ import {
   hasAdditionalScope,
   viewParentResources,
 } from '../components/common/UserPermissionsEditor/labels'
-import { NO_ACCESS, cellKey as gridCellKey, gridActions, gridSections, scopeByCell, presetActionGroups, commonPresetScope, type PresetActionGroup } from '../utils/rbacGrid'
+import { NO_ACCESS, cellKey as gridCellKey, scopeByCell, commonPresetScope, type PresetActionGroup } from '../utils/rbacGrid'
 import { scopeMoves } from '@/rbacScope'
 import { useRbacStore } from '../store'
 import { useConfirm } from '../composables/useConfirm'
@@ -50,13 +51,11 @@ function syncColumnLayout() {
  * effective matrix), so a resource or action the engine gains shows up without
  * a frontend change; the local dictionaries only order and label them.
  */
-const sections = computed(() => gridSections(matrix.value, GROUPS))
 function actionGroups(resource: string) {
-  return presetActionGroups(gridActions(matrix.value.filter((cell) => cell.resource === resource), ACTIONS))
+  return permissionActionGroups(resource, matrix.value)
 }
 const blockColumns = computed(() => {
-  const blocks = sections.value.flatMap((group) => group.resources.map((resource) => ({ resource, group: group.key })))
-    .map((block, index) => ({ ...block, index }))
+  const blocks = permissionBlocks(matrix.value)
   // Keep the mobile DOM order aligned with reading and keyboard navigation.
   if (singleColumn.value) return [blocks]
   return [blocks.filter((block) => block.index % 2 === 0), blocks.filter((block) => block.index % 2 === 1)]
@@ -135,6 +134,7 @@ function groupScope(resource: string, group: PresetActionGroup): string | null {
 }
 
 function groupTitle(group: PresetActionGroup): string {
+  if (group.title) return t(`adminConfig.administration.title.${group.title}`)
   return group.key === 'manage' ? t('adminConfig.presets.manage') : actionTitle(group.key)
 }
 
@@ -456,68 +456,70 @@ onBeforeUnmount(() => layoutMedia.removeEventListener('change', syncColumnLayout
       <!-- Editor of the selected preset -->
       <div class="pm-editor">
         <div v-for="(column, columnIndex) in blockColumns" :key="columnIndex" class="pm-column">
-          <div v-for="{ resource, group, index } in column" :key="resource" class="pm-block" :data-order="index">
+          <div v-for="{ resource, group, index } in column" :key="resource" class="pm-block" :data-resource="resource" :data-order="index">
             <div class="pm-block-head">
               <h3 class="pm-block-title">{{ resourceTitle(resource) }}</h3>
               <span class="pm-block-group">{{ t(`adminConfig.perm.group.${group}`) }}</span>
             </div>
-            <div class="pm-actions">
+            <p v-if="resourceDescription(resource)" class="pm-resource-description">{{ resourceDescription(resource) }}</p>
+            <div class="pm-actions" :class="{ 'pm-actions--administration': resource === 'administration' }">
               <div
                 v-for="actionGroup in actionGroups(resource)"
                 :key="actionGroup.key"
                 class="pm-row"
-                :data-action-group="actionGroup.key"
-                :class="{ dirty: actionGroup.actions.some((action) => isDirtyCell(selected, resource, action)) }"
+                :data-action-group="actionGroup.key" :data-capability-resource="actionGroup.resource"
+                :class="{ dirty: actionGroup.actions.some((action) => isDirtyCell(selected, actionGroup.resource, action)) }"
               >
                 <div class="pm-action-head">
                   <span class="pm-row-label">{{ groupTitle(actionGroup) }}</span>
-                  <span v-if="actionGroup.key === 'manage'" class="pm-action-hint">{{ t('adminConfig.presets.manageHint') }}</span>
+                  <span v-if="actionGroup.description" class="pm-action-hint">{{ t(`adminConfig.administration.description.${actionGroup.description}`) }}</span>
+                  <span v-else-if="actionGroup.key === 'manage'" class="pm-action-hint">{{ t('adminConfig.presets.manageHint') }}</span>
                 </div>
-                <p v-if="actionGroup.key === 'view' && inheritedViewScopes(resource).length" class="pm-action-hint pm-inherited">
-                  {{ t(inheritsAllViews(resource) ? 'adminConfig.presets.inheritedLocked' : 'adminConfig.presets.inheritedView') }}
+                <p v-if="actionGroup.key === 'view' && inheritedViewScopes(actionGroup.resource).length" class="pm-action-hint pm-inherited">
+                  {{ t(inheritsAllViews(actionGroup.resource) ? 'adminConfig.presets.inheritedLocked' : 'adminConfig.presets.inheritedView') }}
                 </p>
-                <details v-if="groupScope(resource, actionGroup) === null" class="pm-mixed">
+                <details v-if="groupScope(actionGroup.resource, actionGroup) === null" class="pm-mixed">
                   <summary>{{ t('adminConfig.presets.mixed') }}</summary>
                   <ul>
-                    <li v-for="action in actionGroup.actions" :key="action">{{ actionTitle(action) }}: {{ scopeLabel(resource, cellValue(selected, resource, action)) }}</li>
+                    <li v-for="action in actionGroup.actions" :key="action">{{ actionTitle(action) }}: {{ scopeLabel(actionGroup.resource, cellValue(selected, actionGroup.resource, action)) }}</li>
                   </ul>
                   <p>{{ t('adminConfig.presets.mixedHint') }}</p>
                 </details>
-                <p v-if="groupScope(resource, actionGroup) && hasAdditionalScope(resource, groupScope(resource, actionGroup)!)" class="pm-action-hint">
-                  {{ t('adminConfig.presets.savedCondition') }}: {{ scopeLabel(resource, groupScope(resource, actionGroup)!) }}
+                <p v-if="groupScope(actionGroup.resource, actionGroup) && hasAdditionalScope(actionGroup.resource, groupScope(actionGroup.resource, actionGroup)!)" class="pm-action-hint">
+                  {{ t('adminConfig.presets.savedCondition') }}: {{ scopeLabel(actionGroup.resource, groupScope(actionGroup.resource, actionGroup)!) }}
                 </p>
                 <TooltipCell
                   class="pm-choice-tooltip"
                   :text="t('adminConfig.presets.inheritedTooltip')"
-                  :disabled="!(actionGroup.key === 'view' && inheritsAllViews(resource))"
-                  :tabindex="actionGroup.key === 'view' && inheritsAllViews(resource) ? 0 : undefined"
-                  :aria-label="actionGroup.key === 'view' && inheritsAllViews(resource) ? t('adminConfig.presets.inheritedTooltip') : undefined"
+                  :disabled="!(actionGroup.key === 'view' && inheritsAllViews(actionGroup.resource))"
+                  :tabindex="actionGroup.key === 'view' && inheritsAllViews(actionGroup.resource) ? 0 : undefined"
+                  :aria-label="actionGroup.key === 'view' && inheritsAllViews(actionGroup.resource) ? t('adminConfig.presets.inheritedTooltip') : undefined"
                   multiline
                 >
                 <template #popup><span class="pm-inherited-tooltip">{{ t('adminConfig.presets.inheritedTooltip') }}</span></template>
-                <div class="pm-chips" :class="{ 'pm-chips--inherited': actionGroup.key === 'view' && inheritsAllViews(resource) }">
+                <div class="pm-chips" :class="{ 'pm-chips--inherited': actionGroup.key === 'view' && inheritsAllViews(actionGroup.resource) }">
                   <button
-                    v-for="opt in scopeChips(resource)"
+                    v-for="opt in scopeChips(actionGroup.resource)"
                     :key="opt.value"
                     type="button"
                     class="pm-chip"
-                    :disabled="actionGroup.key === 'view' && inheritsAllViews(resource)"
-                    :title="scopeOptionDescription(resource, opt.value)"
-                    :class="{ on: isChipOn(resource, actionGroup, opt.value) }"
-                    :aria-pressed="isChipOn(resource, actionGroup, opt.value)"
-                    @click="onChipClick(resource, actionGroup, opt.value)"
+                    :disabled="actionGroup.key === 'view' && inheritsAllViews(actionGroup.resource)"
+                    :title="scopeOptionDescription(actionGroup.resource, opt.value)"
+                    :class="{ on: isChipOn(actionGroup.resource, actionGroup, opt.value) }"
+                    :aria-pressed="isChipOn(actionGroup.resource, actionGroup, opt.value)"
+                    @click="onChipClick(actionGroup.resource, actionGroup, opt.value)"
                   >
-                    {{ scopeLabel(resource, opt.value) }}
+                    {{ resource === 'administration' ? t('adminConfig.administration.allowed') : scopeLabel(actionGroup.resource, opt.value) }}
                   </button>
                   <button
                     type="button"
                     class="pm-chip rev"
-                    :disabled="actionGroup.key === 'view' && inheritsAllViews(resource)"
-                    :class="{ on: isZoneActive(resource, actionGroup, NO_ACCESS) }"
-                    :aria-pressed="isZoneActive(resource, actionGroup, NO_ACCESS)"
+                    :disabled="actionGroup.key === 'view' && inheritsAllViews(actionGroup.resource)"
+                    :class="{ on: isZoneActive(actionGroup.resource, actionGroup, NO_ACCESS) }"
+                    :aria-pressed="isZoneActive(actionGroup.resource, actionGroup, NO_ACCESS)"
                     :title="t('adminConfig.presets.revokeTitle')"
-                    @click="onChipClick(resource, actionGroup, NO_ACCESS)"
-                  >{{ t(actionGroup.key === 'view' && inheritedViewScopes(resource).length ? 'adminConfig.presets.onlyInherited' : 'adminConfig.presets.revokeChip') }}</button>
+                    @click="onChipClick(actionGroup.resource, actionGroup, NO_ACCESS)"
+                  >{{ t(actionGroup.key === 'view' && inheritedViewScopes(actionGroup.resource).length ? 'adminConfig.presets.onlyInherited' : 'adminConfig.presets.revokeChip') }}</button>
                 </div>
                 </TooltipCell>
               </div>
@@ -1101,4 +1103,8 @@ onBeforeUnmount(() => layoutMedia.removeEventListener('change', syncColumnLayout
   gap: 10px;
 }
 
+.pm-actions--administration { display: flex; flex-direction: column; }
+.pm-actions--administration > div + div { border-left: 0; border-top: 1px solid var(--ui-border); }
+.pm-actions--administration .pm-chips { flex-direction: row; flex-wrap: wrap; }
+.pm-resource-description { margin: 0; padding: 10px 14px; color: var(--ui-text-muted); font-size: calc(var(--ui-font-scale, 1) * 11px); line-height: 1.5; border-bottom: 1px solid var(--ui-border); }
 </style>

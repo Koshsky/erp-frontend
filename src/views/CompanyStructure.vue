@@ -33,24 +33,8 @@ async function loadStructure() {
   adminUsersError.value = ''
   try {
     const api = new UsersApi(apiConfig())
-    const all: DtoAdminUserResponse[] = []
-    const seen = new Set<number>()
-    const limit = 500
-    while (true) {
-      const response = await api.userGet(limit, undefined, undefined, false, undefined, all.length, { signal: abort.signal })
-      const body = response.data?.data
-      const batch = body?.items ?? []
-      if (!batch.length) {
-        if (body?.total != null && all.length < body.total) throw new Error(t('adminUsers.structure.loadIncomplete'))
-        break
-      }
-      for (const user of batch) {
-        if (user.id == null || seen.has(user.id)) throw new Error(t('adminUsers.structure.loadIncomplete'))
-        seen.add(user.id)
-        all.push(user)
-      }
-      if (body?.total != null ? all.length >= body.total : batch.length < limit) break
-    }
+    const response = await api.userStructureGet({ signal: abort.signal })
+    const all = response.data?.data ?? []
     if (!abort.signal.aborted) adminUsers.value = all
   } catch (error: unknown) {
     if (!abort.signal.aborted) {

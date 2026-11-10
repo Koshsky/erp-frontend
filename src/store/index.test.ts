@@ -25,6 +25,7 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { useAppStore, useTimesheetStore, useAuthStore, useRbacStore } from './index'
+import { buildPullSteps } from '../offline/warmup'
 import { reloadDomainsFor } from '../offline/sync'
 import { getAccessToken, setAccessToken } from '@/token'
 import type { DtoUserInfo } from '@/api'
@@ -33,6 +34,7 @@ import type { DtoUserInfo } from '@/api'
 const api = vi.hoisted(() => ({
   resourcesGet: vi.fn(),
   userGet: vi.fn(),
+  userAccountsGet: vi.fn(),
   rbacUsersIdPermissionsGet: vi.fn(),
   rbacUsersIdPermissionsPut: vi.fn(),
 }))
@@ -44,6 +46,7 @@ vi.mock('@/api', () => {
     }
   }
   class UsersApi {
+    userAccountsGet(...args: unknown[]) { return api.userAccountsGet(...args) }
     userGet(...args: unknown[]) {
       return api.userGet(...args)
     }
@@ -547,4 +550,32 @@ describe('individual permission snapshots', () => {
     expect(store.userPermissions?.user_id).toBe(6)
   })
 
+})
+
+
+describe('dictionary administration without employee-calendar access', () => {
+  beforeAll(() => {
+    vi.stubGlobal('window', { addEventListener: vi.fn(), removeEventListener: vi.fn() })
+    vi.stubGlobal('document', { addEventListener: vi.fn(), removeEventListener: vi.fn() })
+  })
+  afterAll(() => vi.unstubAllGlobals())
+  beforeEach(() => { useAuthStore().user = { id: 42, preset: 'worker' } })
+  it('refreshes dictionary changes without loading employees or their periods', () => {
+    const rbac = useRbacStore()
+    rbac.permsLoaded = true
+    rbac.myPermissions = [{ resource: 'state', action: 'view', scope: 'all' }]
+    expect(reloadDomainsFor('state').map((domain) => domain.name)).toEqual(['states'])
+    expect(reloadDomainsFor('period')).toEqual([])
+    const names = buildPullSteps().map((step) => step.name)
+    expect(names).toContain('states')
+    expect(names).not.toContain('employees')
+    expect(names).not.toContain('periods')
+  })
+  it('employee-calendar access alone never refreshes a forbidden dictionary', () => {
+    const rbac = useRbacStore()
+    rbac.permsLoaded = true
+    rbac.myPermissions = [{ resource: 'worker', action: 'view', scope: 'all' }]
+    expect(reloadDomainsFor('state')).toEqual([])
+    expect(buildPullSteps().map((step) => step.name)).not.toContain('states')
+  })
 })

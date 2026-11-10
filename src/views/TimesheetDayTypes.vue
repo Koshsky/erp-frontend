@@ -11,6 +11,8 @@ import { useEditModal } from '../composables/useEditModal'
 import { useRoleAccess } from '../composables/useRoleAccess'
 import { useColumnWidths } from '../composables/useColumnWidths'
 import { useTimesheetStore } from '../store'
+import { isOffline } from '../offline/state'
+import { scheduleNamedRefresh } from '../offline/sync'
 import { t } from '@/i18n'
 import type { DtoStateResponse } from '@/api'
 
@@ -141,7 +143,8 @@ function handleSelect(id: string) {
 }
 
 onMounted(() => {
-  if (!states.value.length) ts.loadStates()
+  if (!states.value.length) void ts.loadStates()
+  if (!isOffline.value) scheduleNamedRefresh(['states'])
 })
 </script>
 

@@ -570,6 +570,16 @@ export interface DtoStateResponse {
     'is_available'?: boolean;
     'name'?: string;
 }
+export interface DtoStructureUserResponse {
+    'first_name'?: string;
+    'id'?: number;
+    'last_name'?: string;
+    'manager_id'?: number;
+    'middle_name'?: string;
+    'name'?: string;
+    'position'?: string;
+    'preset'?: string;
+}
 export interface DtoTaskDependency {
     'depends_on_task_id'?: number;
     'id'?: number;
@@ -984,6 +994,10 @@ export interface UserIdResetPasswordPost200Response {
 }
 export interface UserPost201Response {
     'data'?: DtoCreateUserResult;
+    'error'?: object;
+}
+export interface UserStructureGet200Response {
+    'data'?: Array<DtoStructureUserResponse>;
     'error'?: object;
 }
 
@@ -7106,6 +7120,106 @@ export class TimesheetStatesApi extends BaseAPI {
 export const UsersApiAxiosParamCreator = function (configuration?: Configuration) {
     return {
         /**
+         * 
+         * @summary List account directory
+         * @param {number} [limit] Page size (default 50, max 500)
+         * @param {string} [preset] Role filter
+         * @param {number} [managerId] Manager filter
+         * @param {boolean} [includeHash] Include hashes (administrator only)
+         * @param {string} [search] Name or login filter
+         * @param {number} [offset] Page offset
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        userAccountsGet: async (limit?: number, preset?: string, managerId?: number, includeHash?: boolean, search?: string, offset?: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            const localVarPath = `/user/accounts`;
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'GET', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication ApiKeyAuth required
+            await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
+
+            if (limit !== undefined) {
+                localVarQueryParameter['limit'] = limit;
+            }
+
+            if (preset !== undefined) {
+                localVarQueryParameter['preset'] = preset;
+            }
+
+            if (managerId !== undefined) {
+                localVarQueryParameter['manager_id'] = managerId;
+            }
+
+            if (includeHash !== undefined) {
+                localVarQueryParameter['include_hash'] = includeHash;
+            }
+
+            if (search !== undefined) {
+                localVarQueryParameter['search'] = search;
+            }
+
+            if (offset !== undefined) {
+                localVarQueryParameter['offset'] = offset;
+            }
+
+            localVarHeaderParameter['Accept'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * 
+         * @summary Get account profile
+         * @param {number} id User ID
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        userAccountsIdGet: async (id: number, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'id' is not null or undefined
+            assertParamExists('userAccountsIdGet', 'id', id)
+            const localVarPath = `/user/accounts/{id}`
+                .replace('{id}', encodeURIComponent(String(id)));
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'GET', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication ApiKeyAuth required
+            await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
+
+            localVarHeaderParameter['Accept'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
          * Returns all users in the system
          * @summary List all users
          * @param {*} [options] Override http request option.
@@ -7675,6 +7789,39 @@ export const UsersApiAxiosParamCreator = function (configuration?: Configuration
                 options: localVarRequestOptions,
             };
         },
+        /**
+         * 
+         * @summary List company structure
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        userStructureGet: async (options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            const localVarPath = `/user/structure`;
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'GET', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication ApiKeyAuth required
+            await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
+
+            localVarHeaderParameter['Accept'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
     }
 };
 
@@ -7684,6 +7831,37 @@ export const UsersApiAxiosParamCreator = function (configuration?: Configuration
 export const UsersApiFp = function(configuration?: Configuration) {
     const localVarAxiosParamCreator = UsersApiAxiosParamCreator(configuration)
     return {
+        /**
+         * 
+         * @summary List account directory
+         * @param {number} [limit] Page size (default 50, max 500)
+         * @param {string} [preset] Role filter
+         * @param {number} [managerId] Manager filter
+         * @param {boolean} [includeHash] Include hashes (administrator only)
+         * @param {string} [search] Name or login filter
+         * @param {number} [offset] Page offset
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async userAccountsGet(limit?: number, preset?: string, managerId?: number, includeHash?: boolean, search?: string, offset?: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<UserGet200Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.userAccountsGet(limit, preset, managerId, includeHash, search, offset, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['UsersApi.userAccountsGet']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
+         * 
+         * @summary Get account profile
+         * @param {number} id User ID
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async userAccountsIdGet(id: number, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<UserIdGet200Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.userAccountsIdGet(id, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['UsersApi.userAccountsIdGet']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
         /**
          * Returns all users in the system
          * @summary List all users
@@ -7867,6 +8045,18 @@ export const UsersApiFp = function(configuration?: Configuration) {
             const localVarOperationServerBasePath = operationServerMap['UsersApi.userPost']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
+        /**
+         * 
+         * @summary List company structure
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async userStructureGet(options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<UserStructureGet200Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.userStructureGet(options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['UsersApi.userStructureGet']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
     }
 };
 
@@ -7876,6 +8066,31 @@ export const UsersApiFp = function(configuration?: Configuration) {
 export const UsersApiFactory = function (configuration?: Configuration, basePath?: string, axios?: AxiosInstance) {
     const localVarFp = UsersApiFp(configuration)
     return {
+        /**
+         * 
+         * @summary List account directory
+         * @param {number} [limit] Page size (default 50, max 500)
+         * @param {string} [preset] Role filter
+         * @param {number} [managerId] Manager filter
+         * @param {boolean} [includeHash] Include hashes (administrator only)
+         * @param {string} [search] Name or login filter
+         * @param {number} [offset] Page offset
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        userAccountsGet(limit?: number, preset?: string, managerId?: number, includeHash?: boolean, search?: string, offset?: number, options?: RawAxiosRequestConfig): AxiosPromise<UserGet200Response> {
+            return localVarFp.userAccountsGet(limit, preset, managerId, includeHash, search, offset, options).then((request) => request(axios, basePath));
+        },
+        /**
+         * 
+         * @summary Get account profile
+         * @param {number} id User ID
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        userAccountsIdGet(id: number, options?: RawAxiosRequestConfig): AxiosPromise<UserIdGet200Response> {
+            return localVarFp.userAccountsIdGet(id, options).then((request) => request(axios, basePath));
+        },
         /**
          * Returns all users in the system
          * @summary List all users
@@ -8020,6 +8235,15 @@ export const UsersApiFactory = function (configuration?: Configuration, basePath
         userPost(user: DtoCreateUserRequest, options?: RawAxiosRequestConfig): AxiosPromise<UserPost201Response> {
             return localVarFp.userPost(user, options).then((request) => request(axios, basePath));
         },
+        /**
+         * 
+         * @summary List company structure
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        userStructureGet(options?: RawAxiosRequestConfig): AxiosPromise<UserStructureGet200Response> {
+            return localVarFp.userStructureGet(options).then((request) => request(axios, basePath));
+        },
     };
 };
 
@@ -8027,6 +8251,33 @@ export const UsersApiFactory = function (configuration?: Configuration, basePath
  * UsersApi - object-oriented interface
  */
 export class UsersApi extends BaseAPI {
+    /**
+     * 
+     * @summary List account directory
+     * @param {number} [limit] Page size (default 50, max 500)
+     * @param {string} [preset] Role filter
+     * @param {number} [managerId] Manager filter
+     * @param {boolean} [includeHash] Include hashes (administrator only)
+     * @param {string} [search] Name or login filter
+     * @param {number} [offset] Page offset
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    public userAccountsGet(limit?: number, preset?: string, managerId?: number, includeHash?: boolean, search?: string, offset?: number, options?: RawAxiosRequestConfig) {
+        return UsersApiFp(this.configuration).userAccountsGet(limit, preset, managerId, includeHash, search, offset, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * 
+     * @summary Get account profile
+     * @param {number} id User ID
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    public userAccountsIdGet(id: number, options?: RawAxiosRequestConfig) {
+        return UsersApiFp(this.configuration).userAccountsIdGet(id, options).then((request) => request(this.axios, this.basePath));
+    }
+
     /**
      * Returns all users in the system
      * @summary List all users
@@ -8182,6 +8433,16 @@ export class UsersApi extends BaseAPI {
      */
     public userPost(user: DtoCreateUserRequest, options?: RawAxiosRequestConfig) {
         return UsersApiFp(this.configuration).userPost(user, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * 
+     * @summary List company structure
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    public userStructureGet(options?: RawAxiosRequestConfig) {
+        return UsersApiFp(this.configuration).userStructureGet(options).then((request) => request(this.axios, this.basePath));
     }
 }
 

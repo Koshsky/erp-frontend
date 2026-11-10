@@ -3,7 +3,7 @@ import { HintButton } from '../components/common'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
 import { storeToRefs } from 'pinia'
-import { useAppStore } from '../store'
+import { useAppStore, useRbacStore } from '../store'
 import { isWorkerPreset } from '../rbac/presets'
 import { ColorField, ConfirmDialog } from '../components/common'
 import { randomPaletteColor } from '../components/common/ColorField/palette'
@@ -67,6 +67,8 @@ function setTaskType(t: LocalTask, type: 'accent' | 'neutral') {
 }
 
 const app = useAppStore()
+const rbac = useRbacStore()
+const canConfigure = computed(() => rbac.can('auto_create', 'update'))
 const { autoCreateConfig, autoCreateLoading, autoCreateError, users, resources } = storeToRefs(app)
 
 const form = reactive<{ enabled: boolean; processes: LocalProcess[] }>({ enabled: true, processes: [] })
@@ -306,7 +308,7 @@ function validate(): string | null {
 }
 
 async function onSave() {
-  if (saving.value || !dirty.value) return
+  if (!canConfigure.value || saving.value || !dirty.value) return
   const err = validate()
   if (err) {
     notifyError(err)
@@ -354,7 +356,8 @@ async function onSave() {
       <button type="button" class="ac-retry" @click="reload">{{ t('adminConfig.autoCreate.retry') }}</button>
     </div>
 
-    <div v-if="autoCreateConfig" class="ac-form">
+    <p v-if="autoCreateConfig && !canConfigure" class="ac-st" role="note">{{ t('adminConfig.autoCreate.readOnly') }}</p>
+    <fieldset v-if="autoCreateConfig" class="ac-form" :disabled="!canConfigure">
       <label class="ac-enable">
         <input type="checkbox" v-model="form.enabled" @change="dirty = true" />
         {{ t('adminConfig.autoCreate.enabled') }}
@@ -467,10 +470,10 @@ async function onSave() {
       <button type="button" class="ac-add" @click="addProcess">{{ t('adminConfig.autoCreate.addProcess') }}</button>
 
       <div class="ac-actions">
-        <button type="button" class="ac-save" :disabled="saving || !dirty" @click="onSave">{{ t('adminConfig.autoCreate.save') }}</button>
-        <button v-if="dirty" type="button" class="ac-cancel" :disabled="saving" @click="resetForm">{{ t('adminConfig.autoCreate.cancel') }}</button>
+        <button v-if="canConfigure" type="button" class="ac-save" :disabled="saving || !dirty" @click="onSave">{{ t('adminConfig.autoCreate.save') }}</button>
+        <button v-if="canConfigure && dirty" type="button" class="ac-cancel" :disabled="saving" @click="resetForm">{{ t('adminConfig.autoCreate.cancel') }}</button>
       </div>
-    </div>
+    </fieldset>
 
     <ConfirmDialog
       :open="!!confirmDialog"
@@ -788,4 +791,5 @@ async function onSave() {
   color: var(--ui-text-2);
   cursor: pointer;
 }
+.ac-form { border: 0; margin: 0; padding: 0; min-width: 0; }
 </style>

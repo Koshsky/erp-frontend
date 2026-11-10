@@ -16,6 +16,7 @@
     "test:stories": "vitest run",
     "test:pdf": "node tests/pdf-snapshot.mjs",
     "test:rbac:ui": "node tests/rbac-ui.mjs",
+    "test:rbac:admin": "node tests/admin-permissions.mjs",
     "security:csp:sync": "node scripts/sync-csp.mjs",
     "test:csp": "node --test tests/security.test.cjs && node tests/csp.mjs",
     "test:xss": "node tests/xss.mjs",

@@ -11,7 +11,7 @@ export default {
   users: 'Пользователи',
   structure: 'Структура компании',
   autoCreate: 'Шаблон проекта',
-  statuses: 'Статусы',
+  statuses: 'Виды дней табеля',
   permissions: 'Роли',
   audit: 'Журнал действий',
   system: 'Система',

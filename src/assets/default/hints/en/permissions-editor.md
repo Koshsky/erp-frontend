@@ -1,23 +1,40 @@
 # User permissions
 
-A role supplies initial permissions. Individual settings add grants or remove separate role permissions. They remain when the role changes, until explicitly reset.
+The role supplies initial rights. Individual overrides change specific rights and survive a role change until explicitly reset.
 
-**Viewing inherits downward:** a project opens all processes, tasks, subtasks, milestones and assignments; a process opens its contents; a task opens its subtasks and assignments. An individual child denial **cannot cancel** parent-derived viewing. View controls are disabled when the parent is fully open. Through parent only removes an additional grant while preserving inherited access.
+## Planning
 
-**Through parent only means No access with an exception:** it removes a separate viewing grant, but an object remains visible inside an accessible parent project, process or task. For example, a task is visible when its containing process or project is accessible; if neither is accessible, this setting does not grant access to the task. Parent means the containing object, not the employee’s manager. Parent-derived viewing always applies: this button neither enables nor disables inheritance. To restrict that viewing, change the parent permissions. Creation, editing and deletion are configured separately.
+View opens records. Manage groups creation, editing and deletion, while the server checks each action separately. Mixed permissions preserve previously different action settings until an explicit common choice is made.
 
-Management does not inherit: creation, editing and deletion are checked separately. Seeing a colleague's process does not permit editing it.
+Viewing a project opens all its processes, tasks, subtasks, milestones and assignments. Viewing a process opens its contents; viewing a task opens its subtasks and assignments. A child denial cannot cancel parent visibility. Disabled controls explain this on hover. Through parent only removes an independent grant while retaining inherited visibility. Management never inherits this way.
 
-Main conditions are **All**, **In employee-owned projects**, **In employee-owned processes**, and owned projects or resources. Nested records may have different owners. The project condition **Containing employee-owned processes** requires an owned process, not merely a task; the whole project then becomes visible.
+In employee projects checks the project owner; In employee processes checks the process owner. Nested records may have different owners. With employee processes opens a project containing that employee's process and thus the entire project for viewing; owning only a task is insufficient. Selected conditions are combined with OR. Previously stored advanced conditions remain effective until replaced.
 
-Selected conditions use OR. Peer and other complex conditions are no longer offered; previously saved conditions remain visible and effective until replaced.
+Project priority is separate from other edits. An assigned resource and its process must always share an owner, even for administrators.
 
-Projects have a separate **Change priority** permission, which does not grant other field changes. Resource assignments always require matching resource and process owners, including for administrators. Managing resources is separate from managing assignments.
+## Employees, timesheets and resources
 
-**Save** applies changes. **Reset individual permissions** restores the role's permissions. Administrators always have full access.
+- **Employees and timesheet** controls employee visibility and attendance or absence periods. Own means direct subordinates, not the employee's own account.
+- **Timesheet day types** provides working-day, vacation, sickness and other day labels, unrelated to task statuses. Dictionary access does not allow changing employee calendars.
+- **Planning resources** groups employees assigned to tasks and used for capacity calculations. Own means resources owned by the employee. Resource management and task assignment are separate rights.
+- **Employee selection in forms** provides candidates for owners, responsible people and similar fields. It does not open accounts, timesheets or the company chart.
 
-Locked View controls are muted. Hover over their group for an explanation: change access on the parent instead of adding an ineffective child denial.
+## Administration
 
-The user page uses two columns, or one on narrow screens. Manage sets a common condition for creation, editing and deletion. Different permissions reveals the saved conditions; they stay unchanged until a common value is selected. Use role settings removes individual overrides only for the selected action group.
+One card contains independent capabilities:
 
-Role changes are saved immediately. Save and Cancel in the changes panel apply to individual permissions. Reset individual permissions in the header prepares a return to role settings: select Save to apply or Cancel to restore the last saved overrides. A rejected save keeps the draft available for correction.
+- **View user accounts** opens the directory, profile details and roles. No password or profile changes, and no timesheet access.
+- **Manage user accounts** allows creation, editing, password resets and deletion. The UI also requires account viewing. Only administrators may assign roles.
+- **Roles and permissions** allows full role and individual permission configuration, including your own. It is an administrative capability, not a read-only mode. It also opens profiles needed for permission editing. It does not allow password resets or template changes by itself.
+- **New-project template** allows viewing and configuring processes and tasks automatically created with a project, independently of role management. Legacy read-only access remains read-only until configuration is explicitly granted.
+- **Edit timesheet day types** allows creating, editing and deleting day labels. The dictionary opens with Day types inside the timesheet; there is no separate page. Viewing day types is also required. Dictionary-only administrators do not see employees or their calendars. It does not allow changing employee calendars.
+- **View company structure** opens the reporting hierarchy without logins, passwords or timesheet entries. It does not allow manager changes; those require account editing.
+- **View activity log** opens user activity history; request and response bodies may contain operational data. It grants no other administrative access.
+
+Choose Available or No access for each common setting. Mixed permissions show the individual saved actions. Choosing a common setting replaces only its own actions and preserves unrelated permissions.
+
+## Saving
+
+The role saves immediately. Save and Cancel apply to individual rights. Revert to role removes overrides for one setting. Reset individual stages a full return to role defaults; then select Save. Server failures preserve the draft.
+
+Administrators always retain full access. Permissions are enforced on the server; hidden pages and controls are additional UI checks.

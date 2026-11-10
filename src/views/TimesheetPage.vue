@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import CalendarHeader from '../components/planner/CalendarHeader/CalendarHeader.vue'
 import TimelineGrid from '../components/planner/TimelineGrid/TimelineGrid.vue'
@@ -15,6 +15,9 @@ import { isOffline } from '../offline/state'
 import { scheduleNamedRefresh } from '../offline/sync'
 import { t as $t } from '../i18n'
 
+import TimesheetDayTypes from './TimesheetDayTypes.vue'
+import { dayTypesAccessible } from '../utils/timesheetAccess'
+
 const ts = useTimesheetStore()
 const { timesheetRows, states, loading, busy, error } = storeToRefs(ts)
 
@@ -22,6 +25,10 @@ const unit = ref<PlanningUnit>('day')
 const origin = ref(toDate(new Date()))
 
 const rbac = useRbacStore()
+const canViewTimesheet = computed(() => rbac.can('worker', 'view'))
+const canConfigureDayTypes = computed(() => dayTypesAccessible(rbac.can))
+const showDayTypes = ref(false)
+watch(canConfigureDayTypes, (allowed) => { if (!allowed) showDayTypes.value = false })
 /** Permissions arrived (or were cached) — the matrix is authoritative; the preset is the cold-start fallback. */
 const permsReady = computed(() => rbac.permsLoaded || rbac.myPermissions.length > 0)
 /** "All employees" — when worker visibility is not restricted (scope all). */
@@ -55,8 +62,12 @@ const {
 /** Rows shown in the grid: the roster filtered by the shared filters. */
 const visibleRows = computed(() => applyFilters(timesheetRows.value))
 
-onMounted(async () => {
+async function loadTimesheet() {
   await ts.loadStates()
+  if (!canViewTimesheet.value) {
+    showDayTypes.value = canConfigureDayTypes.value
+    return
+  }
   await ts.loadEmployees()
   // The filter options need the user/resource catalogs (cached in the app store)
   if (seesAllEmployees.value && !users.value.length) await app.loadUsers()
@@ -71,7 +82,9 @@ onMounted(async () => {
   // name catalogs) so user mutations done elsewhere show up immediately —
   // period refresh above only covers the already-visible rows.
   if (!isOffline.value) void scheduleNamedRefresh(['employees', 'users', 'myStaff'])
-})
+}
+onMounted(loadTimesheet)
+watch(canViewTimesheet, (allowed) => { if (allowed) void loadTimesheet() })
 
 /** Lazy-load states on scroll/zoom (debounced) */
 let rangeTimer: number | null = null
@@ -116,7 +129,7 @@ const stateColorMap = computed<Record<number, string>>(() => {
   <section class="tp">
     <div class="tp-head">
       <h2 class="tp-title">{{ $t('timesheet.page.title') }}</h2>
-      <div class="tp-legend">
+      <div v-if="canViewTimesheet" class="tp-legend">
         <span v-for="st in states" :key="'lg' + st.id" class="tp-legend-item">
           <span
             class="tp-swatch"
@@ -125,10 +138,13 @@ const stateColorMap = computed<Record<number, string>>(() => {
           {{ st.name }}
         </span>
       </div>
-      <span v-if="seesAllEmployees" class="tp-note">{{ $t('timesheet.page.allEmployees') }}</span>
+      <button v-if="canConfigureDayTypes" type="button" class="tp-day-types" :aria-expanded="showDayTypes" @click="showDayTypes = !showDayTypes">{{ $t('timesheet.page.dayTypes') }}</button>
+      <span v-if="canViewTimesheet && seesAllEmployees" class="tp-note">{{ $t('timesheet.page.allEmployees') }}</span>
     </div>
 
-    <div class="tp-filters">
+    <TimesheetDayTypes v-if="showDayTypes && canConfigureDayTypes" />
+
+    <div v-if="canViewTimesheet" class="tp-filters">
       <input v-model="search" type="search" class="tp-search" :placeholder="$t('timesheet.page.searchPlaceholder')" />
       <select v-if="seesAllEmployees" v-model="managerFilter" class="tp-filter">
         <option value="">{{ $t('timesheet.page.managerAll') }}</option>
@@ -142,7 +158,7 @@ const stateColorMap = computed<Record<number, string>>(() => {
       </select>
     </div>
 
-    <PlannerStates :loading="loading" :error="null" :has-data="timesheetRows.length > 0 || (!loading && !error)">
+    <PlannerStates v-if="canViewTimesheet" :loading="loading" :error="null" :has-data="timesheetRows.length > 0 || (!loading && !error)">
       <TimelineGrid
         id="timesheet"
         :origin="origin"
@@ -317,4 +333,6 @@ const stateColorMap = computed<Record<number, string>>(() => {
   text-align: center;
   box-sizing: border-box;
 }
+.tp-day-types { border: 1px solid var(--ui-border-strong); background: var(--ui-surface); color: var(--ui-text-2); border-radius: var(--ui-radius-sm); padding: 7px 12px; font: inherit; font-size: calc(var(--ui-font-scale, 1) * 12px); cursor: pointer; }
+.tp-day-types:hover, .tp-day-types[aria-expanded="true"] { color: var(--ui-accent); border-color: var(--ui-accent); }
 </style>

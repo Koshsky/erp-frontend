@@ -3,10 +3,10 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRbacStore } from '../../../store'
 import type { PermissionCell, PermissionOverride, UserPermissionsModel } from './types'
 import {
-  GROUPS, ACTIONS, SCOPE_OPTIONS, FALLBACK_SCOPE_OPTIONS, resourceTitle, actionTitle,
-  scopeOptionLabel, scopeOptionDescription, scopeLabel, simpleScope, hasAdditionalScope, viewParentResources,
+  GROUPS, ACTIONS, permissionBlocks, permissionActionGroups, SCOPE_OPTIONS, FALLBACK_SCOPE_OPTIONS, resourceTitle, actionTitle,
+  resourceDescription, scopeOptionLabel, scopeOptionDescription, scopeLabel, simpleScope, hasAdditionalScope, viewParentResources,
 } from './labels'
-import { NO_ACCESS, commonPresetScope, gridActions, gridSections, presetActionGroups, type PresetActionGroup } from '@/utils/rbacGrid'
+import { NO_ACCESS, commonPresetScope, type PresetActionGroup } from '@/utils/rbacGrid'
 import { scopeMoves } from '@/rbacScope'
 import { togglePresetScope } from '@/utils/presetDefaults'
 import { applyPermissionGroup, overrideSignature } from './draft'
@@ -105,20 +105,19 @@ const editorCells = computed(() => {
   ))
   return [...fallback, ...baseline.value, ...overridesList.value]
 })
-const blocks = computed(() => gridSections(editorCells.value, GROUPS)
-  .flatMap((group) => group.resources.map((resource) => ({ resource, group: group.key })))
-  .map((block, index) => ({ ...block, index })))
+const blocks = computed(() => permissionBlocks(editorCells.value))
 const blockColumns = computed(() => singleColumn.value ? [blocks.value] : [
   blocks.value.filter((block) => block.index % 2 === 0),
   blocks.value.filter((block) => block.index % 2 === 1),
 ])
 function actionGroups(resource: string) {
-  const groups = presetActionGroups(gridActions(editorCells.value.filter((cell) => cell.resource === resource), ACTIONS))
+  const groups = permissionActionGroups(resource, editorCells.value)
   const order = ['view', 'manage', 'prioritize']
   return groups.sort((a, b) => (order.indexOf(a.key) < 0 ? order.length : order.indexOf(a.key)) -
     (order.indexOf(b.key) < 0 ? order.length : order.indexOf(b.key)))
 }
 function groupTitle(group: PresetActionGroup) {
+  if (group.title) return t(`adminConfig.administration.title.${group.title}`)
   return group.key === 'manage' ? t('adminConfig.presets.manage') : actionTitle(group.key)
 }
 function groupScope(resource: string, group: PresetActionGroup) {
@@ -206,39 +205,41 @@ onBeforeUnmount(() => resizeObserver?.disconnect())
             <h4 class="uped-res-title">{{ resourceTitle(resource) }}</h4>
             <span class="uped-group-title">{{ t(`adminConfig.perm.group.${group}`) }}</span>
           </div>
-          <div class="uped-actions" :class="{ 'uped-actions--project': resource === 'project' }">
+          <p v-if="resourceDescription(resource)" class="uped-resource-description">{{ resourceDescription(resource) }}</p>
+          <div class="uped-actions" :class="{ 'uped-actions--project': resource === 'project', 'uped-actions--administration': resource === 'administration' }">
             <div v-for="actionGroup in actionGroups(resource)" :key="actionGroup.key" class="ur-row"
-              :data-action-group="actionGroup.key" :class="{ changed: groupChanged(resource, actionGroup) }">
+              :data-action-group="actionGroup.key" :data-capability-resource="actionGroup.resource" :class="{ changed: groupChanged(actionGroup.resource, actionGroup) }">
               <div class="ur-action-head">
                 <span class="ur-cap">{{ groupTitle(actionGroup) }}</span>
-                <span v-if="actionGroup.key === 'manage'" class="ur-action-hint">{{ t('adminConfig.presets.manageHint') }}</span>
+                <span v-if="actionGroup.description" class="ur-action-hint">{{ t(`adminConfig.administration.description.${actionGroup.description}`) }}</span>
+                <span v-else-if="actionGroup.key === 'manage'" class="ur-action-hint">{{ t('adminConfig.presets.manageHint') }}</span>
               </div>
-              <p v-if="actionGroup.key === 'view' && inheritedViewScopes(resource).length" class="ur-inherited">
-                {{ t(locked(resource, actionGroup) ? 'adminConfig.presets.inheritedLocked' : 'adminConfig.presets.inheritedView') }}
+              <p v-if="actionGroup.key === 'view' && inheritedViewScopes(actionGroup.resource).length" class="ur-inherited">
+                {{ t(locked(actionGroup.resource, actionGroup) ? 'adminConfig.presets.inheritedLocked' : 'adminConfig.presets.inheritedView') }}
               </p>
-              <details v-if="groupScope(resource, actionGroup) === null" class="ur-mixed">
+              <details v-if="groupScope(actionGroup.resource, actionGroup) === null" class="ur-mixed">
                 <summary>{{ t('adminConfig.presets.mixed') }}</summary>
-                <ul><li v-for="action in actionGroup.actions" :key="action">{{ actionTitle(action) }}: {{ effectiveZone(resource, action) ? scopeLabel(resource, effectiveZone(resource, action)) : t('adminConfig.presets.revokeChip') }}</li></ul>
+                <ul><li v-for="action in actionGroup.actions" :key="action">{{ actionTitle(action) }}: {{ effectiveZone(actionGroup.resource, action) ? scopeLabel(actionGroup.resource, effectiveZone(actionGroup.resource, action)) : t('adminConfig.presets.revokeChip') }}</li></ul>
                 <p>{{ t('adminConfig.presets.mixedHint') }}</p>
               </details>
-              <p v-else-if="hasAdditionalScope(resource, groupScope(resource, actionGroup) ?? '')" class="ur-action-hint">
-                {{ t('adminConfig.presets.savedCondition') }}: {{ scopeLabel(resource, groupScope(resource, actionGroup) ?? '') }}
+              <p v-else-if="hasAdditionalScope(actionGroup.resource, groupScope(actionGroup.resource, actionGroup) ?? '')" class="ur-action-hint">
+                {{ t('adminConfig.presets.savedCondition') }}: {{ scopeLabel(actionGroup.resource, groupScope(actionGroup.resource, actionGroup) ?? '') }}
               </p>
-              <TooltipCell class="ur-choice-tooltip" :text="t('adminConfig.presets.inheritedTooltip')" :disabled="!locked(resource, actionGroup)"
-                :tabindex="locked(resource, actionGroup) ? 0 : undefined"
-                :aria-label="locked(resource, actionGroup) ? t('adminConfig.presets.inheritedTooltip') : undefined" multiline>
+              <TooltipCell class="ur-choice-tooltip" :text="t('adminConfig.presets.inheritedTooltip')" :disabled="!locked(actionGroup.resource, actionGroup)"
+                :tabindex="locked(actionGroup.resource, actionGroup) ? 0 : undefined"
+                :aria-label="locked(actionGroup.resource, actionGroup) ? t('adminConfig.presets.inheritedTooltip') : undefined" multiline>
                 <template #popup><span class="ur-inherited-tooltip">{{ t('adminConfig.presets.inheritedTooltip') }}</span></template>
-                <div class="ur-chips" :class="{ 'ur-chips--inherited': locked(resource, actionGroup) }">
-                  <button v-for="opt in SCOPE_OPTIONS[resource] ?? FALLBACK_SCOPE_OPTIONS" :key="opt.value" type="button" class="ur-chip"
-                    :class="{ on: isChipOn(resource, actionGroup, opt.value) }" :data-scope="opt.value" :disabled="busy || locked(resource, actionGroup)"
-                    :aria-pressed="isChipOn(resource, actionGroup, opt.value)" :title="scopeOptionDescription(resource, opt.value)"
-                    @click="chooseScope(resource, actionGroup, opt.value)">{{ scopeOptionLabel(resource, opt.value) }}</button>
-                  <button type="button" class="ur-chip rev" data-scope="none" :disabled="busy || locked(resource, actionGroup)"
-                    :class="{ on: isChipOn(resource, actionGroup, NO_ACCESS) }" :aria-pressed="isChipOn(resource, actionGroup, NO_ACCESS)"
-                    @click="chooseScope(resource, actionGroup, NO_ACCESS)">{{ t(actionGroup.key === 'view' && inheritedViewScopes(resource).length ? 'adminConfig.presets.onlyInherited' : 'adminConfig.presets.revokeChip') }}</button>
+                <div class="ur-chips" :class="{ 'ur-chips--inherited': locked(actionGroup.resource, actionGroup) }">
+                  <button v-for="opt in SCOPE_OPTIONS[actionGroup.resource] ?? FALLBACK_SCOPE_OPTIONS" :key="opt.value" type="button" class="ur-chip"
+                    :class="{ on: isChipOn(actionGroup.resource, actionGroup, opt.value) }" :data-scope="opt.value" :disabled="busy || locked(actionGroup.resource, actionGroup)"
+                    :aria-pressed="isChipOn(actionGroup.resource, actionGroup, opt.value)" :title="scopeOptionDescription(actionGroup.resource, opt.value)"
+                    @click="chooseScope(actionGroup.resource, actionGroup, opt.value)">{{ resource === 'administration' ? t('adminConfig.administration.allowed') : scopeOptionLabel(actionGroup.resource, opt.value) }}</button>
+                  <button type="button" class="ur-chip rev" data-scope="none" :disabled="busy || locked(actionGroup.resource, actionGroup)"
+                    :class="{ on: isChipOn(actionGroup.resource, actionGroup, NO_ACCESS) }" :aria-pressed="isChipOn(actionGroup.resource, actionGroup, NO_ACCESS)"
+                    @click="chooseScope(actionGroup.resource, actionGroup, NO_ACCESS)">{{ t(actionGroup.key === 'view' && inheritedViewScopes(actionGroup.resource).length ? 'adminConfig.presets.onlyInherited' : 'adminConfig.presets.revokeChip') }}</button>
                 </div>
               </TooltipCell>
-              <button v-if="groupIndividual(resource, actionGroup)" type="button" class="ur-revert" :disabled="busy || locked(resource, actionGroup)" @click="revertGroup(resource, actionGroup)">{{ t('adminConfig.editor.revertToRole') }}</button>
+              <button v-if="groupIndividual(actionGroup.resource, actionGroup)" type="button" class="ur-revert" :disabled="busy || locked(actionGroup.resource, actionGroup)" @click="revertGroup(actionGroup.resource, actionGroup)">{{ t('adminConfig.editor.revertToRole') }}</button>
             </div>
           </div>
         </div>
@@ -300,4 +301,8 @@ onBeforeUnmount(() => resizeObserver?.disconnect())
   .uped-actions--project { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .uped-actions--project .ur-row:last-child { grid-column: 1 / -1; border-top: 1px solid var(--ui-border); border-left: 0; }
 }
+.uped-actions--administration { display: flex; flex-direction: column; }
+.uped-actions--administration > div + div { border-left: 0; border-top: 1px solid var(--ui-border); }
+.uped-actions--administration .ur-chips { flex-direction: row; flex-wrap: wrap; }
+.uped-resource-description { margin: 0; padding: 10px 14px; color: var(--ui-text-muted); font-size: calc(var(--ui-font-scale, 1) * 11px); line-height: 1.5; border-bottom: 1px solid var(--ui-border); }
 </style>

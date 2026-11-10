@@ -9,6 +9,7 @@
  */
 import { t } from '@/i18n'
 import { describeScopeExpr, scopeMoves } from '@/rbacScope'
+import { gridActions, gridSections, presetActionGroups, type MatrixCellLike, type PresetActionGroup } from '@/utils/rbacGrid'
 
 export interface ScopeOption {
   value: string
@@ -73,6 +74,7 @@ const SCOPE_CATALOG: Record<string, ScopeOption[]> = {
   user_catalog: [{ value: 'all', label: 'available' }],
   user_admin: [{ value: 'all', label: 'available' }],
   rbac_config: [{ value: 'all', label: 'available' }],
+  auto_create: [{ value: 'all', label: 'available' }],
   // Page guards and derived resources: no owner, no parent — "all" only
   // (mirrors engine/tree.go: nodeHasOwner / nodeHasParent are false).
   state_admin: [{ value: 'all', label: 'available' }],
@@ -129,9 +131,43 @@ export const GROUPS: ReadonlyArray<{ key: string; resources: readonly string[] }
   // renders, in the trailing fallback section of the grid.
   {
     key: 'advanced',
-    resources: ['user_catalog', 'user_admin', 'rbac_config', 'state_admin', 'org_structure', 'audit', 'comment'],
+    resources: ['user_catalog', 'user_admin', 'rbac_config', 'auto_create', 'state_admin', 'org_structure', 'audit', 'comment'],
   },
 ]
+
+export const ADMIN_CAPABILITIES = [
+  { key: 'accounts-view', resource: 'user_admin', actions: ['view'], title: 'accountsView', description: 'accountsView' },
+  { key: 'accounts-manage', resource: 'user_admin', actions: ['create', 'update', 'delete'], title: 'accountsManage', description: 'accountsManage' },
+  { key: 'roles', resource: 'rbac_config', actions: ['update'], title: 'roles', description: 'roles' },
+  { key: 'template', resource: 'auto_create', actions: ['view', 'update'], title: 'template', description: 'template' },
+  { key: 'day-types', resource: 'state', actions: ['create', 'update', 'delete'], title: 'dayTypes', description: 'dayTypes' },
+  { key: 'structure', resource: 'org_structure', actions: ['view'], title: 'structure', description: 'structure' },
+  { key: 'audit', resource: 'audit', actions: ['view'], title: 'audit', description: 'audit' },
+] as const
+
+/** Legacy partial grants stay visible until explicitly replaced. */
+export function permissionActionGroups(resource: string, cells: readonly MatrixCellLike[]): Array<PresetActionGroup & { resource: string }> {
+  if (resource === 'administration') {
+    return ADMIN_CAPABILITIES.flatMap((capability) => {
+      const actions = capability.actions.filter((action) => cells.some((cell) => cell.resource === capability.resource && cell.action === action))
+      return actions.length ? [{ ...capability, actions }] : []
+    })
+  }
+  const actions = gridActions(cells.filter((cell) => cell.resource === resource), ACTIONS)
+    .filter((action) => (resource !== 'state' || action === 'view') && (resource !== 'worker' || action !== 'create'))
+  return presetActionGroups(actions).map((group) => ({ ...group, resource,
+    ...(resource === 'worker' && group.key === 'manage' ? { description: 'employeeCalendar' } : {}),
+  }))
+}
+
+export function permissionBlocks(cells: readonly MatrixCellLike[]) {
+  const administrative = new Set<string>(ADMIN_CAPABILITIES.filter((capability) => capability.resource !== 'state').map((capability) => capability.resource))
+  const blocks = gridSections(cells.filter((cell) => cell.resource !== 'state_admin'), GROUPS)
+    .flatMap((group) => group.resources.filter((resource) => !administrative.has(resource))
+      .map((resource) => ({ resource, group: group.key })))
+  if (permissionActionGroups('administration', cells).length) blocks.push({ resource: 'administration', group: 'administration' })
+  return blocks.map((block, index) => ({ ...block, index }))
+}
 
 export const ACTIONS = ['view', 'create', 'update', 'delete'] as const
 
@@ -186,6 +222,7 @@ export const DEFAULT_GRANT_ZONE: Record<string, string> = {
   user_catalog: 'all',
   user_admin: 'all',
   rbac_config: 'all',
+  auto_create: 'all',
   state_admin: 'all',
   org_structure: 'all',
   audit: 'all',
@@ -198,4 +235,9 @@ export function viewParentResources(resource: string): string[] {
   if (resource === 'task' || resource === 'milestone') return ['project', 'process']
   if (resource === 'assignment') return ['project', 'process', 'task']
   return []
+}
+
+export function resourceDescription(resource: string): string {
+  return ['state', 'resource', 'worker', 'user_catalog'].includes(resource)
+    ? t(`adminConfig.perm.resourceHelp.${resource}`) : ''
 }

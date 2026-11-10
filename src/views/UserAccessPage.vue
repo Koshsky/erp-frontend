@@ -34,7 +34,7 @@ const presetOptions = computed(() =>
 /** Permission editing is admin-only (as on the user editor page). */
 const permsReady = computed(() => rbac.permsLoaded || rbac.myPermissions.length > 0)
 const canManageUserRights = computed(() =>
-  permsReady.value ? rbac.can('rbac_config', 'view') : auth.user?.preset === 'admin',
+  permsReady.value ? rbac.can('rbac_config', 'update') : auth.user?.preset === 'admin',
 )
 
 const userId = computed(() => {

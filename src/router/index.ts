@@ -85,8 +85,7 @@ const router = createRouter({
         },
         {
           path: 'statuses',
-          name: 'statuses',
-          component: () => import('../views/StatusesPage.vue'),
+          redirect: '/timesheet',
         },
         {
           path: 'users',
@@ -196,10 +195,9 @@ const FIRST_ACCESSIBLE_TABS: Array<[string, [string, string] | null, string[]]> 
   ['employees', ['worker', 'view'], ['vp', 'admin']],
   ['resources', ['resource', 'view'], ['vp', 'admin']],
   ['users', ['user_admin', 'view'], ['admin']],
-  ['statuses', ['state_admin', 'view'], ['admin']],
   ['structure', ['org_structure', 'view'], ['admin']],
-  ['auto-create', ['rbac_config', 'view'], ['admin']],
-  ['permissions', ['rbac_config', 'view'], ['admin']],
+  ['auto-create', ['auto_create', 'update'], ['admin']],
+  ['permissions', ['rbac_config', 'update'], ['admin']],
 ]
 
 async function pageAccessible(

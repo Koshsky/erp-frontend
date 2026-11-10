@@ -14,7 +14,7 @@ export default {
   users: 'Users',
   structure: 'Company structure',
   autoCreate: 'Project template',
-  statuses: 'Statuses',
+  statuses: 'Timesheet day types',
   permissions: 'Roles',
   audit: 'Audit log',
   system: 'System',

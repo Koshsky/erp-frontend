@@ -1,3 +1,4 @@
+import { timesheetPageAccessible } from '@/utils/timesheetAccess'
 import { resourcePageAccessible } from '@/utils/resourceAccess'
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
@@ -77,9 +78,8 @@ export const NAV_CATEGORIES: NavCategory[] = [
     items: [
       { label: 'nav.users', to: '/users', name: 'users', perm: ['user_admin', 'view'], icon: 'users-round' },
       { label: 'nav.structure', to: '/structure', name: 'structure', perm: ['org_structure', 'view'], icon: 'network' },
-      { label: 'nav.autoCreate', to: '/auto-create', name: 'auto-create', perm: ['rbac_config', 'view'], icon: 'wand-sparkles' },
-      { label: 'nav.statuses', to: '/statuses', name: 'statuses', perm: ['state_admin', 'view'], icon: 'tags' },
-      { label: 'nav.permissions', to: '/permissions', name: 'permissions', perm: ['rbac_config', 'view'], icon: 'file-key' },
+      { label: 'nav.autoCreate', to: '/auto-create', name: 'auto-create', perm: ['auto_create', 'update'], icon: 'wand-sparkles' },
+      { label: 'nav.permissions', to: '/permissions', name: 'permissions', perm: ['rbac_config', 'update'], icon: 'file-key' },
       { label: 'nav.audit', to: '/audit', name: 'audit', perm: ['audit', 'view'], icon: 'notebook-text' },
     ],
   },
@@ -117,6 +117,8 @@ export function useNavigation() {
             c.label,
             c.items.filter((i) => {
               if (permsReady.value) {
+                if (i.name === 'timesheet') return timesheetPageAccessible(rbac.can)
+                if (i.name === 'auto-create') return rbac.can('auto_create', 'view') || rbac.can('auto_create', 'update')
                 if (i.name === 'resources') return resourcePageAccessible(rbac.can)
                 return i.perm ? rbac.can(i.perm[0], i.perm[1]) : true
               }

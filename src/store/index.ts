@@ -1201,7 +1201,7 @@ export const useAppStore = defineStore('app', () => {
     adminUsersError.value = null
     try {
       const api = new UsersApi(apiConfig())
-      const resp = await api.userGet(500, undefined, undefined, false, search || undefined, 0)
+      const resp = await api.userAccountsGet(500, undefined, undefined, false, search || undefined, 0)
       adminUsers.value = resp.data?.data?.items ?? []
     } catch (e: unknown) {
       adminUsersError.value = apiErrorMessage(e as { message?: string; code?: unknown })

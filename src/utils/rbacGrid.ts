@@ -112,6 +112,9 @@ export function gridSections(
 export interface PresetActionGroup {
   key: string
   actions: string[]
+  resource?: string
+  title?: string
+  description?: string
 }
 
 export function presetActionGroups(actions: readonly string[]): PresetActionGroup[] {

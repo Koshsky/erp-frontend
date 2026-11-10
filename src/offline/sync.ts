@@ -112,7 +112,7 @@ export function reloadDomainsFor(entity: MutationEntity): Reloader[] {
     case 'member':
       return seesRoster ? [reload('resources', () => app.refreshResources())] : []
     case 'state':
-      return seesRoster ? [reload('states', () => ts.refreshStates())] : []
+      return (permsReady ? rbac.can('state', 'view') : seesRoster) ? [reload('states', () => ts.refreshStates())] : []
     case 'period':
       return seesRoster
         ? [
