@@ -32,6 +32,8 @@
     "files": [
       "main.js",
       "preload.js",
+      "security.cjs",
+      "static-server.cjs",
       "package.json"
     ],
     "extraResources": [

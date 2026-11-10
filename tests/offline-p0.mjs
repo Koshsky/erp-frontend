@@ -1,19 +1,31 @@
 import { chromium, expect } from 'playwright/test'
 import fs from 'node:fs'
+import { launchElectronFixture } from './helpers/electron.mjs'
 
 const base = process.env.ERP_TEST_URL || 'http://127.0.0.1:5173'
 if (!['localhost', '127.0.0.1'].includes(new URL(base).hostname)) throw new Error('Local backend tests only')
 const envPath = process.env.ERP_TEST_ENV || new URL('../../local/dev.env', import.meta.url)
-const env = Object.fromEntries(fs.readFileSync(envPath, 'utf8').split('\n').filter((line) => /^[A-Z_]+=/.test(line)).map((line) => {
+const env = process.env.ERP_TEST_PASSWORD ? {} : Object.fromEntries(fs.readFileSync(envPath, 'utf8').split('\n').filter((line) => /^[A-Z_]+=/.test(line)).map((line) => {
   const i = line.indexOf('=')
   return [line.slice(0, i), line.slice(i + 1).replace(/^['"]|['"]$/g, '')]
 }))
 const password = process.env.ERP_TEST_PASSWORD || env.ADMIN_PASSWORD
 if (!password) throw new Error('Set ERP_TEST_PASSWORD or ERP_TEST_ENV')
-const browser = await chromium.launch({ channel: process.env.PLAYWRIGHT_CHANNEL || 'chrome', headless: true })
-const context = await browser.newContext()
+const native = process.env.ERP_TEST_DESKTOP === '1' && process.env.ELECTRON_EXECUTABLE ? await launchElectronFixture() : null
+const browser = native ? null : await chromium.launch({ channel: process.env.PLAYWRIGHT_CHANNEL || 'chrome', headless: true })
+const context = native ? native.app.context() : await browser.newContext()
 await context.addInitScript(() => localStorage.setItem('mvs_erp_auto_sync', '0'))
-const page = await context.newPage()
+const cspViolations = []
+if (process.env.ERP_TEST_CSP === '1') {
+  await context.exposeBinding('reportCspViolation', (_, value) => cspViolations.push(value))
+  await context.addInitScript(() => document.addEventListener('securitypolicyviolation', event => {
+    void window.reportCspViolation({ directive: event.effectiveDirective, blocked: event.blockedURI })
+  }))
+}
+if (process.env.ERP_TEST_DESKTOP === '1') {
+  await context.addInitScript(() => { if (!window.erpDesktop) window.erpDesktop = { isElectron: true, appVersion: async () => ({ version: '1.6.1', electron: 'csp-test' }) } })
+}
+const page = native ? await native.app.firstWindow() : await context.newPage()
 page.setDefaultTimeout(20_000)
 let fault = null
 let lost = null
@@ -26,7 +38,7 @@ const prefix = `Offline-P0-${Date.now()}`
 const report = []
 
 async function runtime() {
-  await page.evaluate(async () => {
+  await page.evaluate(async (axiosPath) => {
     const store = await import('/src/store/index.ts')
     const token = await import('/src/token.ts')
     const outbox = await import('/src/offline/outbox.ts')
@@ -35,10 +47,10 @@ async function runtime() {
     const state = await import('/src/offline/state.ts')
     const sync = await import('/src/offline/sync.ts')
     const settings = await import('/src/settings.ts')
-    const { default: axios } = await import('/node_modules/.vite/deps/axios.js')
+    const { default: axios } = await import(axiosPath)
     settings.autoSync.value = false
     window.p0 = { planning: store.usePlanningStore(), app: store.useAppStore(), auth: store.useAuthStore(), outbox, db, cache, state, sync, axios, token }
-  })
+  }, process.env.ERP_TEST_AXIOS_PATH || '/node_modules/.vite/deps/axios.js')
 }
 async function api(method, path, data) {
   return page.evaluate(async ({ method, path, data }) => {
@@ -299,6 +311,7 @@ try {
   await settled(prefix + '-reload-edited', fixture.resource, 3)
   expect(await page.evaluate(() => window.p0.db.idbAll('idmap'))).toHaveLength(0)
   report.push('P0-6 PASS: reload mid-flush preserves suffix, keys and persistent id map')
+  expect(cspViolations, 'offline queue/cache/recovery must not violate CSP').toEqual([])
   console.log(report.join('\n'))
 } finally {
   fault = null
@@ -309,5 +322,5 @@ try {
     if (created.project) await api('delete', '/project/' + created.project)
     if (created.resource) await api('delete', '/resources/' + created.resource)
   } catch (error) { console.error('Fixture cleanup failed:', error.message) }
-  await browser.close()
+  if (native) await native.close(); else await browser.close()
 }
