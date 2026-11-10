@@ -235,7 +235,7 @@ router.beforeEach(async (to) => {
 
   if (
     to.meta.requiresAuth &&
-    (!auth.isAuthenticated || auth.accessExpired) &&
+    (!auth.isAuthenticated || auth.accessExpired()) &&
     !isOffline.value
   ) {
     if (isElectron && shouldAutoSync() && !isLoggedOut()) {

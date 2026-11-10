@@ -357,6 +357,6 @@ export function startSessionMaintenance(): void {
   if (maintenanceTimer != null) return
   maintenanceTimer = window.setInterval(() => {
     const auth = useAuthStore()
-    if (auth.isAuthenticated && auth.accessExpired) void ensureAutoSession()
+    if (auth.isAuthenticated && auth.accessExpired()) void ensureAutoSession()
   }, SESSION_MAINTENANCE_MS)
 }

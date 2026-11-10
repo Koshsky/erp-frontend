@@ -20,7 +20,7 @@
  *  - id-less rows are dropped (they cannot be deduplicated).
  *
  * The auth-store section checks the real token.expiry decoding contract that
- * drives the proactive-refresh margin (accessExpired computed).
+ * drives the proactive-refresh margin (accessExpired check).
  */
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
@@ -349,22 +349,49 @@ describe('auth access-expiry decoding (a token-margin contract)', () => {
   beforeEach(() => setAccessToken(null))
 
   it('reports the token expired when missing', () => {
-    expect(useAuthStore().accessExpired).toBe(true)
+    expect(useAuthStore().accessExpired()).toBe(true)
   })
 
   it('reports the token expired when exp has passed', () => {
     setAccessToken(jwt(Math.floor(Date.now() / 1000) - 60))
-    expect(useAuthStore().accessExpired).toBe(true)
+    expect(useAuthStore().accessExpired()).toBe(true)
   })
 
   it('reports a valid (far-future exp) token as not expired', () => {
     setAccessToken(jwt(Math.floor(Date.now() / 1000) + 3600))
-    expect(useAuthStore().accessExpired).toBe(false)
+    expect(useAuthStore().accessExpired()).toBe(false)
   })
 
   it('treats an unparseable token as expired', () => {
     setAccessToken('not-a-jwt')
-    expect(useAuthStore().accessExpired).toBe(true)
+    expect(useAuthStore().accessExpired()).toBe(true)
+  })
+
+  it('stops reporting expiry after a saved session restores a valid token', () => {
+    const auth = useAuthStore()
+    expect(auth.accessExpired()).toBe(true)
+    setAccessToken(jwt(Math.floor(Date.now() / 1000) + 3600))
+    expect(auth.accessExpired()).toBe(false)
+  })
+
+  it('detects expiry as time passes without replacing the token', () => {
+    const now = Date.now()
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(now)
+    try {
+      setAccessToken(jwt(Math.floor(now / 1000) + 60))
+      const auth = useAuthStore()
+      expect(auth.accessExpired()).toBe(false)
+      clock.mockReturnValue(now + 61_000)
+      expect(auth.accessExpired()).toBe(true)
+    } finally { clock.mockRestore() }
+  })
+
+  it('detects a removed token after previously observing a valid one', () => {
+    setAccessToken(jwt(Math.floor(Date.now() / 1000) + 3600))
+    const auth = useAuthStore()
+    expect(auth.accessExpired()).toBe(false)
+    setAccessToken(null)
+    expect(auth.accessExpired()).toBe(true)
   })
 
   it('round-trips through the in-memory token store', () => {

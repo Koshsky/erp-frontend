@@ -8,6 +8,10 @@ The web app and the desktop wrapper are versioned together.
 
 ## [Unreleased]
 
+### Fixed
+
+- Page navigation after session restoration no longer triggers redundant token refreshes.
+
 ### Changed
 
 - Administration settings share one card; the day-type dictionary opens inside the timesheet.

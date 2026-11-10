@@ -255,7 +255,8 @@ export const useAuthStore = defineStore('auth', () => {
   // using the HttpOnly cookie; without a cookie, refresh returns 401 and logs out.
   const user = ref<DtoUserInfo | null>(readStoredUser())
   const isAuthenticated = ref<boolean>(Boolean(readStoredUser()))
-  const accessExpired = computed<boolean>(() => accessTokenExpired())
+  // Neither the in-memory token nor the wall clock invalidates a Vue computed value.
+  function accessExpired(): boolean { return accessTokenExpired() }
   /** Session mode: online — real (with token), offline — local without token */
   const sessionMode = ref<'online' | 'offline'>('online')
   const loading = ref(false)
