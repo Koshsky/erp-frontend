@@ -1,4 +1,4 @@
-import { ref, watch } from 'vue'
+import { ref } from 'vue'
 import { useAppStore, useAuthStore, usePlanningStore, useTimesheetStore, useRbacStore } from '@/store'
 import { shouldAutoSync } from '@/settings'
 import { isLoggedOut } from '@/loggedOut'
@@ -60,7 +60,7 @@ function noteLastPush(): void {
   }
 }
 
-let reconciling = false
+let syncFlight: Promise<void> | null = null
 
 interface Reloader {
   name: string
@@ -98,7 +98,7 @@ export function reloadDomainsFor(entity: MutationEntity): Reloader[] {
 
   switch (entity) {
     case 'resource':
-      return [reload('resources', () => app.refreshResources()), reload('calendar', () => app.refreshCalendar())]
+      return [reload('task-plan', () => planning.refreshTaskPlanning(true)), reload('resources', () => app.refreshResources()), reload('calendar', () => app.refreshCalendar())]
     case 'user':
       // A user CRUD (create/update/delete/manager change) alters the roster
       // (timesheet + employees page), the name catalog (/user/all) and the
@@ -116,6 +116,7 @@ export function reloadDomainsFor(entity: MutationEntity): Reloader[] {
     case 'period':
       return seesRoster
         ? [
+            reload('calendar', () => app.refreshCalendar()),
             reload('employees', () => ts.refreshEmployees(undefined, true)),
             ...(ts.windowStart
               ? [reload('periods', () => ts.refreshPeriods(ts.windowStart, ts.windowEnd))]
@@ -253,23 +254,23 @@ async function reconcile(entities: Set<MutationEntity>): Promise<void> {
   }
 }
 
-async function runSync(): Promise<void> {
-  if (reconciling) return
-  reconciling = true
-  try {
-    const res = await flushOutbox()
-    if (res.ok > 0 || res.failed > 0 || res.interrupted) {
-      if (res.ok > 0) noteLastPush()
-      await reconcile(res.entities)
-      syncNotice.value = {
-        ok: res.ok,
-        failed: res.failed,
-        interrupted: res.interrupted,
-        failedEntries: res.failedEntries,
-      }
+function runSync(): Promise<void> {
+  if (syncFlight) return syncFlight
+  syncFlight = flushAndReconcile().finally(() => { syncFlight = null })
+  return syncFlight
+}
+
+async function flushAndReconcile(): Promise<void> {
+  const res = await flushOutbox()
+  if (res.ok > 0 || res.failed > 0 || res.interrupted) {
+    if (res.ok > 0) noteLastPush()
+    await reconcile(res.entities)
+    syncNotice.value = {
+      ok: res.ok,
+      failed: res.failed,
+      interrupted: res.interrupted,
+      failedEntries: res.failedEntries,
     }
-  } finally {
-    reconciling = false
   }
 }
 
@@ -314,24 +315,20 @@ export async function retryFailed(): Promise<void> {
 /** The "Skip" button: removes rejected entries (see outbox) */
 export { discardFailed } from './outbox'
 
-/** Queue flushing & PULL are driven by the single 10-second maintenance cycle (offline/cycle.ts). */
+/** Queue flushing & PULL are driven by the minute monitor (offline/connection.ts). */
 
-/** Initialization: reconcile at startup with a queue + trigger on network return */
+/** Reconcile a saved startup queue; connection.ts owns recovery ordering */
 export async function initOfflineSync(): Promise<void> {
   // Write-through into the cache BEFORE the first data load (main.ts awaits this function):
   // an offline reload shows the unsynced queue changes.
   await replayOutboxToCache()
   void refreshPendingCount()
-  watch(isOffline, (offline) => {
-    // After an explicit logout, autosync is not started until manual login
-    if (!offline && shouldAutoSync() && !isLoggedOut()) void runSync()
-  })
   if (!isOffline.value) {
     void refreshPendingCount().then(() => {
       if (shouldAutoSync() && !isLoggedOut() && pendingCount.value > 0) void runSync()
     })
   }
-  // Periodic flushing & the PULL cycle live in offline/cycle.ts (10 s loop).
+  // Periodic flushing & PULL are owned by offline/connection.ts (60 s loop).
 }
 
 /**

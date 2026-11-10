@@ -1,28 +1,21 @@
-# User access rights
+# User permissions
 
-A user's rights: the base ones — from the preset (in the block header), below — individual edits per row (resource + action).
+A role supplies initial permissions. Individual settings add grants or remove separate role permissions. They remain when the role changes, until explicitly reset.
 
-- The buttons in a row — which records the right applies to; you can select several at once.
-- "⛔ deny" — close an action; a second click returns it to the preset.
-- "Reset individual" — return everything to the preset.
+**Viewing inherits downward:** a project opens all processes, tasks, subtasks, milestones and assignments; a process opens its contents; a task opens its subtasks and assignments. An individual child denial **cannot cancel** parent-derived viewing. View controls are disabled when the parent is fully open. Through parent only removes an additional grant while preserving inherited access.
 
-What the buttons mean:
+Management does not inherit: creation, editing and deletion are checked separately. Seeing a colleague's process does not permit editing it.
 
-```
-Project → Process → Task → subtasks
-```
+Main conditions are **All**, **In employee-owned projects**, **In employee-owned processes**, and owned projects or resources. Nested records may have different owners. The project condition **Containing employee-owned processes** requires an owned process, not merely a task; the whole project then becomes visible.
 
-Everything inside a record is its descendants, everything outside (the project for a task, etc.) — its ancestors. Every record has an owner. A rule grants access if you are the owner of the record itself, of an ancestor of it, or of a record inside it.
+Selected conditions use OR. Peer and other complex conditions are no longer offered; previously saved conditions remain visible and effective until replaced.
 
-Buttons:
+Projects have a separate **Change priority** permission, which does not grant other field changes. Resource assignments always require matching resource and process owners, including for administrators. Managing resources is separate from managing assignments.
 
-1. "Own" (self) — you are the owner of the record. Example: "tasks = Own" — only your tasks.
-2. "Parents" (up1) — you are the owner of its immediate parent. Example: "tasks = Parents" — tasks of your processes.
-3. "Ancestors" (up) — you are the owner of any ancestor. Example: "tasks = Ancestors" — tasks of your processes and projects.
-4. "Siblings" (sib) — neighboring records under the same parent. Example: "processes = Siblings" — all processes of your project.
-5. "Subtree" (down) — there is one of your records inside the record. Example: "projects = Subtree" — projects that contain your tasks.
-6. "All" (all) — the whole catalog. "⛔" — deny.
+**Save** applies changes. **Reset individual permissions** restores the role's permissions. Administrators always have full access.
 
-"Tasks = Ancestors" and "projects = Subtree" are different rules: the former gives the tasks of your projects, the latter the projects with your tasks.
+Locked View controls are muted. Hover over their group for an explanation: change access on the parent instead of adding an ineffective child denial.
 
-Combine the buttons: "Own" + "Siblings" = your own and neighboring ones. "All" and "⛔" — separately (they reset the rest). Milestones and assignments have no "Own"/"Siblings"/"Subtree"; a project has no "Parents"/"Ancestors"/"Siblings".
+The user page uses two columns, or one on narrow screens. Manage sets a common condition for creation, editing and deletion. Different permissions reveals the saved conditions; they stay unchanged until a common value is selected. Use role settings removes individual overrides only for the selected action group.
+
+Role changes are saved immediately. Save and Cancel in the changes panel apply to individual permissions. Reset individual permissions in the header prepares a return to role settings: select Save to apply or Cancel to restore the last saved overrides. A rejected save keeps the draft available for correction.

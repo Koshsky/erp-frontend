@@ -5,6 +5,7 @@ import { pullStaleCycle, scheduleWarmup } from './warmup'
 import { pendingCount, refreshPendingCount } from './outbox'
 import { shouldAutoSync } from '@/settings'
 import { isLoggedOut } from '@/loggedOut'
+import { hasActiveMutations } from './mutationGuard'
 
 /**
  * The single background connection & maintenance monitor, active in EVERY
@@ -13,9 +14,8 @@ import { isLoggedOut } from '@/loggedOut'
  * It watches backend reachability and drives autosync:
  *   - ONLINE: probes /health every ONLINE_PROBE_MS (10 s, see below); while the
  *     connection
- *     is healthy it auto-pushes the mutation queue every AUTO_PUSH_MS (5 s,
- *     only when there are pending entries) and refreshes stale cache domains on
- *     a slower PULL timer.
+ *     is healthy it auto-pushes the mutation queue once a minute (
+ *     only when there are pending entries) then refreshes stale cache domains in the same cycle.
  *   - OFFLINE (a probe fails): flips isOffline and starts a reconnect countdown
  *     (reconnectDeadline, set to now + 60 s on going offline); on the deadline
  *     it probes again;
@@ -34,7 +34,6 @@ import { isLoggedOut } from '@/loggedOut'
 // below still react to a real network change immediately, and the heartbeat
 // only has to notice a silently dropped connection.
 const ONLINE_PROBE_MS = 10000
-const AUTO_PUSH_MS = 5000 // auto-push of the pending queue while online
 const PULL_STALE_MS = 60 * 1000 // slow PULL refresher (stale cache domains only)
 const OFFLINE_RETRY_MS = 60 // reconnect attempt interval (seconds)
 const COUNTDOWN_TICK_MS = 1000 // one countdown step per second
@@ -85,16 +84,13 @@ function canWork(): boolean {
 }
 
 let heartbeatTimer: number | null = null
-let autoPushTimer: number | null = null
 let pullTimer: number | null = null
 let countdownTimer: number | null = null
 
 function stopOnlineLoop(): void {
   if (heartbeatTimer != null) window.clearInterval(heartbeatTimer)
-  if (autoPushTimer != null) window.clearInterval(autoPushTimer)
   if (pullTimer != null) window.clearInterval(pullTimer)
   heartbeatTimer = null
-  autoPushTimer = null
   pullTimer = null
 }
 
@@ -106,8 +102,7 @@ function stopCountdown(): void {
 function startOnlineLoop(): void {
   stopOnlineLoop()
   heartbeatTimer = window.setInterval(() => void onlineHeartbeat(), ONLINE_PROBE_MS)
-  autoPushTimer = window.setInterval(() => void autoPush(), AUTO_PUSH_MS)
-  pullTimer = window.setInterval(() => void stalePull(), PULL_STALE_MS)
+  pullTimer = window.setInterval(() => void minuteSync(), PULL_STALE_MS)
 }
 
 function startCountdown(): void {
@@ -122,7 +117,7 @@ function scheduleReconnect(): void {
 
 /** The connection dropped: flip offline and begin the reconnect countdown. */
 function gotoOffline(): void {
-  if (isOffline.value) return // already offline & counting down
+  if (isOffline.value && countdownTimer != null) return
   stopOnlineLoop()
   isOffline.value = true
   scheduleReconnect()
@@ -139,9 +134,13 @@ async function handleBackendUp(): Promise<void> {
     isOffline.value = false
     reconnectDeadline.value = null
     startOnlineLoop()
-    if (canWork() && pendingCount.value > 0) await syncNow()
-    // Cover data not reached by the slow PULL loop right after re-connects.
-    scheduleWarmup()
+    if (canWork()) {
+      await refreshPendingCount()
+      if (pendingCount.value > 0) await syncNow()
+      if (!isOffline.value) scheduleWarmup()
+    }
+  } catch {
+    // Preserve the queue; a later cycle can retry without an unhandled rejection.
   } finally {
     recovering = false
   }
@@ -159,7 +158,7 @@ async function onlineHeartbeat(): Promise<void> {
   }
 }
 
-/** Auto-push queued mutations while online (only when the queue is non-empty). */
+/** Flush queued edits before the minute cycle reads server snapshots. */
 async function autoPush(): Promise<void> {
   if (pushing || isOffline.value || !canWork()) return
   if (pendingCount.value <= 0) return
@@ -173,17 +172,27 @@ async function autoPush(): Promise<void> {
 }
 
 /** Slow PULL of expired cache domains (keeps the cache fresh when online). */
-async function stalePull(): Promise<void> {
-  if (isOffline.value || !canWork()) return
-  const refreshed = await pullStaleCycle()
-  if (refreshed > 0) notePull()
+let minuteRunning = false
+async function minuteSync(): Promise<void> {
+  if (minuteRunning || recovering || hasActiveMutations() || isOffline.value || !canWork()) return
+  minuteRunning = true
+  try {
+    await autoPush()
+    if (isOffline.value || !canWork()) return
+    const refreshed = await pullStaleCycle()
+    if (refreshed > 0) notePull()
+  } catch {
+    // A failed push must not start a pull over unsent changes.
+  } finally {
+    minuteRunning = false
+  }
 }
 
 /** One reconnect-countdown tick: probe once the deadline has passed. The
  *  deadline is wall-clock time, so the attempt happens after 60 s regardless
  *  of browser timer throttling on hidden tabs. */
 function countdownTick(): void {
-  if (reconnectDeadline.value == null) return
+  if (!canWork() || reconnectDeadline.value == null) return
   if (Date.now() >= reconnectDeadline.value) {
     void retryConnectionNow()
   }
@@ -225,6 +234,7 @@ function onWindowOffline(): void {
 }
 
 function onWindowOnline(): void {
+  if (!canWork()) return
   // The network interface is back but the backend may still be down: only the
   // probe decides. Probe immediately instead of on the next scheduled tick.
   if (reconnectDeadline.value != null) {
@@ -254,9 +264,8 @@ export function startConnectionMonitor(): void {
   window.addEventListener('online', onWindowOnline)
   window.addEventListener('offline', onWindowOffline)
 
-  // Network return → an idle-time full warmup for data the slow PULL misses
-  // (scheduleWarmup no-ops when already online / queue already flushed above).
+  // HTTP cache fallback can detect an outage before the next health probe.
   watch(isOffline, (offline) => {
-    if (!offline) scheduleWarmup()
+    if (offline) gotoOffline()
   })
 }

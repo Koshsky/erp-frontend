@@ -28,7 +28,7 @@ describe('hint registry', () => {
   })
 
   it('maps file names to ids and headings to titles', () => {
-    expect(hintPage('scope-expressions', 'ru')?.title).toBe('Выражения области видимости')
+    expect(hintPage('scope-expressions', 'ru')?.title).toBe('Условия доступа')
     expect(hintPage('planner', 'ru')?.title).toBe('Планировщик')
     expect(hintPage('nope')).toBeNull()
   })

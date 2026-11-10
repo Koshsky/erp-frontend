@@ -1,33 +1,39 @@
-# Rights presets
+# Set up a role
 
-A preset is a set of base rights. On the left, select a preset; on the right — its rights per row (resource + action).
+Select a role on the left. Each block has **View** and **Manage**. Manage groups creation, editing and deletion; expand Different permissions when their saved conditions differ. They stay unchanged until a common condition is chosen.
 
-- The buttons in a row — which records the right applies to; you can select several at once.
-- "⛔ no access" — the row has no rule.
-- Changes accumulate at the bottom: "Save" applies them immediately, "Cancel" discards them, "Reset everything to defaults" returns the factory matrix.
-- Other users will see the changes within the TTL (up to 30 seconds).
+## Viewing opens the contents
 
-What the buttons mean:
+Viewing a project opens all its processes, tasks, subtasks, milestones and resource assignments. Viewing a process opens everything inside it. Viewing a task opens its subtasks and assignments.
 
-```
-Project → Process → Task → subtasks
-```
+**A child denial cannot cancel viewing inherited from a parent**, including an individual employee denial. If the parent is fully open, its content's View controls are disabled. With scoped parent access, Through parent only removes an additional grant while keeping inherited visibility.
 
-Everything inside a record is its descendants, everything outside (the project for a task, etc.) — its ancestors. Every record has an owner. A rule grants access if you are the owner of the record itself, of an ancestor of it, or of a record inside it.
+This applies only to viewing. Seeing an entire project does not grant permission to edit it or manage its contents.
 
-Buttons:
+## Main conditions
 
-1. "Own" (self) — you are the owner of the record. Example: "tasks = Own" — only your tasks.
-2. "Parents" (up1) — you are the owner of its immediate parent. Example: "tasks = Parents" — tasks of your processes.
-3. "Ancestors" (up) — you are the owner of any ancestor. Example: "tasks = Ancestors" — tasks of your processes and projects.
-4. "Siblings" (sib) — neighboring records under the same parent. Example: "processes = Siblings" — all processes of your project.
-5. "Subtree" (down) — there is one of your records inside the record. Example: "projects = Subtree" — projects that contain your tasks.
-6. "All" (all) — the whole catalog. "⛔" — deny.
+- **All** covers any objects.
+- **In employee-owned projects** checks the project owner, regardless of process or task owners.
+- **In employee-owned processes** checks the process owner, regardless of task owners.
+- **Own** checks ownership of the project or resource itself.
+- **Containing employee-owned processes** opens projects containing an employee's process. Owning a task alone does not qualify. A project opened this way becomes fully visible.
 
-"Tasks = Ancestors" and "projects = Subtree" are different rules: the former gives the tasks of your projects, the latter the projects with your tasks.
+Selected conditions use OR. Peer and other complex conditions are no longer offered. Previously saved special rules remain visible separately and stay effective until explicitly replaced.
 
-Combine the buttons: "Own" + "Siblings" = your own and neighboring ones. "All" and "⛔" — separately (they reset the rest). Milestones and assignments have no "Own"/"Siblings"/"Subtree"; a project has no "Parents"/"Ancestors"/"Siblings".
+## Predefined roles
 
-Presets on the left: "+ Add" — create; ✕ on the button — delete (confirmation by typing the tag); right-click the button — "Rename". A preset has three fields: name (shown in the list), tag — the access code (in the blue badge) and description; all three are set at creation and edited on rename. Deleting removes the preset's rules and the base rights of the users assigned to it (the "admin" preset is protected).
+- **Project director** views all planning and changes project priorities. Other changes are forbidden.
+- **Project manager** manages owned projects and all their contents, regardless of nested owners. Does not manage resources.
+- **Process owner** manages owned processes and resources. Projects containing their processes are fully visible; other processes remain read-only.
+- **Worker** has no initial permissions.
+- **Administrator** has full access.
 
-Comments on tasks: the rights are the same as on the task — those who can see the task see them.
+Resource assignment always requires matching resource and process owners, for every role. Project managers may read resources belonging to process owners in their projects for assignment; process owners manage those resources. A regular user's resource header shows only their own resources.
+
+Projects have a separate **Change priority** permission. It does not allow changing names, dates or owners.
+
+New custom roles initially access owned projects and resources, manage processes in owned projects and tasks in owned processes. Assignments default to owned resources in owned tasks; matching resource and process owners remains mandatory. Viewing follows the inheritance rule above.
+
+**Save** applies changes. **Cancel** restores saved values. A role applies to all its employees; individual settings may change additional permissions but cannot cancel parent-derived viewing.
+
+Locked controls are muted and labelled as inherited viewing. Hover over their group for the reason and how to change access: edit the parent project or process View permission. Reset all to defaults is in the page header; the unsaved-changes panel contains only Save and Cancel.

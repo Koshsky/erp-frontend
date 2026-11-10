@@ -1,20 +1,11 @@
-# Scope expressions
+# Access conditions
 
-```
-Project → Process → Task → subtasks
-```
+Choose objects available to an employee: **All**, their own projects or resources, contents of **their projects** or **their processes**. The named owner is checked; nested records may belong to others.
 
-Everything inside a record is its descendants, everything outside (the project for a task, etc.) — its ancestors. Every record has an owner. A rule grants access if you are the owner of the record itself, of an ancestor of it, or of a record inside it.
+Selected conditions use OR. All replaces the other conditions. No access removes a separate grant.
 
-Buttons:
+Viewing always inherits: an accessible project opens all its contents, a process opens its contents, and a task opens subtasks and assignments. A child denial does not cancel parent access. The denial is labelled Through parent only when inheritance applies; child View controls are disabled for a fully open parent.
 
-1. "Own" (self) — you are the owner of the record. Example: "tasks = Own" — only your tasks.
-2. "Parents" (up1) — you are the owner of its immediate parent. Example: "tasks = Parents" — tasks of your processes.
-3. "Ancestors" (up) — you are the owner of any ancestor. Example: "tasks = Ancestors" — tasks of your processes and projects.
-4. "Siblings" (sib) — neighboring records under the same parent. Example: "processes = Siblings" — all processes of your project.
-5. "Subtree" (down) — there is one of your records inside the record. Example: "projects = Subtree" — projects that contain your tasks.
-6. "All" (all) — the whole catalog. "⛔" — deny.
+Creation, editing and deletion do not inherit. Changing project priorities is a separate permission. Assigning a resource always requires matching resource and process owners.
 
-"Tasks = Ancestors" and "projects = Subtree" are different rules: the former gives the tasks of your projects, the latter the projects with your tasks.
-
-Combine the buttons: "Own" + "Siblings" = your own and neighboring ones. "All" and "⛔" — separately (they reset the rest). Milestones and assignments have no "Own"/"Siblings"/"Subtree"; a project has no "Parents"/"Ancestors"/"Siblings".
+Peer and other complex conditions are no longer offered in this interface version. Previously saved special rules are shown separately and stay effective until explicitly replaced.

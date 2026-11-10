@@ -76,7 +76,7 @@ export const NoPreset: Story = {
 
 /**
  * Test: the visible zone chips (Variant A) toggle a multi-move expression —
- * two selected moves stay active together, "запрет" is exclusive and clears
+ * two selected moves stay active together, No access is exclusive and clears
  * every other chip, and the two mounted instances stay isolated.
  */
 export const ChipMultiSelect: Story = {
@@ -105,9 +105,8 @@ export const ChipMultiSelect: Story = {
     })
 
     await step('clicking a chip toggles its move on and off', async () => {
-      // "Процессы" card — a resource with several ordinary moves.
-      const cards = document.querySelectorAll('.uped-res-card')
-      const row = cards[1]?.querySelector('.ur-row') as HTMLElement
+      // Resources provide two independent owner conditions without inherited planning access.
+      const row = document.querySelector('.uped-res-card[data-resource=resource] [data-action-group=view]') as HTMLElement
       const chips = [...row.querySelectorAll<HTMLButtonElement>('.ur-chip:not(.rev)')]
       const first = chips.find((c) => !c.classList.contains('on'))
       expect(first).toBeTruthy()
@@ -120,10 +119,9 @@ export const ChipMultiSelect: Story = {
     })
 
     await step('two moves compose one expression: both chips stay active', async () => {
-      const cards = document.querySelectorAll('.uped-res-card')
-      const row = cards[1]?.querySelector('.ur-row') as HTMLElement
+      const row = document.querySelector('.uped-res-card[data-resource=resource] [data-action-group=view]') as HTMLElement
       const chips = [...row.querySelectorAll<HTMLButtonElement>('.ur-chip:not(.rev)')].filter(
-        (c) => c.textContent !== 'Все',
+        (c) => c.dataset.scope !== 'all',
       )
       const inactive = chips.filter((c) => !c.classList.contains('on'))
       const a = inactive[0]
@@ -138,9 +136,8 @@ export const ChipMultiSelect: Story = {
       await wait(30)
     })
 
-    await step('«⛔ запрет» is exclusive: selecting it clears all other chips', async () => {
-      const cards = document.querySelectorAll('.uped-res-card')
-      const row = cards[1]?.querySelector('.ur-row') as HTMLElement
+    await step('No access is exclusive: selecting it clears all other chips', async () => {
+      const row = document.querySelector('.uped-res-card[data-resource=resource] [data-action-group=view]') as HTMLElement
       const chips = [...row.querySelectorAll<HTMLButtonElement>('.ur-chip:not(.rev)')]
       const rev = row.querySelector<HTMLButtonElement>('.ur-chip.rev')
       const inactive = chips.filter((c) => !c.classList.contains('on'))
@@ -149,8 +146,10 @@ export const ChipMultiSelect: Story = {
       await wait(30)
       expect(rev?.classList.contains('on')).toBe(true)
       expect(chips.every((c) => !c.classList.contains('on'))).toBe(true)
-      // Second click returns to the preset — the row restores its baseline.
       rev?.click()
+      await wait(30)
+      expect(rev?.classList.contains('on')).toBe(true)
+      row.querySelector<HTMLButtonElement>('.ur-revert')?.click()
       await wait(30)
       expect(rev?.classList.contains('on')).toBe(false)
     })

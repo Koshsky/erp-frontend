@@ -72,7 +72,7 @@ export default defineConfig({
           browser: {
             enabled: true,
             headless: true,
-            provider: playwright({}),
+            provider: playwright(process.env.PLAYWRIGHT_CHANNEL ? { launchOptions: { channel: process.env.PLAYWRIGHT_CHANNEL } } : {}),
             instances: [{ browser: 'chromium' }],
           },
         },

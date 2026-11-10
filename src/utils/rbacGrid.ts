@@ -9,6 +9,8 @@
  * presentation (section order, titles, scope chips).
  */
 
+import { canonicalScope, scopeMoves } from '@/rbacScope'
+
 /** Wire code of "no right" in a matrix cell. */
 export const NO_ACCESS = 'none'
 
@@ -105,4 +107,25 @@ export function gridSections(
   const rest = resources.filter((r) => !known.has(r))
   if (rest.length) sections.push({ key: fallbackKey, resources: rest })
   return sections
+}
+
+export interface PresetActionGroup {
+  key: string
+  actions: string[]
+}
+
+export function presetActionGroups(actions: readonly string[]): PresetActionGroup[] {
+  const management = actions.filter((action) => ['create', 'update', 'delete'].includes(action))
+  const groups = actions.filter((action) => !management.includes(action))
+    .map((action) => ({ key: action, actions: [action] }))
+  if (management.length) groups.push({ key: 'manage', actions: management })
+  return groups
+}
+
+export function commonPresetScope(scopes: readonly string[]): string | null {
+  const normalized = scopes.map((scope) => {
+    if (!scope || scope === NO_ACCESS) return NO_ACCESS
+    return scopeMoves(scope).join(' ') || canonicalScope(scope)
+  })
+  return normalized.length && normalized.every((scope) => scope === normalized[0]) ? normalized[0] : null
 }

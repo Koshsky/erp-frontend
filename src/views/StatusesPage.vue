@@ -100,6 +100,7 @@ const { open: openModal, close: closeModal, submit: submitModal, bind: modalBind
   },
   (state) => (state.type === 'create' ? t('adminConfig.statuses.create') : t('adminConfig.statuses.editTitle')),
   (state) => (state.type === 'create' ? t('common.create') : t('adminConfig.statuses.save')),
+  (state) => state.type === 'create' ? canCreateState.value : canManageState.value,
 )
 
 function onRowContextMenu(e: MouseEvent, st: DtoStateResponse) {
@@ -128,7 +129,7 @@ function openEdit(id: number) {
 }
 
 function handleSelect(id: string) {
-  if (!menu.value) return
+  if (!menu.value || !menuItems.value.some((item) => item.id === id)) return
   if (id === 'edit-state') {
     openEdit(menu.value.stateId)
   } else if (id === 'delete-state') {

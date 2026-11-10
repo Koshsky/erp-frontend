@@ -1,3 +1,4 @@
+import { resourcePageAccessible } from '@/utils/resourceAccess'
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAuthStore, useRbacStore } from '../store'
@@ -116,6 +117,7 @@ export function useNavigation() {
             c.label,
             c.items.filter((i) => {
               if (permsReady.value) {
+                if (i.name === 'resources') return resourcePageAccessible(rbac.can)
                 return i.perm ? rbac.can(i.perm[0], i.perm[1]) : true
               }
               return !i.roles || i.roles.includes(role.value)

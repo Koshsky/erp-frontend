@@ -1,6 +1,6 @@
 {
   "name": "frontend",
-  "version": "1.6.0",
+  "version": "1.6.1",
   "description": "",
   "main": "index.js",
   "scripts": {
@@ -14,6 +14,9 @@
     "typecheck": "vue-tsc --noEmit",
     "lint": "eslint src --max-warnings 0",
     "test:stories": "vitest run",
+    "test:pdf": "node tests/pdf-snapshot.mjs",
+    "test:rbac:ui": "node tests/rbac-ui.mjs",
+    "test:offline:p0": "node tests/offline-p0.mjs",
     "test:stories:watch": "vitest"
   },
   "keywords": [],
@@ -24,6 +27,7 @@
     "@pdf-lib/fontkit": "^1.1.1",
     "axios": "^1.19.0",
     "d3-hierarchy": "3.1.2",
+    "html-to-image": "1.11.13",
     "marked": "^18.0.14",
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "4.10.38",
@@ -47,6 +51,7 @@
     "eslint": "^10.10.0",
     "eslint-plugin-vue": "^10.11.0",
     "playwright": "^1.61.1",
+    "pngjs": "7.0.0",
     "storybook": "^10.5.2",
     "vite": "^8.1.5",
     "vite-plugin-checker": "^0.14.4",

@@ -68,7 +68,7 @@ vi.mock('axios', () => ({
   default: axiosCall.fn,
 }))
 
-import { enqueueMutation, flushOutbox, clearOutbox, type OutboxEntry } from './outbox'
+import { enqueueMutation, flushOutbox, clearOutbox, createMutationKey, replayOutboxToCache, type OutboxEntry } from './outbox'
 import { idbPut, idbDel, idbAll } from './db'
 
 const okResponse = { data: { data: {} } }
@@ -269,4 +269,81 @@ describe('clearOutbox', () => {
     expect(fake.store('idmap').size).toBe(0)
     void idbDel
   })
+})
+describe('P0 persistence and replay regressions', () => {
+  it('generates keys on insecure origins without crypto.randomUUID', () => {
+    vi.stubGlobal('crypto', {})
+    try {
+      const first = createMutationKey()
+      const second = createMutationKey()
+      expect(first).toMatch(/^m-/)
+      expect(second).not.toBe(first)
+    } finally { vi.unstubAllGlobals() }
+  })
+
+  it('retains the initial online request key across persistence and replay', async () => {
+    await enqueueMutation({ entity: 'task', method: 'POST', url: 'http://api.test/api/v1/task', body: { title: 'Lost response' }, tempId: -1, idempotencyKey: 'initial-key' })
+    axiosCall.fn.mockResolvedValueOnce({ data: { data: { id: 42 } } })
+    await flushOutbox()
+    expect(axiosCall.fn.mock.calls[0][0].headers['Idempotency-Key']).toBe('initial-key')
+  })
+
+  it('gives sequential enqueues a stable order even within the same millisecond', async () => {
+    const now = vi.spyOn(Date, 'now').mockReturnValue(100)
+    try {
+      await enqueueMutation({ entity: 'task', method: 'POST', url: 'http://api.test/api/v1/task', body: { title: 'First' }, tempId: -1 })
+      await enqueueMutation({ entity: 'task', method: 'PUT', url: 'http://api.test/api/v1/task/-1', body: { title: 'Second' } })
+      const entries = [...fake.store('outbox').values()] as OutboxEntry[]
+      expect(entries[0].ts).toBeLessThan(entries[1].ts)
+    } finally { now.mockRestore() }
+  })
+
+  it('rewrites complete numeric ids without changing titles, dates or longer ids', async () => {
+    seed({ id: 'create', ts: 1, entity: 'task', method: 'POST', url: 'http://api.test/api/v1/task', body: {}, tempId: -1 })
+    seed({ id: 'update', ts: 2, entity: 'task', method: 'PUT', url: 'http://api.test/api/v1/task/-10', body: { task_id: -1, other_id: -10, title: 'Task -1', start_date: '2026-11-10' } })
+    axiosCall.fn.mockResolvedValueOnce({ data: { data: { id: 42 } } }).mockResolvedValue(okResponse)
+    await flushOutbox()
+    const request = axiosCall.fn.mock.calls[1][0]
+    expect(request.url).toContain('/task/-10')
+    expect(request.data).toEqual({ task_id: 42, other_id: -10, title: 'Task -1', start_date: '2026-11-10' })
+  })
+
+  it('rewrites temporary ids in query parameters without changing date values', async () => {
+    seed({ id: 'create', ts: 1, entity: 'state', method: 'POST', url: 'http://api.test/api/v1/timesheet/states', body: {}, tempId: -1 })
+    seed({ id: 'clear', ts: 2, entity: 'period', method: 'DELETE', url: 'http://api.test/api/v1/user/5/days?state_id=-1&start_date=2026-11-10', body: {} })
+    axiosCall.fn.mockResolvedValueOnce({ data: { data: { id: 42 } } }).mockResolvedValue(okResponse)
+    await flushOutbox()
+    const url = new URL(axiosCall.fn.mock.calls[1][0].url)
+    expect(url.searchParams.get('state_id')).toBe('42')
+    expect(url.searchParams.get('start_date')).toBe('2026-11-10')
+  })
+
+  it('retains an interrupted suffix and its id map for the next process', async () => {
+    const { probeBackend } = await import('./state')
+    vi.mocked(probeBackend).mockResolvedValueOnce(true).mockResolvedValueOnce(false)
+    seed({ id: 'create', ts: 1, entity: 'task', method: 'POST', url: 'http://api.test/api/v1/task', body: {}, tempId: -1 })
+    seed({ id: 'edit', ts: 2, entity: 'task', method: 'PUT', url: 'http://api.test/api/v1/task/-1', body: { title: 'Edited' } })
+    seed({ id: 'assign', ts: 3, entity: 'assignment', method: 'POST', url: 'http://api.test/api/v1/assignment', body: { task_id: -1, resource_id: 3, quantity: 2 } })
+    axiosCall.fn.mockResolvedValueOnce({ data: { data: { id: 42 } } }).mockRejectedValueOnce(new Error('offline'))
+    const first = await flushOutbox()
+    expect(first.ok).toBe(1)
+    expect(first.interrupted).toBe(true)
+    expect(fake.store('outbox').size).toBe(2)
+    expect(fake.store('idmap').size).toBe(1)
+    axiosCall.fn.mockResolvedValue(okResponse)
+    const second = await flushOutbox()
+    expect(second.ok).toBe(2)
+    expect(axiosCall.fn.mock.calls[2][0].url).toContain('/task/42')
+    expect(axiosCall.fn.mock.calls[3][0].data.task_id).toBe(42)
+    expect(fake.store('outbox').size).toBe(0)
+  })
+})
+
+
+it('replays the cached overlay in FIFO order rather than IndexedDB key order', async () => {
+  const { applyToCache } = await import('./cacheApply')
+  seed({ id: 'a', ts: 2, entity: 'task', method: 'PUT', url: 'http://api.test/api/v1/task/1', body: { title: 'Second' } })
+  seed({ id: 'z', ts: 1, entity: 'task', method: 'PUT', url: 'http://api.test/api/v1/task/1', body: { title: 'First' } })
+  await replayOutboxToCache()
+  expect(vi.mocked(applyToCache).mock.calls.map(([item]) => item.id)).toEqual(['z', 'a'])
 })

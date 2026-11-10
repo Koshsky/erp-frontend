@@ -16,10 +16,10 @@
 
 import { t } from './i18n'
 
-export type ScopeMove = 'self' | 'up' | 'up1' | 'up2' | 'down' | 'down2' | 'sib'
+export type ScopeMove = 'project_owner' | 'process_owner' | 'process_projects' | 'project_resources' | 'self' | 'up' | 'up1' | 'up2' | 'down' | 'down2' | 'sib' | 'sib_project'
 
 /** All move codes accepted by the parser (canonical + legacy aliases). */
-export const SCOPE_TOKENS = ['self', 'up', 'up1', 'up2', 'down', 'down2', 'sib', 'all', 'none'] as const
+export const SCOPE_TOKENS = ['self', 'up', 'up1', 'up2', 'down', 'down2', 'sib', 'sib_project', 'project_owner', 'process_owner', 'process_projects', 'project_resources', 'all', 'none'] as const
 
 /** Owners of an entity — the chain positions used by the evaluator. */
 export interface ScopeOwners {
@@ -32,9 +32,12 @@ export interface ScopeOwners {
 export interface ScopeProbe {
   descendant?: boolean
   sibling?: boolean
+  projectSibling?: boolean
+  processProjects?: boolean
+  projectResources?: boolean
 }
 
-const MOVE_RE = /^(self|up\d*|down\d*|sib)$/
+const MOVE_RE = /^(self|up\d*|down\d*|sib|sib_project|project_owner|process_owner|process_projects|project_resources)$/
 const DEPTH_RE = /^(up|down)(\d*)$/
 
 /**
@@ -76,7 +79,7 @@ export function canonicalScope(scope: string): string {
 }
 
 /** Display order of the move chips (canonical sequence of the tree). */
-const MOVE_RANK: Record<string, number> = { self: 0, up1: 1, up: 2, sib: 3, down: 4 }
+const MOVE_RANK: Record<string, number> = { self: 0, up1: 1, up: 2, sib: 3, sib_project: 4, down: 5 }
 
 function moveRank(move: string): number {
   return MOVE_RANK[move] ?? 10
@@ -120,6 +123,10 @@ export function toggleScopeMove(expr: string, move: string): string {
 /** Catalog keys of the scope words (resolved at call time, so the description
  *  follows the interface language). */
 const SCOPE_WORD_KEYS: Record<string, string> = {
+  project_owner: 'adminConfig.perm.zone.exactProject',
+  process_owner: 'adminConfig.perm.zone.exactProcess',
+  process_projects: 'adminConfig.perm.zone.processProjects',
+  project_resources: 'adminConfig.perm.zone.projectResources',
   self: 'authz.scope.self',
   up1: 'authz.scope.parents',
   up: 'authz.scope.ancestors',
@@ -127,6 +134,7 @@ const SCOPE_WORD_KEYS: Record<string, string> = {
   down: 'authz.scope.subtree',
   down2: 'authz.scope.subtree2',
   sib: 'authz.scope.siblings',
+  sib_project: 'authz.scope.projectPeers',
   own: 'authz.scope.self',
   parent: 'authz.scope.parents',
   ancestor: 'authz.scope.ancestors',
@@ -165,6 +173,18 @@ export function evalScope(
   if (uid <= 0) return false
   for (const m of moves) {
     switch (m) {
+      case 'project_owner':
+        if (['process', 'task', 'milestone', 'assignment'].includes(resource) && o.projectOwner === uid) return true
+        break
+      case 'process_owner':
+        if (['process', 'task', 'milestone', 'assignment'].includes(resource) && o.processOwner === uid) return true
+        break
+      case 'process_projects':
+        if (resource === 'project' && probe?.processProjects) return true
+        break
+      case 'project_resources':
+        if (resource === 'resource' && probe?.projectResources) return true
+        break
       case 'self':
         if (ownOf(resource, o) === uid) return true
         break
@@ -179,6 +199,9 @@ export function evalScope(
         break
       case 'sib':
         if (probe?.sibling) return true
+        break
+      case 'sib_project':
+        if (resource === 'task' && probe?.projectSibling) return true
         break
       case 'down':
       case 'down2':

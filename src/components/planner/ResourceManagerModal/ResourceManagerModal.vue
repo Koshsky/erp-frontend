@@ -11,6 +11,8 @@ import type {
 
 const props = withDefaults(defineProps<ResourceManagerModalProps>(), {
   taskTitle: '',
+  canCreate: true,
+  canDelete: true,
   busy: false,
   error: null,
 })
@@ -32,7 +34,7 @@ const available = computed<ResourceOption[]>(() =>
 )
 
 const canAdd = computed(
-  () => !props.busy && selectedResourceId.value !== '' && quantity.value >= 1,
+  () => props.canCreate && !props.busy && available.value.some((r) => r.id === selectedResourceId.value) && selectedResourceId.value !== '' && quantity.value >= 1,
 )
 
 function resetForm() {
@@ -76,6 +78,7 @@ function resourceTitle(r: AssignedResource): string {
           <span class="rm-item-qty">× {{ a.quantity }}</span>
           <button
             type="button"
+            v-if="canDelete"
             class="rm-remove"
             :disabled="busy"
             :aria-label="t('planner.resourceModal.removeAria')"
@@ -85,7 +88,7 @@ function resourceTitle(r: AssignedResource): string {
       </div>
       <div v-else class="rm-empty">{{ t('planner.resourceModal.empty') }}</div>
 
-      <div class="rm-add">
+      <div v-if="canCreate" class="rm-add">
         <div class="rm-fields">
           <select
             v-model="selectedResourceId"

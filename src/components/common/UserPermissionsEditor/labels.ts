@@ -8,50 +8,61 @@
  * never at module load, so a language switch re-renders the UI.
  */
 import { t } from '@/i18n'
+import { describeScopeExpr, scopeMoves } from '@/rbacScope'
 
 export interface ScopeOption {
   value: string
   /** Catalog key of the option label (resolved with `t('adminConfig.perm.zone.' + label)`). */
   label: string
+  description?: string
 }
 
 /** Scope zone codes with human-readable labels in the resource context
  *  (mirrors the backend tree applicability: engine tree.go). The values are
  *  canonical expressions; the map is keyed by resource code. */
-export const SCOPE_OPTIONS: Record<string, ScopeOption[]> = {
+const SCOPE_CATALOG: Record<string, ScopeOption[]> = {
   project: [
+    { value: 'process_projects', label: 'processProjects', description: 'processProjects' },
     { value: 'self', label: 'selfUpper' },
-    { value: 'down', label: 'down' },
+    { value: 'down', label: 'down', description: 'relatedProjects' },
     { value: 'all', label: 'all' },
   ],
   process: [
-    { value: 'self', label: 'selfUpper' },
-    { value: 'up1', label: 'up1' },
-    { value: 'up', label: 'up' },
-    { value: 'sib', label: 'sib' },
-    { value: 'down', label: 'down' },
+    { value: 'project_owner', label: 'exactProject', description: 'exactProject' },
+    { value: 'process_owner', label: 'exactProcess', description: 'exactProcess' },
+    { value: 'up1', label: 'up1Projects', description: 'projectOwner' },
+    { value: 'up', label: 'projectOrProcessOwner', description: 'processOwnerChain' },
+    { value: 'sib', label: 'sharedProject', description: 'sharedProcessProject' },
+    { value: 'down', label: 'withEmployeeTasks', description: 'employeeTasks' },
     { value: 'all', label: 'all' },
   ],
   task: [
-    { value: 'self', label: 'selfUpper' },
-    { value: 'up1', label: 'up1' },
-    { value: 'up', label: 'up' },
-    { value: 'sib', label: 'sib' },
-    { value: 'down', label: 'down' },
+    { value: 'project_owner', label: 'exactProject', description: 'exactProject' },
+    { value: 'process_owner', label: 'exactProcess', description: 'exactProcess' },
+    { value: 'up1', label: 'up1Processes', description: 'processOwner' },
+    { value: 'up', label: 'taskProcessOrProjectOwner', description: 'taskOwnerChain' },
+    { value: 'sib', label: 'sharedProcess', description: 'sharedTaskProcess' },
+    { value: 'sib_project', label: 'sharedProject', description: 'sharedTaskProject' },
+    { value: 'down', label: 'withEmployeeSubtasks', description: 'employeeSubtasks' },
     { value: 'all', label: 'all' },
   ],
   milestone: [
-    { value: 'up1', label: 'up1' },
-    { value: 'up', label: 'up' },
+    { value: 'project_owner', label: 'exactProject', description: 'exactProject' },
+    { value: 'process_owner', label: 'exactProcess', description: 'exactProcess' },
+    { value: 'up1', label: 'ownMilestones', description: 'processOwner' },
+    { value: 'up', label: 'inEmployeeProjectsOrProcesses', description: 'processOwnerChain' },
     { value: 'all', label: 'all' },
   ],
   assignment: [
-    { value: 'up1', label: 'up1' },
-    { value: 'up', label: 'up' },
+    { value: 'project_owner', label: 'exactProject', description: 'exactProject' },
+    { value: 'process_owner', label: 'exactProcess', description: 'exactProcess' },
+    { value: 'up1', label: 'ownAssignments', description: 'ownAssignment' },
+    { value: 'up', label: 'taskProcessOrProjectOwner', description: 'assignmentOwnerChain' },
     { value: 'all', label: 'all' },
   ],
   state: [{ value: 'all', label: 'allStates' }],
   resource: [
+    { value: 'project_resources', label: 'projectResources', description: 'projectResources' },
     { value: 'self', label: 'selfUpper' },
     { value: 'all', label: 'all' },
   ],
@@ -68,6 +79,39 @@ export const SCOPE_OPTIONS: Record<string, ScopeOption[]> = {
   org_structure: [{ value: 'all', label: 'available' }],
   audit: [{ value: 'all', label: 'available' }],
   comment: [{ value: 'all', label: 'available' }],
+}
+
+/** The first iteration exposes only direct owner relationships. */
+const BASIC_SCOPES: Record<string, string[]> = {
+  project: ['all', 'self', 'process_projects'],
+  process: ['all', 'project_owner', 'process_owner'],
+  task: ['all', 'project_owner', 'process_owner'],
+  milestone: ['all', 'project_owner', 'process_owner'],
+  assignment: ['all', 'project_owner', 'process_owner'],
+  resource: ['all', 'self', 'project_resources'],
+}
+
+export const SCOPE_OPTIONS: Record<string, ScopeOption[]> = Object.fromEntries(
+  Object.entries(SCOPE_CATALOG).map(([resource, options]) => [resource,
+    BASIC_SCOPES[resource]
+      ? BASIC_SCOPES[resource].map((code) => options.find((option) => option.value === code)!).filter(Boolean)
+      : options,
+  ]),
+)
+
+/** Equivalent legacy conditions share the same selected chip without rewriting stored rules. */
+export function simpleScope(resource: string, scope: string): string {
+  if (!scope || scope === 'all' || scope === 'none') return scope
+  return scopeMoves(scope).map((move) => {
+    if (move === 'up1' && resource === 'process') return 'project_owner'
+    if (move === 'up1' && (resource === 'task' || resource === 'milestone')) return 'process_owner'
+    return move
+  }).join(' ')
+}
+
+export function hasAdditionalScope(resource: string, scope: string): boolean {
+  const available = SCOPE_OPTIONS[resource] ?? FALLBACK_SCOPE_OPTIONS
+  return scopeMoves(simpleScope(resource, scope)).some((move) => !available.some((option) => option.value === move))
 }
 
 /** Scope chips of a resource the dictionary does not describe: "all" is the
@@ -108,8 +152,13 @@ export function actionTitle(action: string): string {
 
 /** Scope option label in the resource context (falls back to the code itself). */
 export function scopeOptionLabel(resource: string, scope: string): string {
-  const opt = SCOPE_OPTIONS[resource]?.find((o) => o.value === scope)
-  return opt ? t(`adminConfig.perm.zone.${opt.label}`) : scope
+  const opt = SCOPE_CATALOG[resource]?.find((o) => o.value === scope)
+  return opt ? t(`adminConfig.perm.zone.${opt.label}`) : describeScopeExpr(scope)
+}
+
+export function scopeOptionDescription(resource: string, scope: string): string {
+  const opt = SCOPE_CATALOG[resource]?.find((o) => o.value === scope)
+  return opt?.description ? t(`adminConfig.perm.scopeHelp.${opt.description}`) : scopeOptionLabel(resource, scope)
 }
 
 /** Section title of a matrix group. */
@@ -119,7 +168,8 @@ export function groupTitle(key: string): string {
 
 /** Human-readable scope label in the resource context. */
 export function scopeLabel(resource: string, scope: string): string {
-  return scopeOptionLabel(resource, scope)
+  const moves = scopeMoves(scope)
+  return moves.length ? moves.map((move) => scopeOptionLabel(resource, move)).join(t('authz.scope.join')) : describeScopeExpr(scope)
 }
 
 /** Default grant zone per resource when enabling a capability with no preset
@@ -140,4 +190,12 @@ export const DEFAULT_GRANT_ZONE: Record<string, string> = {
   org_structure: 'all',
   audit: 'all',
   comment: 'all',
+}
+
+/** Viewing a container always opens its contents; editing remains independent. */
+export function viewParentResources(resource: string): string[] {
+  if (resource === 'process') return ['project']
+  if (resource === 'task' || resource === 'milestone') return ['project', 'process']
+  if (resource === 'assignment') return ['project', 'process', 'task']
+  return []
 }

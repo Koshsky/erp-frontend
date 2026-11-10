@@ -7,9 +7,9 @@
  * Source of truth — the matrix on the backend (/api/v1/rbac/*); edits are
  * applied immediately (upsert; "no access" = soft delete).
  */
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
-import { ConfirmDialog, ContextMenu, HintButton, InfoTooltip, ModalForm, TooltipCell } from '../components/common'
+import { AppIcon, ConfirmDialog, ContextMenu, HintButton, InfoTooltip, ModalForm, TooltipCell } from '../components/common'
 import {
   GROUPS,
   ACTIONS,
@@ -19,20 +19,31 @@ import {
   resourceTitle,
   actionTitle,
   scopeLabel,
+  scopeOptionDescription,
+  simpleScope,
+  hasAdditionalScope,
+  viewParentResources,
 } from '../components/common/UserPermissionsEditor/labels'
-import { NO_ACCESS, cellKey as gridCellKey, gridActions, gridSections, scopeByCell } from '../utils/rbacGrid'
-import { canonicalScope, scopeMoves, toggleScopeMove } from '@/rbacScope'
+import { NO_ACCESS, cellKey as gridCellKey, gridActions, gridSections, scopeByCell, presetActionGroups, commonPresetScope, type PresetActionGroup } from '../utils/rbacGrid'
+import { scopeMoves } from '@/rbacScope'
 import { useRbacStore } from '../store'
 import { useConfirm } from '../composables/useConfirm'
 import { notifyError, notifySuccess } from '../notify/state'
 import { presetDisplayName } from '../utils/presets'
 import { t } from '@/i18n'
+import { togglePresetScope } from '@/utils/presetDefaults'
 
 const rbac = useRbacStore()
 const { presets, presetRules, matrix, loading, error, saving } = storeToRefs(rbac)
 
 /** Selected preset (by default — the first one from the catalog, not admin). */
 const selected = ref('')
+const layoutMedia = window.matchMedia('(max-width: 720px)')
+const singleColumn = ref(layoutMedia.matches)
+function syncColumnLayout() {
+  singleColumn.value = layoutMedia.matches
+}
+
 
 /**
  * Sections and actions of the grid come from the backend payload (the complete
@@ -40,12 +51,24 @@ const selected = ref('')
  * a frontend change; the local dictionaries only order and label them.
  */
 const sections = computed(() => gridSections(matrix.value, GROUPS))
-const actions = computed(() => gridActions(matrix.value, ACTIONS))
+function actionGroups(resource: string) {
+  return presetActionGroups(gridActions(matrix.value.filter((cell) => cell.resource === resource), ACTIONS))
+}
+const blockColumns = computed(() => {
+  const blocks = sections.value.flatMap((group) => group.resources.map((resource) => ({ resource, group: group.key })))
+    .map((block, index) => ({ ...block, index }))
+  // Keep the mobile DOM order aligned with reading and keyboard navigation.
+  if (singleColumn.value) return [blocks]
+  return [blocks.filter((block) => block.index % 2 === 0), blocks.filter((block) => block.index % 2 === 1)]
+})
 
 /** Scope chips of a resource: its dictionary entry, else "all" (applicable to
  *  every resource) so an unknown resource stays editable. */
+const SCOPE_DISPLAY_ORDER = ['all', 'up', 'project_owner', 'process_owner', 'sib_project', 'sib', 'up1', 'down', 'process_projects', 'project_resources', 'self']
+
 function scopeChips(resource: string) {
-  return SCOPE_CHIPS[resource] ?? FALLBACK_SCOPE_OPTIONS
+  const options = SCOPE_CHIPS[resource] ?? FALLBACK_SCOPE_OPTIONS
+  return [...options].sort((a, b) => SCOPE_DISPLAY_ORDER.indexOf(a.value) - SCOPE_DISPLAY_ORDER.indexOf(b.value))
 }
 
 /** Effective cell scope from the matrix (no rule = "no access"). */
@@ -104,48 +127,45 @@ const dirtyKeys = computed<string[]>(() =>
 /** Canonical form of a scope expression (legacy zones normalize; "all"/"none"
  *  keep their identity — they must never compare equal). */
 function canon(scope: string): string {
-  return canonicalScope(scope)
+  return commonPresetScope([scope]) ?? NO_ACCESS
 }
 
-/** The row zone as an expression ('' — no access). */
-function rowText(resource: string, action: string): string {
-  const v = cellValue(selected.value, resource, action)
-  return v === NO_ACCESS ? '' : v
+function groupScope(resource: string, group: PresetActionGroup): string | null {
+  return commonPresetScope(group.actions.map((action) => simpleScope(resource, cellValue(selected.value, resource, action))))
 }
 
-/** Спец-чип активен (каноническое сравнение: «⛔ нет доступа» = none). */
-function isZoneActive(resource: string, action: string, value: string): boolean {
-  return canon(cellValue(selected.value, resource, action)) === canon(value)
+function groupTitle(group: PresetActionGroup): string {
+  return group.key === 'manage' ? t('adminConfig.presets.manage') : actionTitle(group.key)
 }
 
-/** Обычный чип активен, если его ход присутствует в выражении ячейки
- *  (мульти-выбор: активны все отмеченные ходы). */
-function isChipOn(resource: string, action: string, value: string): boolean {
-  return scopeMoves(cellValue(selected.value, resource, action)).includes(value)
+function inheritedViewScopes(resource: string): string[] {
+  return viewParentResources(resource).map((parent) => cellValue(selected.value, parent, 'view'))
+    .filter((scope) => !!scope && scope !== NO_ACCESS)
 }
 
-/** Chip click toggles a move in the expression (multi-select; all/none are
- *  exclusive). Removing the last move or reaching the effective value —
- *  remove the staged edit. */
-function onChipClick(resource: string, action: string, value: string) {
-  const key = cellKey(selected.value, resource, action)
-  const next = toggleScopeMove(cellValue(selected.value, resource, action), value)
-  if (next === '') { delete staged[key]; return }
-  const eff = effective.value[key] ?? NO_ACCESS
-  if (canon(next) === canon(eff)) { delete staged[key]; return }
-  staged[key] = next
+function inheritsAllViews(resource: string): boolean {
+  return inheritedViewScopes(resource).includes('all')
 }
 
-/** «⛔ запрет» toggle: stage none; clicking again removes the staged edit. */
-function onRevokeClick(resource: string, action: string) {
-  const key = cellKey(selected.value, resource, action)
-  if (isZoneActive(resource, action, NO_ACCESS)) {
-    if (staged[key] !== undefined) delete staged[key]
-    return
+function isZoneActive(resource: string, group: PresetActionGroup, value: string): boolean {
+  return !(group.key === 'view' && inheritsAllViews(resource)) && groupScope(resource, group) === value
+}
+
+function isChipOn(resource: string, group: PresetActionGroup, value: string): boolean {
+  if (group.key === 'view' && inheritsAllViews(resource)) return value === 'all'
+  return scopeMoves(groupScope(resource, group) ?? '').includes(value)
+}
+
+/** Mixed existing rights stay unchanged until an administrator chooses a common scope. */
+function onChipClick(resource: string, group: PresetActionGroup, value: string) {
+  const scope = groupScope(resource, group)
+  const next = scope === null || hasAdditionalScope(resource, scope) ? value : togglePresetScope(scope, value)
+  for (const action of group.actions) {
+    const key = cellKey(selected.value, resource, action)
+    const eff = effective.value[key] ?? NO_ACCESS
+    if (canon(next) === canon(eff)) delete staged[key]
+    else staged[key] = next
   }
-  const eff = effective.value[key] ?? NO_ACCESS
-  if (canon(NO_ACCESS) === canon(eff)) { delete staged[key]; return }
-  staged[key] = NO_ACCESS
 }
 
 /** A cell holds a REAL change: its staged value differs from the effective
@@ -153,16 +173,6 @@ function onRevokeClick(resource: string, action: string) {
 function isDirtyCell(preset: string, resource: string, action: string): boolean {
   const key = cellKey(preset, resource, action)
   return staged[key] !== undefined && staged[key] !== (effective.value[key] ?? NO_ACCESS)
-}
-
-/** Card-header summary: grants + staged edits of the resource. */
-function cardSummary(resource: string): string {
-  const granted = actions.value.filter((a) => cellValue(selected.value, resource, a) !== NO_ACCESS).length
-  const edited = actions.value.filter((a) => isDirtyCell(selected.value, resource, a)).length
-  const base = granted
-    ? t('adminConfig.presets.cardSummaryGranted', { granted, total: actions.value.length })
-    : t('adminConfig.presets.cardSummaryDenied')
-  return edited ? base + t('adminConfig.presets.cardSummaryEdited', { count: edited }) : base
 }
 
 /** Change descriptions for the save bar. */
@@ -189,7 +199,7 @@ async function save() {
     let ok: boolean
     if (scope === NO_ACCESS) {
       const id = ruleIdByCell.value[key]
-      ok = id != null ? await rbac.deleteRule(id) : true
+      ok = id != null ? await rbac.deleteRule(id) : false
     } else {
       ok = await rbac.upsertRule({ preset, resource, action, scope })
     }
@@ -197,13 +207,21 @@ async function save() {
       failures.push(`${preset} · ${actionTitle(action) || action} ${resourceLabel(resource) || resource}`)
     }
   }
-  await rbac.reloadRules()
+  const reloaded = await rbac.reloadRules()
   saving.value = false
+  if (reloaded) {
+    for (const key of keys) {
+      if (canon(staged[key]) === canon(effective.value[key] ?? NO_ACCESS)) delete staged[key]
+    }
+  }
   if (failures.length) {
     notifyError(t('adminConfig.presets.saveFailed', { list: failures.join('; ') }))
     return
   }
-  for (const key of keys) delete staged[key]
+  if (!reloaded || keys.some((key) => staged[key] !== undefined)) {
+    notifyError(t('adminConfig.presets.refreshFailed'))
+    return
+  }
   notifySuccess(t('adminConfig.presets.changesSaved'))
 }
 
@@ -366,13 +384,15 @@ watch(presetList, (list) => {
   if ((!selected.value || !list.includes(selected.value)) && list.length) {
     selected.value = list[0]
   }
-})
+}, { immediate: true })
 
 onMounted(() => {
+  layoutMedia.addEventListener('change', syncColumnLayout)
   if (!presetRules.value.length && !loading.value) {
     void rbac.loadRbac()
   }
 })
+onBeforeUnmount(() => layoutMedia.removeEventListener('change', syncColumnLayout))
 </script>
 
 <template>
@@ -380,42 +400,43 @@ onMounted(() => {
     <div class="pm-head">
       <h2 class="pm-title">{{ t('adminConfig.presets.title') }}</h2>
       <HintButton hint="presets-editor" />
+      <button type="button" class="pm-btn pm-reset" :disabled="saving || loading" @click="onReset">{{ t('adminConfig.presets.resetAll') }}</button>
     </div>
 
     <p v-if="loading && !presetRules.length" class="pm-load">{{ t('adminConfig.presets.loading') }}</p>
     <p v-if="error && !presetRules.length" class="pm-load er">{{ error }}</p>
 
-    <div v-if="presetRules.length && presetList.length" class="pm-layout">
+    <div v-if="presetList.length" class="pm-layout">
       <!-- Roles -->
-      <nav class="pm-presets">
-        <button
-          v-for="preset in presetList"
-          :key="preset"
-          type="button"
-          class="pm-preset-btn"
-          :class="{ active: preset === selected }"
-          @click="selected = preset"
-          @contextmenu.prevent="onPresetContextMenu($event, preset)"
-        >
-          <TooltipCell :multiline="true">
-            <span class="pm-preset-code">{{ preset }}</span>
-            <span class="pm-preset-name">
-              {{ presetName(preset) }}
-            </span>
-            <template #popup>
-              <InfoTooltip :title="presetName(preset)" :lines="presetTooltipLines(preset)" />
-            </template>
-          </TooltipCell>
-          <span
+      <nav class="pm-presets" :aria-label="t('adminConfig.presets.roles')">
+        <h3 class="pm-presets-title">{{ t('adminConfig.presets.roles') }}</h3>
+        <div v-for="preset in presetList" :key="preset" class="pm-preset-item">
+          <button
+            type="button"
+            class="pm-preset-btn"
+            :class="{ active: preset === selected }"
+            :aria-pressed="preset === selected"
+            @click="selected = preset"
+            @contextmenu.prevent="onPresetContextMenu($event, preset)"
+          >
+            <TooltipCell class="pm-preset-content" :multiline="true">
+              <span class="pm-preset-code">{{ preset }}</span>
+              <span class="pm-preset-name">{{ presetName(preset) }}</span>
+              <template #popup>
+                <InfoTooltip :title="presetName(preset)" :lines="presetTooltipLines(preset)" />
+              </template>
+            </TooltipCell>
+          </button>
+          <button
             v-if="!BUILTIN_PRESETS.has(preset)"
+            type="button"
             class="pm-preset-remove"
-            role="button"
-            tabindex="0"
+            :class="{ active: preset === selected }"
+            :aria-label="t('adminConfig.presets.removeTitle', { name: presetName(preset) })"
             :title="t('adminConfig.presets.removeTitle', { name: presetName(preset) })"
-            @click.stop="openDelete(preset)"
-            @keydown.enter.stop.prevent="openDelete(preset)"
-          >✕</span>
-        </button>
+            @click="openDelete(preset)"
+          ><AppIcon name="close" :size="14" /></button>
+        </div>
         <button type="button" class="pm-preset-add" @click="createError = null; createOpen = true">
           {{ t('adminConfig.presets.add') }}
         </button>
@@ -434,47 +455,75 @@ onMounted(() => {
 
       <!-- Editor of the selected preset -->
       <div class="pm-editor">
-        <div v-for="group in sections" :key="group.key" class="pm-group">
-          <h3 class="pm-group-title">{{ t(`adminConfig.perm.group.${group.key}`) }}</h3>
-          <div v-for="resource in group.resources" :key="resource" class="pm-block">
+        <div v-for="(column, columnIndex) in blockColumns" :key="columnIndex" class="pm-column">
+          <div v-for="{ resource, group, index } in column" :key="resource" class="pm-block" :data-order="index">
             <div class="pm-block-head">
-              <span class="pm-block-title">{{ resourceTitle(resource) }}</span>
-              <span class="pm-block-summary">{{ cardSummary(resource) }}</span>
+              <h3 class="pm-block-title">{{ resourceTitle(resource) }}</h3>
+              <span class="pm-block-group">{{ t(`adminConfig.perm.group.${group}`) }}</span>
             </div>
-            <div
-              v-for="action in actions"
-              :key="action"
-              class="pm-row"
-              :class="{ dirty: isDirtyCell(selected, resource, action) }"
-            >
-              <span class="pm-row-label">{{ actionTitle(action) }}</span>
-              <div class="pm-chips">
-                <button
-                  v-for="opt in scopeChips(resource)"
-                  :key="opt.value"
-                  type="button"
-                  class="pm-chip"
-                  :class="{ on: isChipOn(resource, action, opt.value) }"
-                  @click="onChipClick(resource, action, opt.value)"
+            <div class="pm-actions">
+              <div
+                v-for="actionGroup in actionGroups(resource)"
+                :key="actionGroup.key"
+                class="pm-row"
+                :data-action-group="actionGroup.key"
+                :class="{ dirty: actionGroup.actions.some((action) => isDirtyCell(selected, resource, action)) }"
+              >
+                <div class="pm-action-head">
+                  <span class="pm-row-label">{{ groupTitle(actionGroup) }}</span>
+                  <span v-if="actionGroup.key === 'manage'" class="pm-action-hint">{{ t('adminConfig.presets.manageHint') }}</span>
+                </div>
+                <p v-if="actionGroup.key === 'view' && inheritedViewScopes(resource).length" class="pm-action-hint pm-inherited">
+                  {{ t(inheritsAllViews(resource) ? 'adminConfig.presets.inheritedLocked' : 'adminConfig.presets.inheritedView') }}
+                </p>
+                <details v-if="groupScope(resource, actionGroup) === null" class="pm-mixed">
+                  <summary>{{ t('adminConfig.presets.mixed') }}</summary>
+                  <ul>
+                    <li v-for="action in actionGroup.actions" :key="action">{{ actionTitle(action) }}: {{ scopeLabel(resource, cellValue(selected, resource, action)) }}</li>
+                  </ul>
+                  <p>{{ t('adminConfig.presets.mixedHint') }}</p>
+                </details>
+                <p v-if="groupScope(resource, actionGroup) && hasAdditionalScope(resource, groupScope(resource, actionGroup)!)" class="pm-action-hint">
+                  {{ t('adminConfig.presets.savedCondition') }}: {{ scopeLabel(resource, groupScope(resource, actionGroup)!) }}
+                </p>
+                <TooltipCell
+                  class="pm-choice-tooltip"
+                  :text="t('adminConfig.presets.inheritedTooltip')"
+                  :disabled="!(actionGroup.key === 'view' && inheritsAllViews(resource))"
+                  :tabindex="actionGroup.key === 'view' && inheritsAllViews(resource) ? 0 : undefined"
+                  :aria-label="actionGroup.key === 'view' && inheritsAllViews(resource) ? t('adminConfig.presets.inheritedTooltip') : undefined"
+                  multiline
                 >
-                  {{ scopeLabel(resource, opt.value) }}
-                </button>
-                <button
-                  type="button"
-                  class="pm-chip rev"
-                  :class="{ on: isZoneActive(resource, action, NO_ACCESS) }"
-                  :title="isZoneActive(resource, action, NO_ACCESS) ? t('adminConfig.presets.revertTitle') : t('adminConfig.presets.revokeTitle')"
-                  @click="onRevokeClick(resource, action)"
-                >{{ t('adminConfig.presets.revokeChip') }}</button>
-                <!-- Собранное выражение при множественном выборе -->
-                <span v-if="scopeMoves(rowText(resource, action)).length > 1" class="pm-zone-mini">
-                  {{ rowText(resource, action) }}
-                </span>
+                <template #popup><span class="pm-inherited-tooltip">{{ t('adminConfig.presets.inheritedTooltip') }}</span></template>
+                <div class="pm-chips" :class="{ 'pm-chips--inherited': actionGroup.key === 'view' && inheritsAllViews(resource) }">
+                  <button
+                    v-for="opt in scopeChips(resource)"
+                    :key="opt.value"
+                    type="button"
+                    class="pm-chip"
+                    :disabled="actionGroup.key === 'view' && inheritsAllViews(resource)"
+                    :title="scopeOptionDescription(resource, opt.value)"
+                    :class="{ on: isChipOn(resource, actionGroup, opt.value) }"
+                    :aria-pressed="isChipOn(resource, actionGroup, opt.value)"
+                    @click="onChipClick(resource, actionGroup, opt.value)"
+                  >
+                    {{ scopeLabel(resource, opt.value) }}
+                  </button>
+                  <button
+                    type="button"
+                    class="pm-chip rev"
+                    :disabled="actionGroup.key === 'view' && inheritsAllViews(resource)"
+                    :class="{ on: isZoneActive(resource, actionGroup, NO_ACCESS) }"
+                    :aria-pressed="isZoneActive(resource, actionGroup, NO_ACCESS)"
+                    :title="t('adminConfig.presets.revokeTitle')"
+                    @click="onChipClick(resource, actionGroup, NO_ACCESS)"
+                  >{{ t(actionGroup.key === 'view' && inheritedViewScopes(resource).length ? 'adminConfig.presets.onlyInherited' : 'adminConfig.presets.revokeChip') }}</button>
+                </div>
+                </TooltipCell>
               </div>
             </div>
           </div>
         </div>
-
       </div>
     </div>
 
@@ -551,7 +600,6 @@ onMounted(() => {
       <div class="pm-savebar-actions">
         <button type="button" class="pm-btn primary" :disabled="saving" @click="save">{{ saving ? t('adminConfig.presets.saving') : t('adminConfig.presets.save') }}</button>
         <button type="button" class="pm-btn" :disabled="saving" @click="cancelDirty">{{ t('adminConfig.presets.cancel') }}</button>
-        <button type="button" class="pm-btn danger" :disabled="saving" @click="onReset">{{ t('adminConfig.presets.resetAll') }}</button>
       </div>
     </div>
 
@@ -566,6 +614,7 @@ onMounted(() => {
 </template>
 
 <style scoped>
+.pm-inherited-tooltip { white-space: pre-line; }
 @import '../styles/tokens.css';
 
 .pm-head {
@@ -574,6 +623,20 @@ onMounted(() => {
   gap: 12px;
   margin-bottom: 18px;
   flex-wrap: wrap;
+}
+.pm-head :deep(.hb) {
+  border: 1px solid var(--ui-border-strong);
+  background: var(--ui-surface);
+  color: var(--ui-text-muted);
+  font-weight: 500;
+  box-shadow: none;
+}
+.pm-head :deep(.hb:hover),
+.pm-head :deep(.hb[aria-expanded="true"]) {
+  background: var(--ui-accent-soft);
+  border-color: var(--ui-accent);
+  color: var(--ui-accent);
+  transform: none;
 }
 .pm-title {
   font-size: calc(var(--ui-font-scale, 1) * 24px);
@@ -590,7 +653,7 @@ onMounted(() => {
 }
 .pm-layout {
   display: grid;
-  grid-template-columns: 240px 1fr;
+  grid-template-columns: 200px minmax(0, 1fr);
   gap: 20px;
   align-items: start;
 }
@@ -601,60 +664,77 @@ onMounted(() => {
   position: sticky;
   top: 16px;
 }
+.pm-presets-title {
+  margin: 0;
+  color: var(--ui-text-muted);
+  font-size: calc(var(--ui-font-scale, 1) * 11px);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+.pm-preset-item {
+  position: relative;
+  min-width: 0;
+}
 .pm-preset-btn {
   display: flex;
   align-items: center;
+  width: 100%;
+  min-width: 0;
   gap: 10px;
   text-align: left;
-  padding: 11px 10px 11px 14px;
+  padding: 11px 36px 11px 14px;
   border: 1px solid var(--ui-border);
-  border-radius: 10px;
+  border-radius: var(--ui-radius-sm);
   background: var(--ui-surface);
   cursor: pointer;
-  font-size: calc(var(--ui-font-scale, 1) * 14px);
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
   color: var(--ui-text);
   transition: border-color var(--ui-duration), background var(--ui-duration);
 }
-.pm-preset-btn .pm-preset-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.pm-preset-content {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  min-width: 0;
+  flex: 1;
 }
-/* Аккуратный крестик удаления на кнопке пресета */
 .pm-preset-remove {
-  margin-left: auto;
-  flex: none;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
+  position: absolute;
+  top: 11px;
+  right: 8px;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  background: transparent;
+  border-radius: var(--ui-radius-sm);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   font-size: calc(var(--ui-font-scale, 1) * 12px);
-  line-height: 1;
   color: var(--ui-text-muted);
   opacity: 0.65;
+  cursor: pointer;
   transition: background var(--ui-duration), color var(--ui-duration), opacity var(--ui-duration);
 }
-.pm-preset-remove:hover {
-  background: var(--ui-danger);
-  color: #fff;
+.pm-preset-remove:hover,
+.pm-preset-remove.active:hover {
+  background: var(--ui-danger-soft);
+  color: var(--ui-danger);
   opacity: 1;
 }
-.pm-preset-btn.active .pm-preset-remove {
-  color: var(--ui-accent-on);
-}
-.pm-preset-btn.active .pm-preset-remove:hover {
-  background: var(--ui-danger);
+.pm-preset-remove.active {
+  color: var(--ui-accent);
 }
 /* Добавить пресет */
 .pm-preset-add {
   display: block;
   width: 100%;
   padding: 9px 14px;
-  border: 1px dashed var(--ui-border-strong);
-  border-radius: 10px;
-  background: transparent;
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius-sm);
+  background: var(--ui-surface);
   color: var(--ui-accent);
   font-size: calc(var(--ui-font-scale, 1) * 13px);
   font-weight: 600;
@@ -671,66 +751,69 @@ onMounted(() => {
 }
 .pm-preset-btn.active {
   border-color: var(--ui-accent);
-  background: var(--ui-accent);
-  color: var(--ui-accent-on);
+  background: var(--ui-accent-soft);
+  color: var(--ui-accent);
 }
-.pm-preset-btn.active .pm-preset-code {
-  background: rgba(255, 255, 255, 0.2);
-  color: var(--ui-accent-on);
-}
+.pm-preset-btn.active .pm-preset-code,
 .pm-preset-btn.active .pm-preset-name {
-  color: var(--ui-accent-on);
+  color: var(--ui-accent);
 }
 .pm-preset-code {
   font-size: calc(var(--ui-font-scale, 1) * 11px);
-  font-weight: 700;
-  background: var(--ui-accent-soft);
-  color: var(--ui-accent);
-  border-radius: 999px;
-  padding: 2px 9px;
+  font-weight: 400;
+  color: var(--ui-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.4px;
-  min-width: 42px;
-  text-align: center;
+  overflow-wrap: anywhere;
 }
 .pm-preset-name {
   font-weight: 600;
   color: var(--ui-text);
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .pm-editor {
   min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  align-items: start;
 }
-.pm-group {
-  margin-bottom: 26px;
+/* Independent stacks avoid gaps from aligning cards of different heights. */
+.pm-column {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
 }
-.pm-group-title {
-  font-size: calc(var(--ui-font-scale, 1) * 12px);
-  font-weight: 700;
-  color: var(--ui-text-faint);
-  text-transform: uppercase;
-  letter-spacing: 0.6px;
-  margin: 0 0 10px;
+.pm-block-group {
+  font-size: calc(var(--ui-font-scale, 1) * 11px);
+  font-weight: 400;
+  color: var(--ui-text-muted);
+  margin: 0;
 }
 /* Resource card (Variant A design — same as the user-rights editor) */
 .pm-block {
   background: var(--ui-surface);
   border: 1px solid var(--ui-border);
-  border-radius: 12px;
+  border-radius: var(--ui-radius-md);
   overflow: hidden;
-  margin-bottom: 8px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+  min-width: 0;
+  box-shadow: var(--ui-shadow-sm);
 }
 .pm-block-head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 12px;
-  padding: 10px 14px 8px;
+  padding: 12px 14px;
   border-bottom: 1px solid var(--ui-border);
 }
 .pm-block-title {
+  margin: 0;
   font-size: calc(var(--ui-font-scale, 1) * 13px);
-  font-weight: 700;
+  font-weight: 600;
   color: var(--ui-text);
 }
 .pm-block-summary {
@@ -741,60 +824,94 @@ onMounted(() => {
   text-overflow: ellipsis;
 }
 
-/* Action row: label + zone chips + «no access» + expression */
+.pm-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
 .pm-row {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 14px;
-  flex-wrap: wrap;
-  font-size: calc(var(--ui-font-scale, 1) * 13px);
+  flex-direction: column;
+  align-items: stretch;
+  min-width: 0;
+  gap: 8px;
+  padding: 12px;
+  font-size: calc(var(--ui-font-scale, 1) * 12px);
   transition: background var(--ui-duration);
 }
-.pm-row + .pm-row { border-top: 1px solid var(--ui-border); }
-.pm-row:hover { background: var(--ui-surface-3); }
+.pm-row + .pm-row { border-left: 1px solid var(--ui-border); }
 .pm-row.dirty { background: var(--ui-warning-soft); }
 .pm-row-label {
-  width: 84px;
-  flex-shrink: 0;
   color: var(--ui-text);
+  font-weight: 500;
+  overflow-wrap: anywhere;
 }
 .pm-chips {
   display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-  flex: 1;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 5px;
   min-width: 0;
 }
+.pm-row:nth-child(odd) { border-left: 0; }
+.pm-row:nth-child(n + 3) { border-top: 1px solid var(--ui-border); }
+.pm-action-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 34px;
+}
+.pm-action-hint, .pm-mixed {
+  font-size: calc(var(--ui-font-scale, 1) * 11px);
+  color: var(--ui-text-muted);
+}
+.pm-mixed {
+  padding: 8px 10px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
+  background: var(--ui-surface-2);
+}
+.pm-mixed summary { cursor: pointer; font-weight: 500; }
+.pm-mixed ul { margin: 6px 0; padding-left: 16px; }
+.pm-mixed p { margin: 6px 0 0; }
 .pm-chip {
   border: 1px solid var(--ui-border-strong);
-  border-radius: 999px;
-  padding: 3px 10px;
-  font-size: calc(var(--ui-font-scale, 1) * 11px);
+  border-radius: var(--ui-radius-sm);
+  padding: 6px 9px;
+  font-size: calc(var(--ui-font-scale, 1) * 12px);
   font-family: inherit;
   color: var(--ui-text-2);
   background: var(--ui-surface);
   cursor: pointer;
   transition: background 0.12s, border-color 0.12s, color 0.12s;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  max-width: 100%;
+  text-align: left;
 }
-.pm-chip:hover { border-color: var(--ui-accent); }
+.pm-chip:not(:disabled):hover { border-color: var(--ui-accent); background: var(--ui-surface-2); }
 .pm-chip.on {
-  background: var(--ui-accent);
+  background: var(--ui-accent-soft);
   border-color: var(--ui-accent);
-  color: var(--ui-accent-on);
-  font-weight: 600;
+  color: var(--ui-accent);
+  font-weight: 500;
 }
-.pm-chip.rev {
-  color: var(--ui-danger);
-  border-color: light-dark(rgba(185, 28, 28, 0.45), rgba(248, 113, 113, 0.55));
-  background: transparent;
+.pm-reset { margin-left: auto; }
+.pm-choice-tooltip { display: block; min-width: 0; }
+.pm-inherited { margin: 0; line-height: 1.45; }
+.pm-chips--inherited { cursor: not-allowed; }
+.pm-chip:disabled {
+  pointer-events: none;
+  cursor: not-allowed;
+  opacity: .55;
+  color: var(--ui-text-muted);
+  background: var(--ui-surface-2);
+  border-color: var(--ui-border);
 }
-.pm-chip.rev.on {
-  background: var(--ui-danger);
-  border-color: var(--ui-danger);
-  color: #fff;
+.pm-chip.on:disabled {
+  opacity: .85;
+  color: var(--ui-text-2);
+  background: var(--ui-surface-3);
+  border-color: var(--ui-border-strong);
 }
 .pm-expr-toggle {
   border: 1px solid var(--ui-border-strong);
@@ -806,16 +923,6 @@ onMounted(() => {
   cursor: pointer;
 }
 .pm-expr-toggle:hover { border-color: var(--ui-accent); color: var(--ui-accent); }
-/* Собранное выражение множественного выбора — компактная подпись */
-.pm-zone-mini {
-  font-family: ui-monospace, Menlo, Consolas, monospace;
-  font-size: calc(var(--ui-font-scale, 1) * 10px);
-  color: var(--ui-text-muted);
-  background: var(--ui-surface-2);
-  border-radius: 5px;
-  padding: 2px 7px;
-}
-
 /* Free-expression row under the chips */
 .pm-expr-block {
   display: flex;
@@ -850,8 +957,19 @@ onMounted(() => {
 }
 .pm-expr-close:hover { background: var(--ui-surface-2); color: var(--ui-text); }
 
-@media (max-width: 640px) {
-  .pm-row-label { width: 100%; }
+@media (max-width: 1000px) {
+  .pm-layout { grid-template-columns: minmax(0, 1fr); }
+  .pm-presets {
+    position: static;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  }
+  .pm-presets-title { grid-column: 1 / -1; }
+}
+@media (max-width: 720px) {
+  .pm-editor { grid-template-columns: minmax(0, 1fr); }
+  .pm-savebar { flex-wrap: wrap; }
+  .pm-savebar-actions { flex-wrap: wrap; }
 }
 
 .pm-savebar {
@@ -860,9 +978,8 @@ onMounted(() => {
   margin-top: 18px;
   background: var(--ui-surface);
   border: 1px solid var(--ui-border);
-  border-left: 4px solid var(--ui-warning);
   border-radius: var(--ui-radius-md);
-  box-shadow: var(--ui-shadow-lg);
+  box-shadow: var(--ui-shadow-sm);
   padding: 12px 16px;
   display: flex;
   gap: 18px;
@@ -889,7 +1006,7 @@ onMounted(() => {
 }
 .pm-btn {
   font-size: calc(var(--ui-font-scale, 1) * 13px);
-  font-weight: 600;
+  font-weight: 500;
   border: 1px solid var(--ui-border-strong);
   background: var(--ui-surface);
   color: var(--ui-text);
@@ -945,7 +1062,8 @@ onMounted(() => {
   width: 100%;
   max-width: 420px;
   background: var(--ui-surface);
-  border-radius: 10px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-md);
   box-shadow: var(--ui-shadow-md);
   padding: 18px 20px;
   display: flex;
@@ -969,7 +1087,7 @@ onMounted(() => {
   font-size: calc(var(--ui-font-scale, 1) * 14px);
   padding: 8px 10px;
   border: 1px solid var(--ui-border-strong);
-  border-radius: 7px;
+  border-radius: var(--ui-radius-sm);
   background: var(--ui-surface);
   color: var(--ui-text);
 }

@@ -24,6 +24,8 @@ export interface ResourceManagerModalProps {
   taskTitle?: string
   resources: ResourceOption[]
   assigned: AssignedResource[]
+  canCreate?: boolean
+  canDelete?: boolean
   busy?: boolean
   error?: string | null
 }

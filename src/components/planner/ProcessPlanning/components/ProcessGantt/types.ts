@@ -26,7 +26,7 @@ export interface ProcessGanttProps {
   groupStartDate?: string | Date | number | null
   groupEndDate?: string | Date | number | null
   /** Allows modifying processes: moving dates, editing, deleting */
-  canManage?: boolean
+  canManage?: boolean | ((processId: number) => boolean)
   /** Enables vertical row drag to reorder the processes of the project */
   reorderable?: boolean
 }

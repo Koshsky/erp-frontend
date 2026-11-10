@@ -1,6 +1,11 @@
 import type { Meta, StoryObj } from '@storybook/vue3-vite'
+import { computed } from 'vue'
+import TaskPlanning from '../TaskPlanning/TaskPlanning.vue'
+import ProcessPlanning from '../ProcessPlanning/ProcessPlanning.vue'
+import ProjectPlanning from '../ProjectPlanning/ProjectPlanning.vue'
 import { expect } from 'storybook/test'
 import PdfExport from './PdfExport.vue'
+import type { PdfExportProps } from './types'
 import { renderGanttPdf } from './pdfRenderer'
 import { renderPdfPreview } from './previewPdf'
 import type { PdfGanttGroup } from './pdfRenderer'
@@ -56,6 +61,21 @@ const meta: Meta<typeof PdfExport> = {
   title: 'Components/Planner/PdfExport',
   component: PdfExport,
   parameters: { layout: 'padded' },
+  render: (args: PdfExportProps) => ({
+    components: { PdfExport, TaskPlanning, ProcessPlanning, ProjectPlanning },
+    setup() {
+      const processes = computed(() => (args.groups ?? []).map((g) => ({ ...g, project_code: g.code,
+        id: Number(g.id), tasks: g.rows.map((r) => ({ ...r, id: Number(r.id), process_id: Number(g.id) })),
+        milestones: g.milestones?.map((m) => ({ ...m, id: Number(m.id) })),
+      })))
+      const projects = computed(() => (args.groups ?? []).map((g) => ({ ...g, id: Number(g.id), project_code: g.code,
+        processes: g.rows.map((r) => ({ ...r, id: Number(r.id) })),
+      })))
+      const rows = computed(() => (args.groups ?? []).flatMap((g) => g.rows).map((r) => ({ ...r, id: Number(r.id), project_code: r.title })))
+      return { args, processes, projects, rows }
+    },
+    template: `<section style="width:1100px"><PdfExport v-bind="args" /><TaskPlanning v-if="args.scope==='tasks'" :processes="processes" :resources="args.resources" :origin="args.origin" :unit="args.unit" :focus-date="args.periodFrom" /><ProcessPlanning v-else-if="args.scope==='processes'" :projects="projects" :origin="args.origin" :unit="args.unit" :focus-date="args.periodFrom" /><ProjectPlanning v-else :projects="rows" :origin="args.origin" :unit="args.unit" :focus-date="args.periodFrom" /></section>`,
+  }),
   tags: ['autodocs'],
   args: {
     groups: demoGroups,
@@ -147,13 +167,13 @@ export const OpenDialog: Story = {
   },
 }
 
-/** Opens the dialog in black-and-white outline style (preview of the mono variant) */
+/** Retained story ID: export now preserves the page colors without a separate style setting. */
 export const OpenDialogMono: Story = {
+  name: 'Current page colors',
   play: async () => {
     window.dispatchEvent(new CustomEvent('app:print-request'))
-    await new Promise((r) => setTimeout(r, 800))
-    document.querySelector<HTMLInputElement>('input[value="mono"]')?.click()
-    await new Promise((r) => setTimeout(r, 2000))
+    await new Promise((r) => setTimeout(r, 1500))
+    expect(document.querySelector('input[value="mono"]')).toBeNull()
   },
 }
 

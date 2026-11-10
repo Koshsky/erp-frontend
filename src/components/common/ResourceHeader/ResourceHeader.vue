@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { fmtDate } from '@/components/planner/calendar'
 import TooltipCell from '../TooltipCell/TooltipCell.vue'
 import { InfoTooltip } from '../Tooltips'
 import UsageCell from '../UsageCell/UsageCell.vue'
@@ -116,6 +117,8 @@ const labelsH = computed(() => resourceCells.value.length * rowH.value)
           v-for="(u, k) in rc.cells"
           :key="'rc' + t.visibleIndices[k]"
           class="rs-cell"
+          :data-resource-id="rc.res.id"
+          :data-date="fmtDate(t.cellStart(t.visibleIndices[k]))"
           :style="{ left: t.cellLeft(t.visibleIndices[k]) + 'px', width: t.cellPx + 'px' }"
         >
           <UsageCell :used="u.used" :available="u.available" :isWeekend="u.isWeekend" :show-text="showText" :absentees="u.absentees" />

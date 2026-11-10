@@ -86,6 +86,8 @@ export interface TaskEditorProps {
   canManage?: boolean
   /** Whether the user can add subtasks (same as canManage) */
   canCreateSubtask?: boolean
+  canUpdateSubtask?: (id: number) => boolean
+  canDeleteSubtask?: (id: number) => boolean
   /** Whether the user can manage dependencies (same as canManage) */
   canManageDependencies?: boolean
   busy?: boolean

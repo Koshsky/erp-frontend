@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import TaskPlanning from '../components/planner/TaskPlanning/TaskPlanning.vue'
@@ -26,7 +26,7 @@ import { usePlanningOrigin } from '../composables/usePlanningOrigin'
 import { useUnitMenu } from '../composables/useUnitMenu'
 import { useRoleAccess } from '../composables/useRoleAccess'
 import { useFindPlanningItem } from '../composables/useFindPlanningItem'
-import { usePlanningStore, useAppStore, useRbacStore } from '../store'
+import { usePlanningStore, useAppStore } from '../store'
 import { compareByName } from '../utils'
 import { t } from '../i18n'
 import { addDaysISO, fitSpanDates, clampDateToBounds } from '../components/planner/calendar'
@@ -34,11 +34,53 @@ import type { DependencyType } from '../components/planner/dependencies'
 import { CELL_WIDTH } from '../components/planner/layout'
 import { randomPaletteColor } from '../components/common/ColorField/palette'
 import type { PdfGanttGroup } from '../components/planner/PdfExport/pdfRenderer'
-import type { DtoDetailedProcess, DtoDetailedTask, DtoTaskDependency, DtoResource, DtoMilestone } from '@/api'
+import { PlanningApi, TimesheetResourcesApi, TimesheetCalendarApi } from '@/api'
+import { apiConfig } from '@/store'
+import { useOwnedResources } from '@/composables/useOwnedResources'
+import { resourceHeaderRows } from '@/utils/resourceAccess'
+import type { DtoResourceResponse, DtoResourceCalendar, DtoDetailedProcess, DtoDetailedTask, DtoTaskDependency, DtoResource, DtoMilestone } from '@/api'
 
 const planning = usePlanningStore()
 const app = useAppStore()
 const route = useRoute()
+const viewUser = ref('')
+const previewData = ref<DtoDetailedProcess[] | null>(null)
+const previewResources = ref<DtoResourceResponse[]>([])
+const previewCalendar = ref<DtoResourceCalendar[]>([])
+const previewError = ref<string | null>(null)
+const previewLoading = ref(false)
+let viewRequest = 0
+watch(viewUser, async (value) => {
+  const request = ++viewRequest
+  previewData.value = null
+  previewResources.value = []
+  previewCalendar.value = []
+  previewError.value = null
+  if (!value) { previewLoading.value = false; return }
+  previewLoading.value = true
+  try {
+    const options = { headers: { 'X-View-User-ID': value }, params: { view_user_id: value } }
+    const [tasks, rows, capacity] = await Promise.all([
+      new PlanningApi(apiConfig()).planningTasksGet(options),
+      (async () => {
+        const items: DtoResourceResponse[] = []
+        for (let offset = 0; ; offset += 500) {
+          const result = await new TimesheetResourcesApi(apiConfig()).resourcesGet(500, Number(value), offset, options)
+          const page = result.data?.data?.items ?? []
+          items.push(...page)
+          if (page.length < 500) return items
+        }
+      })(),
+      new TimesheetCalendarApi(apiConfig()).timesheetCalendarGet(addDaysISO(new Date().toISOString().slice(0, 10), -180), addDaysISO(new Date().toISOString().slice(0, 10), 360), options),
+    ])
+    if (request !== viewRequest) return
+    previewData.value = tasks.data?.data?.processes ?? []
+    previewResources.value = rows
+    previewCalendar.value = capacity.data?.data?.resources ?? []
+  } catch (e) {
+    if (request === viewRequest) previewError.value = e instanceof Error ? e.message : String(e)
+  } finally { if (request === viewRequest) previewLoading.value = false }
+})
 
 const { taskPlanning, loading, error } = storeToRefs(planning)
 const { resources, calendar } = storeToRefs(app)
@@ -89,8 +131,6 @@ const focusGroupId = computed(() => {
   return id ? id : null
 })
 
-// vp owns the tasks/milestones/assignments of their processes; rp — view only
-// (the task list for them is already filtered by the backend), dp — read-only.
 const {
   canCreateTask,
   canManageTask,
@@ -106,18 +146,13 @@ const {
   userId,
 } = useRoleAccess()
 
-const rbac = useRbacStore()
-/** Permissions arrived (or were cached) — the matrix is authoritative; presets are only the cold-start fallback. */
-const permsReady = computed(() => rbac.permsLoaded || rbac.myPermissions.length > 0)
-/** Unrestricted resource visibility (resource.view scope all) — e.g. admin sees every resource. */
-const seesAllResources = computed(() =>
-  permsReady.value ? rbac.perm('resource', 'view') === 'all' : role.value === 'admin',
-)
-
-/** Drag/resize/reorder/assign are enabled when the user can manage at least one visible process */
-const anyManageableTask = computed(() =>
-  (taskPlanning.value?.processes ?? []).some((p: DtoDetailedProcess) => canManageTask(p.id)),
-)
+const ownedResources = useOwnedResources(resources, userId, computed(() => role.value !== 'admin'))
+const headerResources = computed(() => resourceHeaderRows(
+  role.value === 'admin' ? previewResources.value : ownedResources.value,
+  role.value === 'admin' ? (viewUser.value ? Number(viewUser.value) : null) : userId.value,
+))
+const displayCalendar = computed(() => role.value === 'admin' && viewUser.value ? previewCalendar.value : calendar.value)
+const previewReadOnly = computed(() => role.value === 'admin' && !!viewUser.value)
 
 const { findTask, findMilestone } = useFindPlanningItem()
 
@@ -145,11 +180,11 @@ const menuItems = computed<ContextMenuItem[]>(() => {
   if (menu.value?.taskId != null) {
     const processId = findTask(menu.value.taskId)?.process_id
     const items: ContextMenuItem[] = [{ id: 'comments', label: t('plannerViews.planner.menu.comments') }]
-    if (canManageTask(processId)) items.push({ id: 'edit-task', label: t('plannerViews.planner.menu.editTask') })
-    if (canAssignTaskResources(processId)) {
+    if (canManageTask(processId, menu.value.taskId)) items.push({ id: 'edit-task', label: t('plannerViews.planner.menu.editTask') })
+    if (canAssignTaskResources(processId, menu.value.taskId) || canAssignTaskResources(processId, menu.value.taskId, 'delete')) {
       items.push({ id: 'manage-resources', label: t('plannerViews.planner.menu.manageResources') })
     }
-    if (canDeleteTask(processId)) items.push({ id: 'delete-task', label: t('plannerViews.planner.menu.deleteTask') })
+    if (canDeleteTask(processId, menu.value.taskId)) items.push({ id: 'delete-task', label: t('plannerViews.planner.menu.deleteTask') })
     return items
   }
   if (menu.value?.milestoneId != null) {
@@ -203,6 +238,8 @@ const { open: openEdit, close: closeEdit, submit: submitEdit, bind: editBind } =
     return { ok, error: ok ? null : planning.error }
   },
   () => t('plannerViews.planner.milestone.title'),
+  undefined,
+  (state) => canManageMilestone(findMilestone(state.id)?.process_id),
 )
 
 // === Task editor modal (left: task fields; right: subtasks todo list) ===
@@ -251,7 +288,7 @@ function closeTaskEdit() {
 }
 
 async function onSaveTaskEditor(patch: TaskEditorPatch) {
-  if (taskEditorId.value == null) return
+  if (taskEditorId.value == null || !canManageTask(taskEditorTask.value?.process_id, taskEditorId.value)) return
   taskEditorBusy.value = true
   taskEditorError.value = null
   // Mutation failures are reported by the global toast (http.ts) — no inline banner.
@@ -260,7 +297,7 @@ async function onSaveTaskEditor(patch: TaskEditorPatch) {
 }
 
 async function onAddSubtask(payload: NewSubtaskPayload) {
-  if (taskEditorId.value == null) return
+  if (taskEditorId.value == null || !canCreateTask(taskEditorTask.value?.process_id)) return
   taskEditorBusy.value = true
   taskEditorError.value = null
   // Mutation failures are reported by the global toast (http.ts) — no inline banner.
@@ -269,6 +306,7 @@ async function onAddSubtask(payload: NewSubtaskPayload) {
 }
 
 async function onUpdateSubtask(payload: UpdateSubtaskPayload) {
+  if (!canManageTask(taskEditorTask.value?.process_id, payload.id)) return
   taskEditorBusy.value = true
   taskEditorError.value = null
   // Mutation failures are reported by the global toast (http.ts) — no inline banner.
@@ -277,7 +315,7 @@ async function onUpdateSubtask(payload: UpdateSubtaskPayload) {
 }
 
 async function onDeleteSubtask(id: number) {
-  if (taskEditorId.value == null) return
+  if (taskEditorId.value == null || !canDeleteTask(taskEditorTask.value?.process_id, id)) return
   // Mutation failures are reported by the global toast (http.ts) — no inline banner.
   await planning.deleteSubtask(id)
 }
@@ -346,6 +384,7 @@ async function onDeleteDependency(id: number) {
 }
 
 function onContextMenu(p: { clientX: number; clientY: number; date: string | null; rowIndex: number; processId?: number; taskId?: number; milestoneId?: number }) {
+  if (role.value === 'admin' && viewUser.value) return
   if (!canViewTasks.value) return
   // Empty group area: creation requires the corresponding right, a parent process and a known date.
   // A task row opens the menu for viewers (Comments); a milestone — only with a right on it.
@@ -371,20 +410,22 @@ const { open: openMenu, close: closeMenu, select, bind: menuBind } = useContextM
  *  task.update on the task's process; everyone else with task.view gets the
  *  same modal in read-only mode (fields and operations disabled). */
 function onTaskBarEdit(id: number) {
+  if (role.value === 'admin' && viewUser.value) return
   const task = findTask(id)
   if (!task || !canViewTasks.value) return
   openTaskEdit(id)
 }
 
 function openMilestoneEdit(id: number) {
+  if (role.value === 'admin' && viewUser.value) return
   const ms = findMilestone(id)
-  if (ms) {
+  if (ms && canManageMilestone(ms.process_id)) {
     openEdit({ type: 'milestone', id, title: ms.title ?? '', content: ms.content ?? '', color: ms.color ?? '' })
   }
 }
 
 async function handleSelect(id: string) {
-  if (!menu.value) return
+  if (!menu.value || !menuItems.value.some((item) => item.id === id)) return
   const { date, rowIndex, processId, taskId, milestoneId } = menu.value
   if (id === 'create-task') {
     if (processId == null || date == null) return
@@ -459,18 +500,11 @@ const assignedResources = computed<AssignedResource[]>(() => {
   }))
 })
 
-/**
- * Resource catalog for choosing in the modal (only those with id). For non-admin
- * keep the resources of the task owners (process/project) — the server will
- * reject a foreign resource anyway (403). admin sees all; when owners are unknown
- * (cold cache) the list is not filtered — the server is the final arbiter.
- */
 const resourceOptions = computed(() => {
   const opts = resources.value.filter((r) => r.id != null)
-  const owners = planning.taskOwnerIds(resourcesModalTaskId.value ?? 0)
-  const allowed = seesAllResources.value || owners.length === 0 ? null : new Set(owners)
+  const process = taskPlanning.value?.processes?.find((p) => p.id === findTask(resourcesModalTaskId.value ?? 0)?.process_id)
   return opts
-    .filter((r) => allowed == null || (r.owner_id != null && allowed.has(r.owner_id)))
+    .filter((r) => process?.owner_id != null && r.owner_id === process.owner_id)
     .map((r) => ({ id: r.id as number, title: r.title, code: r.code }))
 })
 
@@ -480,7 +514,7 @@ function openResources(taskId: number) {
 }
 
 async function onAddResource(payload: AddResourcePayload) {
-  if (resourcesModalTaskId.value == null) return
+  if (resourcesModalTaskId.value == null || !canAssignTaskResources(findTask(resourcesModalTaskId.value)?.process_id, resourcesModalTaskId.value)) return
   resourcesBusy.value = true
   resourcesError.value = null
   // Mutation failures are reported by the global toast (http.ts) — no inline banner.
@@ -493,7 +527,7 @@ async function onAddResource(payload: AddResourcePayload) {
 }
 
 async function onRemoveResource(payload: { resource_id: number }) {
-  if (resourcesModalTaskId.value == null) return
+  if (resourcesModalTaskId.value == null || !canAssignTaskResources(findTask(resourcesModalTaskId.value)?.process_id, resourcesModalTaskId.value, 'delete')) return
   resourcesBusy.value = true
   resourcesError.value = null
   // Mutation failures are reported by the global toast (http.ts) — no inline banner.
@@ -521,6 +555,7 @@ const taskComments = computed(() => {
 })
 
 function openComments(taskId: number) {
+  if (role.value === 'admin' && viewUser.value) return
   if (!canViewTasks.value) return
   commentsTaskId.value = taskId
   void planning.loadTaskComments(taskId)
@@ -575,17 +610,7 @@ const processesByPriority = computed(() => {
   for (const p of source) {
     if (p.id != null) prio.set(p.id, p.priority ?? Number.MAX_SAFE_INTEGER)
   }
-  let list = taskPlanning.value?.processes ?? []
-  // vp-like scope (task.view = parent): show only processes in projects where
-  // the user owns at least one process. The matrix is authoritative once loaded;
-  // the preset is only a cold-start fallback (rp keeps the ancestor view — the
-  // backend already scopes that list).
-  if ((permsReady.value ? ['parent', 'up1'].includes(rbac.perm('task', 'view')) : role.value === 'vp') && userId.value != null) {
-    const myProjects = new Set(
-      list.filter((p: DtoDetailedProcess) => p.owner_id === userId.value).map((p: DtoDetailedProcess) => p.project_id),
-    )
-    list = list.filter((p: DtoDetailedProcess) => myProjects.has(p.project_id))
-  }
+  const list = role.value === 'admin' && viewUser.value ? (previewData.value ?? []) : (taskPlanning.value?.processes ?? [])
   return [...list].sort((a, b) => {
     const pa = prio.get(a.project_id ?? -1) ?? Number.MAX_SAFE_INTEGER
     const pb = prio.get(b.project_id ?? -1) ?? Number.MAX_SAFE_INTEGER
@@ -620,10 +645,17 @@ const taskGroups = computed<PdfGanttGroup[]>(() =>
   <section class="pp">
     <!-- Printing the diagram as PDF: the period and cell width come from the current page view -->
     <div class="pp-toolbar">
+      <label v-if="role === 'admin'">
+        {{ t('plannerViews.planner.viewAs') }}
+        <select v-model="viewUser">
+          <option value="">{{ t('plannerViews.planner.wholeSystem') }}</option>
+          <option v-for="user in app.users" :key="user.id" :value="String(user.id)">{{ user.name }}</option>
+        </select>
+      </label>
       <PdfExport
         :groups="taskGroups"
-        :resources="resources"
-        :calendar="calendar"
+        :resources="headerResources"
+        :calendar="displayCalendar"
         :origin="origin"
         :unit="unit"
         :owner-id="userId"
@@ -641,19 +673,20 @@ const taskGroups = computed<PdfGanttGroup[]>(() =>
          TaskPlanning receives it through props -->
     <TaskPlanning
       :processes="processesByPriority"
-      :resources="resources"
-      :calendar="calendar"
-      :absence-by-resource="absenceByResource"
+      :resources="headerResources"
+      :calendar="displayCalendar"
+      :absence-by-resource="role === 'admin' ? null : absenceByResource"
       :users="app.users"
-      :loading="loading"
-      :error="error"
+      :loading="loading || previewLoading"
+      :error="previewError || error"
       :origin="origin"
       :unit="unit"
-      :can-manage="anyManageableTask"
-      :reorderable="anyManageableTask"
+      :can-manage="(id, processId) => !previewReadOnly && canManageTask(processId, id)"
+      :can-manage-milestones="(processId) => !previewReadOnly && canManageMilestone(processId)"
+      :reorderable="(processId) => !previewReadOnly && canManageTask(processId)"
       :focus-date="focusDate"
       :focus-group-id="focusGroupId"
-      :comments-by-task="planning.commentsByTask"
+      :comments-by-task="viewUser ? null : planning.commentsByTask"
       @change="(p) => planning.moveTask(p.id, p.start_date, p.end_date)"
       @milestone-change="(p) => planning.updateMilestoneDate(p.id, p.date)"
       @contextmenu="onContextMenu"
@@ -662,7 +695,7 @@ const taskGroups = computed<PdfGanttGroup[]>(() =>
       @milestone-edit="openMilestoneEdit"
       @visible-range="onVisibleRange"
       @edit="onTaskBarEdit"
-      @request-comments="(id) => planning.loadTaskComments(id, { fresh: false })"
+      @request-comments="(id) => !viewUser && planning.loadTaskComments(id, { fresh: false })"
       @open-comments="openComments"
     />
 
@@ -687,9 +720,11 @@ const taskGroups = computed<PdfGanttGroup[]>(() =>
       :owner-options="ownerOptions"
       :dependencies="taskEditorDependencies"
       :dependency-options="taskEditorDependencyOptions"
-      :can-manage="taskEditorTask ? canManageTask(taskEditorTask.process_id) : false"
-      :can-create-subtask="taskEditorTask ? canManageTask(taskEditorTask.process_id) : false"
-      :can-manage-dependencies="taskEditorTask ? canManageTask(taskEditorTask.process_id) : false"
+      :can-manage="taskEditorTask ? canManageTask(taskEditorTask.process_id, taskEditorTask.id) : false"
+      :can-create-subtask="taskEditorTask ? canCreateTask(taskEditorTask.process_id) : false"
+      :can-update-subtask="(id) => canManageTask(taskEditorTask?.process_id, id)"
+      :can-delete-subtask="(id) => canDeleteTask(taskEditorTask?.process_id, id)"
+      :can-manage-dependencies="taskEditorTask ? canManageTask(taskEditorTask.process_id, taskEditorTask.id) : false"
       :busy="taskEditorBusy"
       :error="taskEditorError"
       :disabled-reason="isOffline ? t('plannerViews.offline.disabled') : null"
@@ -707,6 +742,8 @@ const taskGroups = computed<PdfGanttGroup[]>(() =>
       :open="resourcesModalTaskId != null"
       :task-id="resourcesModalTaskId ?? 0"
       :task-title="resourcesTaskTitle"
+      :can-create="resourcesModalTaskId != null && canAssignTaskResources(findTask(resourcesModalTaskId)?.process_id, resourcesModalTaskId)"
+      :can-delete="resourcesModalTaskId != null && canAssignTaskResources(findTask(resourcesModalTaskId)?.process_id, resourcesModalTaskId, 'delete')"
       :resources="resourceOptions"
       :assigned="assignedResources"
       :busy="resourcesBusy"

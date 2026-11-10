@@ -6,6 +6,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 The web app and the desktop wrapper are versioned together.
 
+## [1.6.1] - 2026-11-10
+
+### Changed
+
+- PDF preserves diagram colors, badges, dates and zoom, printing complete selected items with repeated headers while retaining filters and Ctrl+S/Ctrl+P.
+
+- Scope choices are simplified without peers, with explicit inherited viewing and separate priority controls.
+
+- Preset Manage controls configure create, update and delete together while server permissions remain separate.
+- Tasks support shared-project access; shared-process access covers all tasks and subtasks, with consistent list, diagram and direct-ID scoping.
+
+### Fixed
+
+- Pages, context menus, editors and dragging check each action and object independently; revoked access closes the page.
+
+- Individual permissions preserve separate action rules, support cancellation and reject stale responses after saving.
+
+- Deselecting the last preset condition stages No access without automatically selecting a replacement.
+- Process permissions follow the project owner and task permissions follow the process owner for all actions.
+- Resource navigation and actions follow individual permissions; new roles start with own access, and task planning supports a read-only administrator subject view.
+- Offline retries preserve the original idempotency key, FIFO order and exact temporary ID mappings across interruptions.
+- Automatic synchronization flushes queued edits before refreshing the offline cache once a minute and preserves unconfirmed changes.
+- Resource headers update optimistically for task dates, assignments and employee absences, with rollback on rejected changes.
+
 ## [1.6.0] - 2026-11-09
 
 ### Changed

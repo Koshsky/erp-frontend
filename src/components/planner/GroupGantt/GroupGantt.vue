@@ -72,7 +72,7 @@ function fmt(d: string | Date | number | null | undefined): string {
 </script>
 
 <template>
-  <div ref="groupEl" class="gg-group" :data-group="groupId ?? ''" :data-rows="displayCount" :style="{ minHeight: mergedHeight, '--label-width': LABEL_WIDTH + 'px' }">
+  <div ref="groupEl" class="gg-group" :data-group="groupId ?? ''" :data-rows="displayCount" :data-pdf-min-height="minLabelHeight" :data-pdf-min-rows="minRows" :style="{ minHeight: mergedHeight, '--label-width': LABEL_WIDTH + 'px' }">
     <div v-if="overlayStyle" class="gg-overlay" :style="overlayStyle" />
 
     <!-- Merged group label (object code + process): sticky left, full height.
@@ -86,7 +86,7 @@ function fmt(d: string | Date | number | null | undefined): string {
     </div>
 
     <template v-for="(item, index) in items" :key="'gi' + item.id">
-      <div class="gg-row" :style="{ height: rowHeight + 'px' }" :data-row-index="index">
+      <div class="gg-row" :style="{ height: rowHeight + 'px' }" :data-row-index="index" :data-pdf-row="item.id">
         <div v-if="!mergedLabel" class="gg-label" :style="{ width: LABEL_WIDTH + 'px' }">
           <slot name="row" :item="item as GroupGanttSlotItem" :index="index">
             <span class="item-title">{{ item.title }}</span>

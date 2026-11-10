@@ -330,3 +330,46 @@ describe('applyToCache — project deletion cascades the planning aggregates', (
     expect(tasks.data.data.processes.map((p) => p.id)).toEqual([9])
   })
 })
+
+describe('complete resource header cache survives offline CRUD', () => {
+  const key = 'http://api.test/local/resource-header?owner_id=7'
+  it('updates ownership even when the resource is outside the table first page', async () => {
+    fake.put(key, { ts: 1, data: [{ id: 501, owner_id: 7 }] })
+    await applyToCache(entry({ entity: 'resource', method: 'PUT', url: 'http://api.test/api/v1/resources/501', body: { owner_id: 8 } }))
+    expect(fake.get(key)).toMatchObject({ data: [{ id: 501, owner_id: 8 }] })
+  })
+  it('removes a deleted resource from the complete snapshot', async () => {
+    fake.put(key, { ts: 1, data: [{ id: 501, owner_id: 7 }] })
+    await applyToCache(entry({ entity: 'resource', method: 'DELETE', url: 'http://api.test/api/v1/resources/501' }))
+    expect(fake.get(key)).toMatchObject({ data: [] })
+  })
+  it('retains a newly created own resource before synchronization', async () => {
+    fake.put(key, { ts: 1, data: [] })
+    await applyToCache(entry({ entity: 'resource', method: 'POST', url: 'http://api.test/api/v1/resources', tempId: -7, body: { owner_id: 7, code: 'Own', title: 'Own' } }))
+    expect(fake.get(key)).toMatchObject({ data: [{ id: -7, owner_id: 7 }] })
+  })
+})
+
+
+it.each(['resource', 'process'] as const)('offline %s owner changes clear the corresponding cached assignments', async (entity) => {
+  const key = 'http://api.test/api/v1/planning/tasks'
+  fake.put(key, { ts: 1, data: env({ processes: [{ id: 1, owner_id: 7, tasks: [{ id: 2, resources: [{ id: 3 }, { id: 4 }] }] }, { id: 5, owner_id: 9, tasks: [{ id: 6, resources: [{ id: 4 }] }] }] }) })
+  await applyToCache(entry({ entity, method: 'PUT', url: entity === 'resource' ? 'http://api.test/api/v1/resources/3' : 'http://api.test/api/v1/process/1', body: { owner_id: 8 } }))
+  const cached = fake.get(key) as { data: { data: { processes: Array<{ tasks: Array<{ resources: Array<{ id: number }> }> }> } } }
+  expect(cached.data.data.processes[0].tasks[0].resources).toEqual(entity === 'resource' ? [{ id: 4 }] : [])
+  expect(cached.data.data.processes[1].tasks[0].resources).toEqual([{ id: 4 }])
+})
+
+
+it('updates only the current account prefixed resource header cache', async () => {
+  vi.stubGlobal('localStorage', { getItem: () => JSON.stringify({ id: 7 }) })
+  try {
+    const own = 'u7:http://api.test/local/resource-header?owner_id=7'
+    const foreign = 'u8:http://api.test/local/resource-header?owner_id=8'
+    fake.put(own, { ts: 1, data: [{ id: 1, owner_id: 7 }] })
+    fake.put(foreign, { ts: 1, data: [{ id: 1, owner_id: 7 }] })
+    await applyToCache(entry({ entity: 'resource', method: 'PUT', url: 'http://api.test/api/v1/resources/1', body: { owner_id: 8 } }))
+    expect(fake.get(own)).toMatchObject({ data: [{ id: 1, owner_id: 8 }] })
+    expect(fake.get(foreign)).toMatchObject({ data: [{ id: 1, owner_id: 7 }] })
+  } finally { vi.unstubAllGlobals() }
+})

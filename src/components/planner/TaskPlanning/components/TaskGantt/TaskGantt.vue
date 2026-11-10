@@ -10,6 +10,7 @@ import { fmtDate as fmtDateLocale } from '@/i18n/date'
 
 const props = withDefaults(defineProps<TaskGanttProps>(), {
   canManage: true,
+  canManageMilestones: undefined,
   reorderable: false,
   users: null,
   commentsByTask: null,
@@ -41,7 +42,7 @@ function fmtDate(d: string | Date | number | null | undefined): string {
 }
 
 function onBarChange(id: number, d: { start_date: string; end_date: string }) {
-  emit('change', { id, ...d })
+  if (typeof props.canManage === 'function' ? props.canManage(id) : props.canManage) emit('change', { id, ...d })
 }
 
 function onBarContextMenu(p: { clientX: number; clientY: number }, id: number) {
@@ -53,12 +54,12 @@ function onMilestoneContextMenu(p: { clientX: number; clientY: number }, id: num
 }
 
 function onMilestoneEdit(id: number) {
-  if (props.canManage) emit('milestone-edit', id)
+  if (props.canManageMilestones ?? (props.canManage === true)) emit('milestone-edit', id)
 }
 </script>
 
 <template>
-  <div class="tg-task-group">
+  <div class="tg-task-group" :data-pdf-group="processId">
     <!-- Opaque sticky label-column cell for the milestone row (otherwise bars show through) -->
     <div class="tg-ms-label" :style="{ width: LABEL_WIDTH + 'px' }" />
     <!-- Dependency arrows between the process's top-level tasks -->
@@ -73,7 +74,7 @@ function onMilestoneEdit(id: number) {
       :minRows="3"
       :reorderable="reorderable"
       mergedLabel
-      @reorder="(p) => emit('reorder', p)"
+      @reorder="(p) => reorderable && emit('reorder', p)"
     >
       <template #label>
         <div v-if="projectCode" class="gl-code">{{ projectCode }}</div>
@@ -90,7 +91,7 @@ function onMilestoneEdit(id: number) {
           :projectCode="projectCode"
           :groupStartDate="groupStartDate"
           :groupEndDate="groupEndDate"
-          :draggable="canManage"
+          :draggable="typeof canManage === 'function' ? canManage(item.id) : canManage"
           :start-row-reorder="reorderable ? startReorder : null"
           :users="users"
           :comments-by-task="commentsByTask"
@@ -114,8 +115,8 @@ function onMilestoneEdit(id: number) {
       :stripHeight="20"
       :groupStartDate="groupStartDate"
       :groupEndDate="groupEndDate"
-      :draggable="canManage"
-      @change="(d) => emit('milestone-change', { id: ms.id, ...d })"
+      :draggable="canManageMilestones ?? (canManage === true)"
+      @change="(d) => (canManageMilestones ?? (canManage === true)) && emit('milestone-change', { id: ms.id, ...d })"
       @contextmenu="(p) => onMilestoneContextMenu(p, ms.id)"
       @edit="() => onMilestoneEdit(ms.id)"
     />

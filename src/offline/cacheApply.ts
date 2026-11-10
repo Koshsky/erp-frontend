@@ -15,6 +15,7 @@ import type {
   DtoUserStateResponse,
 } from '@/api'
 import { idbGet, idbKeys, idbPut } from './db'
+import { stripUserPrefix, currentUserId, keyMatchesUser } from './cache'
 import type { OutboxEntry } from './outbox'
 import { applyRangeSplit, type PutPeriodFields } from './periodSplit'
 
@@ -111,10 +112,11 @@ interface StateFields {
 }
 
 function pathnameOf(url: string): string {
+  const plain = stripUserPrefix(url)
   try {
-    return new URL(url).pathname
+    return new URL(plain).pathname
   } catch {
-    return url.split('?')[0]
+    return plain.split('?')[0]
   }
 }
 
@@ -133,7 +135,7 @@ async function forEachCacheKey(
 ): Promise<void> {
   const keys = await idbKeys(CACHE_STORE)
   for (const key of keys) {
-    if (!match(pathnameOf(key))) continue
+    if (!keyMatchesUser(key, currentUserId()) || !match(pathnameOf(key))) continue
     const cached = await idbGet<CachedEntryLike>(CACHE_STORE, key)
     if (!cached || typeof cached.data !== 'object' || cached.data == null) continue
     const before = JSON.stringify(cached.data)
@@ -691,11 +693,33 @@ async function applyMembers(entry: OutboxEntry): Promise<void> {
  * Applies an offline delta to saved GET responses. Called on every
  * queue write. Errors are not critical — the cache simply won't update.
  */
+async function applyPlanningOwnerChange(entry: OutboxEntry): Promise<void> {
+  const patch = entry.body as MutationBody | undefined
+  if (entry.method.toUpperCase() !== 'PUT' || patch?.owner_id == null) return
+  const id = entryId(entry)
+  await forEachCacheKey((path) => path === '/api/v1/planning/tasks', (body) => {
+    const data = body.data as DtoTaskPlanning | undefined
+    for (const process of data?.processes ?? []) {
+      if (entry.entity === 'process' && process.id === id && process.owner_id !== patch.owner_id) {
+        process.owner_id = patch.owner_id
+        for (const task of process.tasks ?? []) task.resources = []
+      }
+      if (entry.entity === 'resource' && process.owner_id !== patch.owner_id) {
+        for (const task of process.tasks ?? []) task.resources = task.resources?.filter((r) => r.id !== id)
+      }
+    }
+  })
+}
+
 export async function applyToCache(entry: OutboxEntry): Promise<void> {
   try {
     console.log(`[offline] applyToCache: ${(entry.method || '').toUpperCase()} ${entry.url}`)
     switch (entry.entity) {
       case 'resource':
+        await applyPlanningOwnerChange(entry)
+        await forEachCacheKey((path) => path === '/local/resource-header', (body) => {
+          if (Array.isArray(body)) applyListMutation({ items: body as DtoResourceResponse[] }, entry, makeResource)
+        })
         await listApplier('/api/v1/resources', makeResource)(entry)
         break
       case 'user':
@@ -722,6 +746,7 @@ export async function applyToCache(entry: OutboxEntry): Promise<void> {
         await applyPlanningTasks(entry, 'assignment')
         break
       case 'process':
+        await applyPlanningOwnerChange(entry)
         await listApplier('/api/v1/process', makeProcess)(entry)
         await applyPlanningProcesses(entry)
         break

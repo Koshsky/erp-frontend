@@ -104,7 +104,8 @@ describe('describeScopeExpr', () => {
     expect(describeScopeExpr('self')).toBe('свои')
     expect(describeScopeExpr('self sib')).toBe('свои + сиблинги')
     expect(describeScopeExpr('up1')).toBe('родители')
-    expect(describeScopeExpr('down')).toBe('поддерево')
+    expect(describeScopeExpr('down')).toBe('связанные')
+    expect(describeScopeExpr('up')).toBe('по цепочке владельцев')
     expect(describeScopeExpr('none')).toBe('запрещено')
     expect(describeScopeExpr('all')).toBe('всё')
   })
@@ -157,5 +158,44 @@ describe('evalScope (probe moves)', () => {
     expect(evalScope('down', 'project', {}, 5, { descendant: true })).toBe(true)
     expect(evalScope('down', 'project', {}, 5, { descendant: false })).toBe(false)
     expect(evalScope('down', 'project', {}, 5)).toBe(false)
+  })
+})
+
+describe('independent project peers for tasks', () => {
+  it('parses, combines and toggles the project peer scope independently', () => {
+    expect(parseScopeExpr('sib sib_project')).toEqual(['sib', 'sib_project'])
+    expect(parseScopeExpr('sib_project1')).toBeNull()
+    expect(toggleScopeMove('sib', 'sib_project')).toBe('sib sib_project')
+    expect(toggleScopeMove('sib sib_project', 'sib')).toBe('sib_project')
+    expect(scopeMoves('sib_project sib')).toEqual(['sib', 'sib_project'])
+  })
+  it('requires a separate project probe and never infers access from project ownership', () => {
+    expect(evalScope('sib_project', 'task', { projectOwner: 7 }, 7)).toBe(false)
+    expect(evalScope('sib_project', 'task', {}, 7, { sibling: true })).toBe(false)
+    expect(evalScope('sib', 'task', {}, 7, { projectSibling: true })).toBe(false)
+    expect(evalScope('sib_project', 'task', {}, 7, { projectSibling: true })).toBe(true)
+    expect(evalScope('sib sib_project', 'task', {}, 7, { sibling: true })).toBe(true)
+    expect(evalScope('sib_project', 'process', {}, 7, { projectSibling: true })).toBe(false)
+  })
+})
+
+
+describe('exact owner scopes', () => {
+  it.each(['process', 'task', 'milestone', 'assignment'])('%s separates project and process ownership', (resource) => {
+    expect(evalScope('project_owner', resource, { projectOwner: 7, processOwner: 8, owner: 9 }, 7)).toBe(true)
+    expect(evalScope('project_owner', resource, { projectOwner: 8, processOwner: 7, owner: 7 }, 7)).toBe(false)
+    expect(evalScope('process_owner', resource, { projectOwner: 8, processOwner: 7, owner: 9 }, 7)).toBe(true)
+    expect(evalScope('process_owner', resource, { projectOwner: 7, processOwner: 8, owner: 7 }, 7)).toBe(false)
+  })
+  it.each(['project_owner', 'process_owner', 'process_projects', 'project_resources'])('parses %s independently', (scope) => {
+    expect(parseScopeExpr(scope)).toEqual([scope])
+    expect(parseScopeExpr(scope + '1')).toBe(null)
+  })
+  it('requires explicit probes for parent projects and related resources', () => {
+    expect(evalScope('process_projects', 'project', { projectOwner: 7 }, 7)).toBe(false)
+    expect(evalScope('process_projects', 'project', {}, 7, { processProjects: true })).toBe(true)
+    expect(evalScope('project_resources', 'resource', { owner: 7 }, 7)).toBe(false)
+    expect(evalScope('project_resources', 'resource', {}, 7, { projectResources: true })).toBe(true)
+    expect(evalScope('project_resources', 'task', {}, 7, { projectResources: true })).toBe(false)
   })
 })

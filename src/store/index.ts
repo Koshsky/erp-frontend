@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed, watch, onScopeDispose } from 'vue'
 import axios, { type AxiosError, type Method } from 'axios'
 import { AuthApi, ProjectsApi, ProcessesApi, TasksApi, TimesheetResourcesApi, TimesheetCalendarApi, TimesheetStatesApi, PlanningApi, MilestonesApi, UsersApi, AssignmentsApi, AutoCreateApi, RBACApi, PermissionsApi, AuditApi, Configuration } from '@/api'
-import type { DtoUserInfo, DtoProject, DtoResourceResponse, DtoResourceCalendar, DtoResourceMemberResponse, DtoResourceAbsenceResponse, DtoUserResponse, DtoUserStateResponse, DtoStateResponse, DtoCreateResourceRequest, DtoUpdateResourceRequest, DtoCreateUserRequest, DtoUpdateUserRequest, DtoSetDaysRequest, DtoAdminUserResponse, DtoCreateUserResult, DtoAutoCreateConfig, DtoAutoCreatedCounts, DtoCommentResponse, DtoPresetView, DtoPresetRuleInput, DtoPresetRuleView, DtoMatrixCell, DtoRoutePolicyView, EngineKindInfo, DtoPermission, DtoUserPermissionsView, DtoUserPermissionsInput, DtoAuditEventView, DtoAssignmentResponse, DtoDetailedProcess, DtoDetailedProject, DtoDetailedTask, DtoMilestone, DtoProcess, DtoProcessPlanning, DtoProjectPlanning, DtoResource, DtoTaskDependency, DtoTaskPlanning } from '@/api'
+import type { DtoUserInfo, DtoProject, DtoResourceResponse, DtoResourceCalendar, DtoResourceMemberResponse, DtoResourceAbsenceResponse, DtoUserResponse, DtoUserStateResponse, DtoStateResponse, DtoCreateResourceRequest, DtoUpdateResourceRequest, DtoCreateUserRequest, DtoUpdateUserRequest, DtoAdminUserResponse, DtoCreateUserResult, DtoAutoCreateConfig, DtoAutoCreatedCounts, DtoCommentResponse, DtoPresetView, DtoPresetRuleInput, DtoPresetRuleView, DtoMatrixCell, DtoRoutePolicyView, EngineKindInfo, DtoPermission, DtoUserPermissionsView, DtoUserPermissionsInput, DtoAuditEventView, DtoAssignmentResponse, DtoDetailedProcess, DtoDetailedProject, DtoDetailedTask, DtoMilestone, DtoProcess, DtoProcessPlanning, DtoProjectPlanning, DtoResource, DtoTaskDependency, DtoTaskPlanning } from '@/api'
 import { apiErrorMessage } from '@/utils'
 import { t } from '@/i18n'
 import { getApiUrl } from '@/config'
@@ -13,6 +13,9 @@ import { scheduleWarmup } from '@/offline/warmup'
 import { enqueueMutation, isNetworkError, pruneForeignOutbox, type MutationEntity } from '@/offline/outbox'
 import { scheduleDomainRefresh } from '@/offline/sync'
 import { applyRangeSplit } from '@/offline/periodSplit'
+import { updatePeriodAvailability } from './periodAvailability'
+import { beginMutation, readStamp, mayApplyRead } from '@/offline/mutationGuard'
+import { pendingRefs } from '@/offline/outbox'
 import { getAccessToken, setAccessToken } from '@/token'
 import {
   tryAcquireRefreshLock,
@@ -25,7 +28,8 @@ import { isLoggedOut, clearLoggedOut, setLoggedOut } from '@/loggedOut'
 import { saveRefreshToken, loadRefreshToken, clearRefreshToken } from '@/offline/session'
 import { hydrateFromCache, apiPath } from '@/offline/hydrate'
 import { cacheGetAllByPath } from '@/offline/cache'
-import { evalScope } from '@/rbacScope'
+import { evalScope, type ScopeProbe } from '@/rbacScope'
+import { parentScope } from '@/utils/presetDefaults'
 import {
   resolveTaskMove,
   resolveAddDependency,
@@ -87,14 +91,20 @@ interface MutationOptions<T = unknown> {
  *  Auth/passwords (/auth/*, changePassword) do not go through this path.
  */
 async function runMutation<T = unknown>(opts: MutationOptions<T>): Promise<boolean> {
+  const finish = beginMutation()
   try {
     const resp = await opts.call()
+    const body = (resp as { data?: { error?: { code?: unknown; message?: string } } } | undefined)?.data
+    if (body?.error && (body.error.code != null || body.error.message)) {
+      throw new Error(apiErrorMessage(body.error))
+    }
     // Unwrap the unified envelope exactly TWO levels: `resp.data` is the body
     // ({ data: <payload>, error }), `resp.data.data` is the payload DTO the
     // apply callback expects (the created/updated entity). Going one level
     // deeper (resp.data.data.data = payload.data) yields undefined for every
     // create/update DTO and would silently drop online mutations from the UI
     // (the offline/optimistic path is unaffected — it never reads the payload).
+    finish()
     await opts.apply(((resp as { data?: { data?: unknown } } | undefined)?.data?.data as T | null) ?? null)
     // Post-mutation consistency (online only): the outbox flush path owns the
     // refresh of queued changes (reconcile), so here the refresh is skipped
@@ -115,16 +125,21 @@ async function runMutation<T = unknown>(opts: MutationOptions<T>): Promise<boole
           method: (err.config.method ?? 'get') as Method,
           url: axios.getUri(err.config),
           body: err.config.data,
+          idempotencyKey: String(err.config.headers?.['Idempotency-Key'] ?? err.config.headers?.['idempotency-key'] ?? '') || undefined,
         })
       } catch {
+        finish()
         opts.onError(e instanceof Error ? e.message ?? String(e) : String(e))
         return false
       }
       opts.optimistic()
       return true
     }
+    finish()
     opts.onError(e instanceof Error ? e.message ?? String(e) : String(e))
     return false
+  } finally {
+    finish()
   }
 }
 
@@ -815,6 +830,7 @@ export const useAppStore = defineStore('app', () => {
 
   async function createResource(payload: DtoCreateResourceRequest): Promise<boolean> {
     resourcesError.value = null
+    payload = { ...payload, owner_id: payload.owner_id ?? useAuthStore().user?.id }
     const tempId = nextTempId()
     return runMutation({
       entity: 'resource',
@@ -839,6 +855,13 @@ export const useAppStore = defineStore('app', () => {
 
   async function updateResource(id: number, patch: DtoUpdateResourceRequest): Promise<boolean> {
     resourcesError.value = null
+    const previousOwner = resources.value.find((r) => r.id === id)?.owner_id
+    const clearAssignments = () => {
+      if (patch.owner_id == null || patch.owner_id === previousOwner) return
+      for (const process of usePlanningStore().taskPlanning?.processes ?? []) {
+        for (const task of process.tasks ?? []) task.resources = task.resources?.filter((r) => r.id !== id)
+      }
+    }
     return runMutation({
       entity: 'resource',
       call: async () => {
@@ -849,10 +872,12 @@ export const useAppStore = defineStore('app', () => {
       },
       apply: (updated) => {
         if (!updated) return
+        clearAssignments()
         const i = resources.value.findIndex((r) => r.id === id)
         if (i >= 0) resources.value[i] = updated
       },
       optimistic: () => {
+        clearAssignments()
         const i = resources.value.findIndex((r) => r.id === id)
         if (i >= 0) resources.value[i] = { ...resources.value[i], ...patch }
       },
@@ -1048,6 +1073,9 @@ export const useAppStore = defineStore('app', () => {
   }
 
   async function refreshCalendar(): Promise<void> {
+    const timesheet = useTimesheetStore()
+    if (timesheet.busy) return
+    const revision = timesheet.periodRevision
     calendarLoading.value = true
     calendarError.value = null
     try {
@@ -1057,7 +1085,7 @@ export const useAppStore = defineStore('app', () => {
         calendarDay(today, -CALENDAR_BACK_DAYS),
         calendarDay(today, CALENDAR_FORWARD_DAYS),
       )
-      calendar.value = resp.data?.data?.resources ?? []
+      if (!timesheet.busy && revision === timesheet.periodRevision) calendar.value = resp.data?.data?.resources ?? []
     } catch (e: unknown) {
       calendarError.value = e instanceof Error ? e.message || String(e) : String(e)
     } finally {
@@ -1070,9 +1098,13 @@ export const useAppStore = defineStore('app', () => {
 
   /** Loads absences (unavailable states) of a resource's members for a window */
   async function loadResourceAbsence(resourceId: number, from: string, to: string) {
+    const timesheet = useTimesheetStore()
+    if (timesheet.busy) return
+    const revision = timesheet.periodRevision
     try {
       const api = new TimesheetResourcesApi(apiConfig())
       const resp = await api.resourcesIdAbsenceGet(resourceId, from, to)
+      if (timesheet.busy || revision !== timesheet.periodRevision) return
       absenceByResource.value = { ...absenceByResource.value, [resourceId]: resp.data?.data ?? [] }
     } catch {
       // Skip: the tooltip will simply not show absent members on this resource.
@@ -1371,6 +1403,7 @@ export const useTimesheetStore = defineStore('timesheet', () => {
   const employeesLoadedFor = ref<number | null>(null)
   const states = ref<DtoStateResponse[]>([])
   const periodsByEmployee = ref<Record<number, DtoUserStateResponse[]>>({})
+  const periodRevision = ref(0)
   const windowStart = ref('')
   const windowEnd = ref('')
   const loading = ref(false)
@@ -1430,6 +1463,7 @@ export const useTimesheetStore = defineStore('timesheet', () => {
 
   /** Merges a fresh [start, end] window response for one employee into the cache */
   function mergeWindowPeriods(id: number, list: DtoUserStateResponse[], start: string, end: string): void {
+    if (busy.value) return
     const existing = periodsByEmployee.value[id] ?? []
     // A fresh response for the [start, end] window is authoritative for periods overlapping it:
     // old overlapping periods (e.g. cleared via DELETE) are removed,
@@ -1470,6 +1504,7 @@ export const useTimesheetStore = defineStore('timesheet', () => {
    * previous cached data; returns false only when at least one row failed.
    */
   async function refreshPeriodsOneByOne(start: string, end: string): Promise<boolean> {
+    const revision = periodRevision.value
     const api = new UsersApi(apiConfig())
     let failed: unknown = null
     const results = await Promise.all(
@@ -1479,12 +1514,13 @@ export const useTimesheetStore = defineStore('timesheet', () => {
           .then((r) => ({ id: emp.id, list: r.data?.data ?? [] }))
           .catch((e: unknown) => {
             failed = failed ?? e
-            return { id: emp.id, list: [] }
+            return { id: emp.id, list: null }
           }),
       ),
     )
+    if (revision !== periodRevision.value) return false
     for (const { id, list } of results) {
-      if (id == null) continue
+      if (id == null || list == null) continue
       mergeWindowPeriods(id, list, start, end)
     }
     return failed == null
@@ -1502,6 +1538,8 @@ export const useTimesheetStore = defineStore('timesheet', () => {
    * per-employee path so the timesheet renders even against an older backend.
    */
   async function refreshPeriodsBatch(start: string, end: string): Promise<boolean> {
+    if (busy.value) return false
+    const revision = periodRevision.value
     const ids = timesheetRows.value
       .map((e) => e.id)
       .filter((id): id is number => id != null)
@@ -1513,6 +1551,7 @@ export const useTimesheetStore = defineStore('timesheet', () => {
       const responses = await Promise.all(
         chunks.map((chunk) => api.userDaysGet(chunk.join(','), start, end)),
       )
+      if (revision !== periodRevision.value) return false
       for (const resp of responses) {
         const entries = resp.data?.data
         // Shape guard: an older backend (or a proxy) answering the URL with a
@@ -1529,6 +1568,7 @@ export const useTimesheetStore = defineStore('timesheet', () => {
     } catch (e: unknown) {
       // The batch endpoint may be missing on an older backend — fall back to
       // the per-employee path; surface an error only when the fallback fails too.
+      if (revision !== periodRevision.value || busy.value) return false
       const ok = await refreshPeriodsOneByOne(start, end)
       if (!ok) setError(e)
       else console.warn('[timesheet] batch days unavailable, fell back to per-employee:', e instanceof Error ? e.message : e)
@@ -1836,97 +1876,85 @@ export const useTimesheetStore = defineStore('timesheet', () => {
     }
   }
 
-  /** Assigns a state to an employee's date range (PUT days, overwrites overlaps) */
-  async function assignRange(
+  /** Keep the timesheet and capacity curve in the same optimistic transaction. */
+  async function changeRange(
     employeeId: number,
-    stateId: number,
     startDate: string,
     endDate: string,
+    stateId: number | undefined,
+    mode: 'put' | 'delete',
   ): Promise<boolean> {
+    if (busy.value) return false
     busy.value = true
     error.value = null
-    try {
-      const body: DtoSetDaysRequest = {
-        state_id: stateId,
-        start_date: startDate,
-        end_date: endDate,
+    periodRevision.value++
+    const app = useAppStore()
+    const before = periodsByEmployee.value[employeeId] ?? []
+    const state = states.value.find((s) => s.id === stateId)
+    const after = applyRangeSplit(before, mode, startDate, endDate, mode === 'delete' ? stateId : undefined, mode === 'put' ? {
+      id: nextTempId(), state_id: stateId!, state_code: state?.code,
+      state_name: state?.name, is_available: state?.is_available,
+    } : undefined)
+    const resource = app.resourceByUser[employeeId]
+    const previousAbsences = resource?.id != null ? app.absenceByResource[resource.id] : undefined
+    const updateCalendar = (from: DtoUserStateResponse[], to: DtoUserStateResponse[]) => {
+      if (resource?.id != null) {
+        app.calendar = updatePeriodAvailability(app.calendar, resource.id, from, to, startDate, endDate)
+        app.absenceByResource[resource.id] = [
+          ...(previousAbsences ?? []).filter((p) => p.user_id !== employeeId),
+          ...to.filter((p) => p.is_available === false).map((p) => ({
+            start_date: p.start_date, end_date: p.end_date, state_id: p.state_id,
+            state_code: p.state_code, state_name: p.state_name, user_id: employeeId,
+            user_name: employees.value.find((e) => e.id === employeeId)?.name,
+          })),
+        ]
       }
-      return await runMutation({
+    }
+    periodsByEmployee.value[employeeId] = after
+    updateCalendar(before, after)
+    let ok = false
+    try {
+      ok = await runMutation({
         entity: 'period',
-        call: () => new UsersApi(apiConfig()).userIdDaysPut(employeeId, body),
-        apply: async () => {
-          await refreshPeriods(windowStart.value, windowEnd.value)
-        },
-        optimistic: () => {
-          const existing = periodsByEmployee.value[employeeId] ?? []
-          // State fields are needed for the cell color and abbreviation offline
-          const st = states.value.find((s) => s.id === stateId)
-          // Splitting like the backend: subtract [startDate, endDate]; the tails
-          // of overlapping ranges are kept, the old range does not disappear.
-          periodsByEmployee.value[employeeId] = applyRangeSplit(existing, 'put', startDate, endDate, undefined, {
-            id: nextTempId(),
-            state_id: stateId,
-            state_code: st?.code,
-            state_name: st?.name,
-            is_available: st?.is_available,
-          })
-        },
-        onError: (m) => {
-          error.value = m
+        call: () => mode === 'put'
+          ? new UsersApi(apiConfig()).userIdDaysPut(employeeId, { state_id: stateId, start_date: startDate, end_date: endDate })
+          : new UsersApi(apiConfig()).userIdDaysDelete(employeeId, startDate, endDate, stateId),
+        apply: () => {},
+        optimistic: () => {},
+        onError: (message) => {
+          error.value = message
+          periodsByEmployee.value[employeeId] = before
+          updateCalendar(after, before)
+          if (resource?.id != null) {
+            if (previousAbsences) app.absenceByResource[resource.id] = previousAbsences
+            else delete app.absenceByResource[resource.id]
+          }
         },
       })
     } finally {
       busy.value = false
+      periodRevision.value++
     }
+    if (ok && !isOffline.value) {
+      await Promise.all([refreshPeriods(windowStart.value || startDate, windowEnd.value || endDate), app.refreshCalendar()])
+    }
+    return ok
   }
 
-  /** Clears states on an employee's date range (DELETE days; without state_id — all) */
-  async function clearRange(
-    employeeId: number,
-    startDate: string,
-    endDate: string,
-    stateId?: number,
-  ): Promise<boolean> {
-    busy.value = true
-    error.value = null
-    try {
-      return await runMutation({
-        entity: 'period',
-        call: () =>
-          new UsersApi(apiConfig()).userIdDaysDelete(
-            employeeId,
-            startDate,
-            endDate,
-            stateId,
-          ),
-        apply: async () => {
-          await refreshPeriods(windowStart.value, windowEnd.value)
-        },
-        optimistic: () => {
-          const existing = periodsByEmployee.value[employeeId] ?? []
-          // Like the backend DeleteStateRange: subtract the range from overlapping
-          // intervals (tails are kept); with stateId — only its states.
-          periodsByEmployee.value[employeeId] = applyRangeSplit(
-            existing,
-            'delete',
-            startDate,
-            endDate,
-            stateId,
-          )
-        },
-        onError: (m) => {
-          error.value = m
-        },
-      })
-    } finally {
-      busy.value = false
-    }
+  /** PUT replaces overlapping states while retaining their outside tails. */
+  async function assignRange(employeeId: number, stateId: number, startDate: string, endDate: string): Promise<boolean> {
+    return changeRange(employeeId, startDate, endDate, stateId, 'put')
+  }
+
+  async function clearRange(employeeId: number, startDate: string, endDate: string, stateId?: number): Promise<boolean> {
+    return changeRange(employeeId, startDate, endDate, stateId, 'delete')
   }
 
   /** Clears the user-scoped payloads on logout/account switch. The GET cache
    *  itself is per-user keyed (offline/cache.ts), so no cache wipe is needed —
    *  only the in-memory state must not leak across accounts. */
   function resetUserData(): void {
+    periodRevision.value++
     employees.value = []
     employeesTotal.value = 0
     employeesLoadedFor.value = null
@@ -1944,6 +1972,7 @@ export const useTimesheetStore = defineStore('timesheet', () => {
     employeesHasMore,
     states,
     periodsByEmployee,
+    periodRevision,
     windowStart,
     windowEnd,
     loading,
@@ -2045,22 +2074,25 @@ export const usePlanningStore = defineStore('planning', () => {
 
   async function refreshProjectPlanning(silent = false): Promise<void> {
     await runLoad(silent, async () => {
+      const stamp = readStamp()
       const resp = await new PlanningApi(apiConfig()).planningProjectsGet()
-      projectPlanning.value = resp.data?.data ?? null
+      if (mayApplyRead(stamp) && pendingRefs.value.size === 0) projectPlanning.value = resp.data?.data ?? null
     })
   }
 
   async function refreshProcessPlanning(silent = false): Promise<void> {
     await runLoad(silent, async () => {
+      const stamp = readStamp()
       const resp = await new PlanningApi(apiConfig()).planningProcessesGet()
-      processPlanning.value = resp.data?.data ?? null
+      if (mayApplyRead(stamp) && pendingRefs.value.size === 0) processPlanning.value = resp.data?.data ?? null
     })
   }
 
   async function refreshTaskPlanning(silent = false): Promise<void> {
     await runLoad(silent, async () => {
+      const stamp = readStamp()
       const resp = await new PlanningApi(apiConfig()).planningTasksGet()
-      taskPlanning.value = resp.data?.data ?? null
+      if (mayApplyRead(stamp) && pendingRefs.value.size === 0) taskPlanning.value = resp.data?.data ?? null
     })
   }
 
@@ -2131,6 +2163,8 @@ export const usePlanningStore = defineStore('planning', () => {
 
   /** Bar date shift: local edit first (see patchRow), then the PUT. */
   async function updateTaskDates(id: number, start_date: string, end_date: string): Promise<boolean> {
+    const row = findTaskRow(id)
+    const previous = { start_date: row?.start_date, end_date: row?.end_date }
     const applyLocally = () => patchRow(findTaskRow(id), { start_date, end_date })
     applyLocally()
     return runMutation({
@@ -2146,7 +2180,8 @@ export const usePlanningStore = defineStore('planning', () => {
       optimistic: applyLocally,
       onError: (m) => {
         error.value = m
-        // A rejected span must not stick in the diagram: the server dates win.
+        const current = findTaskRow(id)
+        if (current?.start_date === start_date && current?.end_date === end_date) patchRow(current, previous)
         void refreshTaskPlanning(true)
       },
     })
@@ -2192,9 +2227,13 @@ export const usePlanningStore = defineStore('planning', () => {
    *  aggregate ONCE per burst (offline — each PUT goes to the outbox). */
   async function persistDatePatches(changes: Map<number, TaskDatePatch>): Promise<boolean> {
     if (changes.size === 0) return true
+    const previous = new Map<number, { start_date?: string; end_date?: string }>()
     for (const [tid, patch] of changes) {
       const t = findTaskRow(tid)
-      if (t) Object.assign(t, patch)
+      if (t) {
+        previous.set(tid, { start_date: t.start_date, end_date: t.end_date })
+        Object.assign(t, patch)
+      }
     }
     const edges = dependencyEdgesOf([...changes.keys()][0])
     const order = persistenceOrder([...changes.keys()], edges)
@@ -2224,6 +2263,15 @@ export const usePlanningStore = defineStore('planning', () => {
         },
       })
       if (!okOne) {
+        // Keep the accepted prefix; rejected and unsubmitted dates were never confirmed.
+        for (const pendingId of order.slice(order.indexOf(tid))) {
+          const row = findTaskRow(pendingId)
+          const proposed = changes.get(pendingId)!
+          if (row?.start_date === proposed.start_date && row?.end_date === proposed.end_date) {
+            patchRow(row, previous.get(pendingId) ?? {})
+          }
+        }
+        void refreshTaskPlanning(true)
         ok = false
         break
       }
@@ -2442,7 +2490,15 @@ export const usePlanningStore = defineStore('planning', () => {
     id: number,
     patch: { title?: string; owner_id?: number; responsible_id?: number; color?: string; start_date?: string; end_date?: string },
   ): Promise<boolean> {
-    const applyLocally = () => patchRow(findProcessRow(id), patch)
+    const previousOwner = taskPlanning.value?.processes?.find((p) => p.id === id)?.owner_id ?? findProcessRow(id)?.owner_id
+    const applyLocally = () => {
+      patchRow(findProcessRow(id), patch)
+      const process = taskPlanning.value?.processes?.find((p) => p.id === id)
+      if (process && patch.owner_id != null && patch.owner_id !== previousOwner) {
+        process.owner_id = patch.owner_id
+        for (const task of process.tasks ?? []) task.resources = []
+      }
+    }
     return runMutation({
       entity: 'process',
       call: () => new ProcessesApi(apiConfig()).processIdPut(id, patch),
@@ -2949,46 +3005,41 @@ export const usePlanningStore = defineStore('planning', () => {
     const rbac = useRbacStore()
     const permsReady = rbac.permsLoaded || rbac.myPermissions.length > 0
     const assignAll = permsReady ? rbac.perm('assignment', 'create') === 'all' : auth.user?.preset === 'admin'
-    const owners = assignAll ? [] : taskOwnerIds(taskId)
-    if (owners.length > 0) {
-      const res = useAppStore().resources.find((r: DtoResourceResponse) => r.id === resourceId)
-      if (res?.owner_id == null || !owners.includes(res.owner_id)) {
-        error.value = t('offline.assignment.foreignResource')
-        return false
-      }
+    const process = findProcessOfTask(taskId)
+    const resource = useAppStore().resources.find((r) => r.id === resourceId)
+    if (process?.owner_id != null && resource?.owner_id != null && process.owner_id !== resource.owner_id) {
+      error.value = t('offline.assignment.foreignResource')
+      return false
+    }
+    if (!assignAll && resource?.owner_id != null && (resource.owner_id !== auth.user?.id || findTaskRow(taskId)?.owner_id !== auth.user?.id)) {
+      error.value = t('offline.assignment.foreignResource')
+      return false
     }
     const tempId = nextTempId()
+    const add = () => {
+      const task = findTaskRow(taskId)
+      if (!task) return
+      task.resources ??= []
+      if (task.resources.some((r) => r.id === resourceId)) return
+      const meta = useAppStore().resources.find((r) => r.id === resourceId)
+      task.resources.push({ id: resourceId, assignment_id: tempId, quantity, code: meta?.code, title: meta?.title, color: meta?.color })
+    }
+    add()
     return runMutation({
       entity: 'assignment',
       tempId,
-      call: () =>
-        new AssignmentsApi(apiConfig()).assignmentPost({
-          task_id: taskId,
-          resource_id: resourceId,
-          quantity,
-        }),
-      apply: async () => {
+      call: () => new AssignmentsApi(apiConfig()).assignmentPost({ task_id: taskId, resource_id: resourceId, quantity }),
+      apply: async (dto) => {
+        const assignment = dto as DtoAssignmentResponse | null
+        const row = findTaskRow(taskId)?.resources?.find((r) => r.assignment_id === tempId)
+        if (row && assignment?.id != null) row.assignment_id = assignment.id
         await refreshTaskPlanning(true)
       },
-      optimistic: () => {
-        const t = findTaskRow(taskId)
-        if (!t) return
-        const resources = t.resources ?? []
-        if (!resources.some((r: DtoResource) => r.id === resourceId)) {
-          // Code/title/color fields are needed for the resource badge offline (from the reference)
-          const meta = useAppStore().resources.find((r: DtoResourceResponse) => r.id === resourceId)
-          resources.push({
-            id: resourceId,
-            assignment_id: tempId,
-            quantity,
-            code: meta?.code,
-            title: meta?.title,
-            color: meta?.color,
-          })
-        }
-      },
+      optimistic: add,
       onError: (m) => {
         error.value = m
+        const task = findTaskRow(taskId)
+        if (task) task.resources = (task.resources ?? []).filter((r) => r.assignment_id !== tempId)
       },
     })
   }
@@ -3017,18 +3068,26 @@ export const usePlanningStore = defineStore('planning', () => {
         return false
       }
     }
+    const task = findTaskRow(taskId)
+    const removed = task?.resources?.find((r) => r.id === resourceId)
+    const remove = () => {
+      const row = findTaskRow(taskId)
+      if (row) row.resources = (row.resources ?? []).filter((r) => r.id !== resourceId)
+    }
+    remove()
     return runMutation({
       entity: 'assignment',
       call: () => new AssignmentsApi(apiConfig()).assignmentIdDelete(assignmentId!),
       apply: async () => {
         await refreshTaskPlanning(true)
       },
-      optimistic: () => {
-        const t = findTaskRow(taskId)
-        if (t) t.resources = (t.resources ?? []).filter((r: DtoResource) => r.id !== resourceId)
-      },
+      optimistic: remove,
       onError: (m) => {
         error.value = m
+        const row = findTaskRow(taskId)
+        if (row && removed && !row.resources?.some((r) => r.id === resourceId)) {
+          row.resources = [...(row.resources ?? []), removed]
+        }
       },
     })
   }
@@ -3371,18 +3430,18 @@ export const useRbacStore = defineStore('rbac', () => {
    * moves need the tree data — the caller supplies the probe results.
    * Expressions come from /permissions/me (the Casbin snapshot).
    */
-  function scopeSatisfied(scope: string, resource: string, uid: number, o: { owner?: number | null; projectOwner?: number | null; processOwner?: number | null }): boolean {
-    return evalScope(scope, resource, o, uid)
+  function scopeSatisfied(scope: string, resource: string, uid: number, o: { owner?: number | null; projectOwner?: number | null; processOwner?: number | null }, probe?: ScopeProbe): boolean {
+    return evalScope(scope, resource, o, uid, probe)
   }
 
   /** Whether the current role has the right to the action at all. */
   function can(resource: string, action: string): boolean {
-    return myPermissions.value.some((p) => p.resource === resource && p.action === action)
+    return myPermissions.value.some((p) => p.resource === resource && p.action === action && p.scope !== 'none' && p.scope !== '')
   }
 
   /** The right's scope ('' — no right). */
   function perm(resource: string, action: string): string {
-    return myPermissions.value.find((p) => p.resource === resource && p.action === action)?.scope ?? ''
+    return parentScope(resource, myPermissions.value.find((p) => p.resource === resource && p.action === action)?.scope ?? '')
   }
 
   /** Right + object ownership by scope (owners — from the card data). */
@@ -3390,11 +3449,12 @@ export const useRbacStore = defineStore('rbac', () => {
     resource: string,
     action: string,
     owners: { owner?: number | null; projectOwner?: number | null; processOwner?: number | null },
+    probe?: ScopeProbe,
   ): boolean {
     const scope = perm(resource, action)
     if (!scope) return false
     const auth = useAuthStore()
-    return scopeSatisfied(scope, resource, auth.user?.id ?? 0, owners)
+    return scopeSatisfied(scope, resource, auth.user?.id ?? 0, owners, probe)
   }
 
   /**
@@ -3575,23 +3635,27 @@ export const useRbacStore = defineStore('rbac', () => {
     }
   }
 
+  let userPermissionRead = 0
+  let userPermissionReadId: number | null = null
+
   /** Loads the per-user permissions view (assigned preset + overrides + effective). */
   async function loadUserPermissions(id: number): Promise<boolean> {
+    const read = ++userPermissionRead
+    userPermissionReadId = id
     userPermissionsLoading.value = true
     userPermissionsError.value = null
-    // Reset the snapshot while loading: the editor must never render the
-    // permissions of the previously opened user (e.g. the admin stub shown
-    // for a non-admin right after opening the admin).
-    userPermissions.value = null
+    // Keep same-user refreshes usable while concealing another user's snapshot.
+    if (userPermissions.value?.user_id !== id) userPermissions.value = null
     try {
       const resp = await new RBACApi(apiConfig()).rbacUsersIdPermissionsGet(id)
+      if (read !== userPermissionRead) return false
       userPermissions.value = resp.data?.data ?? null
       return true
     } catch (e: unknown) {
-      userPermissionsError.value = apiErrorMessage(e as { message?: string; code?: unknown })
+      if (read === userPermissionRead) userPermissionsError.value = apiErrorMessage(e as { message?: string; code?: unknown })
       return false
     } finally {
-      userPermissionsLoading.value = false
+      if (read === userPermissionRead) userPermissionsLoading.value = false
     }
   }
 
@@ -3600,9 +3664,19 @@ export const useRbacStore = defineStore('rbac', () => {
     try {
       const body: DtoUserPermissionsInput = { overrides }
       await new RBACApi(apiConfig()).rbacUsersIdPermissionsPut(id, body)
+      if (userPermissionReadId === id) {
+        userPermissionRead++
+        userPermissionsLoading.value = false
+      }
+      if (userPermissions.value?.user_id === id) {
+        userPermissions.value = { ...userPermissions.value, overrides: (overrides ?? []).map((rule) => ({ ...rule })) }
+      }
+      if (userPermissionReadId === id || userPermissions.value?.user_id === id) userPermissionsError.value = null
       return true
     } catch (e: unknown) {
-      userPermissionsError.value = apiErrorMessage(e as { message?: string; code?: unknown })
+      if (userPermissionReadId === id || userPermissions.value?.user_id === id) {
+        userPermissionsError.value = apiErrorMessage(e as { message?: string; code?: unknown })
+      }
       return false
     }
   }

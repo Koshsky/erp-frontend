@@ -26,8 +26,8 @@ export function useRoleAccess() {
   /** Create project: project.create */
   const canCreateProject = computed(() => rbac.can('project', 'create'))
 
-  /** Reorder project priorities: project.update */
-  const canReorderProjects = computed(() => rbac.can('project', 'update'))
+  /** Reorder project priorities: project.prioritize */
+  const canReorderProjects = computed(() => rbac.can('project', 'prioritize'))
 
   /** Parent project owner of a process (process.update/delete — parent scope) */
   function processProjectOwner(processId: number): OwnerId {
@@ -51,6 +51,29 @@ export function useRoleAccess() {
     return planning.taskPlanning?.processes?.find((p: DtoDetailedProcess) => p.id === processId)?.owner_id ?? null
   }
 
+  function taskProjectOwner(processId: OwnerId): OwnerId {
+    return planning.taskPlanning?.processes?.find((p) => p.id === processId)?.project_owner_id ?? null
+  }
+
+  function processPeerProbe(projectId: OwnerId) {
+    const project = planning.processPlanning?.projects?.find((p) => p.id === projectId)
+    return { sibling: (project?.processes ?? []).some((p) => p.owner_id === userId.value && userId.value != null) }
+  }
+
+  function taskPeerProbe(processId: OwnerId) {
+    const processes = planning.taskPlanning?.processes ?? []
+    const process = processes.find((p) => p.id === processId)
+    const hasEmployeeTask = (p: DtoDetailedProcess) => (p.tasks ?? []).some((task) =>
+      task.owner_id === userId.value || (task.subtasks ?? []).some((subtask) => subtask.owner_id === userId.value),
+    )
+    return {
+      sibling: userId.value != null && !!process && hasEmployeeTask(process),
+      projectSibling: userId.value != null && process?.project_id != null && processes.some((p) =>
+        p.project_id === process.project_id && hasEmployeeTask(p),
+      ),
+    }
+  }
+
   /** Edit project: project.update permission + ownership (own) */
   function canManageProject(projectId: number): boolean {
     const project = planning.projectPlanning?.projects?.find((p: DtoProject) => p.id === projectId)
@@ -68,12 +91,17 @@ export function useRoleAccess() {
   /** Create process: process.create */
   const canCreateProcess = computed(() => rbac.can('process', 'create'))
 
+  function canCreateProcessInProject(projectId: OwnerId): boolean {
+    const project = planning.processPlanning?.projects?.find((p: DtoDetailedProject) => p.id === projectId)
+    return rbac.canOwn('process', 'create', { projectOwner: project?.owner_id ?? null, processOwner: project ? userId.value : null }, processPeerProbe(projectId))
+  }
+
   /** Edit process: process.update + ownership (self = process owner, up1 = project owner) */
   function canManageProcess(processId: number): boolean {
     return rbac.canOwn('process', 'update', {
       processOwner: processOwnerFromPlanning(processId),
       projectOwner: processProjectOwner(processId),
-    })
+    }, processPeerProbe(planning.processPlanning?.projects?.find((p) => (p.processes ?? []).some((pr) => pr.id === processId))?.id))
   }
 
   /** Delete process: process.delete + ownership (self = process owner, up1 = project owner) */
@@ -81,7 +109,7 @@ export function useRoleAccess() {
     return rbac.canOwn('process', 'delete', {
       processOwner: processOwnerFromPlanning(processId),
       projectOwner: processProjectOwner(processId),
-    })
+    }, processPeerProbe(planning.processPlanning?.projects?.find((p) => (p.processes ?? []).some((pr) => pr.id === processId))?.id))
   }
 
   /** Reorder processes of a project: process.update + parent */
@@ -93,37 +121,43 @@ export function useRoleAccess() {
 
   /** Create a task in a process: task.create + parent */
   function canCreateTask(processId: OwnerId): boolean {
-    return rbac.canOwn('task', 'create', { processOwner: processOwner(processId) })
+    return rbac.canOwn('task', 'create', { processOwner: processOwner(processId), projectOwner: taskProjectOwner(processId) }, taskPeerProbe(processId))
+  }
+
+  function taskOwner(processId: OwnerId, taskId?: number): OwnerId {
+    const tasks = planning.taskPlanning?.processes?.find((p) => p.id === processId)?.tasks ?? []
+    return tasks.flatMap((task) => [task, ...(task.subtasks ?? [])]).find((task) => task.id === taskId)?.owner_id ?? null
   }
 
   /** Edit task: task.update + parent */
-  function canManageTask(processId: OwnerId): boolean {
-    return rbac.canOwn('task', 'update', { processOwner: processOwner(processId) })
+  function canManageTask(processId: OwnerId, taskId?: number): boolean {
+    return rbac.canOwn('task', 'update', { owner: taskOwner(processId, taskId), processOwner: processOwner(processId), projectOwner: taskProjectOwner(processId) }, taskPeerProbe(processId))
   }
 
   /** Delete task: task.delete + parent */
-  function canDeleteTask(processId: OwnerId): boolean {
-    return rbac.canOwn('task', 'delete', { processOwner: processOwner(processId) })
+  function canDeleteTask(processId: OwnerId, taskId?: number): boolean {
+    return rbac.canOwn('task', 'delete', { owner: taskOwner(processId, taskId), processOwner: processOwner(processId), projectOwner: taskProjectOwner(processId) }, taskPeerProbe(processId))
   }
 
-  /** Assign/remove resources on a task: assignment.create + parent (owner_match, admin exempt) */
-  function canAssignTaskResources(processId: OwnerId): boolean {
-    return rbac.canOwn('assignment', 'create', { processOwner: processOwner(processId) })
+  function canAssignTaskResources(processId: OwnerId, taskId?: number, action: 'create' | 'delete' = 'create'): boolean {
+    const scope = rbac.perm('assignment', action)
+    if (scope === 'up1' && (taskOwner(processId, taskId) !== userId.value || processOwner(processId) !== userId.value)) return false
+    return rbac.canOwn('assignment', action, { processOwner: processOwner(processId), projectOwner: taskProjectOwner(processId) })
   }
 
   /** Create a milestone in a process: milestone.create + parent */
   function canCreateMilestone(processId: OwnerId): boolean {
-    return rbac.canOwn('milestone', 'create', { processOwner: processOwner(processId) })
+    return rbac.canOwn('milestone', 'create', { processOwner: processOwner(processId), projectOwner: taskProjectOwner(processId) })
   }
 
   /** Edit milestone: milestone.update + parent */
   function canManageMilestone(processId: OwnerId): boolean {
-    return rbac.canOwn('milestone', 'update', { processOwner: processOwner(processId) })
+    return rbac.canOwn('milestone', 'update', { processOwner: processOwner(processId), projectOwner: taskProjectOwner(processId) })
   }
 
   /** Delete milestone: milestone.delete + parent */
   function canDeleteMilestone(processId: OwnerId): boolean {
-    return rbac.canOwn('milestone', 'delete', { processOwner: processOwner(processId) })
+    return rbac.canOwn('milestone', 'delete', { processOwner: processOwner(processId), projectOwner: taskProjectOwner(processId) })
   }
 
   /** View tasks (diagram and comments): task.view; the backend allows adding
@@ -176,6 +210,7 @@ export function useRoleAccess() {
     canManageProject,
     canDeleteProject,
     canCreateProcess,
+    canCreateProcessInProject,
     canManageProcess,
     canDeleteProcess,
     canReorderProcess,

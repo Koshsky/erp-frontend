@@ -66,16 +66,7 @@ const processGroups = computed<PdfGanttGroup[]>(() =>
 // Right-click menu on the table header: switching the "Day" / "Decade" scale
 const { open: openUnitMenu, close: closeUnitMenu, select: selectUnit, bind: unitMenuBind } = useUnitMenu(unit)
 
-// dp (project director) — read-only; rp manages the processes of their projects,
-// vp/worker — no rights (the process list for them is already filtered by the backend).
-const { canCreateProcess, canManageProcess, canDeleteProcess, role, userId } = useRoleAccess()
-
-/** Drag/resize/reorder are enabled when the user can manage at least one visible process */
-const anyManageableProcess = computed(() =>
-  (processPlanning.value?.projects ?? []).some((p: DtoDetailedProject) =>
-    (p.processes ?? []).some((pr: DtoProcess) => canManageProcess(pr.id ?? 0)),
-  ),
-)
+const { canCreateProcessInProject, canManageProcess, canDeleteProcess, canReorderProcess, role, userId } = useRoleAccess()
 
 const { findProcess } = useFindPlanningItem()
 
@@ -116,7 +107,7 @@ const { confirm: confirmDialog, ask, proceed, cancel } = useConfirm()
 
 const menuItems = computed<ContextMenuItem[]>(() => {
   if (menu.value?.processId == null) {
-    return canCreateProcess.value ? [{ id: 'create-process', label: t('plannerViews.processes.menu.create') }] : []
+    return canCreateProcessInProject(menu.value?.projectId) ? [{ id: 'create-process', label: t('plannerViews.processes.menu.create') }] : []
   }
   const processId = menu.value.processId
   const items: ContextMenuItem[] = []
@@ -200,12 +191,14 @@ const { open: openEdit, close: closeEdit, submit: submitEdit, bind: editBind } =
     return { ok, error: ok ? null : store.error }
   },
   () => t('plannerViews.processes.edit'),
+  undefined,
+  (state) => canManageProcess(state.id),
 )
 
 function onContextMenu(p: { clientX: number; clientY: number; date: string | null; rowIndex: number; projectId?: number; processId?: number }) {
   // Empty group area: creating a process requires the create right, a parent project and a known date
   if (p.processId == null) {
-    if (!canCreateProcess.value) return
+    if (!canCreateProcessInProject(p.projectId)) return
     if (p.projectId == null || p.date == null) return
   } else if (!canManageProcess(p.processId) && !canDeleteProcess(p.processId)) {
     return
@@ -239,7 +232,7 @@ function openProcessEdit(id: number) {
 }
 
 async function handleSelect(id: string) {
-  if (!menu.value) return
+  if (!menu.value || !menuItems.value.some((item) => item.id === id)) return
   const { date, rowIndex, projectId, processId } = menu.value
   if (id === 'create-process') {
     if (projectId == null || date == null) return
@@ -306,8 +299,8 @@ onMounted(() => {
       :users="app.users"
       :origin="origin"
       :unit="unit"
-      :can-manage="anyManageableProcess"
-      :reorderable="anyManageableProcess"
+      :can-manage="canManageProcess"
+      :reorderable="(id) => canReorderProcess(processPlanning?.projects?.find((p) => p.id === id)?.owner_id)"
       :focus-date="focusDate"
       :focus-group-id="focusGroupId"
       @change="(p) => store.updateProcessDates(p.id, p.start_date, p.end_date)"

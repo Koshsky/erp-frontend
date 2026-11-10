@@ -17,15 +17,6 @@ export const isOffline: Ref<boolean> = ref(
   typeof navigator !== 'undefined' && navigator.onLine === false,
 )
 
-if (typeof window !== 'undefined') {
-  window.addEventListener('online', () => {
-    isOffline.value = false
-  })
-  window.addEventListener('offline', () => {
-    isOffline.value = true
-  })
-}
-
 const PROBE_TIMEOUT_MS = 4000
 
 /** Liveness probe URL: the real backend endpoint /api/v1/health. */

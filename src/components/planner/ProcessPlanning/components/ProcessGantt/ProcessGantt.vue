@@ -29,7 +29,7 @@ function fmtDate(d: string | Date | number | null | undefined): string {
 }
 
 function onBarChange(id: number, d: { start_date: string; end_date: string }) {
-  emit('change', { id, ...d })
+  if (typeof props.canManage === 'function' ? props.canManage(id) : props.canManage) emit('change', { id, ...d })
 }
 
 function onBarContextMenu(p: { clientX: number; clientY: number }, id: number) {
@@ -48,7 +48,7 @@ function onBarContextMenu(p: { clientX: number; clientY: number }, id: number) {
     :minRows="3"
     :reorderable="reorderable"
     mergedLabel
-    @reorder="(p) => emit('reorder', p)"
+    @reorder="(p) => reorderable && emit('reorder', p)"
   >
     <template #label>
       <div v-if="projectCode" class="pg-code">{{ projectCode }}</div>
@@ -71,7 +71,7 @@ function onBarContextMenu(p: { clientX: number; clientY: number }, id: number) {
         :color="item.color"
         :groupStartDate="groupStartDate"
         :groupEndDate="groupEndDate"
-        :draggable="canManage"
+        :draggable="typeof canManage === 'function' ? canManage(item.id) : canManage"
         :start-row-reorder="reorderable ? startReorder : null"
         @change="(d) => onBarChange(item.id, d)"
         @contextmenu="(p) => onBarContextMenu(p, item.id)"

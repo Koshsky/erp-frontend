@@ -21,15 +21,24 @@
  */
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
-import { useAppStore, usePlanningStore } from './index'
+import { pendingRefs } from '@/offline/outbox'
+import { useAppStore, usePlanningStore, useTimesheetStore, useAuthStore } from './index'
 
 /** Mutable per-test method implementations for the mocked API classes. */
 const api = vi.hoisted(() => ({
+  resourcesPost: vi.fn(),
+  resourcesIdPut: vi.fn(),
   processIdPut: vi.fn(),
   projectIdPut: vi.fn(),
   projectGet: vi.fn(),
   milestoneIdPut: vi.fn(),
   taskIdPut: vi.fn(),
+  userIdDaysPut: vi.fn(),
+  userIdDaysDelete: vi.fn(),
+  userDaysGet: vi.fn(),
+  timesheetCalendarGet: vi.fn(),
+  assignmentPost: vi.fn(),
+  assignmentIdDelete: vi.fn(),
   planningProcessesGet: vi.fn(),
   planningProjectsGet: vi.fn(),
   planningTasksGet: vi.fn(),
@@ -82,11 +91,18 @@ vi.mock('@/api', () => {
     MilestonesApi,
     TasksApi,
     PlanningApi,
-    TimesheetResourcesApi: class {},
-    TimesheetCalendarApi: class {},
+    TimesheetResourcesApi: class { resourcesPost(...args: unknown[]) { return api.resourcesPost(...args) } resourcesIdPut(...args: unknown[]) { return api.resourcesIdPut(...args) } },
+    TimesheetCalendarApi: class { timesheetCalendarGet(...args: unknown[]) { return api.timesheetCalendarGet(...args) } },
     TimesheetStatesApi: class {},
-    UsersApi: class {},
-    AssignmentsApi: class {},
+    UsersApi: class {
+      userIdDaysPut(...args: unknown[]) { return api.userIdDaysPut(...args) }
+      userIdDaysDelete(...args: unknown[]) { return api.userIdDaysDelete(...args) }
+      userDaysGet(...args: unknown[]) { return api.userDaysGet(...args) }
+    },
+    AssignmentsApi: class {
+      assignmentPost(...args: unknown[]) { return api.assignmentPost(...args) }
+      assignmentIdDelete(...args: unknown[]) { return api.assignmentIdDelete(...args) }
+    },
     AutoCreateApi: class {},
     RBACApi: class {},
     PermissionsApi: class {},
@@ -399,4 +415,324 @@ describe('one re-read per aggregate per mutation (no duplicate GET)', () => {
 
     expect(api.planningTasksGet).toHaveBeenCalledTimes(1)
   })
+})
+
+
+describe('task drag and resize persistence', () => {
+  const original = { start_date: '2026-11-09', end_date: '2026-11-22' }
+  beforeEach(() => {
+    planning.taskPlanning = { processes: [{ id: 1, tasks: [{ id: 7, ...original }] }] }
+    api.planningTasksGet.mockRejectedValue(new Error('reload unavailable'))
+  })
+
+  it.each([
+    ['move right', '2026-11-16', '2026-11-29'],
+    ['move left', '2026-11-02', '2026-11-15'],
+    ['resize start', '2026-11-16', '2026-11-22'],
+    ['resize end', '2026-11-09', '2026-11-29'],
+  ])('%s keeps pending dates and applies the accepted server span', async (_, start_date, end_date) => {
+    let accept!: (value: unknown) => void
+    api.taskIdPut.mockImplementation(() => new Promise((resolve) => { accept = resolve }))
+    const pending = planning.moveTask(7, start_date, end_date)
+    const row = planning.taskPlanning!.processes![0].tasks![0]
+    expect(row).toMatchObject({ start_date, end_date })
+    expect(api.taskIdPut).toHaveBeenCalledExactlyOnceWith(7, { start_date, end_date })
+    accept(payload({ ...original }))
+    await expect(pending).resolves.toBe(true)
+    expect(row).toMatchObject(original)
+  })
+
+  it.each(['moveTask', 'updateTaskDates'] as const)('%s restores confirmed dates even if reconciliation fails', async (action) => {
+    api.taskIdPut.mockRejectedValue(new Error('409: rejected'))
+    await expect(planning[action](7, '2026-11-16', '2026-11-29')).resolves.toBe(false)
+    await tick()
+    expect(planning.taskPlanning!.processes![0].tasks![0]).toMatchObject(original)
+    expect(planning.error).toBeTruthy()
+  })
+
+  it('preserves accepted predecessors and restores rejected and unsubmitted successors', async () => {
+    planning.taskPlanning = { processes: [{ id: 1, tasks: [
+      { id: 7, ...original },
+      { id: 8, start_date: '2026-11-23', end_date: '2026-11-29' },
+      { id: 9, start_date: '2026-11-30', end_date: '2026-12-06' },
+    ], dependencies: [
+      { id: 1, task_id: 8, depends_on_task_id: 7, type: 'fs' },
+      { id: 2, task_id: 9, depends_on_task_id: 8, type: 'fs' },
+    ] }] }
+    api.taskIdPut.mockResolvedValueOnce(payload({ start_date: '2026-11-23', end_date: '2026-12-06' }))
+      .mockRejectedValueOnce(new Error('409: successor rejected'))
+    await expect(planning.moveTask(7, '2026-11-23', '2026-12-06')).resolves.toBe(false)
+    expect(api.taskIdPut).toHaveBeenCalledTimes(2)
+    expect(planning.taskPlanning!.processes![0].tasks).toMatchObject([
+      { id: 7, start_date: '2026-11-23', end_date: '2026-12-06' },
+      { id: 8, start_date: '2026-11-23', end_date: '2026-11-29' },
+      { id: 9, start_date: '2026-11-30', end_date: '2026-12-06' },
+    ])
+  })
+})
+
+
+describe('resource assignment persistence', () => {
+  beforeEach(() => {
+    planning.taskPlanning = { processes: [{ id: 1, tasks: [{ id: 7, resources: [] }] }] }
+  })
+
+  it('adds the confirmed assignment from the planning response', async () => {
+    let accept!: (value: unknown) => void
+    api.assignmentPost.mockImplementation(() => new Promise((resolve) => { accept = resolve }))
+    const resources = [{ id: 3, assignment_id: 41, quantity: 4 }]
+    api.planningTasksGet.mockResolvedValue(payload({ processes: [{ id: 1, tasks: [{ id: 7, resources }] }] }))
+    const pending = planning.assignResource(7, 3, 4)
+    expect(api.assignmentPost).toHaveBeenCalledExactlyOnceWith({ task_id: 7, resource_id: 3, quantity: 4 })
+    expect(planning.taskPlanning!.processes![0].tasks![0].resources).toMatchObject([{ id: 3, quantity: 4 }])
+    accept(payload({ id: 41 }))
+    await expect(pending).resolves.toBe(true)
+    expect(planning.taskPlanning!.processes![0].tasks![0].resources).toEqual(resources)
+  })
+
+  it('removes only the confirmed assignment using its assignment id', async () => {
+    planning.taskPlanning!.processes![0].tasks![0].resources = [{ id: 3, assignment_id: 41, quantity: 4 }, { id: 4, assignment_id: 42, quantity: 5 }]
+    api.assignmentIdDelete.mockResolvedValue(payload(null))
+    api.planningTasksGet.mockResolvedValue(payload({ processes: [{ id: 1, tasks: [{ id: 7, resources: [{ id: 4, assignment_id: 42, quantity: 5 }] }] }] }))
+    await expect(planning.removeResource(7, 3)).resolves.toBe(true)
+    expect(api.assignmentIdDelete).toHaveBeenCalledExactlyOnceWith(41)
+    expect(planning.taskPlanning!.processes![0].tasks![0].resources).toEqual([{ id: 4, assignment_id: 42, quantity: 5 }])
+  })
+
+  it('keeps resource loads unchanged on rejected assignment and removal', async () => {
+    api.assignmentPost.mockRejectedValue(new Error('403: forbidden'))
+    await expect(planning.assignResource(7, 3, 4)).resolves.toBe(false)
+    expect(planning.taskPlanning!.processes![0].tasks![0].resources).toEqual([])
+    const assigned = [{ id: 3, assignment_id: 41, quantity: 4 }]
+    planning.taskPlanning!.processes![0].tasks![0].resources = assigned
+    api.assignmentIdDelete.mockRejectedValue(new Error('409: conflict'))
+    await expect(planning.removeResource(7, 3)).resolves.toBe(false)
+    expect(planning.taskPlanning!.processes![0].tasks![0].resources).toEqual(assigned)
+  })
+})
+
+
+describe('task mutation response status', () => {
+  beforeEach(() => {
+    planning.taskPlanning = { processes: [{ id: 1, tasks: [{ id: 7, start_date: '2026-11-09', end_date: '2026-11-22' }] }] }
+    api.planningTasksGet.mockRejectedValue(new Error('reload unavailable'))
+  })
+
+  it('rejects an error envelope even when HTTP succeeded', async () => {
+    api.taskIdPut.mockResolvedValue({ data: { data: null, error: { code: 409, message: 'Rejected dates' } } })
+    await expect(planning.moveTask(7, '2026-11-16', '2026-11-29')).resolves.toBe(false)
+    expect(planning.taskPlanning!.processes![0].tasks![0]).toMatchObject({ start_date: '2026-11-09', end_date: '2026-11-22' })
+  })
+
+  it('does not mistake an empty error object for failure', async () => {
+    api.taskIdPut.mockResolvedValue({ data: { data: { start_date: '2026-11-16', end_date: '2026-11-29' }, error: {} } })
+    await expect(planning.moveTask(7, '2026-11-16', '2026-11-29')).resolves.toBe(true)
+  })
+
+  it('does not overwrite a newer edit when an older request fails', async () => {
+    let reject!: (reason: Error) => void
+    api.taskIdPut.mockImplementationOnce(() => new Promise((_, fail) => { reject = fail }))
+    const first = planning.moveTask(7, '2026-11-16', '2026-11-29')
+    api.taskIdPut.mockResolvedValueOnce(payload({ start_date: '2026-11-23', end_date: '2026-12-06' }))
+    await planning.moveTask(7, '2026-11-23', '2026-12-06')
+    reject(new Error('409: older move failed'))
+    await expect(first).resolves.toBe(false)
+    expect(planning.taskPlanning!.processes![0].tasks![0]).toMatchObject({ start_date: '2026-11-23', end_date: '2026-12-06' })
+  })
+})
+
+
+describe('optimistic timesheet absence and resource capacity transaction', () => {
+  let timesheet: ReturnType<typeof useTimesheetStore>
+  beforeEach(() => {
+    timesheet = useTimesheetStore()
+    timesheet.employees = [{ id: 51, name: 'Employee' }]
+    timesheet.states = [{ id: 2, code: 'leave', is_available: false }, { id: 3, code: 'sick', is_available: false }, { id: 4, code: 'work', is_available: true }]
+    timesheet.periodsByEmployee = { 51: [] }
+    timesheet.windowStart = '2026-11-01'
+    timesheet.windowEnd = '2026-11-30'
+    app.resources = [{ id: 1 }, { id: 2 }]
+    app.resourceMembers = { 1: [{ id: 51 }] }
+    app.calendar = [1, 2].map((resource_id) => ({ resource_id, periods: [{ start_date: '2026-11-01', end_date: '2026-11-30', capacity: 10, unavailable: 0, available: 10 }] }))
+    api.userDaysGet.mockImplementation(() => Promise.resolve(payload([{ user_id: 51, days: timesheet.periodsByEmployee[51].map((p, i) => ({ ...p, id: 100 + i })) }])))
+    api.timesheetCalendarGet.mockImplementation(() => Promise.resolve(payload({ resources: app.calendar })))
+  })
+  const available = (date: string, id = 1) => app.calendar.find((r) => r.resource_id === id)?.periods?.find((p) => p.start_date! <= date && p.end_date! >= date)?.available
+
+  it.each([true, false])('adding an absence previews immediately; accepted=%s', async (accepted) => {
+    let respond!: () => void
+    api.userIdDaysPut.mockImplementation(() => new Promise((resolve, reject) => {
+      respond = () => accepted ? resolve(payload(null)) : reject(new Error('409: rejected'))
+    }))
+    const pending = timesheet.assignRange(51, 2, '2026-11-10', '2026-11-12')
+    expect(timesheet.periodFor(51, '2026-11-11')?.state_id).toBe(2)
+    expect(available('2026-11-09')).toBe(10)
+    expect(available('2026-11-10')).toBe(9)
+    expect(available('2026-11-12')).toBe(9)
+    expect(available('2026-11-13')).toBe(10)
+    expect(available('2026-11-11', 2)).toBe(10)
+    // A background pull cannot overwrite the pending local transaction.
+    await app.refreshCalendar()
+    await timesheet.refreshPeriods('2026-11-01', '2026-11-30')
+    expect(api.timesheetCalendarGet).not.toHaveBeenCalled()
+    expect(api.userDaysGet).not.toHaveBeenCalled()
+    respond()
+    await expect(pending).resolves.toBe(accepted)
+    expect(available('2026-11-11')).toBe(accepted ? 9 : 10)
+    expect(timesheet.periodFor(51, '2026-11-11')?.state_id).toBe(accepted ? 2 : undefined)
+  })
+
+  it.each([true, false])('deleting part of an absence keeps its tails; accepted=%s', async (accepted) => {
+    api.userIdDaysPut.mockResolvedValue(payload(null))
+    await timesheet.assignRange(51, 2, '2026-11-09', '2026-11-15')
+    let respond!: () => void
+    api.userIdDaysDelete.mockImplementation(() => new Promise((resolve, reject) => {
+      respond = () => accepted ? resolve(payload(null)) : reject(new Error('403: rejected'))
+    }))
+    const pending = timesheet.clearRange(51, '2026-11-10', '2026-11-12')
+    expect(timesheet.periodFor(51, '2026-11-11')).toBeUndefined()
+    expect(available('2026-11-11')).toBe(10)
+    expect(available('2026-11-09')).toBe(9)
+    expect(available('2026-11-13')).toBe(9)
+    respond()
+    await expect(pending).resolves.toBe(accepted)
+    expect(available('2026-11-11')).toBe(accepted ? 10 : 9)
+    expect(timesheet.periodFor(51, '2026-11-11')?.state_id).toBe(accepted ? undefined : 2)
+  })
+
+  it('replacing one absence by another does not subtract an employee twice', async () => {
+    api.userIdDaysPut.mockResolvedValue(payload(null))
+    api.userIdDaysDelete.mockResolvedValue(payload(null))
+    await timesheet.assignRange(51, 2, '2026-11-09', '2026-11-15')
+    await timesheet.assignRange(51, 3, '2026-11-11', '2026-11-13')
+    expect(available('2026-11-12')).toBe(9)
+    await timesheet.clearRange(51, '2026-11-09', '2026-11-15', 2)
+    expect(available('2026-11-10')).toBe(10)
+    expect(available('2026-11-12')).toBe(9)
+    await timesheet.assignRange(51, 4, '2026-11-12', '2026-11-12')
+    expect(available('2026-11-12')).toBe(10)
+    expect(available('2026-11-11')).toBe(9)
+  })
+
+  it('ignores calendar and period reads started before a mutation', async () => {
+    let calendarReply!: (value: unknown) => void
+    let periodsReply!: (value: unknown) => void
+    const oldCalendar = app.calendar
+    api.timesheetCalendarGet.mockImplementationOnce(() => new Promise((resolve) => { calendarReply = resolve }))
+    api.userDaysGet.mockImplementationOnce(() => new Promise((resolve) => { periodsReply = resolve }))
+    const reads = [app.refreshCalendar(), timesheet.refreshPeriods('2026-11-01', '2026-11-30')]
+    api.userIdDaysPut.mockResolvedValue(payload(null))
+    await timesheet.assignRange(51, 2, '2026-11-10', '2026-11-12')
+    calendarReply(payload({ resources: oldCalendar }))
+    periodsReply(payload([{ user_id: 51, days: [] }]))
+    await Promise.all(reads)
+    expect(available('2026-11-11')).toBe(9)
+    expect(timesheet.periodFor(51, '2026-11-11')?.state_id).toBe(2)
+  })
+})
+
+
+describe('background planning reads never replace unconfirmed edits', () => {
+  beforeEach(() => {
+    planning.taskPlanning = { processes: [{ id: 1, tasks: [{ id: 7, start_date: '2026-11-09', end_date: '2026-11-22', resources: [] }] }] }
+    pendingRefs.value = new Set()
+  })
+  afterEach(() => { pendingRefs.value = new Set() })
+
+  it.each(['dates', 'assignment'] as const)('ignores a GET started before pending %s', async (kind) => {
+    const old = JSON.parse(JSON.stringify(planning.taskPlanning))
+    let reply!: (value: unknown) => void
+    api.planningTasksGet.mockImplementationOnce(() => new Promise((resolve) => { reply = resolve }))
+    const read = planning.refreshTaskPlanning(true)
+    let accept!: (value: unknown) => void
+    const mutation = kind === 'dates' ? api.taskIdPut : api.assignmentPost
+    mutation.mockImplementationOnce(() => new Promise((resolve) => { accept = resolve }))
+    const pending = kind === 'dates'
+      ? planning.moveTask(7, '2026-11-16', '2026-11-29')
+      : planning.assignResource(7, 3, 4)
+    reply(payload(old))
+    await read
+    const row = planning.taskPlanning!.processes![0].tasks![0]
+    if (kind === 'dates') expect(row.start_date).toBe('2026-11-16')
+    else expect(row.resources).toMatchObject([{ id: 3, quantity: 4 }])
+    api.planningTasksGet.mockResolvedValue(payload(planning.taskPlanning))
+    accept(payload({ id: 41 }))
+    await expect(pending).resolves.toBe(true)
+  })
+
+  it('ignores a GET started during a write even when it arrives after acceptance', async () => {
+    const old = JSON.parse(JSON.stringify(planning.taskPlanning))
+    let accept!: (value: unknown) => void
+    api.taskIdPut.mockImplementationOnce(() => new Promise((resolve) => { accept = resolve }))
+    const pending = planning.moveTask(7, '2026-11-16', '2026-11-29')
+    let reply!: (value: unknown) => void
+    api.planningTasksGet.mockImplementationOnce(() => new Promise((resolve) => { reply = resolve }))
+    const read = planning.refreshTaskPlanning(true)
+    accept(payload({ start_date: '2026-11-16', end_date: '2026-11-29' }))
+    await pending
+    reply(payload(old))
+    await read
+    expect(planning.taskPlanning!.processes![0].tasks![0].start_date).toBe('2026-11-16')
+    api.planningTasksGet.mockResolvedValue(payload(old))
+    await planning.refreshTaskPlanning(true)
+    expect(planning.taskPlanning!.processes![0].tasks![0].start_date).toBe('2026-11-09')
+  })
+
+  it('keeps offline queue edits while allowing a clean read after the queue is drained', async () => {
+    const old = JSON.parse(JSON.stringify(planning.taskPlanning))
+    planning.taskPlanning!.processes![0].tasks![0].start_date = '2026-11-16'
+    pendingRefs.value = new Set(['task:7'])
+    api.planningTasksGet.mockResolvedValue(payload(old))
+    await planning.refreshTaskPlanning(true)
+    expect(planning.taskPlanning!.processes![0].tasks![0].start_date).toBe('2026-11-16')
+    pendingRefs.value = new Set()
+    await planning.refreshTaskPlanning(true)
+    expect(planning.taskPlanning!.processes![0].tasks![0].start_date).toBe('2026-11-09')
+  })
+})
+
+
+describe('assignment cleanup on owner changes', () => {
+  beforeEach(() => {
+    app.resources = [{ id: 3, owner_id: 1 }]
+    planning.taskPlanning = { processes: [
+      { id: 10, owner_id: 1, tasks: [{ id: 7, resources: [{ id: 3 }, { id: 4 }] }] },
+      { id: 11, owner_id: 1, tasks: [{ id: 8, resources: [{ id: 4 }] }] },
+    ] }
+  })
+  it('changing resource owner removes only this resource assignments', async () => {
+    api.resourcesIdPut.mockResolvedValue(payload({ id: 3, owner_id: 2 }))
+    await expect(app.updateResource(3, { owner_id: 2 })).resolves.toBe(true)
+    expect(planning.taskPlanning!.processes![0].tasks![0].resources).toEqual([{ id: 4 }])
+    expect(planning.taskPlanning!.processes![1].tasks![0].resources).toEqual([{ id: 4 }])
+  })
+  it('changing process owner clears only assignments in that process', async () => {
+    api.processIdPut.mockResolvedValue(payload({ id: 10, owner_id: 2 }))
+    await expect(planning.updateProcessMeta(10, { owner_id: 2 })).resolves.toBe(true)
+    expect(planning.taskPlanning!.processes![0].tasks![0].resources).toEqual([])
+    expect(planning.taskPlanning!.processes![1].tasks![0].resources).toEqual([{ id: 4 }])
+  })
+  it('unchanged resource owner and unrelated edits preserve assignments', async () => {
+    api.resourcesIdPut.mockResolvedValue(payload({ id: 3, owner_id: 1 }))
+    await app.updateResource(3, { owner_id: 1, title: 'Renamed' })
+    expect(planning.taskPlanning!.processes![0].tasks![0].resources).toHaveLength(2)
+    api.processIdPut.mockResolvedValue(payload({ id: 10 }))
+    await planning.updateProcessMeta(10, { title: 'Renamed' })
+    expect(planning.taskPlanning!.processes![0].tasks![0].resources).toHaveLength(2)
+  })
+  it('rejected ownership changes preserve assignments', async () => {
+    api.resourcesIdPut.mockRejectedValue(new Error('403'))
+    await expect(app.updateResource(3, { owner_id: 2 })).resolves.toBe(false)
+    api.processIdPut.mockRejectedValue(new Error('403'))
+    await expect(planning.updateProcessMeta(10, { owner_id: 2 })).resolves.toBe(false)
+    expect(planning.taskPlanning!.processes![0].tasks![0].resources).toHaveLength(2)
+  })
+})
+
+
+it('resource creation explicitly retains the caller as the default owner', async () => {
+  useAuthStore().user = { id: 7, preset: 'worker' }
+  api.resourcesPost.mockResolvedValue(payload({ id: 13, owner_id: 7 }))
+  await expect(app.createResource({ code: 'Own', title: 'Own resource' })).resolves.toBe(true)
+  expect(api.resourcesPost).toHaveBeenCalledWith({ code: 'Own', title: 'Own resource', owner_id: 7 })
 })

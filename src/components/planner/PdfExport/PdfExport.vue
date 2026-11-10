@@ -7,6 +7,9 @@ import { fmtDate, toDate } from '../calendar'
 import { t } from '@/i18n'
 import { fmtDateRange } from '@/i18n/date'
 import { viewSettings } from '@/settings'
+import type { DiagramSnapshot, SnapshotPrintPage } from './snapshot'
+import { printSnapshotPages } from './printPages'
+import type { PdfGanttGroup } from './pdfRenderer'
 
 const props = withDefaults(defineProps<PdfExportProps>(), {
   groups: () => [],
@@ -23,6 +26,12 @@ const props = withDefaults(defineProps<PdfExportProps>(), {
   calendar: () => [],
 })
 
+const rootEl = ref<HTMLElement | null>(null)
+const snapshotGroups = ref<PdfGanttGroup[] | null>(null)
+const sourceGroups = computed(() => snapshotGroups.value ?? props.groups ?? [])
+let snapshot: DiagramSnapshot | null = null
+const opening = ref(false)
+
 /** Min/max dates from the data — period fallback until the page's visible window arrives */
 const dataRange = computed(() => {
   let min = ''
@@ -32,7 +41,7 @@ const dataRange = computed(() => {
     if (!min || d < min) min = d
     if (!max || d > max) max = d
   }
-  for (const g of props.groups ?? []) {
+  for (const g of sourceGroups.value) {
     touch(g.start_date)
     touch(g.end_date)
     for (const r of g.rows ?? []) {
@@ -83,14 +92,14 @@ const periodFallbackHint = computed(
  * Print settings: process filters and appearance; persisted in the session.
  * The period comes from the page (periodFrom/periodTo props).
  */
+const thicknessEdited = ref(false)
 const settings = ref({
   onlyMine: false,
   hiddenProjects: [] as number[],
   selectedNames: [] as string[],
   showMilestones: true,
-  showTodayLine: false,
+  showTodayLine: true,
   showResources: true,
-  style: 'color' as 'color' | 'mono',
   // Bar thickness (px): the row automatically = bar + 2px; starts from the rowHeight prop
   barThickness: (props.rowHeight ?? 26) - 2,
 })
@@ -106,7 +115,7 @@ const projects = computed(() => {
     if (id == null) return
     if (!seen.has(id)) seen.set(id, code || t('pdf.dialog.projectFallback', { id }))
   }
-  for (const g of props.groups ?? []) {
+  for (const g of sourceGroups.value) {
     add(g.project_id, g.code)
     for (const r of g.rows ?? []) add(r.project_id, r.title)
   }
@@ -122,7 +131,7 @@ const nameFilterLabel = computed(() => t('pdf.dialog.processes'))
  *  processes (owner_id != current user); with "only mine" enabled the
  *  name filter is not needed. */
 const hasForeignProcesses = computed(() =>
-  (props.groups ?? []).some((g) => g.owner_id != null && g.owner_id !== props.ownerId),
+  sourceGroups.value.some((g) => g.owner_id != null && g.owner_id !== props.ownerId),
 )
 const showNameFilter = computed(() => props.scope !== 'projects' && !settings.value.onlyMine)
 const showMilestonesOption = computed(() => props.scope === 'tasks')
@@ -134,9 +143,9 @@ const filterLevel = computed<'group' | 'row'>(() => (props.scope === 'tasks' ? '
 const nameOptions = computed(() => {
   const names = new Set<string>()
   if (filterLevel.value === 'row') {
-    for (const g of props.groups ?? []) for (const r of g.rows ?? []) if (r.title) names.add(r.title)
+    for (const g of sourceGroups.value) for (const r of g.rows ?? []) if (r.title) names.add(r.title)
   } else {
-    for (const g of props.groups ?? []) if (g.title) names.add(g.title)
+    for (const g of sourceGroups.value) if (g.title) names.add(g.title)
   }
   return [...names].sort((a, b) => a.localeCompare(b, 'ru'))
 })
@@ -147,7 +156,7 @@ const nameOptions = computed(() => {
  * is derived from the scope.
  */
 const visibleGroups = computed(() => {
-  let list = props.groups ?? []
+  let list = sourceGroups.value
   const level = filterLevel.value
   // "Only my processes" (only vp sees it): by group or row owner
   if (settings.value.onlyMine && props.ownerId != null) {
@@ -181,7 +190,7 @@ const visibleGroups = computed(() => {
         .filter((g) => (g.rows?.length ?? 0) > 0)
     }
   }
-  return list
+  return list.filter((group) => group.rows.length > 0 || (props.scope === 'tasks' && settings.value.showMilestones && (group.milestones?.length ?? 0) > 0))
 })
 
 /** Everything filtered out — preview is empty, printing unavailable */
@@ -197,6 +206,7 @@ const truncatedWarning = ref(false)
 const previewLoading = ref(false)
 const pageCount = ref(0)
 const currentBytes = ref<Uint8Array | null>(null)
+let currentPages: SnapshotPrintPage[] = []
 
 const filename = computed(() => `gantt-${fmtDate(new Date())}.pdf`)
 
@@ -215,15 +225,14 @@ function renderKey(): string {
 }
 
 /**
- * Warm loading of the heavy preview modules (pdfRenderer + pdf.js/worker,
- * ~2.8 MB): starts on the first click and loads chunks IN PARALLEL, so the
+ * Warm loading of the capture and preview modules: starts on the first click and loads chunks IN PARALLEL, so the
  * first open does not wait for each chunk to load sequentially.
  * Idempotent: repeated calls return the same promise.
  */
 let warmupPromise: Promise<unknown> | null = null
 function warmup(): Promise<unknown> {
   if (!warmupPromise) {
-    const p = Promise.all([import('./pdfRenderer'), preloadPdfPreview()])
+    const p = Promise.all([import('./snapshot'), preloadPdfPreview()])
     // Prevent an "unhandled" rejection before generate() picks it up
     p.catch(() => {})
     warmupPromise = p
@@ -268,7 +277,7 @@ async function runAll(force: boolean) {
   }
 }
 
-/** One pass: filters → pdf-lib → preview page rendering */
+/** One pass: frozen DOM → PDF image → preview page rendering */
 async function generateOnce(force: boolean) {
   const params = renderKey()
   // Params did not change — no render needed. Early exit WITHOUT a token change:
@@ -280,6 +289,7 @@ async function generateOnce(force: boolean) {
     truncatedWarning.value = false
     pageCount.value = 0
     currentBytes.value = null
+    currentPages = []
     return
   }
   previewLoading.value = true
@@ -289,51 +299,30 @@ async function generateOnce(force: boolean) {
     // Modules load in parallel (on the first click — warmup); repeated
     // calls find them cached and do not wait for loading.
     await warmup()
-    const { renderGanttPdf } = await import('./pdfRenderer')
-    const period = resolvePeriod()
-    const result = await renderGanttPdf(visibleGroups.value, {
-      from: period.from,
-      to: period.to,
-      origin: props.origin,
-      unit: props.unit,
-      pageTitle: pdfTitle.value,
-      // Milestones and resource usage — only for the tasks scope
-      showMilestones: showMilestonesOption.value ? settings.value.showMilestones : false,
+    if (!snapshot) throw new Error('Missing diagram snapshot')
+    const { snapshotPdf } = await import('./snapshot')
+    const result = await snapshotPdf(snapshot, {
+      extent: 'selection',
+      cancelled: () => !open.value || params !== renderKey(),
+      groups: visibleGroups.value,
+      scope: props.scope,
+      showMilestones: settings.value.showMilestones,
       showTodayLine: settings.value.showTodayLine,
-      style: settings.value.style,
-      scale: Number(props.scale) || 1,
-      // Row = bar + 2px: the renderer will compute bar = rowHeight − 2 = barThickness
-      rowHeight: settings.value.barThickness + 2,
-      resources: showResourcesOption.value && settings.value.showResources
-        ? (props.resources ?? [])
-            .filter((r) => r.id != null)
-            .map((r) => {
-              const cal = (props.calendar ?? []).find((c) => c.resource_id === r.id)
-              return {
-                id: r.id as number,
-                code: r.code ?? '',
-                title: r.title,
-                periods: (cal?.periods ?? [])
-                  .filter((p) => p.start_date && p.end_date)
-                  .map((p) => ({
-                    start_date: p.start_date as string,
-                    end_date: p.end_date as string,
-                    available: p.available ?? 0,
-                  })),
-              }
-            })
-        : [],
-    })
+      showResources: settings.value.showResources,
+      style: 'color',
+      barThickness: settings.value.barThickness,
+    }, pdfTitle.value)
     if (token !== genToken) return
-    currentBytes.value = result
-    truncatedWarning.value = result.truncated === true
+    currentBytes.value = result.bytes
+    currentPages = result.pages
+    truncatedWarning.value = false
     renderedParams = params
 
     const el = previewEl.value
     if (el) {
       previewHandle?.destroy()
       previewHandle = null
-      const handle = await renderPdfPreview(result, el)
+      const handle = await renderPdfPreview(result.bytes, el)
       if (token !== genToken) {
         handle.destroy()
         return
@@ -341,12 +330,13 @@ async function generateOnce(force: boolean) {
       previewHandle = handle
       pageCount.value = handle.pageCount
     }
-  } catch (e: unknown) {
-    if (token === genToken) {
-      previewError.value = e instanceof Error ? e.message : String(e)
+  } catch {
+    if (token === genToken && params === renderKey()) {
+      previewError.value = t('pdf.dialog.captureError')
       truncatedWarning.value = false
       pageCount.value = 0
       currentBytes.value = null
+      currentPages = []
     }
   }
 }
@@ -374,21 +364,42 @@ watch(
   },
 )
 
-function openDialog() {
-  if (busy.value) return
-  // Process filters persist in the session; the period and width come from the page.
+async function openDialog() {
+  if (busy.value || opening.value || open.value) return
+  opening.value = true
+  snapshot?.dispose()
+  snapshot = null
+  snapshotGroups.value = null
   renderedParams = ''
   previewError.value = null
   truncatedWarning.value = false
   pageCount.value = 0
   currentBytes.value = null
-  open.value = true
-  void nextTick(() => void generate(true))
+  currentPages = []
+  try {
+    await document.fonts.ready
+    const target = props.captureTarget ? props.captureTarget() : rootEl.value?.closest('section')?.querySelector<HTMLElement>('.tg-scroll')
+    if (!target) throw new Error('Missing diagram viewport')
+    const { freezeDiagram } = await import('./snapshot')
+    snapshot = freezeDiagram(target, true)
+    snapshotGroups.value = JSON.parse(JSON.stringify(props.groups ?? [])) as PdfGanttGroup[]
+    if (!thicknessEdited.value) settings.value.barThickness = snapshot.barThickness
+    open.value = true
+    void nextTick(() => void generate(true))
+  } catch {
+    previewError.value = t('pdf.dialog.captureError')
+    open.value = true
+  } finally {
+    opening.value = false
+  }
 }
 
 function closeDialog() {
   if (busy.value) return
   open.value = false
+  snapshot?.dispose()
+  snapshot = null
+  snapshotGroups.value = null
   runPending = false
   genToken++
   if (genTimer != null) {
@@ -400,6 +411,8 @@ function closeDialog() {
   previewLoading.value = false
   previewError.value = null
   truncatedWarning.value = false
+  currentBytes.value = null
+  currentPages = []
 }
 
 function download(bytes: Uint8Array, name: string) {
@@ -436,35 +449,6 @@ async function onDownload() {
   closeDialog()
 }
 
-/** Prints the PDF via the browser dialog: hidden iframe with blob URL + contentWindow.print() */
-function printBytes(bytes: Uint8Array) {
-  const copy = new Uint8Array(bytes.byteLength)
-  copy.set(bytes)
-  const blob = new Blob([copy.buffer], { type: 'application/pdf' })
-  const url = URL.createObjectURL(blob)
-  const iframe = document.createElement('iframe')
-  iframe.setAttribute('aria-hidden', 'true')
-  iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden'
-  iframe.src = url
-  document.body.appendChild(iframe)
-  const cleanup = () => {
-    URL.revokeObjectURL(url)
-    iframe.remove()
-    window.removeEventListener('afterprint', cleanup)
-  }
-  window.addEventListener('afterprint', cleanup)
-  iframe.addEventListener('load', () => {
-    // Give the built-in PDF viewer time to open the document, then trigger printing
-    setTimeout(() => {
-      try {
-        iframe.contentWindow?.print()
-      } catch {
-        cleanup()
-      }
-    }, 150)
-  })
-}
-
 /** Prepares printing: generates the PDF and sends it to the browser print dialog */
 async function onPrint() {
   if (busy.value || previewEmpty.value) return
@@ -480,7 +464,15 @@ async function onPrint() {
     }
   }
   if (!bytes) return
-  printBytes(bytes)
+  busy.value = true
+  try {
+    await printSnapshotPages(currentPages)
+  } catch {
+    previewError.value = t('pdf.dialog.captureError')
+    return
+  } finally {
+    busy.value = false
+  }
   closeDialog()
 }
 
@@ -499,6 +491,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  snapshot?.dispose()
   if (genTimer != null) clearTimeout(genTimer)
   previewHandle?.destroy()
   document.removeEventListener('keydown', onKeydown)
@@ -507,13 +500,14 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="pe">
+  <div ref="rootEl" class="pe">
     <!-- Visible toolbar trigger above the diagram (gated by the view settings
          "Export charts"). Ctrl/Cmd+P/S always works regardless of this flag. -->
     <button
       v-if="viewSettings.showPdfButtons"
       type="button"
       class="pe-open"
+      :disabled="opening"
       @click="openDialog"
     >
       <span class="pe-open-icon" aria-hidden="true">⤓</span>
@@ -530,23 +524,9 @@ onBeforeUnmount(() => {
           <div class="pe-body">
             <div class="pe-settings">
               <div class="pe-field">
-                <span class="pe-label">{{ t('pdf.dialog.style') }}</span>
-                <div class="pe-style-row">
-                  <label class="pe-style-opt">
-                    <input v-model="settings.style" type="radio" name="pe-style" value="color" class="pe-checkbox" />
-                    {{ t('pdf.dialog.styleColor') }}
-                  </label>
-                  <label class="pe-style-opt">
-                    <input v-model="settings.style" type="radio" name="pe-style" value="mono" class="pe-checkbox" />
-                    {{ t('pdf.dialog.styleMono') }}
-                  </label>
-                </div>
-              </div>
-
-              <div class="pe-field">
                 <span class="pe-label">{{ t('pdf.dialog.barThickness') }}</span>
                 <div class="pe-range-row">
-                  <input v-model.number="settings.barThickness" type="range" min="16" max="64" step="4" class="pe-range" />
+                  <input v-model.number="settings.barThickness" type="range" min="16" max="64" step="4" class="pe-range" @input="thicknessEdited = true" />
                   <span class="pe-range-value">{{ settings.barThickness }}px</span>
                 </div>
               </div>
@@ -556,7 +536,6 @@ onBeforeUnmount(() => {
                   <input v-model="settings.onlyMine" type="checkbox" class="pe-checkbox" />
                   <span class="pe-label">{{ t('pdf.dialog.onlyMine') }}</span>
                 </span>
-                <span class="pe-hint">{{ t('pdf.dialog.onlyMineHint') }}</span>
               </label>
 
               <label v-if="showMilestonesOption" class="pe-field">
@@ -571,7 +550,6 @@ onBeforeUnmount(() => {
                   <input v-model="settings.showTodayLine" type="checkbox" class="pe-checkbox" />
                   <span class="pe-label">{{ t('pdf.dialog.showTodayLine') }}</span>
                 </span>
-                <span class="pe-hint">{{ t('pdf.dialog.showTodayLineHint') }}</span>
               </label>
 
               <label v-if="showResourcesOption" class="pe-field">
@@ -645,10 +623,10 @@ onBeforeUnmount(() => {
 
           <div class="pe-actions">
             <button type="button" class="pe-btn-cancel" @click="closeDialog">{{ t('common.cancel') }}</button>
-            <button type="button" class="pe-btn-download" :disabled="busy || previewEmpty" @click="onDownload">
+            <button type="button" class="pe-btn-download" :disabled="busy || previewEmpty || previewLoading || !!previewError" @click="onDownload">
               {{ t('pdf.dialog.download') }}
             </button>
-            <button type="button" class="pe-btn-primary" :disabled="busy || previewEmpty" @click="onPrint">
+            <button type="button" class="pe-btn-primary" :disabled="busy || previewEmpty || previewLoading || !!previewError" @click="onPrint">
               <span v-if="busy" class="pe-spinner" />
               {{ t('pdf.dialog.print') }}
             </button>

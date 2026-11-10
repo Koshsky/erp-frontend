@@ -1,4 +1,4 @@
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import type { Ref } from 'vue'
 import type { ModalField, ModalFormProps } from '../components/common/ModalForm'
 
@@ -20,6 +20,7 @@ export function useEditModal<T>(
   onSave: (state: T, values: Record<string, string | number>) => Promise<EditModalResult>,
   getTitle: (state: T) => string,
   submitLabel?: (state: T) => string,
+  canEdit?: (state: T) => boolean,
 ) {
   const edit: Ref<T | null> = ref(null)
   const saving = ref(false)
@@ -28,6 +29,7 @@ export function useEditModal<T>(
   const title = computed(() => (edit.value ? getTitle(edit.value) : ''))
 
   function open(state: T) {
+    if (canEdit && !canEdit(state)) return
     edit.value = state
   }
 
@@ -36,7 +38,7 @@ export function useEditModal<T>(
   }
 
   async function submit(values: Record<string, string | number>) {
-    if (!edit.value) return
+    if (!edit.value || (canEdit && !canEdit(edit.value))) return
     saving.value = true
     const res = await onSave(edit.value, values)
     saving.value = false
@@ -47,12 +49,18 @@ export function useEditModal<T>(
   }
 
   const bind = computed<ModalFormProps>(() => ({
-    open: !!edit.value,
+    open: !!edit.value && (!canEdit || canEdit(edit.value)),
     title: title.value,
     fields: fields.value,
     busy: saving.value,
     submitLabel: edit.value && submitLabel ? submitLabel(edit.value) : undefined,
   }))
+
+  if (canEdit) {
+    watch(() => edit.value != null && !canEdit(edit.value), (denied) => {
+      if (denied) close()
+    })
+  }
 
   return { edit, saving, fields, open, close, submit, bind }
 }

@@ -29,9 +29,10 @@ const props = withDefaults(defineProps<{
   /** Cell unit: day or decade */
   unit?: PlanningUnit
   /** Allows modifying tasks and milestones: moving dates, editing, deleting */
-  canManage?: boolean
+  canManage?: boolean | ((taskId: number, processId: number) => boolean)
+  canManageMilestones?: boolean | ((processId: number) => boolean)
   /** Enables vertical row drag to reorder tasks within each process */
-  reorderable?: boolean
+  reorderable?: boolean | ((processId: number) => boolean)
   /** Users to display the owner (owner_id → name) in tooltips */
   users?: DtoUserInfo[] | null
   /** On open, scroll the timeline to this date (navigation from another tab) */
@@ -50,12 +51,17 @@ const props = withDefaults(defineProps<{
   origin: '',
   unit: 'day',
   canManage: true,
+  canManageMilestones: undefined,
   reorderable: false,
   users: null,
   focusDate: null,
   focusGroupId: null,
   commentsByTask: null,
 })
+
+function taskManager(processId: number): (id: number) => boolean {
+  return (id) => typeof props.canManage === 'function' ? props.canManage(id, processId) : props.canManage
+}
 
 const emit = defineEmits<{
   change: [payload: { id: number; start_date: string; end_date: string }]
@@ -246,8 +252,9 @@ function onGridCtx(p: { clientX: number; clientY: number; date: string | null; r
           :dependencies="proc.dependencies || []"
           :groupStartDate="proc.start_date"
           :groupEndDate="proc.end_date"
-          :can-manage="canManage"
-          :reorderable="reorderable"
+          :can-manage="typeof canManage === 'function' ? taskManager(proc.id) : canManage"
+          :can-manage-milestones="typeof canManageMilestones === 'function' ? canManageMilestones(proc.id) : canManageMilestones"
+          :reorderable="typeof reorderable === 'function' ? reorderable(proc.id) : reorderable"
           :users="users"
           :comments-by-task="commentsByTask"
           @change="(p) => emit('change', p)"

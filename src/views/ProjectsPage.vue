@@ -225,12 +225,14 @@ const { open: openEdit, close: closeEdit, submit: submitEdit, bind: editBind } =
     return { ok, error: ok ? null : store.error }
   },
   () => t('plannerViews.projects.edit'),
+  undefined,
+  (state) => canManageProject(state.id),
 )
 
 function onContextMenu(p: { clientX: number; clientY: number; date: string | null; rowIndex: number; projectId?: number }) {
   // Project bar: open the menu only if there are rights to manage the project
   if (p.projectId != null) {
-    if (!canManageProject(p.projectId)) return
+    if (!canManageProject(p.projectId) && !canDeleteProject(p.projectId)) return
     openMenu({ x: p.clientX, y: p.clientY, date: p.date, rowIndex: p.rowIndex, projectId: p.projectId })
     return
   }
@@ -286,7 +288,7 @@ async function createProjectAt(date: string) {
 }
 
 async function handleSelect(id: string) {
-  if (!menu.value) return
+  if (!menu.value || !menuItems.value.some((item) => item.id === id)) return
   const { date, projectId } = menu.value
   if (id === 'create-project' && date != null) {
     await createProjectAt(date)

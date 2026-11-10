@@ -106,6 +106,7 @@ function subtaskStatusLabel(s: { status?: string }): string {
 
 /** Cycle a subtask status: not_started → in_progress → done → not_started */
 function cycleStatus(s: { id: number; status?: string }) {
+  if (props.busy || !(props.canUpdateSubtask?.(s.id) ?? props.canManage)) return
   const next =
     s.status === 'not_started'
       ? 'in_progress'
@@ -116,6 +117,7 @@ function cycleStatus(s: { id: number; status?: string }) {
 }
 
 function onDeleteSubtask(id: number) {
+  if (props.busy || !(props.canDeleteSubtask?.(id) ?? props.canManage)) return
   emit('deleteSubtask', id)
 }
 
@@ -145,11 +147,12 @@ function onAddDependency() {
 }
 
 function onDepTypeChange(dep: { id: number; type: DependencyType }, type: DependencyType) {
-  if (dep.type === type) return
+  if (props.busy || !props.canManageDependencies || dep.type === type) return
   emit('updateDependency', { id: dep.id, type })
 }
 
 function onDeleteDependency(id: number) {
+  if (props.busy || !props.canManageDependencies) return
   emit('deleteDependency', id)
 }
 </script>
@@ -256,7 +259,7 @@ function onDeleteDependency(id: number) {
                 class="te-status"
                 :class="`is-${s.status || 'not_started'}`"
                 :title="t('planner.taskEditor.subtaskStatusHint', { status: subtaskStatusLabel(s) })"
-                :disabled="!canManage || busy"
+                :disabled="!(canUpdateSubtask?.(s.id) ?? canManage) || busy"
                 @click="cycleStatus(s)"
               />
             </TooltipCell>
@@ -265,7 +268,7 @@ function onDeleteDependency(id: number) {
             <button
               type="button"
               class="te-remove"
-              :disabled="!canManage || busy"
+              :disabled="!(canDeleteSubtask?.(s.id) ?? canManage) || busy"
               :aria-label="t('planner.taskEditor.subtask.deleteAria', { title: s.title })"
               @click="onDeleteSubtask(s.id)"
             >✕</button>

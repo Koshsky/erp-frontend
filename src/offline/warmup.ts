@@ -1,4 +1,6 @@
 import { ref } from 'vue'
+import { hasActiveMutations } from './mutationGuard'
+import { pendingCount, pendingRefs } from './outbox'
 import { AssignmentsApi } from '@/api'
 import { apiConfig, useAppStore, useAuthStore, usePlanningStore, useRbacStore, useTimesheetStore } from '@/store'
 import { isOffline } from './state'
@@ -12,7 +14,7 @@ import { warmupEnabled } from '@/settings'
  * Rendering is local-first (hydrateFromCache) — pages NEVER fetch. The ONLY
  * network GETs belong here (plus auth/health/probe):
  *  - full warmup: after login / re-login, on network return, manual "Обновить";
- *  - the 10-second maintenance cycle (offline/cycle.ts) refreshes only domains
+ *  - the minute maintenance cycle (offline/connection.ts) refreshes only domains
  *    whose cached copy is older than its TTL — no constant unnecessary GETs.
  *
  * Requests run sequentially at WARMUP_RATE_PER_SECOND (10/sec); a repeated
@@ -58,7 +60,7 @@ export interface PullStep {
   refresh: () => Promise<unknown>
   /** Staleness limit; the step is skipped while the cache copy is younger */
   ttl?: number
-  /** If true — never pulled by the 10-second cycle (heavy/logical), full warmup only */
+  /** If true — never pulled by the minute cycle (heavy/logical), full warmup only */
   cycle?: boolean
 }
 
@@ -254,13 +256,14 @@ async function runPull(settings: { cycle: boolean; refreshAll?: boolean }): Prom
   let refreshed = 0
   warmupProgress.value = total > 0 ? 0 : null
   for (const step of targets) {
-    if (isOffline.value || !useAuthStore().isAuthenticated) break
+    if (isOffline.value || !useAuthStore().isAuthenticated || hasActiveMutations() || pendingCount.value > 0 || pendingRefs.value.size > 0) break
     // Fresh cached copies are left alone in every mode, unless an explicit
     // full refresh was requested.
     if (!settings.refreshAll && (await isStepFresh(step))) {
       done++
       continue
     }
+    if (isOffline.value || hasActiveMutations() || pendingCount.value > 0 || pendingRefs.value.size > 0) break
     try {
       await step.refresh()
       refreshed++
@@ -304,7 +307,7 @@ export function warmNow(force = false): Promise<boolean> {
 }
 
 /**
- * The 10-second cycle PULL: refreshes only stale domains (younger copies are
+ * The minute cycle PULL: refreshes only stale domains (younger copies are
  * left alone — no constant unnecessary GETs). Returns the number of domains
  * refreshed (0 — everything was already fresh).
  */

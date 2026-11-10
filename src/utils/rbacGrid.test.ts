@@ -7,6 +7,8 @@ import {
   gridResources,
   gridSections,
   scopeByCell,
+  presetActionGroups,
+  commonPresetScope,
 } from './rbacGrid'
 
 /** A payload shaped like GET /rbac/matrix: complete, "none" for no right. */
@@ -56,5 +58,33 @@ describe('rbacGrid', () => {
       GROUPS,
     )
     expect(sections).toEqual([{ key: 'planning', resources: ['project'] }])
+  })
+})
+
+describe('frontend management grouping', () => {
+  it('groups writes while preserving the three original API action names', () => {
+    expect(presetActionGroups(['view', 'create', 'update', 'delete'])).toEqual([
+      { key: 'view', actions: ['view'] },
+      { key: 'manage', actions: ['create', 'update', 'delete'] },
+    ])
+  })
+  it('keeps read-only and future actions visible', () => {
+    expect(presetActionGroups(['view'])).toEqual([{ key: 'view', actions: ['view'] }])
+    expect(presetActionGroups(['view', 'export', 'update'])).toEqual([
+      { key: 'view', actions: ['view'] }, { key: 'export', actions: ['export'] },
+      { key: 'manage', actions: ['update'] },
+    ])
+  })
+  it.each([
+    [['all', 'all', 'all'], 'all'],
+    [['none', '', 'none'], 'none'],
+    [['own', 'self', 'self'], 'self'],
+    [['sib up1', 'up1 sib', 'up1 sib'], 'up1 sib'],
+    [['self', 'all', 'none'], null],
+    [['none', 'none', 'all'], null],
+  ])('represents %j without merging unlike scopes', (scopes, expected) => {
+    const original = [...scopes]
+    expect(commonPresetScope(scopes)).toBe(expected)
+    expect(scopes).toEqual(original)
   })
 })

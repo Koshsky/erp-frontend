@@ -19,9 +19,9 @@ const props = withDefaults(defineProps<{
   /** Users to display the owner (owner_id → name) in tooltips */
   users?: DtoUserInfo[] | null
   /** Allows modifying processes: moving dates, editing, deleting */
-  canManage?: boolean
+  canManage?: boolean | ((processId: number) => boolean)
   /** Enables vertical row drag to reorder processes within each project */
-  reorderable?: boolean
+  reorderable?: boolean | ((projectId: number) => boolean)
   /** On open, scroll the timeline to this date (navigation from another tab) */
   focusDate?: string | null
   /** On open, scroll vertically to the group (project row) */
@@ -110,7 +110,7 @@ function onGridCtx(p: { clientX: number; clientY: number; date: string | null; r
           :groupStartDate="project.start_date"
           :groupEndDate="project.end_date"
           :can-manage="canManage"
-          :reorderable="reorderable"
+          :reorderable="typeof reorderable === 'function' ? reorderable(project.id) : reorderable"
           @change="(p) => emit('change', p)"
           @contextmenu="(p) => emit('contextmenu', p)"
           @reorder="(p) => emit('reorder', { projectId: project.id, ...p })"
