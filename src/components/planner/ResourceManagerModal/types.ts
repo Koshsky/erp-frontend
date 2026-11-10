@@ -19,6 +19,7 @@ export interface AddResourcePayload {
 }
 
 export interface ResourceManagerModalProps {
+  embedded?: boolean
   open: boolean
   taskId: number
   taskTitle?: string

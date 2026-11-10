@@ -28,7 +28,7 @@ const values = reactive<Record<string, string | number>>({})
  */
 const { dialogEl, onKeydown } = useModalFocus({
   open: () => props.open,
-  onClose: () => emit('close'),
+  onClose: requestClose,
 })
 
 function resetValues() {
@@ -61,8 +61,12 @@ function onSubmit() {
   emit('save', { ...values })
 }
 
+function requestClose() {
+  if (!props.closeDisabled) emit('close')
+}
+
 function onOverlayClick(e: MouseEvent) {
-  if (e.target === e.currentTarget) emit('close')
+  if (e.target === e.currentTarget) requestClose()
 }
 </script>
 
@@ -73,10 +77,10 @@ function onOverlayClick(e: MouseEvent) {
       class="mf-overlay"
       @mousedown.self="onOverlayClick"
     >
-      <div ref="dialogEl" class="mf" :style="maxWidth ? { maxWidth } : undefined" role="dialog" aria-modal="true" :aria-label="title" tabindex="-1" @keydown="onKeydown">
+      <div ref="dialogEl" class="mf" :class="dialogClass" :style="maxWidth ? { maxWidth } : undefined" role="dialog" aria-modal="true" :aria-label="title" tabindex="-1" @keydown="onKeydown">
         <div class="mf-head">
           <h3 class="mf-title">{{ title }}</h3>
-          <button type="button" class="mf-close" :aria-label="t('common.close')" @click="emit('close')">×</button>
+          <button type="button" class="mf-close" :disabled="closeDisabled" :aria-label="t('common.close')" @click="requestClose">×</button>
         </div>
 
         <slot v-if="$slots.default" />
@@ -149,7 +153,7 @@ function onOverlayClick(e: MouseEvent) {
           <p v-if="error" class="mf-error" role="alert">{{ error }}</p>
 
           <div class="mf-actions">
-            <button type="button" class="mf-btn mf-cancel" @click="emit('close')">{{ t('common.cancel') }}</button>
+            <button type="button" class="mf-btn mf-cancel" @click="requestClose">{{ t('common.cancel') }}</button>
             <button type="submit" class="mf-btn mf-save" :disabled="!canSubmit">
               <span v-if="busy" class="mf-spinner" />
               {{ submitLabel || t('common.save') }}
@@ -205,7 +209,11 @@ function onOverlayClick(e: MouseEvent) {
   padding: 2px 6px;
   border-radius: 6px;
 }
-.mf-close:hover {
+.mf-close:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.mf-close:hover:not(:disabled) {
   background: var(--ui-surface-2);
   color: var(--ui-text);
 }

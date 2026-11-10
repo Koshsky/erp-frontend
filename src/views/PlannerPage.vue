@@ -13,6 +13,7 @@ import type {
   UpdateSubtaskPayload,
   TaskEditorTask,
   TaskEditorPatch,
+  TaskEditorSection,
 } from '../components/planner/TaskEditor'
 import { ContextMenu, ModalForm, ConfirmDialog } from '../components/common'
 import type { ContextMenuItem } from '../components/common/ContextMenu'
@@ -29,6 +30,7 @@ import { useFindPlanningItem } from '../composables/useFindPlanningItem'
 import { usePlanningStore, useAppStore } from '../store'
 import { compareByName } from '../utils'
 import { t } from '../i18n'
+import { fmtDateRange } from '../i18n/date'
 import { addDaysISO, fitSpanDates, clampDateToBounds } from '../components/planner/calendar'
 import type { DependencyType } from '../components/planner/dependencies'
 import { CELL_WIDTH } from '../components/planner/layout'
@@ -140,7 +142,6 @@ const {
   canManageMilestone,
   canDeleteMilestone,
   canViewTasks,
-  canDeleteOthersComments,
   canViewProjects,
   role,
   userId,
@@ -242,8 +243,12 @@ const { open: openEdit, close: closeEdit, submit: submitEdit, bind: editBind } =
   (state) => canManageMilestone(findMilestone(state.id)?.process_id),
 )
 
-// === Task editor modal (left: task fields; right: subtasks todo list) ===
+// One task context is shared by all card sections.
 const taskEditorId = ref<number | null>(null)
+const taskSection = ref<TaskEditorSection>('details')
+const commentDraftDirty = ref(false)
+const resourceDraftDirty = ref(false)
+const commentSending = ref(false)
 const taskEditorBusy = ref(false)
 const taskEditorError = ref<string | null>(null)
 
@@ -274,26 +279,57 @@ const taskEditorSubtasks = computed(() => {
   }))
 })
 
-function openTaskEdit(id: number) {
-  const task = findTask(id)
-  if (!task) return
+const taskContext = computed(() => {
+  const process = taskPlanning.value?.processes?.find((p) => p.id === taskEditorTask.value?.process_id)
+  return [process?.project_code, process?.title].filter(Boolean).join(' / ')
+})
+const taskSchedule = computed(() => {
+  const task = findTask(taskEditorId.value ?? 0)
+  return task ? fmtDateRange(task.start_date, task.end_date) : ''
+})
+
+function selectTaskSection(section: TaskEditorSection) {
+  taskSection.value = section
+  if (section === 'discussion' && taskEditorId.value != null) {
+    void planning.loadTaskComments(taskEditorId.value)
+  }
+}
+
+function openTaskEdit(id: number, section: TaskEditorSection = 'details') {
+  if (role.value === 'admin' && viewUser.value) return
+  if (!canViewTasks.value || !findTask(id)) return
+  if (taskEditorId.value != null && taskEditorId.value !== id) return
   taskEditorId.value = id
   taskEditorError.value = null
-  taskEditorBusy.value = false
+  resourcesError.value = null
+  commentDraftDirty.value = false
+  resourceDraftDirty.value = false
+  selectTaskSection(section)
 }
 
 function closeTaskEdit() {
   taskEditorId.value = null
   taskEditorError.value = null
+  commentDraftDirty.value = false
+  resourceDraftDirty.value = false
 }
 
-async function onSaveTaskEditor(patch: TaskEditorPatch) {
-  if (taskEditorId.value == null || !canManageTask(taskEditorTask.value?.process_id, taskEditorId.value)) return
+async function onSaveTaskEditor(patch: TaskEditorPatch, acknowledge?: (saved: boolean) => void) {
+  if (taskEditorId.value == null || !canManageTask(taskEditorTask.value?.process_id, taskEditorId.value)) {
+    acknowledge?.(false)
+    return
+  }
   taskEditorBusy.value = true
   taskEditorError.value = null
-  // Mutation failures are reported by the global toast (http.ts) — no inline banner.
-  await planning.updateTaskMeta(taskEditorId.value, patch)
-  taskEditorBusy.value = false
+  planning.error = null
+  try {
+    const saved = await planning.updateTaskMeta(taskEditorId.value, patch)
+    acknowledge?.(saved)
+  } catch {
+    acknowledge?.(false)
+  } finally {
+    taskEditorBusy.value = false
+  }
 }
 
 async function onAddSubtask(payload: NewSubtaskPayload) {
@@ -359,7 +395,7 @@ const taskEditorDependencyOptions = computed(() => {
 })
 
 async function onAddDependency(payload: { depends_on_task_id: number; type: DependencyType }) {
-  if (taskEditorId.value == null) return
+  if (taskEditorId.value == null || !canManageTask(taskEditorTask.value?.process_id, taskEditorId.value)) return
   taskEditorBusy.value = true
   taskEditorError.value = null
   // Mutation failures are reported by the global toast (http.ts) — no inline banner.
@@ -368,7 +404,7 @@ async function onAddDependency(payload: { depends_on_task_id: number; type: Depe
 }
 
 async function onChangeDependency(payload: { id: number; type: DependencyType }) {
-  if (taskEditorId.value == null) return
+  if (taskEditorId.value == null || !canManageTask(taskEditorTask.value?.process_id, taskEditorId.value)) return
   taskEditorBusy.value = true
   taskEditorError.value = null
   // Mutation failures are reported by the global toast (http.ts) — no inline banner.
@@ -377,7 +413,7 @@ async function onChangeDependency(payload: { id: number; type: DependencyType })
 }
 
 async function onDeleteDependency(id: number) {
-  if (taskEditorId.value == null) return
+  if (taskEditorId.value == null || !canManageTask(taskEditorTask.value?.process_id, taskEditorId.value)) return
   taskEditorError.value = null
   // Mutation failures are reported by the global toast (http.ts) — no inline banner.
   await planning.deleteTaskDependency(id, taskEditorId.value)
@@ -476,21 +512,14 @@ async function handleSelect(id: string) {
   }
 }
 
-// Task "Resource management" modal (assigning/removing resources)
-const resourcesModalTaskId = ref<number | null>(null)
+// Resource assignments in the open task card.
 const resourcesBusy = ref(false)
 const resourcesError = ref<string | null>(null)
 
-/** Task title for the modal header */
-const resourcesTaskTitle = computed(() => {
-  if (resourcesModalTaskId.value == null) return ''
-  return findTask(resourcesModalTaskId.value)?.title ?? ''
-})
-
 /** Resources assigned to the task from /planning/tasks (updated after a silent reload) */
 const assignedResources = computed<AssignedResource[]>(() => {
-  if (resourcesModalTaskId.value == null) return []
-  const task = findTask(resourcesModalTaskId.value)
+  if (taskEditorId.value == null) return []
+  const task = findTask(taskEditorId.value)
   return (task?.resources ?? []).map((r: DtoResource) => ({
     assignment_id: r.assignment_id,
     resource_id: r.id ?? 0,
@@ -502,24 +531,23 @@ const assignedResources = computed<AssignedResource[]>(() => {
 
 const resourceOptions = computed(() => {
   const opts = resources.value.filter((r) => r.id != null)
-  const process = taskPlanning.value?.processes?.find((p) => p.id === findTask(resourcesModalTaskId.value ?? 0)?.process_id)
+  const process = taskPlanning.value?.processes?.find((p) => p.id === findTask(taskEditorId.value ?? 0)?.process_id)
   return opts
     .filter((r) => process?.owner_id != null && r.owner_id === process.owner_id)
     .map((r) => ({ id: r.id as number, title: r.title, code: r.code }))
 })
 
 function openResources(taskId: number) {
-  resourcesModalTaskId.value = taskId
-  resourcesError.value = null
+  openTaskEdit(taskId, 'resources')
 }
 
 async function onAddResource(payload: AddResourcePayload) {
-  if (resourcesModalTaskId.value == null || !canAssignTaskResources(findTask(resourcesModalTaskId.value)?.process_id, resourcesModalTaskId.value)) return
+  if (taskEditorId.value == null || !canAssignTaskResources(findTask(taskEditorId.value)?.process_id, taskEditorId.value)) return
   resourcesBusy.value = true
   resourcesError.value = null
   // Mutation failures are reported by the global toast (http.ts) — no inline banner.
   await planning.assignResource(
-    resourcesModalTaskId.value,
+    taskEditorId.value,
     payload.resource_id,
     payload.quantity,
   )
@@ -527,49 +555,50 @@ async function onAddResource(payload: AddResourcePayload) {
 }
 
 async function onRemoveResource(payload: { resource_id: number }) {
-  if (resourcesModalTaskId.value == null || !canAssignTaskResources(findTask(resourcesModalTaskId.value)?.process_id, resourcesModalTaskId.value, 'delete')) return
+  if (taskEditorId.value == null || !canAssignTaskResources(findTask(taskEditorId.value)?.process_id, taskEditorId.value, 'delete')) return
   resourcesBusy.value = true
   resourcesError.value = null
   // Mutation failures are reported by the global toast (http.ts) — no inline banner.
   await planning.removeResource(
-    resourcesModalTaskId.value,
+    taskEditorId.value,
     payload.resource_id,
   )
   resourcesBusy.value = false
 }
 
-// Task "Comments" modal: opens by clicking the bar or from the right-click menu
-// (available to everyone who can see the task; offline — viewing the cache without sending).
-const commentsTaskId = ref<number | null>(null)
-
-/** Task title for the modal header */
-const commentsTaskTitle = computed(() => {
-  if (commentsTaskId.value == null) return ''
-  return findTask(commentsTaskId.value)?.title ?? ''
-})
+// Discussion is available to task viewers; offline access uses cached comments.
 
 /** Task comments from the store cache (flat list; the tree is built by the component) */
 const taskComments = computed(() => {
-  if (commentsTaskId.value == null) return []
-  return planning.commentsByTask[commentsTaskId.value] ?? []
+  if (taskEditorId.value == null) return []
+  return planning.commentsByTask[taskEditorId.value] ?? []
 })
 
 function openComments(taskId: number) {
-  if (role.value === 'admin' && viewUser.value) return
-  if (!canViewTasks.value) return
-  commentsTaskId.value = taskId
-  void planning.loadTaskComments(taskId)
+  openTaskEdit(taskId, 'discussion')
 }
 
-async function onSendComment(payload: SendCommentPayload) {
-  if (commentsTaskId.value == null) return
-  await planning.createTaskComment(commentsTaskId.value, payload.content, payload.parent_id)
+async function onSendComment(payload: SendCommentPayload, acknowledge?: (saved: boolean) => void) {
+  if (taskEditorId.value == null || isOffline.value || commentSending.value) {
+    acknowledge?.(false)
+    return
+  }
+  commentSending.value = true
+  try {
+    const saved = await planning.createTaskComment(taskEditorId.value, payload.content, payload.parent_id)
+    acknowledge?.(saved)
+  } catch {
+    acknowledge?.(false)
+  } finally {
+    commentSending.value = false
+  }
 }
 
 function onDeleteComment(payload: DeleteCommentPayload) {
-  if (commentsTaskId.value == null) return
+  const taskId = taskEditorId.value
+  if (taskId == null || isOffline.value) return
   ask(t('plannerViews.planner.confirm.deleteComment'), () => {
-    void planning.deleteTaskComment(commentsTaskId.value ?? 0, payload.comment_id)
+    void planning.deleteTaskComment(taskId, payload.comment_id)
   })
 }
 
@@ -714,7 +743,17 @@ const taskGroups = computed<PdfGanttGroup[]>(() =>
     <ModalForm v-bind="editBind" @save="submitEdit" @close="closeEdit" />
 
     <TaskEditor
-      :open="taskEditorId != null"
+      v-if="taskEditorId != null"
+      :key="taskEditorId"
+      workspace
+      :open="true"
+      :section="taskSection"
+      :context="taskContext"
+      :schedule="taskSchedule"
+      :resource-count="assignedResources.length"
+      :comment-count="findTask(taskEditorId)?.comments_count ?? taskComments.length"
+      :has-related-drafts="commentDraftDirty || resourceDraftDirty"
+      @update:section="selectTaskSection"
       :task="taskEditorTask"
       :subtasks="taskEditorSubtasks"
       :owner-options="ownerOptions"
@@ -725,7 +764,7 @@ const taskGroups = computed<PdfGanttGroup[]>(() =>
       :can-update-subtask="(id) => canManageTask(taskEditorTask?.process_id, id)"
       :can-delete-subtask="(id) => canDeleteTask(taskEditorTask?.process_id, id)"
       :can-manage-dependencies="taskEditorTask ? canManageTask(taskEditorTask.process_id, taskEditorTask.id) : false"
-      :busy="taskEditorBusy"
+      :busy="taskEditorBusy || resourcesBusy || commentSending"
       :error="taskEditorError"
       :disabled-reason="isOffline ? t('plannerViews.offline.disabled') : null"
       @save="onSaveTaskEditor"
@@ -736,38 +775,41 @@ const taskGroups = computed<PdfGanttGroup[]>(() =>
       @update-dependency="onChangeDependency"
       @delete-dependency="onDeleteDependency"
       @close="closeTaskEdit"
-    />
-
-    <ResourceManagerModal
-      :open="resourcesModalTaskId != null"
-      :task-id="resourcesModalTaskId ?? 0"
-      :task-title="resourcesTaskTitle"
-      :can-create="resourcesModalTaskId != null && canAssignTaskResources(findTask(resourcesModalTaskId)?.process_id, resourcesModalTaskId)"
-      :can-delete="resourcesModalTaskId != null && canAssignTaskResources(findTask(resourcesModalTaskId)?.process_id, resourcesModalTaskId, 'delete')"
-      :resources="resourceOptions"
-      :assigned="assignedResources"
-      :busy="resourcesBusy"
-      :error="resourcesError"
-      @add="onAddResource"
-      @remove="onRemoveResource"
-      @close="resourcesModalTaskId = null"
-    />
-
-    <TaskComments
-      :open="commentsTaskId != null"
-      :task-id="commentsTaskId ?? 0"
-      :task-title="commentsTaskTitle"
-      :comments="taskComments"
-      :users="app.users"
-      :busy="planning.commentsLoading"
-      :error="planning.commentsError"
-      :disabled-reason="isOffline ? t('plannerViews.offline.disabled') : null"
-      :can-manage="canDeleteOthersComments"
-      :user-id="userId"
-      @send="onSendComment"
-      @delete="onDeleteComment"
-      @close="commentsTaskId = null"
-    />
+    >
+      <template #resources>
+        <ResourceManagerModal
+          embedded
+          :open="taskEditorId != null"
+          :task-id="taskEditorId ?? 0"
+          :can-create="taskEditorId != null && canAssignTaskResources(findTask(taskEditorId)?.process_id, taskEditorId)"
+          :can-delete="taskEditorId != null && canAssignTaskResources(findTask(taskEditorId)?.process_id, taskEditorId, 'delete')"
+          :resources="resourceOptions"
+          :assigned="assignedResources"
+          :busy="resourcesBusy"
+          :error="resourcesError"
+          @add="onAddResource"
+          @remove="onRemoveResource"
+          @draft-change="resourceDraftDirty = $event"
+        />
+      </template>
+      <template #discussion>
+        <TaskComments
+          embedded
+          :open="taskEditorId != null"
+          :task-id="taskEditorId ?? 0"
+          :comments="taskComments"
+          :users="app.users"
+          :busy="planning.commentsLoading"
+          :error="planning.commentsError"
+          :disabled-reason="isOffline ? t('plannerViews.offline.disabled') : null"
+          :can-manage="taskEditorTask ? canManageTask(taskEditorTask.process_id, taskEditorTask.id) : false"
+          :user-id="userId"
+          @send="onSendComment"
+          @delete="onDeleteComment"
+          @draft-change="commentDraftDirty = $event"
+        />
+      </template>
+    </TaskEditor>
   </section>
 </template>
 

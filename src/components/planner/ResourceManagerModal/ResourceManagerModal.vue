@@ -21,10 +21,12 @@ const emit = defineEmits<{
   add: [payload: AddResourcePayload]
   remove: [payload: { resource_id: number }]
   close: []
+  draftChange: [dirty: boolean]
 }>()
 
 const selectedResourceId = ref<number | ''>('')
 const quantity = ref(1)
+watch(selectedResourceId, (id) => emit('draftChange', id !== ''))
 
 /** Resources not yet assigned to the task — available for adding */
 const available = computed<ResourceOption[]>(() =>
@@ -68,7 +70,7 @@ function resourceTitle(r: AssignedResource): string {
 </script>
 
 <template>
-  <ModalForm :open="open" :title="t('planner.resourceModal.title', { title: taskTitle })" @close="emit('close')">
+  <component :is="embedded ? 'div' : ModalForm" v-bind="embedded ? {} : { open, title: t('planner.resourceModal.title', { title: taskTitle }) }" @close="emit('close')">
     <div class="rm-body">
       <p v-if="error" class="rm-error">{{ error }}</p>
 
@@ -93,6 +95,7 @@ function resourceTitle(r: AssignedResource): string {
           <select
             v-model="selectedResourceId"
             class="rm-input rm-select"
+            :aria-label="t('planner.resourceModal.selectPlaceholder')"
             :disabled="busy"
           >
             <option value="">{{ t('planner.resourceModal.selectPlaceholder') }}</option>
@@ -107,6 +110,7 @@ function resourceTitle(r: AssignedResource): string {
           <input
             v-model.number="quantity"
             class="rm-input rm-qty"
+            :aria-label="t('planner.workspace.quantity')"
             type="number"
             min="1"
             :disabled="busy"
@@ -123,7 +127,7 @@ function resourceTitle(r: AssignedResource): string {
         </button>
       </div>
     </div>
-  </ModalForm>
+  </component>
 </template>
 
 <style scoped>

@@ -34,6 +34,23 @@ export default {
   calendar: {
     cornerToday: 'Сегодня',
   },
+  workspace: {
+    quantity: 'Количество',
+    details: 'Основное',
+    subtasks: 'Подзадачи',
+    resources: 'Ресурсы',
+    discussion: 'Обсуждение',
+    sections: 'Разделы задачи',
+    saveTask: 'Сохранить задачу',
+    unsaved: 'Есть несохранённые изменения',
+    independentActions: 'Ресурсы и комментарии сохраняются отдельно',
+    unsavedTitle: 'Закрыть карточку задачи?',
+    unsavedBody: 'В карточке есть несохранённые изменения или неотправленный текст. При закрытии они будут потеряны.',
+    continueEditing: 'Продолжить редактирование',
+    discard: 'Закрыть без сохранения',
+    saveAndClose: 'Сохранить и закрыть',
+    saveFailed: 'Не удалось сохранить. Введённые данные сохранены в карточке — попробуйте ещё раз.',
+  },
   taskEditor: {
     titleNamed: 'Задача: {title}',
     title: 'Задача',

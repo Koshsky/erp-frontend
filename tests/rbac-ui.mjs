@@ -80,7 +80,7 @@ try {
   await page.locator('input[autocomplete=current-password]').fill(subject.data.password)
   await page.locator('button[type=submit]').click()
   await expect(page).not.toHaveURL(/\/login/)
-  await page.evaluate(async () => { window.rbacTestRouter = (await import('/src/router/index.ts')).default })
+  await page.evaluate(async () => { window.rbacTestRouter = document.querySelector('#app').__vue_app__.config.globalProperties.$router })
   await rights([])
   for (const path of [...protectedPages, `/users/${uid}/edit`, `/users/${uid}/edit/access`]) {
     await navigate(path)

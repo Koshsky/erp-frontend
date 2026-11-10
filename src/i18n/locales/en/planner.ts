@@ -30,6 +30,23 @@ export default {
   calendar: {
     cornerToday: 'Today',
   },
+  workspace: {
+    quantity: 'Quantity',
+    details: 'Details',
+    subtasks: 'Subtasks',
+    resources: 'Resources',
+    discussion: 'Discussion',
+    sections: 'Task sections',
+    saveTask: 'Save task',
+    unsaved: 'Unsaved changes',
+    independentActions: 'Resources and comments are saved separately',
+    unsavedTitle: 'Close task card?',
+    unsavedBody: 'This card contains unsaved changes or unsent text. Closing it will discard them.',
+    continueEditing: 'Continue editing',
+    discard: 'Close without saving',
+    saveAndClose: 'Save and close',
+    saveFailed: 'Could not save. Your input is still in the card — please try again.',
+  },
   taskEditor: {
     titleNamed: 'Task: {title}',
     title: 'Task',

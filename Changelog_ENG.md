@@ -10,6 +10,8 @@ The web app and the desktop wrapper are versioned together.
 
 ### Changed
 
+- Task details, subtasks, dependencies, resources and discussion share a large card that preserves drafts between sections.
+
 - PDF preserves diagram colors, badges, dates and zoom, printing complete selected items with repeated headers while retaining filters and Ctrl+S/Ctrl+P.
 
 - Scope choices are simplified without peers, with explicit inherited viewing and separate priority controls.

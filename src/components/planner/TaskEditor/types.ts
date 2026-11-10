@@ -68,7 +68,16 @@ export interface UpdateDependencyPayload {
   type: DependencyType
 }
 
+export type TaskEditorSection = 'details' | 'subtasks' | 'dependencies' | 'resources' | 'discussion'
+
 export interface TaskEditorProps {
+  workspace?: boolean
+  section?: TaskEditorSection
+  context?: string
+  schedule?: string
+  resourceCount?: number
+  commentCount?: number
+  hasRelatedDrafts?: boolean
   /** Modal visibility */
   open: boolean
   /** The edited task (null — header shows a placeholder) */
@@ -98,7 +107,8 @@ export interface TaskEditorProps {
 
 export interface TaskEditorEmits {
   /** Left panel: save the edited task fields */
-  save: [patch: TaskEditorPatch]
+  save: [patch: TaskEditorPatch, acknowledge?: (saved: boolean) => void]
+  'update:section': [section: TaskEditorSection]
   /** Right panel: add a subtask */
   addSubtask: [payload: NewSubtaskPayload]
   /** Right panel: update a subtask field */

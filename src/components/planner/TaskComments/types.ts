@@ -10,6 +10,7 @@ export interface CommentFlatNode {
 }
 
 export interface TaskCommentsProps {
+  embedded?: boolean
   open: boolean
   taskId: number
   taskTitle?: string

@@ -16,6 +16,7 @@
     "test:stories": "vitest run",
     "test:pdf": "node tests/pdf-snapshot.mjs",
     "test:rbac:ui": "node tests/rbac-ui.mjs",
+    "test:task-workspace": "node tests/task-workspace.mjs",
     "test:offline:p0": "node tests/offline-p0.mjs",
     "test:stories:watch": "vitest"
   },

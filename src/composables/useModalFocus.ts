@@ -168,6 +168,9 @@ function useModalFocusImpl(
   /** Escape must work even when the focus is outside the dialog */
   function onDocumentKeydown(event: KeyboardEvent): void {
     if (event.key !== 'Escape' || !isOpen()) return
+    // A confirmation or a teleported picker owns Escape while focused.
+    const focusedDialog = (event.target as Element | null)?.closest?.('[role=dialog]')
+    if (focusedDialog && focusedDialog !== dialogEl.value) return
     // The dialog's own handler already dealt with it; ignore the bubbled copy.
     if (dialogEl.value && dialogEl.value.contains(event.target as Node)) return
     if (!closeOnEscape) return
