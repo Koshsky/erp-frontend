@@ -10,6 +10,8 @@ The web app and the desktop wrapper are versioned together.
 
 ### Fixed
 
+- Blocked local storage no longer leaves login pending indefinitely; timed-out writes are cancelled and connections can recover.
+
 - Cached profiles no longer masquerade as logged-out sessions; 401 responses reach login without redirect loops and preserve queued work.
 
 - Administrators see all resources; the owner filter affects only resource-header rows and offers resource owners only.
