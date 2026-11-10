@@ -10,6 +10,8 @@ The web app and the desktop wrapper are versioned together.
 
 ### Fixed
 
+- Cached pages open during sibling session renewal, and pending edits no longer leave reloaded diagrams empty.
+
 - Shared-tab session renewal and offline retries preserve queued changes through expiry, re-login and lost responses.
 
 - Page navigation after session restoration no longer triggers redundant token refreshes.

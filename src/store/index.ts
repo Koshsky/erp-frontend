@@ -2069,7 +2069,10 @@ export const usePlanningStore = defineStore('planning', () => {
     await runLoad(silent, async () => {
       const stamp = readStamp()
       const resp = await new PlanningApi(apiConfig()).planningProjectsGet()
-      if (mayApplyRead(stamp) && pendingRefs.value.size === 0) projectPlanning.value = resp.data?.data ?? null
+      if (!mayApplyRead(stamp)) return
+      if (pendingRefs.value.size === 0) projectPlanning.value = resp.data?.data ?? null
+      // A durable queue must preserve edits without blocking the first snapshot.
+      else if (projectPlanning.value == null) await loadProjectPlanning()
     })
   }
 
@@ -2077,7 +2080,10 @@ export const usePlanningStore = defineStore('planning', () => {
     await runLoad(silent, async () => {
       const stamp = readStamp()
       const resp = await new PlanningApi(apiConfig()).planningProcessesGet()
-      if (mayApplyRead(stamp) && pendingRefs.value.size === 0) processPlanning.value = resp.data?.data ?? null
+      if (!mayApplyRead(stamp)) return
+      if (pendingRefs.value.size === 0) processPlanning.value = resp.data?.data ?? null
+      // A durable queue must preserve edits without blocking the first snapshot.
+      else if (processPlanning.value == null) await loadProcessPlanning()
     })
   }
 
@@ -2085,7 +2091,10 @@ export const usePlanningStore = defineStore('planning', () => {
     await runLoad(silent, async () => {
       const stamp = readStamp()
       const resp = await new PlanningApi(apiConfig()).planningTasksGet()
-      if (mayApplyRead(stamp) && pendingRefs.value.size === 0) taskPlanning.value = resp.data?.data ?? null
+      if (!mayApplyRead(stamp)) return
+      if (pendingRefs.value.size === 0) taskPlanning.value = resp.data?.data ?? null
+      // A durable queue must preserve edits without blocking the first snapshot.
+      else if (taskPlanning.value == null) await loadTaskPlanning()
     })
   }
 

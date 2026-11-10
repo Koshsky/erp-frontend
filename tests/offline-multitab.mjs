@@ -250,6 +250,45 @@ try {
   expect((await tasks()).filter(row => row.title === nameD)).toHaveLength(1)
   await expect.poll(() => second.evaluate(() => window.mt.auth.accessExpired())).toBe(false)
   report.push('PASS slow shared refresh: cached navigation stays responsive and requests wait for a valid token')
+  await navigate(first, '/planner')
+  await second.evaluate(async () => {
+    window.holdsSessionLock = false
+    window.holdSessionLock = navigator.locks.request('mvs_erp_refresh', () => new Promise(resolve => {
+      window.releaseSessionLock = resolve
+      window.holdsSessionLock = true
+    }))
+  })
+  await expect.poll(() => second.evaluate(() => window.holdsSessionLock)).toBe(true)
+  await first.reload()
+  await expect(first.locator('.ah-burger'), 'cached account startup cannot wait forever for a suspended sibling').toBeVisible({ timeout: 4000 })
+  await expect(first.locator('body')).toContainText(nameD)
+  await second.evaluate(() => window.releaseSessionLock())
+  await runtime(first)
+  await expect.poll(() => first.evaluate(() => window.mt.auth.accessExpired())).toBe(false)
+  report.push('PASS cold reload with a suspended refresh owner: cached interface opens before the lock is released')
+  await first.evaluate(async () => {
+    await window.mt.outbox.enqueueMutation({
+      entity: 'task', method: 'PUT', url: location.origin + '/api/v1/task/2147483647',
+      body: { title: 'Rejected disposable fixture' },
+    })
+    await window.mt.sync.syncNow()
+  })
+  expect((await queue(first))[0].quarantined).toBe(true)
+  await setOffline(first, true)
+  const nameE = `${prefix}-E-pending`
+  await createOffline(first, nameE)
+  const rejectedQueue = await queue(first)
+  expect(rejectedQueue).toHaveLength(2)
+  await setOffline(first, false)
+  await first.evaluate(() => window.mt.db.idbClear('cache'))
+  await first.reload()
+  await expect(first.locator('.ah-burger')).toBeVisible({ timeout: 4000 })
+  await runtime(first)
+  await expect(first.locator('body'), 'a preserved rejected edit cannot blank freshly loaded planning data').toContainText(nameD, { timeout: 8000 })
+  await expect(first.locator('body')).toContainText(nameE)
+  expect((await tasks()).some(row => row.title === nameE)).toBe(false)
+  expect(await queue(first)).toEqual(rejectedQueue)
+  report.push('PASS missing cache with a quarantined mutation: backend data renders and the rejected edit remains intact')
   expect(errors).toEqual([])
   console.log(report.join('\n'))
   console.log(`PASS multi-tab offline: ${transitions} real menu transitions; disposable user and data only`)
