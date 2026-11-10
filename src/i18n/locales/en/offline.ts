@@ -31,7 +31,7 @@ export default {
     middleName: 'Middle name',
     username: 'Login',
     position: 'Position',
-    preset: 'Permission preset',
+    preset: 'Role',
     priority: 'Priority',
     startDate: 'Start',
     endDate: 'End',

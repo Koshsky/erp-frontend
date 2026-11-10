@@ -8,12 +8,12 @@ export default {
     column: {
       name: 'Full name',
       login: 'Login',
-      preset: 'Preset',
+      preset: 'Role',
     },
     filter: {
       namePlaceholder: 'Ivanov Ivan Ivanovich',
       loginPlaceholder: 'by login',
-      allPresets: 'All presets',
+      allPresets: 'All roles',
     },
     emptyFound: 'Nothing found',
     create: 'Create user',

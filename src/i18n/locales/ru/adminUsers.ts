@@ -8,12 +8,12 @@ export default {
     column: {
       name: 'ФИО',
       login: 'Логин',
-      preset: 'Пресет',
+      preset: 'Роль',
     },
     filter: {
       namePlaceholder: 'Иванов Иван Иванович',
       loginPlaceholder: 'по логину',
-      allPresets: 'Все пресеты',
+      allPresets: 'Все роли',
     },
     emptyFound: 'Ничего не найдено',
     create: 'Создать пользователя',

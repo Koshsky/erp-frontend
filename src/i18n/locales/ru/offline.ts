@@ -32,7 +32,7 @@ export default {
     middleName: 'Отчество',
     username: 'Логин',
     position: 'Должность',
-    preset: 'Пресет прав',
+    preset: 'Роль',
     priority: 'Приоритет',
     startDate: 'Начало',
     endDate: 'Конец',
