@@ -5,3 +5,8 @@ export function resourcePageAccessible(can: (resource: string, action: string) =
 export function resourceHeaderRows<T extends { owner_id?: number }>(rows: T[], userId: number | null | undefined): T[] {
   return userId == null ? [] : rows.filter((row) => row.owner_id === userId)
 }
+
+export function resourceHeaderOwners<T extends { id?: number }>(users: T[], rows: { owner_id?: number }[]): T[] {
+  const owners = new Set(rows.map(row => row.owner_id))
+  return users.filter(user => user.id != null && owners.has(user.id))
+}

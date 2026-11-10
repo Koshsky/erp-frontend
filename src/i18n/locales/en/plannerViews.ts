@@ -16,8 +16,8 @@ export default {
     disabled: 'Unavailable offline',
   },
   planner: {
-    viewAs: 'Diagram view',
-    wholeSystem: 'Whole system — without resource header',
+    viewAs: 'Resource owner',
+    wholeSystem: 'All resources',
     menu: {
       comments: 'Comments',
       editTask: 'Edit',

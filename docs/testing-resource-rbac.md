@@ -10,6 +10,7 @@ node tests/ownership-mutations.mjs
 node tests/ownership-create.mjs
 node tests/project-subtree.mjs
 node tests/resource-ui.mjs
+node tests/admin-resource-header.mjs
 node tests/preset-denial.mjs
 npm run check
 npm run lint
@@ -62,11 +63,11 @@ The API integration test uses the real backend on loopback port 8080 and creates
 | Process owner change deletes assignments of its tasks | Real API old assignment returns 404; SQL integration count becomes zero; Pinia regression preserves another process's assignments. |
 | Same owner, title-only edits, or rejected changes preserve assignments | SQL integration and `planningDates.test.ts` verify unchanged ownership and unrelated edits; rejected writes preserve the local resource lists. |
 | Transaction rollback restores removed assignments | `TestAssignmentOwnerInvariant` changes an owner inside a transaction, rolls back, and verifies the assignment remains. |
-| Complete resource header, independently of resource-table pagination | `useOwnedResources.test.ts` loads 501 owned resources across two API pages, excludes foreign rows, restores the complete offline snapshot and skips loading in administrator system mode. |
+| Complete resource header, independently of resource-table pagination | `useOwnedResources.test.ts` loads 501 owned resources across two API pages, excludes foreign rows, restores complete offline snapshots, and loads all owners without an owner filter in administrator system mode. |
 | Offline resource CRUD and owner changes survive reload | `cacheApply.test.ts` checks create/delete/owner updates, cached task-assignment cleanup and current-account cache isolation; `outbox.test.ts` checks FIFO cache replay. |
 | Non-admin resource header contains exactly owned resources | UI asserts the single owned code despite foreign cached rows and no assignments; pure helper verifies no ownerless/foreign rows. |
-| Admin system view has no resource header | `resource-ui.mjs`: administrator system selection has zero resource codes. |
-| Admin subject view shows that user's scoped diagram and owned header | UI selection forwards the subject header and shows only owned resource codes; real API preview equals the subject's task-planning response and excludes a foreign task. |
+| Admin system view includes all resource owners | `resource-ui.mjs` checks own and foreign resource codes; `useOwnedResources.test.ts` covers unfiltered pagination, offline snapshots and scope changes. |
+| Admin owner filter changes resource rows only | `admin-resource-header.mjs` checks both owners, hides users without resources, retains every project/process/task and editing handles, and makes no impersonation requests. |
 | Subject preview cannot perform writes or be used by a non-admin | Auth middleware table tests; real API rejects a non-admin subject header and administrator POST with that header. |
 | Preview cannot contaminate normal cache or fall back to whole-system data | Two dedicated `http.test.ts` regressions. |
 | Preset hint is understandable and translated | UI opens the new Russian hint and switches to its English counterpart; both explain own/all, ownership and assignment cleanup. |

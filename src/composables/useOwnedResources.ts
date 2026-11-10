@@ -8,15 +8,15 @@ import { pendingRefs } from '@/offline/outbox'
 import { resourceHeaderRows } from '@/utils/resourceAccess'
 
 /** The planning header must not inherit the resource table's pagination. */
-export function useOwnedResources(resources: Ref<DtoResourceResponse[]>, userId: Ref<number | undefined>, enabled: Ref<boolean>) {
+export function useOwnedResources(resources: Ref<DtoResourceResponse[]>, userId: Ref<number | undefined>, enabled: Ref<boolean>, allOwners: Ref<boolean> = ref(false)) {
   const loaded = ref<DtoResourceResponse[] | null>(null)
   let request = 0
-  watch([resources, userId, enabled, isOffline, pendingRefs], async () => {
+  watch([resources, userId, enabled, allOwners, isOffline, pendingRefs], async () => {
     const generation = ++request
     loaded.value = null
-    const owner = userId.value
-    if (!enabled.value || owner == null) return
-    const key = userCachePrefix() + '/local/resource-header?owner_id=' + owner
+    if (!enabled.value || userId.value == null) return
+    const owner = allOwners.value ? undefined : userId.value
+    const key = userCachePrefix() + '/local/resource-header?owner_id=' + (allOwners.value ? 'all' : owner)
     const saved = await cacheGet<DtoResourceResponse[]>(key)
     if (generation !== request) return
     loaded.value = saved
@@ -26,21 +26,21 @@ export function useOwnedResources(resources: Ref<DtoResourceResponse[]>, userId:
       const rows: DtoResourceResponse[] = []
       for (let offset = 0; ; offset += 500) {
         const response = await new TimesheetResourcesApi(apiConfig()).resourcesGet(500, owner, offset)
-        if (isOffline.value) return
+        if (isOffline.value || generation !== request) return
         const page = response.data?.data?.items ?? []
         rows.push(...page)
         if (page.length < 500) break
       }
       if (generation !== request || !mayApplyRead(stamp)) return
-      loaded.value = resourceHeaderRows(rows, owner)
+      loaded.value = allOwners.value ? rows : resourceHeaderRows(rows, owner)
       await cachePut(key, loaded.value)
     } catch {
-      // Retain the last complete owner snapshot when the backend is unavailable.
+      // Retain the last complete scope snapshot when the backend is unavailable.
     }
   }, { immediate: true, deep: true })
   return computed(() => {
     const rows = new Map((loaded.value ?? []).map((row) => [row.id, row]))
     for (const row of resources.value) rows.set(row.id, row)
-    return resourceHeaderRows([...rows.values()], userId.value)
+    return allOwners.value ? [...rows.values()] : resourceHeaderRows([...rows.values()], userId.value)
   })
 }

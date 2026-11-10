@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import TaskPlanning from '../components/planner/TaskPlanning/TaskPlanning.vue'
@@ -36,53 +36,14 @@ import type { DependencyType } from '../components/planner/dependencies'
 import { CELL_WIDTH } from '../components/planner/layout'
 import { randomPaletteColor } from '../components/common/ColorField/palette'
 import type { PdfGanttGroup } from '../components/planner/PdfExport/pdfRenderer'
-import { PlanningApi, TimesheetResourcesApi, TimesheetCalendarApi } from '@/api'
-import { apiConfig } from '@/store'
 import { useOwnedResources } from '@/composables/useOwnedResources'
-import { resourceHeaderRows } from '@/utils/resourceAccess'
-import type { DtoResourceResponse, DtoResourceCalendar, DtoDetailedProcess, DtoDetailedTask, DtoTaskDependency, DtoResource, DtoMilestone } from '@/api'
+import { resourceHeaderRows, resourceHeaderOwners } from '@/utils/resourceAccess'
+import type { DtoDetailedProcess, DtoDetailedTask, DtoTaskDependency, DtoResource, DtoMilestone } from '@/api'
 
 const planning = usePlanningStore()
 const app = useAppStore()
 const route = useRoute()
-const viewUser = ref('')
-const previewData = ref<DtoDetailedProcess[] | null>(null)
-const previewResources = ref<DtoResourceResponse[]>([])
-const previewCalendar = ref<DtoResourceCalendar[]>([])
-const previewError = ref<string | null>(null)
-const previewLoading = ref(false)
-let viewRequest = 0
-watch(viewUser, async (value) => {
-  const request = ++viewRequest
-  previewData.value = null
-  previewResources.value = []
-  previewCalendar.value = []
-  previewError.value = null
-  if (!value) { previewLoading.value = false; return }
-  previewLoading.value = true
-  try {
-    const options = { headers: { 'X-View-User-ID': value }, params: { view_user_id: value } }
-    const [tasks, rows, capacity] = await Promise.all([
-      new PlanningApi(apiConfig()).planningTasksGet(options),
-      (async () => {
-        const items: DtoResourceResponse[] = []
-        for (let offset = 0; ; offset += 500) {
-          const result = await new TimesheetResourcesApi(apiConfig()).resourcesGet(500, Number(value), offset, options)
-          const page = result.data?.data?.items ?? []
-          items.push(...page)
-          if (page.length < 500) return items
-        }
-      })(),
-      new TimesheetCalendarApi(apiConfig()).timesheetCalendarGet(addDaysISO(new Date().toISOString().slice(0, 10), -180), addDaysISO(new Date().toISOString().slice(0, 10), 360), options),
-    ])
-    if (request !== viewRequest) return
-    previewData.value = tasks.data?.data?.processes ?? []
-    previewResources.value = rows
-    previewCalendar.value = capacity.data?.data?.resources ?? []
-  } catch (e) {
-    if (request === viewRequest) previewError.value = e instanceof Error ? e.message : String(e)
-  } finally { if (request === viewRequest) previewLoading.value = false }
-})
+const resourceOwner = ref('')
 
 const { taskPlanning, loading, error } = storeToRefs(planning)
 const { resources, calendar } = storeToRefs(app)
@@ -147,13 +108,12 @@ const {
   userId,
 } = useRoleAccess()
 
-const ownedResources = useOwnedResources(resources, userId, computed(() => role.value !== 'admin'))
-const headerResources = computed(() => resourceHeaderRows(
-  role.value === 'admin' ? previewResources.value : ownedResources.value,
-  role.value === 'admin' ? (viewUser.value ? Number(viewUser.value) : null) : userId.value,
-))
-const displayCalendar = computed(() => role.value === 'admin' && viewUser.value ? previewCalendar.value : calendar.value)
-const previewReadOnly = computed(() => role.value === 'admin' && !!viewUser.value)
+const allResourceOwners = computed(() => role.value === 'admin')
+const availableResources = useOwnedResources(resources, userId, ref(true), allResourceOwners)
+const resourceOwners = computed(() => resourceHeaderOwners(app.users, availableResources.value))
+const headerResources = computed(() => allResourceOwners.value && !resourceOwner.value
+  ? availableResources.value
+  : resourceHeaderRows(availableResources.value, allResourceOwners.value ? Number(resourceOwner.value) : userId.value))
 
 const { findTask, findMilestone } = useFindPlanningItem()
 
@@ -296,7 +256,6 @@ function selectTaskSection(section: TaskEditorSection) {
 }
 
 function openTaskEdit(id: number, section: TaskEditorSection = 'details') {
-  if (role.value === 'admin' && viewUser.value) return
   if (!canViewTasks.value || !findTask(id)) return
   if (taskEditorId.value != null && taskEditorId.value !== id) return
   taskEditorId.value = id
@@ -420,7 +379,6 @@ async function onDeleteDependency(id: number) {
 }
 
 function onContextMenu(p: { clientX: number; clientY: number; date: string | null; rowIndex: number; processId?: number; taskId?: number; milestoneId?: number }) {
-  if (role.value === 'admin' && viewUser.value) return
   if (!canViewTasks.value) return
   // Empty group area: creation requires the corresponding right, a parent process and a known date.
   // A task row opens the menu for viewers (Comments); a milestone — only with a right on it.
@@ -446,14 +404,12 @@ const { open: openMenu, close: closeMenu, select, bind: menuBind } = useContextM
  *  task.update on the task's process; everyone else with task.view gets the
  *  same modal in read-only mode (fields and operations disabled). */
 function onTaskBarEdit(id: number) {
-  if (role.value === 'admin' && viewUser.value) return
   const task = findTask(id)
   if (!task || !canViewTasks.value) return
   openTaskEdit(id)
 }
 
 function openMilestoneEdit(id: number) {
-  if (role.value === 'admin' && viewUser.value) return
   const ms = findMilestone(id)
   if (ms && canManageMilestone(ms.process_id)) {
     openEdit({ type: 'milestone', id, title: ms.title ?? '', content: ms.content ?? '', color: ms.color ?? '' })
@@ -639,7 +595,7 @@ const processesByPriority = computed(() => {
   for (const p of source) {
     if (p.id != null) prio.set(p.id, p.priority ?? Number.MAX_SAFE_INTEGER)
   }
-  const list = role.value === 'admin' && viewUser.value ? (previewData.value ?? []) : (taskPlanning.value?.processes ?? [])
+  const list = taskPlanning.value?.processes ?? []
   return [...list].sort((a, b) => {
     const pa = prio.get(a.project_id ?? -1) ?? Number.MAX_SAFE_INTEGER
     const pb = prio.get(b.project_id ?? -1) ?? Number.MAX_SAFE_INTEGER
@@ -676,15 +632,15 @@ const taskGroups = computed<PdfGanttGroup[]>(() =>
     <div class="pp-toolbar">
       <label v-if="role === 'admin'">
         {{ t('plannerViews.planner.viewAs') }}
-        <select v-model="viewUser">
+        <select v-model="resourceOwner">
           <option value="">{{ t('plannerViews.planner.wholeSystem') }}</option>
-          <option v-for="user in app.users" :key="user.id" :value="String(user.id)">{{ user.name }}</option>
+          <option v-for="user in resourceOwners" :key="user.id" :value="String(user.id)">{{ user.name }}</option>
         </select>
       </label>
       <PdfExport
         :groups="taskGroups"
         :resources="headerResources"
-        :calendar="displayCalendar"
+        :calendar="calendar"
         :origin="origin"
         :unit="unit"
         :owner-id="userId"
@@ -703,19 +659,19 @@ const taskGroups = computed<PdfGanttGroup[]>(() =>
     <TaskPlanning
       :processes="processesByPriority"
       :resources="headerResources"
-      :calendar="displayCalendar"
+      :calendar="calendar"
       :absence-by-resource="role === 'admin' ? null : absenceByResource"
       :users="app.users"
-      :loading="loading || previewLoading"
-      :error="previewError || error"
+      :loading="loading"
+      :error="error"
       :origin="origin"
       :unit="unit"
-      :can-manage="(id, processId) => !previewReadOnly && canManageTask(processId, id)"
-      :can-manage-milestones="(processId) => !previewReadOnly && canManageMilestone(processId)"
-      :reorderable="(processId) => !previewReadOnly && canManageTask(processId)"
+      :can-manage="(id, processId) => canManageTask(processId, id)"
+      :can-manage-milestones="(processId) => canManageMilestone(processId)"
+      :reorderable="(processId) => canManageTask(processId)"
       :focus-date="focusDate"
       :focus-group-id="focusGroupId"
-      :comments-by-task="viewUser ? null : planning.commentsByTask"
+      :comments-by-task="planning.commentsByTask"
       @change="(p) => planning.moveTask(p.id, p.start_date, p.end_date)"
       @milestone-change="(p) => planning.updateMilestoneDate(p.id, p.date)"
       @contextmenu="onContextMenu"
@@ -724,7 +680,7 @@ const taskGroups = computed<PdfGanttGroup[]>(() =>
       @milestone-edit="openMilestoneEdit"
       @visible-range="onVisibleRange"
       @edit="onTaskBarEdit"
-      @request-comments="(id) => !viewUser && planning.loadTaskComments(id, { fresh: false })"
+      @request-comments="(id) => planning.loadTaskComments(id, { fresh: false })"
       @open-comments="openComments"
     />
 

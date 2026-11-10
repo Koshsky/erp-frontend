@@ -40,19 +40,11 @@ try{
  await page.evaluate(()=>{window.ui.planning.taskPlanning={processes:[{id:10,owner_id:42,title:'Test process',start_date:'2026-11-01',end_date:'2026-12-31',tasks:[{id:20,owner_id:42,title:'Test task',start_date:'2026-11-09',end_date:'2026-11-22',resources:[]}]}]}})
  await page.evaluate(()=>window.ui.router.push('/planner'))
  await expect(page.locator('.rs-code')).toHaveText(['OWN'])
- await seed([{resource:'task',action:'view',scope:'all'}],true);await expect(page.locator('.rs-code')).toHaveCount(0)
- await page.route('**/api/v1/**',async route=>{
-  const req=route.request();if(!req.headers()['x-view-user-id'])return route.continue()
-  expect(req.method()).toBe('GET');expect(req.headers()['x-view-user-id']).toBe('42')
-  const path=new URL(req.url()).pathname
-  const data=await page.evaluate(path=>path.includes('/planning/')?window.ui.planning.taskPlanning:path.includes('/calendar')?{resources:[]}:{items:window.ui.app.resources},path)
-  await route.fulfill({json:{data,error:{}}})
- })
- await page.evaluate(()=>{window.ui.state.isOffline.value=false})
+ await seed([{resource:'task',action:'view',scope:'all'}],true);await expect.poll(()=>page.locator('.rs-code').allTextContents()).toEqual(expect.arrayContaining(['OWN','OTHER']))
  await page.locator('.pp-toolbar select').selectOption('42')
 
  await expect(page.locator('.rs-code')).toHaveText(['OWN'])
- await expect(page.locator('.gb-handle')).toHaveCount(0)
+ expect(await page.locator('.gb-handle').count()).toBeGreaterThan(0)
  await page.evaluate(()=>{
   const u=window.ui;u.rbac.myPermissions=[{resource:'rbac_config',action:'view',scope:'all'}];u.rbac.presets=[{tag:'testrole',name:'Test role'},{tag:'second_role_long_tag',name:'Длинное название роли руководителя подразделения и нескольких проектов'}]
   const entities=['resource','project','process','task','milestone','assignment'];const actions=['view','create','update','delete']
@@ -191,5 +183,5 @@ try{
  await expect(englishTasks.getByRole('button',{name:'In the same process',exact:true})).toHaveCount(0)
  await expect(englishTasks.getByRole('button',{name:'In employee-owned processes',exact:true})).toHaveCount(2)
  await expect(page.getByText('Viewing inherited from a parent · controls locked',{exact:false}).first()).toBeVisible()
- console.log('PASS UI: four independent navigation gates; create gate; view/update/delete/context menus; own/all lists; owner-only header; admin system/subject/read-only modes; six preset blocks with explicit denials; deselect all/last grant, repeated denial click, role switch and cancellation; independent page columns without row gaps, View/Manage columns with explicit mixed scopes, mobile reading order, vertical scope order, responsive widths, stacked role labels, independent staged role changes and delete/context menu controls')
+ console.log('PASS UI: four independent navigation gates; create gate; view/update/delete/context menus; own/all lists; owner-only header; administrator all-resource mode and resource-only owner filtering; six preset blocks with explicit denials; deselect all/last grant, repeated denial click, role switch and cancellation; independent page columns without row gaps, View/Manage columns with explicit mixed scopes, mobile reading order, vertical scope order, responsive widths, stacked role labels, independent staged role changes and delete/context menu controls')
 }finally{await browser.close()}

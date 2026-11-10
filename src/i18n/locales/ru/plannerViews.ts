@@ -18,8 +18,8 @@ export default {
   },
   // --- PlannerPage.vue (tasks diagram) ---
   planner: {
-    viewAs: 'Просмотр диаграммы',
-    wholeSystem: 'Вся система — без шапки ресурсов',
+    viewAs: 'Владелец ресурсов',
+    wholeSystem: 'Все ресурсы',
     /** Right-click menu on a task bar / a milestone flag / an empty group area */
     menu: {
       comments: 'Комментарии',
