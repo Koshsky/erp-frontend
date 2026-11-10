@@ -18,14 +18,14 @@ import { beginMutation, readStamp, mayApplyRead } from '@/offline/mutationGuard'
 import { pendingRefs } from '@/offline/outbox'
 import { getAccessToken, setAccessToken } from '@/token'
 import {
-  tryAcquireRefreshLock,
-  releaseRefreshLock,
+  withRefreshLock,
   publishSession,
   subscribeSession,
   subscribeToken,
 } from '@/sessionSync'
 import { isLoggedOut, clearLoggedOut, setLoggedOut } from '@/loggedOut'
 import { saveRefreshToken, loadRefreshToken, clearRefreshToken } from '@/offline/session'
+import { createTemporaryId } from '@/offline/temporaryId'
 import { hydrateFromCache, apiPath } from '@/offline/hydrate'
 import { cacheGetAllByPath } from '@/offline/cache'
 import { evalScope, type ScopeProbe } from '@/rbacScope'
@@ -65,7 +65,7 @@ const BATCH_IDS_MAX = 200
 
 /** Temporary (negative) id for entities created offline (unique over time) */
 function nextTempId(): number {
-  return -Date.now()
+  return createTemporaryId()
 }
 
 interface MutationOptions<T = unknown> {
@@ -225,23 +225,20 @@ function accessTokenExpiring(): boolean {
   return exp - Date.now() <= REFRESH_MARGIN_MS
 }
 
-/**
- * Cross-tab refresh (web): another tab is already rotating the shared refresh
- * cookie. Adopt the access token it broadcasts (if it is fresher than ours),
- * otherwise return true and let the next 401 retry use the rotated cookie.
- */
+/** Wait for a valid sibling token; timeout is a retry signal, never refresh success. */
 function waitForExternalToken(): Promise<boolean> {
+  if (!accessTokenExpired()) return Promise.resolve(true)
   return new Promise((resolve) => {
     const timer = window.setTimeout(() => {
       unsub()
-      resolve(true)
+      resolve(!accessTokenExpired())
     }, 2000)
     const unsub = subscribeToken((token) => {
-      if (!token) return
       const cur = decodeTokenExp(getAccessToken())
       const next = decodeTokenExp(token)
-      if (next != null && (cur == null || next > cur)) setAccessToken(token)
-      if (timer != null) window.clearTimeout(timer)
+      if (next == null || next <= Date.now()) return
+      if (cur == null || next > cur) setAccessToken(token)
+      window.clearTimeout(timer)
       unsub()
       resolve(true)
     })
@@ -465,17 +462,13 @@ export const useAuthStore = defineStore('auth', () => {
     // the revoked token would trigger reuse detection (revoking all of the
     // user's sessions). We return false without the network — the caller is logged out.
     if (isLoggedOut()) return false
-    // Cross-tab coordination for ALL environments: the refresh token is shared (the body/IndexedDB
-    // value or the cookie), so two tabs refreshing the same (rotating) session pair at once make the
-    // second tab hit the backend reuse detection — revoking ALL of the user's sessions and logging
-    // every tab out. Only one tab refreshes at a time; the rest adopt the token it broadcasts.
-    const coordinated = true
-    if (coordinated && !tryAcquireRefreshLock()) {
-      // Another tab is refreshing — wait briefly for its token, otherwise defer:
-      // the next 401 retry will use the already-rotated refresh (safe — the new
-      // token is not revoked).
-      return await waitForExternalToken()
-    }
+    const renewed = await withRefreshLock(refreshOwnedSession)
+    if (renewed != null) return renewed
+    if (await waitForExternalToken()) return true
+    return doRefresh()
+  }
+
+  async function refreshOwnedSession(): Promise<boolean> {
     loading.value = true
     error.value = null
     try {
@@ -491,7 +484,7 @@ export const useAuthStore = defineStore('auth', () => {
         await saveRefreshToken(body.data.refresh_token)
       }
       const token = getAccessToken()
-      if (coordinated && token) {
+      if (token) {
         publishSession({ access: token, refresh: body?.data?.refresh_token })
       }
       return true
@@ -509,7 +502,6 @@ export const useAuthStore = defineStore('auth', () => {
       return false
     } finally {
       loading.value = false
-      if (coordinated) releaseRefreshLock()
     }
   }
 

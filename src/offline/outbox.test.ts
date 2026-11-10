@@ -347,3 +347,27 @@ it('replays the cached overlay in FIFO order rather than IndexedDB key order', a
   await replayOutboxToCache()
   expect(vi.mocked(applyToCache).mock.calls.map(([item]) => item.id)).toEqual(['z', 'a'])
 })
+
+describe('flushOutbox — expired authorization', () => {
+  it.each(['POST', 'PUT', 'DELETE'] as const)('pauses on %s 401 without damaging the queue', async (method) => {
+    seed({ id: 'unauthorized', ts: 100, method, url: 'http://api.test/api/v1/task/1', entity: 'task', idempotencyKey: 'stable-key' })
+    seed({ id: 'later', ts: 200, method: 'PUT', url: 'http://api.test/api/v1/task/2', entity: 'task' })
+    const before = structuredClone([...fake.store('outbox').values()])
+    axiosCall.fn.mockRejectedValueOnce(httpError(401))
+
+    const result = await flushOutbox()
+
+    expect(result.interrupted).toBe(true)
+    expect(result.failed).toBe(0)
+    expect(result.ok).toBe(0)
+    expect(axiosCall.fn).toHaveBeenCalledTimes(1)
+    expect([...fake.store('outbox').values()]).toEqual(before)
+    expect(fake.store('idmap').size).toBe(0)
+
+    axiosCall.fn.mockResolvedValue(okResponse)
+    const resumed = await flushOutbox()
+    expect(resumed.ok).toBe(2)
+    expect(fake.store('outbox').size).toBe(0)
+    expect(axiosCall.fn.mock.calls[1][0].headers['Idempotency-Key']).toBe('stable-key')
+  })
+})

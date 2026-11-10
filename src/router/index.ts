@@ -257,7 +257,12 @@ router.beforeEach(async (to) => {
               ),
             ])
           : auth.refreshSession()
-      await refresh
+      // Cached permissions already authorize local navigation; renewal gates API calls instead.
+      if (auth.isAuthenticated && useRbacStore().permsLoaded) {
+        void refresh
+      } else {
+        await refresh
+      }
     }
   }
 

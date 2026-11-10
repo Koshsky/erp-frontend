@@ -86,6 +86,22 @@ export function releaseRefreshLock(): void {
   }
 }
 
+/** Web Locks makes acquisition atomic; the storage lock also coordinates older clients. */
+export async function withRefreshLock(refresh: () => Promise<boolean>): Promise<boolean | null> {
+  const run = async () => {
+    if (!tryAcquireRefreshLock()) return null
+    try {
+      return await refresh()
+    } finally {
+      releaseRefreshLock()
+    }
+  }
+  if (typeof navigator !== 'undefined' && navigator.locks) {
+    return navigator.locks.request('mvs_erp_refresh', { ifAvailable: true }, lock => lock ? run() : null)
+  }
+  return run()
+}
+
 /** Session payload broadcast to sibling tabs (access + rotated refresh) */
 export interface SessionPayload {
   access?: string

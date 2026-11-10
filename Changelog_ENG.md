@@ -10,6 +10,8 @@ The web app and the desktop wrapper are versioned together.
 
 ### Fixed
 
+- Shared-tab session renewal and offline retries preserve queued changes through expiry, re-login and lost responses.
+
 - Page navigation after session restoration no longer triggers redundant token refreshes.
 
 ### Changed

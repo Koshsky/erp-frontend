@@ -663,6 +663,11 @@ export async function flushOutbox(): Promise<FlushResult> {
           // flush sorts entries by enqueue time, so the creator entry goes out first
           // and rewriteIds substitutes the real id before this DELETE is sent.
           const status = err.response.status
+          // Session renewal can fail independently of the saved mutation.
+          if (status === 401) {
+            result.interrupted = true
+            break
+          }
           const method = (entry.method || '').toUpperCase()
           if (method === 'DELETE' && (status === 404 || status === 410)) {
             await idbDel(OUTBOX_STORE, entry.id)

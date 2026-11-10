@@ -24,6 +24,7 @@
     "test:csp:nginx": "node tests/nginx-csp.mjs",
     "test:task-workspace": "node tests/task-workspace.mjs",
     "test:offline:p0": "node tests/offline-p0.mjs",
+    "test:offline:multitab": "node tests/offline-multitab.mjs",
     "test:stories:watch": "vitest"
   },
   "keywords": [],
