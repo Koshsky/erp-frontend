@@ -23,6 +23,8 @@ The web app and the desktop wrapper are versioned together.
 
 ### Fixed
 
+- Fixed Markdown URL and SVG filter bypasses; stored XSS coverage includes user fields online, from offline cache and in PDF exports.
+
 - Pages, context menus, editors and dragging check each action and object independently; revoked access closes the page.
 
 - Individual permissions preserve separate action rules, support cancellation and reject stale responses after saving.

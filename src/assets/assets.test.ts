@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * Tests for the unified assets entry point (src/assets/index.ts): the
  * custom/Default catalogs mirror each other and the custom asset wins for
@@ -9,6 +10,7 @@ import {
   customAssets,
   defaultAssets,
   isValidSvg,
+  sanitizeSvg,
   mergeCatalogs,
   resolveAsset,
   resolveAssetWithCustom,
@@ -120,7 +122,7 @@ const EXPECTED_ICONS = [
 
 /** Minimal inert inline SVG (what the runtime resolver would fetch). */
 function svgPayload(marker: string): string {
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h18v18H3z"/><!--${marker}--></svg>`
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h18v18H3z"/><title>${marker}</title></svg>`
 }
 
 /** Stubs the global fetch with a canned response per URL. */
@@ -192,4 +194,50 @@ describe('resolveAssetWithCustom (stubbed fetch, no network)', () => {
     stubFetch(() => ({ ok: false, status: 404, text: () => Promise.resolve('') }))
     expect(await resolveAssetWithCustom('icons', 'nope.svg')).toBeNull()
   })
+})
+
+describe('SVG XSS regressions', () => {
+  it.each([
+    '<svg><foreignObject><iframe srcdoc="&lt;script&gt;parent.__xss=1&lt;/script&gt;"></iframe></foreignObject></svg>',
+    '<svg><a href="java&#x09;script:alert(1)"><path d="M0 0"/></a></svg>',
+    '<svg><animate attributeName="href" values="javascript:alert(1)"/></svg>',
+    '<svg><set attributeName="onload" to="alert(1)"/></svg>',
+    '<svg><image href="data:image/svg+xml,test"/></svg>',
+    '<svg><style>body{display:none}</style></svg>',
+    '<svg style="background:url(https://attacker.invalid/)"></svg>',
+    '<svg><path fill="url(https://attacker.invalid/paint)"/></svg>',
+    '<svg><path fill="u\\72l(https://attacker.invalid/paint)"/></svg>',
+    '<svg xmlns="http://www.w3.org/1999/xhtml"><script>alert(1)</script></svg>',
+    '<svg></svg><img src=x onerror=alert(1)>',
+    '<svg><use href="#untrusted"/></svg>',
+  ])('rejects active or resource-loading SVG: %s', raw => {
+    expect(sanitizeSvg(raw)).toBeNull()
+    expect(isValidSvg(raw)).toBe(false)
+  })
+
+  it('preserves all bundled navigation icons after sanitization', () => {
+    for (const raw of defaultAssets('icons').values()) {
+      const sanitized = sanitizeSvg(raw)
+      expect(sanitized).not.toBeNull()
+      const host = document.createElement('div')
+      host.innerHTML = sanitized!
+      expect(host.querySelector('svg')).not.toBeNull()
+      expect(host.querySelector('script, foreignObject, iframe, style, a, image')).toBeNull()
+    }
+  })
+
+  it('returns inert parsed markup for titles containing HTML-looking text', () => {
+    const sanitized = sanitizeSvg('<svg><title>&lt;img src=x onerror=alert(1)&gt;</title><path d="M0 0h1"/></svg>')
+    expect(sanitized).not.toBeNull()
+    const host = document.createElement('div')
+    host.innerHTML = sanitized!
+    expect(host.querySelector('img')).toBeNull()
+    expect(host.querySelector('title')?.textContent).toContain('<img')
+  })
+})
+
+
+it('a permissive custom validator cannot disable SVG sanitization', async () => {
+  stubFetch(() => ({ ok: true, text: () => Promise.resolve('<svg><foreignObject><iframe srcdoc="&lt;script&gt;alert(1)&lt;/script&gt;"></iframe></foreignObject></svg>') }))
+  expect(await resolveAssetWithCustom('icons', 'network.svg', { isValid: () => true })).toEqual(defaultAssets('icons').get('network.svg'))
 })
