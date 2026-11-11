@@ -9,12 +9,15 @@ import { useConfirm } from '../composables/useConfirm'
 import { useContextMenu } from '../composables/useContextMenu'
 import { useAppStore, useRbacStore } from '../store'
 import { useColumnWidths } from '../composables/useColumnWidths'
+import { presetDisplayName, presetDescriptionByTag, presetLabelFromCatalog } from '../utils/presets'
+import { t } from '../i18n'
 import type { DtoAdminUserResponse } from '@/api'
 
 const router = useRouter()
 const app = useAppStore()
 const rbac = useRbacStore()
 const { adminUsers, adminUsersLoading, adminUsersError } = storeToRefs(app)
+const { presets } = storeToRefs(rbac)
 
 /**
  * The DataTable cell slot gives the row as `unknown` (generic inference does
@@ -23,26 +26,28 @@ const { adminUsers, adminUsersLoading, adminUsersError } = storeToRefs(app)
 const asUser = (row: unknown): DtoAdminUserResponse => row as DtoAdminUserResponse
 
 /** Table columns: sortable keys; sorting itself lives inside DataTable. */
-const columns: DataTableColumn[] = [
-  { key: 'name', label: 'ФИО', width: 'fit-content(380px)' },
-  { key: 'username', label: 'Логин', width: 'fit-content(280px)' },
-  { key: 'preset', label: 'Пресет', width: 'fit-content(260px)' },
-]
+const columns = computed<DataTableColumn[]>(() => [
+  { key: 'name', label: t('adminUsers.users.column.name'), width: 'fit-content(380px)' },
+  { key: 'username', label: t('adminUsers.users.column.login'), width: 'fit-content(280px)' },
+  { key: 'preset', label: t('adminUsers.users.column.preset'), width: 'fit-content(260px)' },
+])
 
-/** Russian preset labels for the column (unknown values fall back to the raw code). */
-const PRESET_LABELS: Record<string, string> = {
-  admin: 'Администратор',
-  dp: 'Директор проектов',
-  rp: 'Руководитель проекта',
-  vp: 'Владелец процесса',
-  worker: 'Работник',
-}
-
+/** Display name of a preset by its tag: looked up in the catalog (name wins),
+ *  falling back to the built-in label, then to the raw tag. */
 function presetLabel(preset?: string): string {
-  return preset ? (PRESET_LABELS[preset] ?? preset) : '—'
+  return presetLabelFromCatalog(preset, presets.value)
 }
 
-/** Per-column filters, rendered as the DataTable filter row */
+/** Native tooltip of the "Preset" cell: the preset description, else its name. */
+function presetHint(preset?: string): string {
+  return presetDescriptionByTag(preset, presets.value) || presetLabel(preset)
+}
+
+/** Preset filter: '' — all, otherwise the preset tag */
+const fPreset = ref('')
+
+/** Preset filter options: the whole catalog (built-in + custom). */
+const presetFilterOptions = computed(() => presets.value.map((p) => ({ value: p.tag ?? '', label: presetDisplayName(p) })))
 const fName = ref('')
 const fLogin = ref('')
 
@@ -59,10 +64,9 @@ const filteredUsers = computed(() => {
   })
 })
 
-/** Preset filter: '' — all, otherwise the preset code */
-const fPreset = ref('')
-
-const emptyText = computed(() => (adminUsers.value.length ? 'Ничего не найдено' : 'Нет данных'))
+const emptyText = computed(() =>
+  adminUsers.value.length ? t('adminUsers.users.emptyFound') : t('common.noData'),
+)
 
 /** Per-user persisted column widths (drag-resize on the header edges). */
 const { columnWidths } = useColumnWidths('users')
@@ -82,10 +86,10 @@ const menu = ref<RowMenuState | null>(null)
 const menuItems = computed<ContextMenuItem[]>(() => {
   const items: ContextMenuItem[] = []
   if (rbac.can('user_admin', 'update')) {
-    items.push({ id: 'edit-user', label: 'Редактировать' })
+    items.push({ id: 'edit-user', label: t('adminUsers.users.action.edit') })
   }
   if (rbac.can('user_admin', 'delete')) {
-    items.push({ id: 'delete-user', label: 'Удалить пользователя' })
+    items.push({ id: 'delete-user', label: t('adminUsers.users.action.delete') })
   }
   return items
 })
@@ -112,7 +116,7 @@ const deleteTarget = ref<string | null>(null)
 
 function askDelete(u: DtoAdminUserResponse) {
   deleteTarget.value = u.id != null ? String(u.id) : null
-  ask(`Удалить пользователя «${u.name ?? u.username ?? ''}»?`, async () => {
+  ask(t('adminUsers.users.confirmDelete', { name: u.name ?? u.username ?? '' }), async () => {
     const id = Number(deleteTarget.value)
     if (!Number.isFinite(id) || id <= 0) return
     deleteTarget.value = null
@@ -143,7 +147,7 @@ async function refreshAfterMutation() {
 
 <template>
   <section class="up">
-    <p v-if="adminUsersLoading && !adminUsers.length" class="up-st">Загрузка...</p>
+    <p v-if="adminUsersLoading && !adminUsers.length" class="up-st">{{ t('common.loading') }}</p>
     <p v-if="adminUsersError && !adminUsers.length" class="up-st er">{{ adminUsersError }}</p>
 
     <!--
@@ -155,7 +159,7 @@ async function refreshAfterMutation() {
       v-if="adminUsers.length || (!adminUsersLoading && !adminUsersError)"
       :columns="columns"
       :rows="filteredUsers"
-      title="Пользователи"
+      :title="t('adminUsers.users.title')"
       :empty-text="emptyText"
       resizable
       v-model:column-widths="columnWidths"
@@ -165,21 +169,21 @@ async function refreshAfterMutation() {
       <template #actions>
         <HintButton hint="users" />
         <button v-if="rbac.can('user_admin', 'create')" type="button" class="up-add" @click="router.push('/users/new')">
-          Создать пользователя
+          {{ t('adminUsers.users.create') }}
         </button>
       </template>
       <template #filter="{ column }">
-        <input v-if="column.key === 'name'" v-model="fName" type="search" class="th-filter" placeholder="Иванов Иван Иванович" />
-        <input v-else-if="column.key === 'username'" v-model="fLogin" type="search" class="th-filter" placeholder="по логину" />
+        <input v-if="column.key === 'name'" v-model="fName" type="search" class="th-filter" :placeholder="t('adminUsers.users.filter.namePlaceholder')" />
+        <input v-else-if="column.key === 'username'" v-model="fLogin" type="search" class="th-filter" :placeholder="t('adminUsers.users.filter.loginPlaceholder')" />
         <select v-else-if="column.key === 'preset'" v-model="fPreset" class="th-filter">
-          <option value="">Все пресеты</option>
-          <option v-for="(label, code) in PRESET_LABELS" :key="code" :value="code">{{ label }}</option>
+          <option value="">{{ t('adminUsers.users.filter.allPresets') }}</option>
+          <option v-for="opt in presetFilterOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
         </select>
       </template>
       <template #cell="{ row, column }">
         <span v-if="column.key === 'name'" class="up-name">{{ asUser(row).name }}</span>
         <span v-else-if="column.key === 'username'" class="mono">{{ asUser(row).username }}</span>
-        <span v-else class="up-preset">{{ presetLabel(asUser(row).preset) }}</span>
+        <span v-else class="up-preset" :title="presetHint(asUser(row).preset)">{{ presetLabel(asUser(row).preset) }}</span>
       </template>
     </DataTable>
 

@@ -17,6 +17,7 @@
  */
 
 import { isElectron } from './electron'
+import { t } from './i18n'
 
 const API_URL_KEY = 'mvs_erp_api_url'
 
@@ -149,7 +150,7 @@ export function httpSchemeWarning(url: string): string | null {
     if (u.protocol !== 'http:') return null
     const host = u.hostname
     if (host === 'localhost' || host === '127.0.0.1' || host === '::1') return null
-    return 'Сервер по http: сессия и автосинк (refresh) могут не работать — используйте https'
+    return t('offline.http.insecureScheme')
   } catch {
     return null
   }

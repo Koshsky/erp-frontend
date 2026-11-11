@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { dismissSyncNotice, syncNotice, retryFailed, discardFailed } from './sync'
+import { t } from '../i18n'
 
 const visible = ref(false)
 const busy = ref(false)
@@ -76,18 +77,18 @@ function onClose() {
       <button
         type="button"
         class="sync-toast__close"
-        aria-label="Закрыть"
-        title="Отложить на потом"
+        :aria-label="t('offline.sync.close')"
+        :title="t('offline.sync.postpone')"
         @click="onClose"
       >
         ×
       </button>
       <template v-if="syncNotice.interrupted">
-        Сеть снова пропала: отправлено {{ syncNotice.ok }}, остальное в очереди
+        {{ t('offline.sync.networkLost', { ok: syncNotice.ok }) }}
       </template>
       <template v-else-if="failedItems.length > 0">
         <div class="sync-toast__head">
-          Синхронизировано {{ syncNotice.ok }}, ошибок {{ failedItems.length }}
+          {{ t('offline.sync.doneWithErrors', { ok: syncNotice.ok, failed: failedItems.length }) }}
         </div>
         <ul class="sync-toast__list">
           <li v-for="(it, i) in failedItems.slice(0, 5)" :key="i" class="sync-toast__item">
@@ -96,13 +97,13 @@ function onClose() {
           </li>
         </ul>
         <div class="sync-toast__actions">
-          <button type="button" class="sync-btn" :disabled="busy" @click="onRetry">Повторить</button>
+          <button type="button" class="sync-btn" :disabled="busy" @click="onRetry">{{ t('offline.sync.retry') }}</button>
           <button type="button" class="sync-btn sync-btn--ghost" :disabled="busy" @click="onDiscard">
-            Пропустить
+            {{ t('offline.sync.skip') }}
           </button>
         </div>
       </template>
-      <template v-else>Синхронизировано изменений: {{ syncNotice.ok }}</template>
+      <template v-else>{{ t('offline.sync.done', { ok: syncNotice.ok }) }}</template>
     </div>
   </transition>
 </template>

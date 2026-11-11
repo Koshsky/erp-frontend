@@ -4,6 +4,7 @@ import axios, { type AxiosError, type Method } from 'axios'
 import { AuthApi, ProjectsApi, ProcessesApi, TasksApi, TimesheetResourcesApi, TimesheetCalendarApi, TimesheetStatesApi, PlanningApi, MilestonesApi, UsersApi, AssignmentsApi, AutoCreateApi, RBACApi, PermissionsApi, AuditApi, Configuration } from '@/api'
 import type { DtoUserInfo, DtoProject, DtoResourceResponse, DtoResourceCalendar, DtoResourceMemberResponse, DtoResourceAbsenceResponse, DtoUserResponse, DtoUserStateResponse, DtoStateResponse, DtoCreateResourceRequest, DtoUpdateResourceRequest, DtoCreateUserRequest, DtoUpdateUserRequest, DtoSetDaysRequest, DtoAdminUserResponse, DtoCreateUserResult, DtoAutoCreateConfig, DtoAutoCreatedCounts, DtoCommentResponse, DtoPresetView, DtoPresetRuleInput, DtoPresetRuleView, DtoMatrixCell, DtoRoutePolicyView, EngineKindInfo, DtoPermission, DtoUserPermissionsView, DtoUserPermissionsInput, DtoAuditEventView, DtoAssignmentResponse, DtoDetailedProcess, DtoDetailedProject, DtoDetailedTask, DtoMilestone, DtoProcess, DtoProcessPlanning, DtoProjectPlanning, DtoResource, DtoTaskDependency, DtoTaskPlanning } from '@/api'
 import { apiErrorMessage } from '@/utils'
+import { t } from '@/i18n'
 import { getApiUrl } from '@/config'
 import { tablePageSize } from '@/settings'
 import { isOffline } from '@/offline/state'
@@ -783,7 +784,7 @@ export const useAppStore = defineStore('app', () => {
           if (typeof d.total === 'number' && (d.offset ?? 0) > 0) resourcesTotal.value = d.total
           merged = true
         }
-        if (!merged) resourcesError.value = 'Нет сохранённых данных: откройте эту страницу онлайн хотя бы раз'
+        if (!merged) resourcesError.value = t('offline.noCachedData')
         return merged
       }
       const api = new TimesheetResourcesApi(apiConfig())
@@ -1663,7 +1664,7 @@ export const useTimesheetStore = defineStore('timesheet', () => {
           if (typeof d.total === 'number' && (d.offset ?? 0) > 0) employeesTotal.value = d.total
           merged = true
         }
-        if (!merged) error.value = 'Нет сохранённых данных: откройте эту страницу онлайн хотя бы раз'
+        if (!merged) error.value = t('offline.noCachedData')
         return merged
       }
       const api = new UsersApi(apiConfig())
@@ -2896,7 +2897,7 @@ export const usePlanningStore = defineStore('planning', () => {
     if (owners.length > 0) {
       const res = useAppStore().resources.find((r: DtoResourceResponse) => r.id === resourceId)
       if (res?.owner_id == null || !owners.includes(res.owner_id)) {
-        error.value = 'Назначить можно только ресурс, принадлежащий владельцу задачи'
+        error.value = t('offline.assignment.foreignResource')
         return false
       }
     }
@@ -2951,7 +2952,7 @@ export const usePlanningStore = defineStore('planning', () => {
         const list = data?.items ?? []
         const a = list.find((x: DtoAssignmentResponse) => x.task_id === taskId && x.resource_id === resourceId)
         if (a?.id == null) {
-          error.value = 'Назначение не найдено'
+          error.value = t('offline.assignment.notFound')
           return false
         }
         assignmentId = a.id
@@ -3468,11 +3469,15 @@ export const useRbacStore = defineStore('rbac', () => {
   }
 
   /** Creates (or revives) a preset and updates the local catalog. */
-  async function createPreset(input: { name: string; description?: string }): Promise<boolean> {
+  async function createPreset(input: { tag: string; name: string; description?: string }): Promise<boolean> {
     try {
-      const resp = await new RBACApi(apiConfig()).rbacPresetsPost({ name: input.name, description: input.description ?? '' })
+      const resp = await new RBACApi(apiConfig()).rbacPresetsPost({
+        tag: input.tag,
+        name: input.name,
+        description: input.description ?? '',
+      })
       if (resp.data?.data) {
-        presets.value = [...presets.value.filter((r) => r.name !== resp.data?.data?.name), resp.data.data]
+        presets.value = [...presets.value.filter((r) => r.tag !== resp.data?.data?.tag), resp.data.data]
       }
       return true
     } catch {
@@ -3480,21 +3485,22 @@ export const useRbacStore = defineStore('rbac', () => {
     }
   }
 
-  /** Updates a preset: optional rename (patch.name) plus a new description. */
+  /** Updates a preset: optional tag rename (patch.tag) plus name and description. */
   async function updatePreset(
-    name: string,
-    patch: { name?: string; description?: string },
+    tag: string,
+    patch: { tag?: string; name: string; description: string },
   ): Promise<boolean> {
     try {
-      const resp = await new RBACApi(apiConfig()).rbacPresetsNamePut(name, {
+      const resp = await new RBACApi(apiConfig()).rbacPresetsTagPut(tag, {
+        tag: patch.tag,
         name: patch.name,
-        description: patch.description ?? '',
+        description: patch.description,
       })
       const saved = resp.data?.data
       if (saved) {
         presets.value = presets.value
-          .filter((r) => r.name !== name)
-          .concat({ name: saved.name ?? name, description: saved.description ?? '' })
+          .filter((r) => r.tag !== tag)
+          .concat({ tag: saved.tag ?? tag, name: saved.name ?? '', description: saved.description ?? '' })
       }
       return true
     } catch {
@@ -3503,10 +3509,10 @@ export const useRbacStore = defineStore('rbac', () => {
   }
 
   /** Softly deletes a preset (and its rules) and removes it from the local catalog. */
-  async function deletePreset(name: string): Promise<boolean> {
+  async function deletePreset(tag: string): Promise<boolean> {
     try {
-      await new RBACApi(apiConfig()).rbacPresetsNameDelete(name)
-      presets.value = presets.value.filter((r) => r.name !== name)
+      await new RBACApi(apiConfig()).rbacPresetsTagDelete(tag)
+      presets.value = presets.value.filter((r) => r.tag !== tag)
       return true
     } catch {
       return false

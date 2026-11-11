@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { fmtDate } from '../../planner/calendar'
+import { fmtDate as fmtLocalDate, fmtDateRange } from '@/i18n/date'
 import { LABEL_WIDTH } from '../../planner/layout'
 import { stateBackground } from '../stateColors'
 import TimesheetCell from '../TimesheetCell/TimesheetCell.vue'
 import { TooltipCell, InfoTooltip } from '@/components/common'
+import { t as $t } from '@/i18n'
 import type { ClearPayload, TimesheetGridProps } from './types'
 
 const props = withDefaults(defineProps<TimesheetGridProps>(), {
@@ -99,14 +101,7 @@ function employeeName(id: number): string {
 }
 
 function fmtDM(iso?: string): string {
-  if (!iso) return ''
-  const [, m, d] = iso.split('-')
-  return `${d}.${m}`
-}
-
-function fmtFull(iso: string): string {
-  const [y, m, d] = iso.split('-')
-  return `${d}.${m}.${y}`
+  return iso ? fmtLocalDate(iso) : ''
 }
 
 /** Full date range of the active selection (for the live tooltip) */
@@ -115,7 +110,7 @@ const rangeLabel = computed(() => {
   if (!s || Number.isNaN(s.endIdx)) return ''
   const lo = Math.min(s.startIdx, s.endIdx)
   const hi = Math.max(s.startIdx, s.endIdx)
-  return `${fmtFull(fmtDate(props.t.cellStart(lo)))} — ${fmtFull(fmtDate(props.t.cellEnd(hi)))}`
+  return fmtDateRange(fmtDate(props.t.cellStart(lo)), fmtDate(props.t.cellEnd(hi)))
 })
 
 /** Date range of the active selection a cell belongs to, for its hover tooltip */
@@ -373,16 +368,16 @@ const labelsH = computed(() => props.employees.length * ROW_H)
     <Teleport to="body">
       <template v-if="panel">
         <div class="ts-overlay" @pointerdown="onOverlayPointerDown" />
-        <div class="ts-panel" ref="panelEl" :style="{ left: panel.x + 'px', top: panel.y + 'px' }" role="dialog" :aria-label="'Назначить состояние'">
+        <div class="ts-panel" ref="panelEl" :style="{ left: panel.x + 'px', top: panel.y + 'px' }" role="dialog" :aria-label="$t('timesheet.panel.ariaLabel')">
           <div class="ts-panel-head">
             <span class="ts-panel-title">{{ employeeName(panel.employeeId) }}</span>
             <TooltipCell class="ts-panel-range" :multiline="true">
               <span>{{ fmtDM(panel.startDate) }}–{{ fmtDM(panel.endDate) }}</span>
               <template #popup>
-                <InfoTooltip :lines="[`${fmtFull(panel.startDate)} — ${fmtFull(panel.endDate)}`]" />
+                <InfoTooltip :lines="[fmtDateRange(panel.startDate, panel.endDate)]" />
               </template>
             </TooltipCell>
-            <button type="button" class="ts-panel-close" aria-label="Закрыть" @click="closePanel">×</button>
+            <button type="button" class="ts-panel-close" :aria-label="$t('timesheet.panel.close')" @click="closePanel">×</button>
           </div>
           <div v-if="props.canAssign(panel.employeeId)" class="ts-panel-states">
             <button
@@ -408,7 +403,7 @@ const labelsH = computed(() => props.employees.length * ROW_H)
               :disabled="busy"
               @click="onClear"
             >
-              Сбросить
+              {{ $t('timesheet.panel.clear') }}
             </button>
           </div>
         </div>

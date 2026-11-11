@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { t } from '../../../i18n'
 import { COLOR_PALETTE, PALETTE_HUES, PALETTE_SHADES } from './palette'
 import type { ColorFieldProps } from './types'
 
@@ -142,8 +143,8 @@ const panelSizeClass = computed(() => (props.size === 'sm' ? 'cf-panel--sm' : ''
       class="cf-trigger"
       :class="{ 'cf-trigger--empty': !modelValue, 'is-open': open }"
       :style="triggerStyle"
-      :aria-label="label ? label : 'Цвет'"
-      :title="modelValue ? `${modelValue} — изменить цвет` : 'Без цвета — выбрать цвет'"
+      :aria-label="label ? label : t('ui.color.label')"
+      :title="modelValue ? t('ui.color.titleChange', { value: modelValue }) : t('ui.color.titleEmpty')"
       :aria-expanded="open"
       aria-haspopup="dialog"
       @click="toggle"
@@ -157,7 +158,7 @@ const panelSizeClass = computed(() => (props.size === 'sm' ? 'cf-panel--sm' : ''
         :class="panelSizeClass"
         :style="panelStyle"
         role="dialog"
-        :aria-label="label ? `Цвет — ${label}` : 'Выбор цвета'"
+        :aria-label="label ? t('ui.color.ariaWithLabel', { label }) : t('ui.color.paletteOpen')"
       >
         <div class="cf-grid">
           <button
@@ -168,7 +169,7 @@ const panelSizeClass = computed(() => (props.size === 'sm' ? 'cf-panel--sm' : ''
             :class="{ 'is-selected': sw.isSelected }"
             :style="{ background: sw.color }"
             :title="sw.color"
-            :aria-label="`Цвет ${sw.color}`"
+            :aria-label="t('ui.color.ariaSwatch', { value: sw.color })"
             @click="select(sw.color)"
           />
         </div>
@@ -176,13 +177,13 @@ const panelSizeClass = computed(() => (props.size === 'sm' ? 'cf-panel--sm' : ''
         <div class="cf-footer">
           <button type="button" class="cf-clear" @click="clear">
             <span class="cf-clear-swatch" />
-            Без цвета
+            {{ t('ui.color.none') }}
           </button>
           <button
             type="button"
             class="cf-flex"
-            :title="'Гибкая палитра'"
-            :aria-label="'Открыть гибкую палитру'"
+            :title="t('ui.color.paletteTitle')"
+            :aria-label="t('ui.color.paletteOpen')"
             @click="openFlexPalette"
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">

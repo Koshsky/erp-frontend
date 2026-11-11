@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '../i18n'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { isOffline, reconnectDeadline } from './state'
 import { retryConnectionNow } from './connection'
@@ -47,12 +48,12 @@ async function onRetry() {
     <div v-if="isOffline" class="reconnect-toast" role="status">
       <div class="reconnect-toast__title">
         <span class="reconnect-toast__dot" aria-hidden="true" />
-        Нет соединения с сервером
+        {{ t('offline.reconnect.offline') }}
       </div>
       <div class="reconnect-toast__body">
-        <span v-if="busy" class="reconnect-toast__countdown">Проверка соединения…</span>
+        <span v-if="busy" class="reconnect-toast__countdown">{{ t('offline.reconnect.checking') }}</span>
         <span v-else-if="counting" class="reconnect-toast__countdown">
-          Попытка реконнекта через {{ secondsLeft }} с
+          {{ t('offline.reconnect.attemptIn', { seconds: secondsLeft }) }}
         </span>
         <button
           type="button"
@@ -60,7 +61,7 @@ async function onRetry() {
           :disabled="busy"
           @click="onRetry"
         >
-          {{ busy ? 'Проверяю…' : 'Повторить' }}
+          {{ busy ? t('offline.reconnect.retrying') : t('offline.reconnect.retry') }}
         </button>
       </div>
     </div>

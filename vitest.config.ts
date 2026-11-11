@@ -43,6 +43,9 @@ export default defineConfig({
           name: 'unit',
           include: ['src/**/*.test.ts'],
           environment: 'node',
+          // Russian is the product default: pin it so the suite does not depend
+          // on the Node navigator.language ("en-US") through the "auto" setting.
+          setupFiles: ['src/i18n/testLocale.ts'],
         },
       },
       {

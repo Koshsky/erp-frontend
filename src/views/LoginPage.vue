@@ -6,6 +6,7 @@ import { PasswordField } from '../components/common'
 import { isOffline, probeBackend } from '../offline/state'
 import { isElectron } from '../electron'
 import { getServerBase } from '../config'
+import { t } from '../i18n'
 
 const router = useRouter()
 const route = useRoute()
@@ -22,7 +23,7 @@ const offline = computed(() => isOffline.value)
 const serverBase = computed(() => getServerBase())
 /** The submit button always performs an ONLINE login (explicit user intent);
  *  offline entry has its own separate secondary button below. */
-const submitLabel = computed(() => (auth.loading ? 'Подождите…' : 'Войти →'))
+const submitLabel = computed(() => (auth.loading ? t('auth.submitWaiting') : t('auth.submit')))
 
 // === Server ping: symbol button + connection indicator ===
 const pinging = ref(false)
@@ -41,10 +42,10 @@ const pingClass = computed(() => {
 })
 
 const pingTitle = computed(() => {
-  if (pinging.value) return 'Проверка соединения…'
-  if (pingOk.value === true) return 'Сервер доступен'
-  if (pingOk.value === false) return 'Сервер недоступен'
-  return 'Проверить соединение с сервером'
+  if (pinging.value) return t('auth.pingChecking')
+  if (pingOk.value === true) return t('auth.pingOk')
+  if (pingOk.value === false) return t('auth.pingFail')
+  return t('auth.pingCheck')
 })
 
 /** Ping the backend (GET /health, public): any status < 500 means alive */
@@ -74,7 +75,7 @@ function enterOffline() {
   const typed = username.value.trim()
   const identity = typed || auth.user?.username
   if (!identity) {
-    localError.value = 'Нет сохранённой сессии: войдите онлайн хотя бы один раз'
+    localError.value = t('auth.noSession')
     return
   }
   auth.enterOffline(identity)
@@ -84,7 +85,7 @@ function enterOffline() {
 async function onSubmit() {
   localError.value = null
   if (!username.value || !password.value) {
-    localError.value = 'Заполните все поля'
+    localError.value = t('auth.fillAll')
     return
   }
   const ok = await auth.login(username.value, password.value)
@@ -118,19 +119,19 @@ function goToRedirect() {
     <div class="lp-form-side">
       <div class="lp-brand-head">
         <h1 class="lp-btitle">MVS ERP</h1>
-        <p class="lp-bsub">Система планирования проектов</p>
+        <p class="lp-bsub">{{ t('auth.subtitle') }}</p>
       </div>
 
       <form class="lp-form" @submit.prevent="onSubmit">
         <label class="lp-field">
-          <span>Логин</span>
+          <span>{{ t('auth.login') }}</span>
           <input v-model="username" type="text" autocomplete="username" placeholder="ivanov" />
         </label>
 
-        <PasswordField v-model="password" label="Пароль" autocomplete="current-password" placeholder="••••••••" />
+        <PasswordField v-model="password" :label="t('auth.password')" autocomplete="current-password" placeholder="••••••••" />
 
         <p v-if="getError()" class="lp-error">{{ getError() }}</p>
-        <p v-if="offline" class="lp-offline-hint">Сервер недоступен для проверки пароля — войдите офлайн ниже</p>
+        <p v-if="offline" class="lp-offline-hint">{{ t('auth.offlineHint') }}</p>
 
         <button type="submit" class="lp-btn" :disabled="auth.loading">
           {{ submitLabel }}
@@ -143,7 +144,7 @@ function goToRedirect() {
           :disabled="auth.loading"
           @click="onOfflineClick"
         >
-          Войти офлайн (без проверки пароля)
+          {{ t('auth.offlineLogin') }}
         </button>
       </form>
 
@@ -153,7 +154,7 @@ function goToRedirect() {
            the deployment. The "Настройки сервера" link stays desktop-only
            (same-origin restriction on the web). -->
       <div class="lp-server-row" :class="{ 'lp-server-row--no-base': !serverBase }">
-        <span v-if="serverBase" class="lp-server">Сервер: {{ serverBase }}</span>
+        <span v-if="serverBase" class="lp-server">{{ t('auth.server', { base: serverBase }) }}</span>
         <button
           type="button"
           class="lp-ping"
@@ -167,7 +168,7 @@ function goToRedirect() {
         </button>
       </div>
 
-      <RouterLink v-if="isElectron" to="/login/settings" class="lp-settings-link">⚙ Настройки сервера</RouterLink>
+      <RouterLink v-if="isElectron" to="/login/settings" class="lp-settings-link">{{ t('auth.settingsLink') }}</RouterLink>
     </div>
   </div>
 </template>

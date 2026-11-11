@@ -1,11 +1,16 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { cellIndexForDate } from '../../../../../calendar'
+import { linkArrow } from '@/components/planner/dependencyPaths'
+import { viewSettings } from '@/settings'
 import type { TaskDependencyLinksProps, DependencyArrow } from './types'
 
 const props = withDefaults(defineProps<TaskDependencyLinksProps>(), {
   dependencies: () => [],
 })
+
+/** The user's choice in Settings (override wins, for the stories). */
+const connector = computed(() => props.connector ?? viewSettings.connector)
 
 /** Row geometry: the milestone strip takes 20px on top, rows are 26px high. */
 const ROW_H = 26
@@ -37,10 +42,12 @@ function rightX(t: { end_date: string }): number {
 }
 
 /**
- * Elbow arrows between rows (fs/ss/ff/sf — same anchors as the constraint
- * engine): the link starts at the predecessor's anchor edge and ends at the
- * successor's bound edge. Rows/bars only exist for top-level tasks, so links
- * involving other rows are skipped.
+ * Connectors between the process's top-level tasks: one line per link in the
+ * user's chosen style (Settings → Diagrams), terminated by a tick on the date
+ * the link constrains (fs/ss — the successor's start edge, ff/sf — its end
+ * edge). The anchors of the four types follow the constraint engine, see
+ * `planner/dependencyPaths.ts`. Rows/bars only exist for top-level tasks, so
+ * links involving other rows are skipped.
  */
 const arrows = computed<DependencyArrow[]>(() => {
   const out: DependencyArrow[] = []
@@ -52,33 +59,22 @@ const arrows = computed<DependencyArrow[]>(() => {
     const pred = props.tasks[predIdx]
     const succ = props.tasks[succIdx]
 
-    const anchorX = e.type === 'fs' || e.type === 'ff' ? rightX(pred) : leftX(pred)
-    const boundX = e.type === 'fs' || e.type === 'ss' ? leftX(succ) : rightX(succ)
-    const yP = TOP_PAD + predIdx * ROW_H + ROW_H / 2
-    const yS = TOP_PAD + succIdx * ROW_H + ROW_H / 2
-
-    // Vertical segments at the row edges; the horizontal segment at the
-    // vertical midpoint between the two rows.
-    const midY = (yP + yS) / 2
-    out.push({
-      key: `${e.id}`,
-      points: `${anchorX},${yP} ${anchorX},${midY} ${boundX},${midY} ${boundX},${yS}`,
-      tipX: boundX,
-      tipY: yS,
-      dir: boundX >= anchorX ? 1 : -1,
-    })
+    const arrow = linkArrow(
+      {
+        type: e.type,
+        predStartX: leftX(pred),
+        predEndX: rightX(pred),
+        succStartX: leftX(succ),
+        succEndX: rightX(succ),
+        predY: TOP_PAD + predIdx * ROW_H + ROW_H / 2,
+        succY: TOP_PAD + succIdx * ROW_H + ROW_H / 2,
+      },
+      connector.value,
+    )
+    out.push({ key: `${e.id}`, d: arrow.d, tick: arrow.tick })
   }
   return out
 })
-
-/** Arrowhead triangle points at the tip (direction: right or left). */
-function arrowHead(a: DependencyArrow): string {
-  const s = 4
-  if (a.dir > 0) {
-    return `${a.tipX},${a.tipY} ${a.tipX - s},${a.tipY - s} ${a.tipX - s},${a.tipY + s}`
-  }
-  return `${a.tipX},${a.tipY} ${a.tipX + s},${a.tipY - s} ${a.tipX + s},${a.tipY + s}`
-}
 </script>
 
 <template>
@@ -91,13 +87,13 @@ function arrowHead(a: DependencyArrow): string {
       v-for="a in arrows"
       :key="a.key"
       class="tdl-path"
-      :d="`M ${a.points}`"
+      :d="a.d"
     />
-    <polygon
+    <path
       v-for="a in arrows"
-      :key="'t' + a.key"
-      class="tdl-head"
-      :points="arrowHead(a)"
+      :key="'tick' + a.key"
+      class="tdl-tick"
+      :d="a.tick"
     />
   </svg>
 </template>
@@ -116,11 +112,16 @@ function arrowHead(a: DependencyArrow): string {
 .tdl-path {
   fill: none;
   stroke: var(--ui-text-muted);
-  stroke-width: 1.5;
-  opacity: 0.85;
+  /* Thicker than a hairline on purpose: the curve crosses bars and row
+     dividers without a halo, so its weight carries the readability. */
+  stroke-width: 2.5;
+  stroke-linecap: round;
 }
-.tdl-head {
-  fill: var(--ui-text-muted);
-  opacity: 0.85;
+/* Terminus mark: the link stops on this date instead of pointing at it. */
+.tdl-tick {
+  fill: none;
+  stroke: var(--ui-text-muted);
+  stroke-width: 3;
+  stroke-linecap: round;
 }
 </style>

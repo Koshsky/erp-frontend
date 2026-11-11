@@ -3,6 +3,7 @@ export type PlanningUnit = 'day' | 'decade'
 
 import { LABEL_WIDTH } from './layout'
 import { DAY_MS, clamp } from '../../utils'
+import { fmtDateRange } from '@/i18n/date'
 
 /** Date in the local timezone. "YYYY-MM-DD" strings are parsed as local midnight,
  * not UTC (otherwise getTime() would not match the cells' local midnight). */
@@ -43,9 +44,13 @@ export function addMonthsISO(date: Date | string | number, months: number): stri
   return fmtDate(new Date(target.getFullYear(), target.getMonth(), Math.min(d.getDate(), lastDay)))
 }
 
-/** Date range "dd.mm.yyyy — dd.mm.yyyy" (local timezone) for bar tooltips */
+/**
+ * Date range "dd.mm.yyyy — dd.mm.yyyy" (local timezone) for bar tooltips.
+ * Locale-aware through src/i18n/date.ts, so it follows the interface language;
+ * callers re-render on a language switch (computed/function context).
+ */
 export function formatDateRange(start: Date | string | number, end: Date | string | number): string {
-  return `${toDate(start).toLocaleDateString('ru')} — ${toDate(end).toLocaleDateString('ru')}`
+  return fmtDateRange(toDate(start), toDate(end))
 }
 
 /** Last day of the month of date d (a new Date, so the original is not mutated) */

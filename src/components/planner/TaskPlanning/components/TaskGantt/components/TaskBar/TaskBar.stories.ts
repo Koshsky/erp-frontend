@@ -1,8 +1,8 @@
 import type { Meta, StoryObj } from '@storybook/vue3-vite'
-import { expect } from 'vitest'
+import { expect } from 'storybook/test'
 import TaskBar from './TaskBar.vue'
 import type { Task } from './types'
-import { makeDemoTimeline } from '@/components/planner/plannerStoryHelpers'
+import { makeDemoTimeline } from '@/components/planner/demoTimeline'
 
 const now = new Date()
 const y = now.getFullYear()

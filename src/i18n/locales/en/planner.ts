@@ -1,0 +1,115 @@
+import type ru from '../ru/planner'
+import type { Translation } from '../types'
+
+/** English catalog mirroring locales/ru/planner.ts. */
+export default {
+  bar: {
+    /** The caller passes the task name (already quoted) plus the date range. */
+    taskNamed: 'Task {title}: {range}',
+    taskQuoted: 'Task “{title}”',
+    task: 'Task',
+    milestoneNamed: 'Milestone “{title}”: {date}',
+    milestone: 'Milestone: {date}',
+    priority: 'Priority: {value}',
+    owner: 'Owner: {owner}',
+  },
+  taskBar: {
+    owner: 'Assignee: {owner}',
+    status: 'Status: {status}',
+    progress: 'Progress: {value}% ({done} of {total} operations)',
+    comments: 'Comments: {count}',
+    userFallback: 'User #{id}',
+  },
+  taskStatus: {
+    notStarted: 'Not started',
+    inProgress: 'In progress',
+    done: 'Completed',
+  },
+  calendar: {
+    cornerToday: 'Today',
+  },
+  taskEditor: {
+    titleNamed: 'Task: {title}',
+    title: 'Task',
+    field: {
+      name: 'Name',
+      namePlaceholder: 'Task name',
+      status: 'Status',
+      owner: 'Assignee',
+      ownerNone: '— none —',
+      color: 'Color',
+      colorLabel: 'Task color',
+    },
+    readonly: 'No permission to edit the task — view mode',
+    subtasksTitle: 'Operations',
+    subtaskStatusHint: 'Status: {status} (click to change)',
+    subtask: {
+      empty: 'No operations',
+      newPlaceholder: 'New operation…',
+      deleteAria: 'Delete operation {title}',
+    },
+    dependenciesTitle: 'Dependencies',
+    dependency: {
+      empty: 'No dependencies',
+      typeAria: 'Dependency type with “{title}”',
+      deleteAria: 'Delete dependency with “{title}”',
+      predecessorAria: 'Predecessor task',
+      predecessorNone: '— predecessor —',
+      typeAriaShort: 'Dependency type',
+    },
+    dependencyNote: 'Adding or changing a dependency adjusts the task dates automatically.',
+    argTypes: {
+      open: { name: 'Open', description: 'Whether to show the modal' },
+      task: { name: 'Task', description: 'The task being edited (left panel)' },
+      subtasks: { name: 'Subtasks', description: 'List of operations (right panel, todo list)' },
+      ownerOptions: {
+        name: 'Assignees',
+        description: 'Candidates for the assignee role (own employees)',
+      },
+      canManage: { name: 'Can manage', description: 'Allowed to change task and subtask fields' },
+      canCreateSubtask: {
+        name: 'Can add operations',
+        description: 'Allowed to create operations',
+      },
+      busy: { name: 'Request', description: 'A request to the API is in flight — actions are blocked' },
+      error: { name: 'Error', description: 'Error message inside the dialog' },
+      disabledReason: {
+        name: 'Block reason',
+        description: 'Why the operations are unavailable (e.g. offline)',
+      },
+    },
+  },
+  taskComments: {
+    titleNamed: 'Comments: {title}',
+    titleFallback: 'Comments: Task #{id}',
+    loading: 'Loading comments…',
+    empty: 'No comments yet',
+    orphan: 'in reply to a deleted comment',
+    orphanTitle: 'The parent comment was deleted',
+    reply: 'Reply',
+    deleteTitle: 'Delete comment',
+    replyPlaceholder: 'Reply…',
+    send: 'Send',
+    composerPlaceholder: 'Write a comment…',
+    userFallback: 'User #{id}',
+  },
+  resourceModal: {
+    title: 'Task resources: {title}',
+    removeAria: 'Remove resource',
+    empty: 'No resources assigned',
+    selectPlaceholder: '— select a resource —',
+    itemFallback: 'Resource #{id}',
+  },
+  projectPlanning: {
+    create: 'New project',
+  },
+  scaleBadge: {
+    label: 'Zoom ',
+  },
+  dependencies: {
+    fs: 'Finish → Start',
+    ss: 'Start → Start',
+    ff: 'Finish → Finish',
+    sf: 'Start → Finish',
+  },
+} satisfies Translation<typeof ru>

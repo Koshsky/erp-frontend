@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/vue3-vite'
 import TaskGantt from './TaskGantt.vue'
-import { makeDemoTimeline } from '@/components/planner/plannerStoryHelpers'
+import { makeDemoTimeline } from '@/components/planner/demoTimeline'
 
 const now = new Date()
 const y = now.getFullYear()
@@ -49,3 +49,41 @@ function base(): Story['render'] {
 }
 
 export const Default: Story = { render: base() }
+
+/**
+ * All four link types on the real component: every connector leaves the
+ * predecessor's anchor edge, enters the successor's bound edge and stops there
+ * with a tick (the anchors per type are defined in `planner/dependencyPaths.ts`).
+ */
+const dependencies = [
+  { id: 1, task_id: 2, depends_on_task_id: 1, type: 'ss' as const },
+  { id: 2, task_id: 3, depends_on_task_id: 1, type: 'fs' as const },
+  { id: 3, task_id: 4, depends_on_task_id: 3, type: 'ff' as const },
+  { id: 4, task_id: 4, depends_on_task_id: 2, type: 'sf' as const },
+]
+
+export const WithDependencies: Story = {
+  render: () => ({
+    components: { TaskGantt },
+    data: () => ({
+      timeline: makeDemoTimeline(iso(day(1, 1)), 'day'),
+      tasks,
+      milestones,
+      dependencies,
+      title: 'Инсталляция',
+      projectCode: 'КО-1001',
+    }),
+    template: `
+      <div style="width:3000px;background:#fff;border-radius:10px;padding:12px;box-shadow:0 1px 6px rgba(0,0,0,.08);">
+        <TaskGantt
+          :timeline="timeline"
+          :title="title"
+          :projectCode="projectCode"
+          :tasks="tasks"
+          :milestones="milestones"
+          :dependencies="dependencies"
+        />
+      </div>
+    `,
+  }),
+}

@@ -2,6 +2,7 @@ import { computed, ref } from 'vue'
 import { isOffline } from '../offline/state'
 import { pendingCount } from '../offline/outbox'
 import { lastPullAt } from '../offline/connection'
+import { t } from '../i18n'
 
 /**
  * Shared sync/freshness status: how long ago the background PULL last updated
@@ -37,11 +38,11 @@ export function useSyncStatus() {
     const ts = lastPullAt.value
     if (ts == null) return null
     const s = Math.max(0, Math.round((now.value - ts) / 1000))
-    if (s < 60) return `${s} с`
+    if (s < 60) return t('dates.seconds', { n: s })
     const m = Math.round(s / 60)
-    if (m < 60) return `${m} мин`
+    if (m < 60) return t('dates.minutes', { n: m })
     const h = Math.round(m / 60)
-    return `${h} ч`
+    return t('dates.hours', { n: h })
   })
 
   return { offline, pending, lastPullLabel }

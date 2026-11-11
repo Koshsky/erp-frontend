@@ -1,61 +1,69 @@
 import type { ArgTypes } from '@storybook/vue3-vite'
+import { t } from '@/i18n'
 import type { TaskEditorProps } from './types'
 
-export const taskEditorArgTypes: ArgTypes<TaskEditorProps> = {
-  open: {
-    name: 'Открыто',
-    description: 'Показывать модальное окно',
-    control: 'boolean',
-    table: { category: 'State' },
-  },
-  task: {
-    name: 'Задача',
-    description: 'Редактируемая задача (левая панель)',
-    control: 'object',
-    table: { type: { summary: 'TaskEditorTask | null' }, category: 'Data' },
-  },
-  subtasks: {
-    name: 'Подзадачи',
-    description: 'Список подзадач (правая панель, todo list)',
-    control: 'object',
-    table: { type: { summary: 'SubtaskItem[]' }, category: 'Data' },
-  },
-  ownerOptions: {
-    name: 'Ответственные',
-    description: 'Кандидаты на роль ответственного (свои сотрудники)',
-    control: 'object',
-    table: { type: { summary: 'OwnerOption[]' }, category: 'Data' },
-  },
-  canManage: {
-    name: 'Может управлять',
-    description: 'Разрешено менять поля задачи и подзадачи',
-    control: 'boolean',
-    table: { category: 'State' },
-  },
-  canCreateSubtask: {
-    name: 'Может добавлять подзадачи',
-    description: 'Разрешено создавать подзадачи',
-    control: 'boolean',
-    table: { category: 'State' },
-  },
-  busy: {
-    name: 'Запрос',
-    description: 'Идёт запрос к API — действия заблокированы',
-    control: 'boolean',
-    table: { category: 'State' },
-  },
-  error: {
-    name: 'Ошибка',
-    description: 'Сообщение об ошибке внутри окна',
-    control: 'text',
-    table: { category: 'State' },
-  },
-  disabledReason: {
-    name: 'Причина блокировки',
-    description: 'Пояснение, почему подзадачи недоступны (например, офлайн)',
-    control: 'text',
-    table: { category: 'State' },
-  },
+/**
+ * Storybook arg-type descriptions for the task editor (Controls panel labels).
+ * Built per call (not a module-level object) so the labels are translated at
+ * access time and follow the interface language.
+ */
+export function taskEditorArgTypes(): ArgTypes<TaskEditorProps> {
+  return {
+    open: {
+      name: t('planner.taskEditor.argTypes.open.name'),
+      description: t('planner.taskEditor.argTypes.open.description'),
+      control: 'boolean',
+      table: { category: 'State' },
+    },
+    task: {
+      name: t('planner.taskEditor.argTypes.task.name'),
+      description: t('planner.taskEditor.argTypes.task.description'),
+      control: 'object',
+      table: { type: { summary: 'TaskEditorTask | null' }, category: 'Data' },
+    },
+    subtasks: {
+      name: t('planner.taskEditor.argTypes.subtasks.name'),
+      description: t('planner.taskEditor.argTypes.subtasks.description'),
+      control: 'object',
+      table: { type: { summary: 'SubtaskItem[]' }, category: 'Data' },
+    },
+    ownerOptions: {
+      name: t('planner.taskEditor.argTypes.ownerOptions.name'),
+      description: t('planner.taskEditor.argTypes.ownerOptions.description'),
+      control: 'object',
+      table: { type: { summary: 'OwnerOption[]' }, category: 'Data' },
+    },
+    canManage: {
+      name: t('planner.taskEditor.argTypes.canManage.name'),
+      description: t('planner.taskEditor.argTypes.canManage.description'),
+      control: 'boolean',
+      table: { category: 'State' },
+    },
+    canCreateSubtask: {
+      name: t('planner.taskEditor.argTypes.canCreateSubtask.name'),
+      description: t('planner.taskEditor.argTypes.canCreateSubtask.description'),
+      control: 'boolean',
+      table: { category: 'State' },
+    },
+    busy: {
+      name: t('planner.taskEditor.argTypes.busy.name'),
+      description: t('planner.taskEditor.argTypes.busy.description'),
+      control: 'boolean',
+      table: { category: 'State' },
+    },
+    error: {
+      name: t('planner.taskEditor.argTypes.error.name'),
+      description: t('planner.taskEditor.argTypes.error.description'),
+      control: 'text',
+      table: { category: 'State' },
+    },
+    disabledReason: {
+      name: t('planner.taskEditor.argTypes.disabledReason.name'),
+      description: t('planner.taskEditor.argTypes.disabledReason.description'),
+      control: 'text',
+      table: { category: 'State' },
+    },
+  }
 }
 
 export default taskEditorArgTypes

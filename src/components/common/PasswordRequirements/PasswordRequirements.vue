@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { PasswordRule } from '../../../composables/usePasswordValidation'
-import { validatePassword } from '../../../composables/usePasswordValidation'
+import { validatePassword, passwordRuleText } from '../../../composables/usePasswordValidation'
 
 const props = withDefaults(
   defineProps<{
@@ -47,7 +47,7 @@ const allOk = computed(() => validatePassword(props.modelValue ?? '', props.rule
       >
         <path d="M3 8.5 6.5 12 13 4" />
       </svg>
-      <span>{{ item.rule.label }}</span>
+      <span>{{ passwordRuleText(item.rule) }}</span>
     </li>
   </ul>
 </template>

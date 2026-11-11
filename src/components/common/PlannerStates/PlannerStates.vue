@@ -1,21 +1,22 @@
 <script setup lang="ts">
+import { t } from '../../../i18n'
 import type { PlannerStatesProps } from './types'
 
 withDefaults(defineProps<PlannerStatesProps>(), {
-  emptyText: 'Нет данных',
+  emptyText: '',
 })
 </script>
 
 <template>
   <div class="pg">
-    <div v-if="loading" class="st">Загрузка...</div>
+    <div v-if="loading" class="st">{{ t('ui.states.loading') }}</div>
     <template v-else>
       <p v-if="error" class="pg-error">{{ error }}</p>
       <slot v-if="hasData" />
       <div v-else-if="error" class="st er">{{ error }}</div>
       <div v-else class="st">
         <!-- Empty-state content (e.g. a create-action button); falls back to the text -->
-        <slot name="empty">{{ emptyText }}</slot>
+        <slot name="empty">{{ emptyText || t('common.noData') }}</slot>
       </div>
     </template>
   </div>

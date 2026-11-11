@@ -3,8 +3,9 @@ import type { PlanningUnit } from '../components/planner/calendar'
 
 /**
  * Shared interactive timeline elements: bars, reorder handles, milestones, sticky columns,
- * resource ribbon, corner cell. Panning cannot start from them, and a right-click
- * on them is not treated as "empty space".
+ * resource ribbon, corner cell. A right-click on them is not treated as "empty space".
+ * Panning (MMB drag) starts from ANY point of the table — content (bars, milestones,
+ * sticky labels, headers) must not block moving the table, see useTimelinePan.
  * Note: individual consumer lists add their own specific selectors —
  * `.tg-ms-label` (sticky milestone strip) to pan-ignore, but NOT to contextmenu-ignore
  * (otherwise right-click on the milestone strip stops opening the create menu).
@@ -15,9 +16,9 @@ export const INTERACTIVE_SELECTOR =
 
 /**
  * Elements whose double-click does NOT reset the scale (interactive + header).
- * Differs from INTERACTIVE_SELECTOR: sticky timesheet columns/rows (.ts-labels,
- * .ts-row) are in INTERACTIVE_SELECTOR only to ignore panning,
- * but double-clicking them should reset the zoom.
+ * Deliberately excludes the sticky timesheet column/rows (.ts-labels, .ts-row):
+ * double-clicking them still resets the zoom, and MMB panning may start from
+ * them like from anywhere else.
  */
 export const DBLCLICK_IGNORE_SELECTOR =
   '.gantt-bar, .gb-handle, .ms-marker, .row-handle, .gg-label, .gg-merged, ' +

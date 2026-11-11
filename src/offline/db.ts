@@ -22,6 +22,8 @@
  * by the backend. See docs/no-ttl-local-storage.md.
  */
 
+import { t } from '../i18n'
+
 const DB_NAME = 'erp-offline'
 // The schema version this build knows. It is NOT passed to indexedDB.open
 // directly: an existing database (created by an older bundle or bumped by our
@@ -57,7 +59,8 @@ function hasAllStores(db: IDBDatabase): boolean {
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     if (typeof indexedDB === 'undefined') {
-      reject(new Error('IndexedDB недоступен'))
+      // i18n-allow: the reason of a failed internal promise, not a rendered label
+      reject(new Error(t('offline.db.unavailable')))
       return
     }
 
@@ -72,7 +75,7 @@ function openDb(): Promise<IDBDatabase> {
     open.onblocked = () => {
       console.warn('[db] open blocked by an older connection in another tab — retrying')
     }
-    open.onerror = () => reject(open.error ?? new Error('Не удалось открыть IndexedDB'))
+    open.onerror = () => reject(open.error ?? new Error(t('offline.db.openFailed')))
     open.onsuccess = () => {
       const db = open.result
       // Close this connection when the database is upgraded by another tab —
@@ -102,7 +105,7 @@ function openDb(): Promise<IDBDatabase> {
       repair.onblocked = () => {
         console.warn('[db] repair blocked by an older connection in another tab — retrying')
       }
-      repair.onerror = () => reject(repair.error ?? new Error('Не удалось восстановить IndexedDB'))
+      repair.onerror = () => reject(repair.error ?? new Error(t('offline.db.repairFailed')))
       repair.onsuccess = () => {
         const repaired = repair.result
         // Same cross-tab rule: close on an external version bump.

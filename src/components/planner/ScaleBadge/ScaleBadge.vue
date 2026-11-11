@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onBeforeUnmount, ref, watch } from 'vue'
+import { t } from '@/i18n'
 import type { ScaleBadgeProps } from './types'
 
 const props = defineProps<ScaleBadgeProps>()
@@ -27,7 +28,7 @@ onBeforeUnmount(() => {
 <template>
   <Transition name="sb-fade">
     <div v-if="show" class="sb">
-      <span class="sb-label">Масштаб </span>
+      <span class="sb-label">{{ t('planner.scaleBadge.label') }}</span>
       <span class="sb-value">{{ Math.round(scale * 100) }}%</span>
     </div>
   </Transition>

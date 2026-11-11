@@ -14,6 +14,8 @@ import { isOffline } from '../offline/state'
 import { scheduleNamedRefresh } from '../offline/sync'
 import { useColumnWidths } from '../composables/useColumnWidths'
 import { compareByName } from '../utils'
+import { fmtDate as fmtDateValue } from '../i18n/date'
+import { t } from '../i18n'
 import type { DtoResourceResponse, DtoUserResponse } from '@/api'
 
 const ts = useTimesheetStore()
@@ -24,7 +26,7 @@ const { users } = storeToRefs(app)
 const { resources, resourcesError } = storeToRefs(app)
 
 // Edit/delete are NOT available here: an employee IS a system user, so profile
-// editing happens only on the admin "Пользователи" page (user-edit right).
+// editing happens only on the admin "Users" page (user-edit right).
 // This page only changes the employee's resource.
 const { role, userId, canManageResource } = useRoleAccess()
 
@@ -53,18 +55,20 @@ const asEmp = (row: unknown): DtoUserResponse => row as DtoUserResponse
 
 /**
  * Column config for the DataTable. Non-admins (see only own employees) do not
- * get the "Руководитель" column at all — the grid tracks follow the columns.
+ * get the "Manager" column at all — the grid tracks follow the columns.
  */
 const columns = computed<DataTableColumn[]>(() => {
   const cols: DataTableColumn[] = [
-    { key: 'name', label: 'ФИО', width: 'fit-content(380px)' },
-    { key: 'position', label: 'Должность', width: 'fit-content(280px)' },
-    { key: 'resource', label: 'Ресурс', width: 'fit-content(200px)' },
-    { key: 'resource_owner', label: 'Владелец ресурса', width: 'fit-content(260px)' },
-    { key: 'hire_date', label: 'Дата приёма', width: '110px' },
-    { key: 'termination_date', label: 'Дата увольнения', width: '140px' },
+    { key: 'name', label: t('adminUsers.employees.column.name'), width: 'fit-content(380px)' },
+    { key: 'position', label: t('adminUsers.employees.column.position'), width: 'fit-content(280px)' },
+    { key: 'resource', label: t('adminUsers.employees.column.resource'), width: 'fit-content(200px)' },
+    { key: 'resource_owner', label: t('adminUsers.employees.column.resourceOwner'), width: 'fit-content(260px)' },
+    { key: 'hire_date', label: t('adminUsers.employees.column.hireDate'), width: '110px' },
+    { key: 'termination_date', label: t('adminUsers.employees.column.terminationDate'), width: '140px' },
   ]
-  if (seesAllEmployees.value) cols.push({ key: 'manager_id', label: 'Руководитель', width: 'fit-content(300px)' })
+  if (seesAllEmployees.value) {
+    cols.push({ key: 'manager_id', label: t('adminUsers.employees.column.manager'), width: 'fit-content(300px)' })
+  }
   return cols
 })
 
@@ -97,17 +101,16 @@ function resourceBadgeStyle(res: DtoResourceResponse | null): Record<string, str
   }
 }
 
-/** Date as DD.MM.YYYY or «—» */
+/** Date as DD.MM.YYYY (locale-aware) or «—» */
 function fmtDate(iso?: string): string {
   if (!iso) return '—'
-  const [y, m, d] = iso.split('-')
-  return `${d}.${m}.${y}`
+  return fmtDateValue(iso)
 }
 
 /** Label of the employee's manager */
 function managerLabel(managerId?: number | null): string {
   if (managerId == null) return '—'
-  if (managerId === userId.value) return 'Я'
+  if (managerId === userId.value) return t('adminUsers.employees.me')
   const u = users.value.find((x) => x.id === managerId)
   return u?.name ?? `#${managerId}`
 }
@@ -115,7 +118,7 @@ function managerLabel(managerId?: number | null): string {
 /** Label of the resource owner (a name from the user catalog) */
 function ownerLabel(ownerId?: number | null): string {
   if (ownerId == null) return '—'
-  if (ownerId === userId.value) return 'Я'
+  if (ownerId === userId.value) return t('adminUsers.employees.me')
   const u = users.value.find((x) => x.id === ownerId)
   return u?.name ?? `#${ownerId}`
 }
@@ -144,7 +147,7 @@ const {
 } = useEmployeeFilters()
 
 // Per-column filters local to this page (the shared `search` remains the
-// timesheet page's combined ФИО+position filter).
+// timesheet page's combined name+position filter).
 const fName = ref('')
 const fPosition = ref('')
 
@@ -177,7 +180,7 @@ const filteredEmployees = computed(() => {
 })
 
 // Right-click on a row: only the resource change. The employee's profile is a
-// system user — editing it happens solely on the admin "Пользователи" page.
+// system user — editing it happens solely on the admin "Users" page.
 interface MenuState {
   x: number
   y: number
@@ -185,7 +188,7 @@ interface MenuState {
 }
 const menu = ref<MenuState | null>(null)
 const menuItems = computed<ContextMenuItem[]>(() => [
-  { id: 'change-resource', label: 'Изменить ресурс' },
+  { id: 'change-resource', label: t('adminUsers.employees.action.changeResource') },
 ])
 
 type ModalMode = {
@@ -203,10 +206,10 @@ const { open: openModal, close: closeModal, submit: submitModal, bind: modalBind
     if (manageableResources.value.length) {
       fields.push({
         key: 'resourceId',
-        label: 'Ресурс',
+        label: t('adminUsers.employees.action.resourceLabel'),
         type: 'select',
         options: [
-          { value: '', label: 'Без ресурса' },
+          { value: '', label: t('adminUsers.employees.filter.noResource') },
           ...manageableResources.value.map((r) => ({
             value: r.id as number,
             label: `${r.code} — ${r.title}`,
@@ -220,11 +223,13 @@ const { open: openModal, close: closeModal, submit: submitModal, bind: modalBind
   async (state, values) => {
     const toResourceId = values.resourceId === '' || values.resourceId == null ? null : Number(values.resourceId)
     const ok = await app.changeEmployeeResource(state.id, state.resourceId ?? null, toResourceId)
-    if (!ok) return { ok: false, error: app.resourcesError ?? 'Не удалось изменить ресурс сотрудника' }
+    if (!ok) {
+      return { ok: false, error: app.resourcesError ?? t('adminUsers.employees.error.changeResource') }
+    }
     return { ok: true, error: null }
   },
-  () => 'Изменить ресурс',
-  () => 'Сохранить',
+  () => t('adminUsers.employees.action.changeResource'),
+  () => t('common.save'),
 )
 
 function onRowContextMenu(e: MouseEvent, emp: DtoUserResponse) {
@@ -273,7 +278,7 @@ function onLoadMore() {
 
 <template>
   <section class="ep">
-    <p v-if="loading && !employees.length" class="ep-st">Загрузка...</p>
+    <p v-if="loading && !employees.length" class="ep-st">{{ t('common.loading') }}</p>
     <p v-if="error && !employees.length" class="ep-st er">{{ error }}</p>
     <p v-if="resourcesError" class="ep-st er">{{ resourcesError }}</p>
 
@@ -286,8 +291,8 @@ function onLoadMore() {
       v-if="employees.length || (!loading && !error)"
       :columns="columns"
       :rows="filteredEmployees"
-      title="Сотрудники"
-      :empty-text="employees.length ? 'Ничего не найдено' : 'Нет данных о сотрудниках'"
+      :title="t('adminUsers.employees.title')"
+      :empty-text="employees.length ? t('adminUsers.employees.emptyFound') : t('adminUsers.employees.empty')"
       :sort-value="empSortValue"
       resizable
       v-model:column-widths="columnWidths"
@@ -299,30 +304,30 @@ function onLoadMore() {
           v-if="column.key === 'name'"
           v-model="fName"
           type="search"
-          placeholder="Иванов Иван Иванович"
+          :placeholder="t('adminUsers.employees.filter.namePlaceholder')"
         />
         <input
           v-else-if="column.key === 'position'"
           v-model="fPosition"
           type="search"
-          placeholder="по должности"
+          :placeholder="t('adminUsers.employees.filter.positionPlaceholder')"
         />
         <select
           v-else-if="column.key === 'resource'"
           v-model="resourceFilter"
           class="ep-filter"
-          title="Фильтр по ресурсу"
+          :title="t('adminUsers.employees.filter.resourceTitle')"
         >
-          <option value="">Все ресурсы</option>
-          <option value="none">Без ресурса</option>
+          <option value="">{{ t('adminUsers.employees.filter.allResources') }}</option>
+          <option value="none">{{ t('adminUsers.employees.filter.noResource') }}</option>
           <option v-for="r in resourceFilterOptions" :key="r.id" :value="r.id">{{ r.code }} — {{ r.title }}</option>
         </select>
         <select
           v-else-if="column.key === 'resource_owner'"
           v-model="ownerFilter"
         >
-          <option value="">Все владельцы</option>
-          <option value="none">Без владельца</option>
+          <option value="">{{ t('adminUsers.employees.filter.allOwners') }}</option>
+          <option value="none">{{ t('adminUsers.employees.filter.noOwner') }}</option>
           <option v-for="u in ownerFilterOptions" :key="u.id" :value="u.id">{{ u.name ?? `#${u.id}` }}</option>
         </select>
         <select
@@ -330,8 +335,8 @@ function onLoadMore() {
           v-model="managerFilter"
           class="ep-filter"
         >
-          <option value="">Все руководители</option>
-          <option value="none">Без руководителя</option>
+          <option value="">{{ t('adminUsers.employees.filter.allManagers') }}</option>
+          <option value="none">{{ t('adminUsers.employees.filter.noManager') }}</option>
           <option v-for="u in managerFilterOptions" :key="u.id" :value="u.id">{{ u.name ?? `#${u.id}` }}</option>
         </select>
       </template>
@@ -363,7 +368,7 @@ function onLoadMore() {
          the rest is appended on demand (dedup by id). -->
     <div v-if="ts.employeesHasMore" class="ep-more">
       <button type="button" class="ep-more-btn" :disabled="ts.employeesLoadingMore" @click="onLoadMore">
-        {{ ts.employeesLoadingMore ? 'Загрузка…' : `Показать ещё (${employees.length} из ${ts.employeesTotal})` }}
+        {{ ts.employeesLoadingMore ? t('common.loading') : t('adminUsers.employees.action.loadMore', { shown: employees.length, total: ts.employeesTotal }) }}
       </button>
     </div>
 

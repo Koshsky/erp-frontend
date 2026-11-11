@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { t } from '@/i18n'
 import CalendarHeader from '../CalendarHeader/CalendarHeader.vue'
 import TimelineGrid from '../TimelineGrid/TimelineGrid.vue'
 import { PlannerStates } from '@/components/common'
@@ -82,7 +83,7 @@ function onGridCtx(p: { clientX: number; clientY: number; date: string | null; r
   <PlannerStates :loading="loading" :error="error" :has-data="displayProjects.length > 0">
     <!-- Empty DB: just a centered create-project action -->
     <template v-if="canCreate" #empty>
-      <button type="button" class="pp-big" @click="emit('create')">Новый проект</button>
+      <button type="button" class="pp-big" @click="emit('create')">{{ t('planner.projectPlanning.create') }}</button>
     </template>
     <TimelineGrid v-if="displayProjects.length" id="project" :origin="origin" :unit="unit" :focus-date="focusDate" :focus-group-id="focusGroupId" @ctxmenu="onGridCtx" @header-ctxmenu="(p) => emit('header-ctxmenu', p)" @visible-range="(p) => emit('visible-range', p)">
       <template #default="{ t }">

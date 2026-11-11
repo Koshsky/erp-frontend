@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/vue3-vite'
-import { expect } from 'vitest'
+import { expect } from 'storybook/test'
 import TaskComments from './TaskComments.vue'
 import type { DtoCommentResponse, DtoUserInfo } from '@/api'
 

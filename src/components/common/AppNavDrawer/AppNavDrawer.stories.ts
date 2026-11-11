@@ -2,44 +2,44 @@ import type { Meta, StoryObj } from '@storybook/vue3-vite'
 import type { NavCategory } from '../../../composables/useNavigation'
 import AppNavDrawer from './AppNavDrawer.vue'
 
-/** Permission-free test data that mirrors the real NAV_CATEGORIES */
+/** Permission-free test data that mirrors the real NAV_CATEGORIES (labels are i18n keys) */
 const testCategories: NavCategory[] = [
   {
-    label: 'Планировщик',
+    label: 'nav.planner',
     roles: null,
     items: [
-      { label: 'Проекты', to: '/projects', name: 'projects' },
-      { label: 'Процессы', to: '/processes', name: 'processes' },
-      { label: 'Задачи', to: '/planner', name: 'planner' },
+      { label: 'nav.projects', to: '/projects', name: 'projects' },
+      { label: 'nav.processes', to: '/processes', name: 'processes' },
+      { label: 'nav.tasks', to: '/planner', name: 'planner' },
     ],
   },
   {
-    label: 'Табель',
+    label: 'nav.timesheet',
     roles: ['vp', 'admin'],
     items: [
-      { label: 'Табель', to: '/timesheet', name: 'timesheet' },
-      { label: 'Сотрудники', to: '/employees', name: 'employees' },
-      { label: 'Ресурсы', to: '/resources', name: 'resources' },
+      { label: 'nav.timesheet', to: '/timesheet', name: 'timesheet' },
+      { label: 'nav.employees', to: '/employees', name: 'employees' },
+      { label: 'nav.resources', to: '/resources', name: 'resources' },
     ],
   },
   {
-    label: 'Админ',
+    label: 'nav.admin',
     roles: ['admin'],
     items: [
-      { label: 'Пользователи', to: '/users', name: 'users' },
-      { label: 'Структура компании', to: '/structure', name: 'structure' },
-      { label: 'Триггер создания проекта', to: '/auto-create', name: 'auto-create', badge: 'new' },
-      { label: 'Статусы', to: '/statuses', name: 'statuses' },
-      { label: 'Пресеты прав', to: '/permissions', name: 'permissions' },
-      { label: 'Журнал действий', to: '/audit', name: 'audit' },
+      { label: 'nav.users', to: '/users', name: 'users' },
+      { label: 'nav.structure', to: '/structure', name: 'structure' },
+      { label: 'nav.autoCreate', to: '/auto-create', name: 'auto-create', badge: 'new' },
+      { label: 'nav.statuses', to: '/statuses', name: 'statuses' },
+      { label: 'nav.permissions', to: '/permissions', name: 'permissions' },
+      { label: 'nav.audit', to: '/audit', name: 'audit' },
     ],
   },
   {
-    label: 'Система',
+    label: 'nav.system',
     roles: null,
     items: [
-      { label: 'Очередь изменений', to: '/system/queue', name: 'system-queue' },
-      { label: 'Настройки', to: '/system/settings', name: 'system-settings' },
+      { label: 'nav.queue', to: '/system/queue', name: 'system-queue' },
+      { label: 'nav.settings', to: '/system/settings', name: 'system-settings' },
     ],
   },
 ]

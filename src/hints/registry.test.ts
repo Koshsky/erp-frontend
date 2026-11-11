@@ -1,8 +1,9 @@
 /**
  * Tests for the centralized hint registry (src/hints/registry.ts) — asset
- * loading with the user-overrides-defaults rule. Hints are Markdown files:
- * the id comes from the file name, the title from the first `# ` heading, and
- * the body is the remaining Markdown.
+ * loading with the user-overrides-defaults rule. Hints are Markdown files in
+ * locale folders (`<locale>/<id>.md`): the id comes from the file name, the
+ * title from the first `# ` heading, and the body is the remaining Markdown.
+ * A locale without a translation of an id falls back to the Russian document.
  */
 import { describe, expect, it } from 'vitest'
 import {
@@ -27,9 +28,29 @@ describe('hint registry', () => {
   })
 
   it('maps file names to ids and headings to titles', () => {
-    expect(hintPage('scope-expressions')?.title).toBe('Выражения области видимости')
-    expect(hintPage('planner')?.title).toBe('Планировщик')
+    expect(hintPage('scope-expressions', 'ru')?.title).toBe('Выражения области видимости')
+    expect(hintPage('planner', 'ru')?.title).toBe('Планировщик')
     expect(hintPage('nope')).toBeNull()
+  })
+
+  it('resolves every built-in hint in English as a genuine translation', () => {
+    const russian = hintPages('ru')
+    expect(russian.length).toBeGreaterThan(0)
+    // The Russian lookup itself still works.
+    for (const page of russian) {
+      expect(hintPage(page.id, 'ru')).not.toBeNull()
+    }
+    // Every Russian id MUST have an English file: a missing one resolves
+    // through the Russian fallback instead of returning null, so resolve
+    // alone is not enough — the English title must differ from the Russian
+    // one (all built-in ids have distinct RU/EN titles).
+    for (const page of russian) {
+      const en = hintPage(page.id, 'en')
+      expect(en, `missing English translation of hint '${page.id}'`).not.toBeNull()
+      expect(en!.title, `hint '${page.id}' in English is the Russian fallback`).not.toBe(page.title)
+    }
+    // The English catalog covers exactly the built-in ids, no more.
+    expect(hintPages('en').length).toBe(russian.length)
   })
 
   it('ignores duplicate registrations', () => {

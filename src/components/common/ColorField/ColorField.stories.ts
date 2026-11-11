@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/vue3-vite'
-import { expect } from 'vitest'
+import { expect } from 'storybook/test'
 import ColorField from './ColorField.vue'
 
 const meta: Meta<typeof ColorField> = {

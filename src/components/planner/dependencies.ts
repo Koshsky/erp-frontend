@@ -9,6 +9,9 @@
  *       ss — S must NOT start before P starts  (bound = S.start, anchor = P.start)
  *       ff — S must NOT end   before P ends    (bound = S.end,   anchor = P.end)
  *       sf — S must NOT end   before P starts  (bound = S.end,   anchor = P.start)
+ *   - the rules are INCLUSIVE (`>=`): a bound that lands exactly on the anchor
+ *     date is valid, there is no minimum one-day lag — only a strictly earlier
+ *     bound is a violation and gets shifted right;
  *   - a move of one task re-resolves the subgraph to a fixpoint, shifting
  *     successors right when a bound is violated and clamping a task that is
  *     dragged before its own predecessor bound (see the 16-case matrix in
@@ -19,17 +22,28 @@
  */
 import { addDaysISO, toDate } from './calendar'
 import { DAY_MS } from '@/utils'
+import { t } from '@/i18n'
 
 export type DependencyType = 'fs' | 'ss' | 'ff' | 'sf'
 
 export const DEPENDENCY_TYPES: readonly DependencyType[] = ['fs', 'ss', 'ff', 'sf']
 
-/** User-facing labels (Russian — the product language). */
-export const DEPENDENCY_LABELS: Record<DependencyType, string> = {
-  fs: 'Окончание → Начало',
-  ss: 'Начало → Начало',
-  ff: 'Окончание → Окончание',
-  sf: 'Начало → Окончание',
+/**
+ * Localized label of a link type. Built per call instead of a module-level map,
+ * so a language switch re-renders the selects and option lists that use it.
+ */
+export function dependencyLabel(type: DependencyType): string {
+  return t(`planner.dependencies.${type}`)
+}
+
+/** Labels of every link type, in `DEPENDENCY_TYPES` order (call-time, reactive). */
+export function dependencyLabels(): Record<DependencyType, string> {
+  return {
+    fs: dependencyLabel('fs'),
+    ss: dependencyLabel('ss'),
+    ff: dependencyLabel('ff'),
+    sf: dependencyLabel('sf'),
+  }
 }
 
 /** One scheduling link as stored in the planning aggregate / API. */

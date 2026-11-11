@@ -2,8 +2,8 @@ import { defineConfig, loadEnv, type Plugin } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import checker from 'vite-plugin-checker'
 import { fileURLToPath, URL } from 'node:url'
-import { readdirSync, writeFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { readdirSync, writeFileSync, mkdirSync } from 'node:fs'
+import { resolve, dirname } from 'node:path'
 import { execSync } from 'node:child_process'
 
 /**
@@ -53,6 +53,9 @@ function versionManifest(version: string): Plugin {
       }
       const dest = resolve(root, outDir, 'precache-manifest.json')
       const payload = { version, assets }
+      // The outDir may not exist yet (clean builds — dist is git-/docker-ignored);
+      // create it before writing the manifest.
+      mkdirSync(dirname(dest), { recursive: true })
       writeFileSync(dest, `${JSON.stringify(payload, null, 2)}\n`)
     },
   }

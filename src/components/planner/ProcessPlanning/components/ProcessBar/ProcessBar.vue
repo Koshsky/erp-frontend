@@ -1,10 +1,12 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import LabeledBar from '../../../Bar/Bar.vue'
 import { BarTooltip } from '@/components/common'
+import { t } from '@/i18n'
 import { viewSettings } from '@/settings'
 import type { ProcessBarProps } from './types'
 
-withDefaults(defineProps<ProcessBarProps>(), {
+const props = withDefaults(defineProps<ProcessBarProps>(), {
   projectCode: '',
   ownerName: '',
   color: 'var(--ui-gantt-process)',
@@ -21,6 +23,11 @@ const emit = defineEmits<{
   contextmenu: [payload: { clientX: number; clientY: number }]
   click: []
 }>()
+
+/** Tooltip rows, rebuilt on a language switch */
+const ownerRow = computed(() =>
+  t('planner.bar.owner', { owner: props.ownerName }),
+)
 </script>
 
 <template>
@@ -50,7 +57,7 @@ const emit = defineEmits<{
         <BarTooltip
           :title="title"
           :accent="color || 'var(--ui-gantt-process)'"
-          :rows="[viewSettings.badgeOwner && ownerName ? `Владелец: ${ownerName}` : '', dateRange].filter(Boolean)"
+          :rows="[viewSettings.badgeOwner && props.ownerName ? ownerRow : '', dateRange].filter(Boolean)"
         />
       </slot>
     </template>

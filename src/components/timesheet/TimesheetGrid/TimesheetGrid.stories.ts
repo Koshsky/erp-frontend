@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/vue3-vite'
 import TimesheetGrid from './TimesheetGrid.vue'
-import { makeDemoTimeline } from '../../planner/plannerStoryHelpers'
+import { makeDemoTimeline } from '../../planner/demoTimeline'
 
 const meta: Meta<typeof TimesheetGrid> = {
   title: 'Components/Timesheet/TimesheetGrid',

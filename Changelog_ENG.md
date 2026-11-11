@@ -4,7 +4,45 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-The web app and the desktop wrapper (`desktop/`) are versioned together.
+The web app and the desktop wrapper are versioned together.
+
+## [1.3.0] - 2026-10-07
+
+### Added
+
+- Multilingual UI: interface language (Russian/English/system) in Settings; the whole interface is translated (screens, planner, timesheet, PDF export, hint pages).
+- The interface language also drives date and number formatting, the window title and the desktop shell dialogs.
+- Hint pages ("?") are localized per interface language, with the Russian document as the fallback.
+- API error messages follow the interface language (the client sends Accept-Language).
+
+### Changed
+
+- Task dependency links (fs/ss/ff/sf) in the planner are drawn as a line with a tick on the constrained date instead of arrowheads; the line shape (six variants) is chosen in the settings with a live preview.
+- Diagram settings: badges and dependency lines are grouped into one "Diagram appearance" block, and badges got a preview.
+- Diagram settings: the comments badge on a task bar can be switched off.
+- The header language button is a toggle switch (only two languages are available) instead of a dropdown.
+- The changelog dialog shows the changelog of the interface language (Changelog_ENG.md / Changelog_RU.md).
+- The Settings sections "Sync" and "Connection" are merged into a single "Server" section.
+
+## [1.2.1] - 2026-10-06
+
+### Fixed
+
+- Changelog dialog: doubled "v" in the current-version caption.
+
+## [1.2.0] - 2026-10-06
+
+### Changed
+
+- Navigation of planner tables, the timesheet and DataTable tables now uses middle mouse button drag instead of the left one; the drag starts from any point of the table — bars, milestones and headers never block moving it.
+- Tables with drag navigation keep the plain arrow cursor at rest (headers, rows, empty space); Gantt bars show a clickable pointer; while the middle button is held, the cursor globally turns into the grabbing fist.
+- Weekday labels in the calendar header raised by a couple of pixels.
+- Presets have three editable fields — name, tag (access code) and description — set on creation and changeable later; lists and selects show the preset name.
+- The preset tooltip shows its description.
+- Action notifications (saving, preset create/rename/delete, password change, sync) moved into the notification stack instead of colored text at the top of the page.
+- Action button panels are aligned to the right edge so the notification stack cannot cover them.
+- Diagram settings: default duration of a created project, in days.
+- A changelog icon in the header opens the changelog (Changelog_RU.md) in a centered dialog.
 
 ## [1.1.0] - 2026-10-01
 

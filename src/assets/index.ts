@@ -18,8 +18,14 @@
  * reference consumer: it passes a `parseHintMarkdown`-based validator, so a
  * broken custom hint falls back to the built-in page.
  *
+ * Hint assets are locale-scoped inside each catalog (`<kind>/<locale>/<file>`),
+ * and the locale folder is part of the asset name (`ru/planner.md`), so a hint
+ * document follows the interface language and an override can target one
+ * language without touching the other.
+ *
  * Two custom-catalog sources coexist:
- * - hints: bundled at build time via the Vite glob (Markdown pages, `*.md`);
+ * - hints: bundled at build time via the Vite glob (Markdown pages, one
+ *   locale folder deep);
  * - icons: NOT bundled — the custom icons are mounted into the container
  *   at runtime (deploy mounts ./assets/custom into
  *   /usr/share/nginx/html/assets/custom, no rebuild). They are resolved
@@ -41,23 +47,33 @@ export type AssetValidator = (raw: unknown) => boolean
 // (task 14) and must never enter the build.
 
 const defaultGlobs: Record<string, Record<string, unknown>> = {
-  hints: import.meta.glob('./default/hints/*.md', { eager: true, query: '?raw', import: 'default' }) as Record<string, unknown>,
+  hints: import.meta.glob('./default/hints/*/*.md', { eager: true, query: '?raw', import: 'default' }) as Record<string, unknown>,
   icons: import.meta.glob('./default/icons/*.svg', { eager: true, query: '?raw', import: 'default' }) as Record<string, unknown>,
 }
 const customGlobs: Record<string, Record<string, unknown>> = {
-  hints: import.meta.glob('./custom/hints/*.md', { eager: true, query: '?raw', import: 'default' }) as Record<string, unknown>,
+  hints: import.meta.glob('./custom/hints/*/*.md', { eager: true, query: '?raw', import: 'default' }) as Record<string, unknown>,
 }
 
 /** Catalog files starting with this name (case-insensitive) are docs, not assets. */
 const DOC_FILE_PREFIX = 'README'
 
 function isDocFile(name: string): boolean {
-  return name.toUpperCase().startsWith(DOC_FILE_PREFIX)
+  const base = name.split('/').pop() ?? name
+  return base.toUpperCase().startsWith(DOC_FILE_PREFIX)
 }
 
+/**
+ * Asset name (catalog key) of a file path. Hint assets are locale-scoped
+ * (`default/hints/<locale>/<id>.md`), so the locale folder is part of the name
+ * (`ru/planner.md`); every other kind uses the bare file name.
+ */
 function assetName(filePath: string): string {
   const parts = filePath.split('/')
-  return parts[parts.length - 1] ?? filePath
+  const name = parts[parts.length - 1] ?? filePath
+  const locale = parts[parts.length - 2]
+  const kind = parts[parts.length - 3]
+  // Locale-scoped kinds (hints) keep the locale folder in the key: `ru/planner.md`.
+  return kind === 'hints' && locale ? `${locale}/${name}` : name
 }
 
 /** Default catalog of a kind: «file name → raw content» (README* docs excluded). */

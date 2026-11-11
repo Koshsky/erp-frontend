@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/vue3-vite'
 import CalendarHeader from './CalendarHeader.vue'
-import { makeDemoTimeline } from '@/components/planner/plannerStoryHelpers'
+import { makeDemoTimeline } from '@/components/planner/demoTimeline'
 
 const now = new Date()
 const y = now.getFullYear()

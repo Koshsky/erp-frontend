@@ -4,13 +4,15 @@ import { preloadPdfPreview, renderPdfPreview } from './previewPdf'
 import type { PdfPreviewHandle } from './previewPdf'
 import type { PdfExportProps } from './types'
 import { fmtDate, toDate } from '../calendar'
+import { t } from '@/i18n'
+import { fmtDateRange } from '@/i18n/date'
 import { viewSettings } from '@/settings'
 
 const props = withDefaults(defineProps<PdfExportProps>(), {
   groups: () => [],
   origin: '',
   unit: 'day',
-  pageTitle: 'Диаграмма задач',
+  pageTitle: undefined,
   ownerId: null,
   scope: 'tasks',
   rowHeight: null,
@@ -62,8 +64,15 @@ const periodFromPage = computed(
 /** Human-readable period string for the modal (dd.mm.yyyy — dd.mm.yyyy) */
 const periodLabel = computed(() => {
   const p = resolvePeriod()
-  return `${toDate(p.from).toLocaleDateString('ru')} — ${toDate(p.to).toLocaleDateString('ru')}`
+  return fmtDateRange(toDate(p.from), toDate(p.to))
 })
+
+/**
+ * Title printed in the PDF footer: an explicit prop wins (pages pass their own
+ * translated title), otherwise the dialog's default in the active language.
+ * Resolved in a computed so a language switch re-renders it.
+ */
+const pdfTitle = computed(() => props.pageTitle || t('pdf.dialog.defaultPageTitle'))
 
 /** Fallback hint: no period from the page, but there is data to print */
 const periodFallbackHint = computed(
@@ -95,7 +104,7 @@ const projects = computed(() => {
   const seen = new Map<number, string>()
   const add = (id?: number, code?: string) => {
     if (id == null) return
-    if (!seen.has(id)) seen.set(id, code || `Проект ${id}`)
+    if (!seen.has(id)) seen.set(id, code || t('pdf.dialog.projectFallback', { id }))
   }
   for (const g of props.groups ?? []) {
     add(g.project_id, g.code)
@@ -105,7 +114,7 @@ const projects = computed(() => {
 })
 
 /** Name filter label: same for tasks and processes */
-const nameFilterLabel = 'Процессы'
+const nameFilterLabel = computed(() => t('pdf.dialog.processes'))
 
 /** Scope-dependent print modal configuration.
  *  Printing does not depend on RBAC rights: the options are derived from the data.
@@ -287,7 +296,7 @@ async function generateOnce(force: boolean) {
       to: period.to,
       origin: props.origin,
       unit: props.unit,
-      pageTitle: props.pageTitle,
+      pageTitle: pdfTitle.value,
       // Milestones and resource usage — only for the tasks scope
       showMilestones: showMilestonesOption.value ? settings.value.showMilestones : false,
       showTodayLine: settings.value.showTodayLine,
@@ -500,7 +509,7 @@ onBeforeUnmount(() => {
 <template>
   <div class="pe">
     <!-- Visible toolbar trigger above the diagram (gated by the view settings
-         "Экспорт диаграмм"). Ctrl/Cmd+P/S always works regardless of this flag. -->
+         "Export charts"). Ctrl/Cmd+P/S always works regardless of this flag. -->
     <button
       v-if="viewSettings.showPdfButtons"
       type="button"
@@ -508,34 +517,34 @@ onBeforeUnmount(() => {
       @click="openDialog"
     >
       <span class="pe-open-icon" aria-hidden="true">⤓</span>
-      Сохранить в PDF / Печать
+      {{ t('pdf.dialog.openButton') }}
     </button>
     <Teleport to="body">
       <div v-if="open" class="pe-overlay" @mousedown.self="closeDialog">
-        <div class="pe-modal" role="dialog" aria-modal="true" aria-label="Печать диаграммы в PDF">
+        <div class="pe-modal" role="dialog" aria-modal="true" :aria-label="t('pdf.dialog.ariaTitle')">
           <div class="pe-head">
-            <h3 class="pe-title">Печать диаграммы в PDF</h3>
-            <button type="button" class="pe-close" aria-label="Закрыть" @click="closeDialog">×</button>
+            <h3 class="pe-title">{{ t('pdf.dialog.title') }}</h3>
+            <button type="button" class="pe-close" :aria-label="t('common.close')" @click="closeDialog">×</button>
           </div>
 
           <div class="pe-body">
             <div class="pe-settings">
               <div class="pe-field">
-                <span class="pe-label">Стиль диаграммы</span>
+                <span class="pe-label">{{ t('pdf.dialog.style') }}</span>
                 <div class="pe-style-row">
                   <label class="pe-style-opt">
                     <input v-model="settings.style" type="radio" name="pe-style" value="color" class="pe-checkbox" />
-                    Цветной
+                    {{ t('pdf.dialog.styleColor') }}
                   </label>
                   <label class="pe-style-opt">
                     <input v-model="settings.style" type="radio" name="pe-style" value="mono" class="pe-checkbox" />
-                    Чёрно-белый (контурный)
+                    {{ t('pdf.dialog.styleMono') }}
                   </label>
                 </div>
               </div>
 
               <div class="pe-field">
-                <span class="pe-label">Толщина баров</span>
+                <span class="pe-label">{{ t('pdf.dialog.barThickness') }}</span>
                 <div class="pe-range-row">
                   <input v-model.number="settings.barThickness" type="range" min="16" max="64" step="4" class="pe-range" />
                   <span class="pe-range-value">{{ settings.barThickness }}px</span>
@@ -545,30 +554,30 @@ onBeforeUnmount(() => {
               <label v-if="hasForeignProcesses" class="pe-field">
                 <span class="pe-toggle">
                   <input v-model="settings.onlyMine" type="checkbox" class="pe-checkbox" />
-                  <span class="pe-label">Только мои процессы</span>
+                  <span class="pe-label">{{ t('pdf.dialog.onlyMine') }}</span>
                 </span>
-                <span class="pe-hint">Скрыть из печати процессы других владельцев</span>
+                <span class="pe-hint">{{ t('pdf.dialog.onlyMineHint') }}</span>
               </label>
 
               <label v-if="showMilestonesOption" class="pe-field">
                 <span class="pe-toggle">
                   <input v-model="settings.showMilestones" type="checkbox" class="pe-checkbox" />
-                  <span class="pe-label">Показывать вехи</span>
+                  <span class="pe-label">{{ t('pdf.dialog.showMilestones') }}</span>
                 </span>
               </label>
 
               <label class="pe-field">
                 <span class="pe-toggle">
                   <input v-model="settings.showTodayLine" type="checkbox" class="pe-checkbox" />
-                  <span class="pe-label">Показывать линию «сегодня»</span>
+                  <span class="pe-label">{{ t('pdf.dialog.showTodayLine') }}</span>
                 </span>
-                <span class="pe-hint">Вертикальная линия текущей даты на диаграмме</span>
+                <span class="pe-hint">{{ t('pdf.dialog.showTodayLineHint') }}</span>
               </label>
 
               <label v-if="showResourcesOption" class="pe-field">
                 <span class="pe-toggle">
                   <input v-model="settings.showResources" type="checkbox" class="pe-checkbox" />
-                  <span class="pe-label">Показывать занятость ресурсов</span>
+                  <span class="pe-label">{{ t('pdf.dialog.showResources') }}</span>
                 </span>
               </label>
 
@@ -579,7 +588,7 @@ onBeforeUnmount(() => {
                   <span class="pe-caret">{{ namesOpen ? '▾' : '▸' }}</span>
                 </button>
                 <div v-if="namesOpen" class="pe-filter-list">
-                  <p v-if="!nameOptions.length" class="pe-hint">Нет данных</p>
+                  <p v-if="!nameOptions.length" class="pe-hint">{{ t('common.noData') }}</p>
                   <label v-for="name in nameOptions" :key="name" class="pe-filter-item">
                     <input v-model="settings.selectedNames" type="checkbox" :value="name" class="pe-checkbox" />
                     <span class="pe-filter-label">{{ name }}</span>
@@ -589,12 +598,12 @@ onBeforeUnmount(() => {
 
               <div class="pe-field">
                 <button type="button" class="pe-filters-toggle" @click="projectsOpen = !projectsOpen">
-                  <span>Скрыть проекты</span>
+                  <span>{{ t('pdf.dialog.hideProjects') }}</span>
                   <span v-if="settings.hiddenProjects.length" class="pe-filters-count">{{ settings.hiddenProjects.length }}</span>
                   <span class="pe-caret">{{ projectsOpen ? '▾' : '▸' }}</span>
                 </button>
                 <div v-if="projectsOpen" class="pe-filter-list">
-                  <p v-if="!projects.length" class="pe-hint">Нет проектов</p>
+                  <p v-if="!projects.length" class="pe-hint">{{ t('pdf.dialog.noProjects') }}</p>
                   <label v-for="pr in projects" :key="pr.id" class="pe-filter-item">
                     <input v-model="settings.hiddenProjects" type="checkbox" :value="pr.id" class="pe-checkbox" />
                     <span class="pe-filter-label">{{ pr.code }}</span>
@@ -603,45 +612,45 @@ onBeforeUnmount(() => {
               </div>
 
               <div class="pe-file">
-                <span class="pe-file-label">Период печати</span>
+                <span class="pe-file-label">{{ t('pdf.dialog.printPeriod') }}</span>
                 <span class="pe-file-name">{{ periodLabel }}</span>
-                <span v-if="!periodFromPage" class="pe-hint">Период определён по данным — уточните вид страницы</span>
+                <span v-if="!periodFromPage" class="pe-hint">{{ t('pdf.dialog.periodFromData') }}</span>
               </div>
 
               <div class="pe-file">
-                <span class="pe-file-label">Файл</span>
+                <span class="pe-file-label">{{ t('pdf.dialog.file') }}</span>
                 <span class="pe-file-name">{{ filename }}</span>
               </div>
             </div>
 
             <div class="pe-preview-area">
               <div v-if="periodFallbackHint" class="pe-period-hint">
-                Период со страницы не определён — используется диапазон данных. Измените вид страницы и откройте заново.
+                {{ t('pdf.dialog.periodFallbackHint') }}
               </div>
               <div v-else-if="!previewLoading && truncatedWarning" class="pe-period-hint pe-truncate-hint" role="status">
-                Период шире, чем помещается на страницу: напечатана только его начальная часть. Сузьте период на странице.
+                {{ t('pdf.dialog.truncatedHint') }}
               </div>
               <div class="pe-preview-head">
-                <span class="pe-pages-count">Страниц: {{ pageCount }}</span>
-                <span v-if="previewLoading" class="pe-updating">Обновляем…</span>
+                <span class="pe-pages-count">{{ t('pdf.dialog.pages', { count: pageCount }) }}</span>
+                <span v-if="previewLoading" class="pe-updating">{{ t('pdf.dialog.updating') }}</span>
               </div>
               <div class="pe-preview-box">
                 <div ref="previewEl" class="pe-pages"></div>
-                <div v-if="previewLoading" class="pe-msg"><span class="pe-spinner" /> Готовим предпросмотр…</div>
+                <div v-if="previewLoading" class="pe-msg"><span class="pe-spinner" /> {{ t('pdf.dialog.preparing') }}</div>
                 <div v-else-if="previewError" class="pe-msg pe-msg-error">{{ previewError }}</div>
-                <div v-else-if="previewEmpty" class="pe-msg">Нет данных для печати — измените фильтры</div>
+                <div v-else-if="previewEmpty" class="pe-msg">{{ t('pdf.dialog.empty') }}</div>
               </div>
             </div>
           </div>
 
           <div class="pe-actions">
-            <button type="button" class="pe-btn-cancel" @click="closeDialog">Отмена</button>
+            <button type="button" class="pe-btn-cancel" @click="closeDialog">{{ t('common.cancel') }}</button>
             <button type="button" class="pe-btn-download" :disabled="busy || previewEmpty" @click="onDownload">
-              Скачать PDF
+              {{ t('pdf.dialog.download') }}
             </button>
             <button type="button" class="pe-btn-primary" :disabled="busy || previewEmpty" @click="onPrint">
               <span v-if="busy" class="pe-spinner" />
-              Печать
+              {{ t('pdf.dialog.print') }}
             </button>
           </div>
         </div>

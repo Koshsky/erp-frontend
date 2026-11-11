@@ -13,6 +13,8 @@ import { storeToRefs } from 'pinia'
 import { useAuditStore } from '../store'
 import { useColumnWidths } from '../composables/useColumnWidths'
 import { tablePageSize } from '../settings'
+import { t } from '@/i18n'
+import { fmtDateTime } from '@/i18n/date'
 import type { DtoAuditEventView } from '@/api'
 
 const audit = useAuditStore()
@@ -24,64 +26,65 @@ const { items, loading, error, disabled } = storeToRefs(audit)
  */
 const asEv = (row: unknown): DtoAuditEventView => row as DtoAuditEventView
 
-/** Table columns; sorting lives inside DataTable (values via sortValue). */
-const columns: DataTableColumn[] = [
-  { key: 'ts', label: 'Время', width: 'fit-content(230px)' },
-  { key: 'actor', label: 'Пользователь', width: 'fit-content(340px)' },
-  { key: 'entity', label: 'Сущность', width: 'fit-content(230px)' },
-  { key: 'action', label: 'Действие', width: 'fit-content(240px)' },
-  { key: 'id', label: 'ID', width: '70px' },
-  { key: 'status', label: 'Статус', width: 'fit-content(180px)' },
-  { key: 'ip', label: 'IP', width: 'fit-content(230px)' },
-  { key: 'duration', label: 'Время, мс', width: 'fit-content(170px)' },
-]
+/** Table columns; sorting lives inside DataTable (values via sortValue).
+ *  Labels are resolved at render time, so a language switch re-renders them. */
+const columns = computed<DataTableColumn[]>(() => [
+  { key: 'ts', label: t('adminConfig.audit.colTs'), width: 'fit-content(230px)' },
+  { key: 'actor', label: t('adminConfig.audit.colActor'), width: 'fit-content(340px)' },
+  { key: 'entity', label: t('adminConfig.audit.colEntity'), width: 'fit-content(230px)' },
+  { key: 'action', label: t('adminConfig.audit.colAction'), width: 'fit-content(240px)' },
+  { key: 'id', label: t('adminConfig.audit.colId'), width: '70px' },
+  { key: 'status', label: t('adminConfig.audit.colStatus'), width: 'fit-content(180px)' },
+  { key: 'ip', label: t('adminConfig.audit.colIp'), width: 'fit-content(230px)' },
+  { key: 'duration', label: t('adminConfig.audit.colDuration'), width: 'fit-content(170px)' },
+])
 
 /** Per-user persisted column widths (drag-resize on the header edges). */
 const { columnWidths } = useColumnWidths('audit')
 
-/** Russian labels for entities (used in the filter and the table). */
-const ENTITY_LABELS: Record<string, string> = {
-  auth: 'Авторизация',
-  project: 'Проекты',
-  process: 'Процессы',
-  task: 'Задачи',
-  comment: 'Комментарии',
-  milestone: 'Вехи',
-  assignment: 'Назначения ресурсов',
-  resource: 'Ресурсы табеля',
-  resource_member: 'Участники ресурса',
-  state: 'Статусы',
-  user: 'Пользователи',
-  auto_create: 'Триггер создания проекта',
-  rbac: 'Права (RBAC)',
-}
+/** Entity codes of the audit journal (used in the filter and the table). */
+const ENTITY_KEYS = [
+  'auth',
+  'project',
+  'process',
+  'task',
+  'comment',
+  'milestone',
+  'assignment',
+  'resource',
+  'resource_member',
+  'state',
+  'user',
+  'auto_create',
+  'rbac',
+] as const
 
-/** Russian labels for actions (filter + table). */
-const ACTION_LABELS: Record<string, string> = {
-  create: 'Создание',
-  update: 'Изменение',
-  delete: 'Удаление',
-  reorder: 'Переупорядочивание',
-  add: 'Добавление',
-  remove: 'Удаление',
-  update_manager: 'Изменение руководителя',
-  reset_password: 'Сброс пароля',
-  change_password: 'Смена пароля',
-  set_days: 'Установка дней',
-  delete_days: 'Удаление дней',
-  create_preset: 'Создание пресета',
-  update_preset: 'Изменение пресета',
-  delete_preset: 'Удаление пресета',
-  upsert_preset_rule: 'Изменение правила пресета',
-  delete_preset_rule: 'Удаление правила пресета',
-  replace_user_permissions: 'Замена прав пользователя',
-  upsert_policy: 'Изменение политики',
-  delete_policy: 'Удаление политики',
-  reset: 'Сброс прав',
-  login: 'Вход',
-  refresh: 'Обновление сессии',
-  logout: 'Выход',
-}
+/** Action codes of the audit journal (filter + table). */
+const ACTION_KEYS = [
+  'create',
+  'update',
+  'delete',
+  'reorder',
+  'add',
+  'remove',
+  'update_manager',
+  'reset_password',
+  'change_password',
+  'set_days',
+  'delete_days',
+  'create_preset',
+  'update_preset',
+  'delete_preset',
+  'upsert_preset_rule',
+  'delete_preset_rule',
+  'replace_user_permissions',
+  'upsert_policy',
+  'delete_policy',
+  'reset',
+  'login',
+  'refresh',
+  'logout',
+] as const
 
 /** Actions applicable to each entity (mirrors the backend route map in
  * internal/audit/route.go). The action filter options depend on the selected
@@ -104,15 +107,20 @@ const ENTITY_ACTIONS: Record<string, string[]> = {
 }
 
 /** Action options for the filter: restricted to the selected entity, or the
- * full catalog when no entity is chosen. */
+ * full catalog when no entity is chosen (labels resolved in the catalog). */
 const actionOptions = computed<Array<{ key: string; label: string }>>(() => {
   if (filters.entity) {
     const keys = ENTITY_ACTIONS[filters.entity] ?? []
-    if (keys.length === 0) return [{ key: '', label: 'Все' }]
-    return keys.map((k) => ({ key: k, label: ACTION_LABELS[k] ?? k }))
+    if (keys.length === 0) return [{ key: '', label: t('adminConfig.audit.filterAll') }]
+    return keys.map((k) => ({ key: k, label: actionLabel(k) }))
   }
-  return Object.entries(ACTION_LABELS).map(([key, label]) => ({ key, label }))
+  return ACTION_KEYS.map((key) => ({ key, label: actionLabel(key) }))
 })
+
+/** Entity options of the filter (code + translated label). */
+const entityOptions = computed<Array<{ key: string; label: string }>>(() =>
+  ENTITY_KEYS.map((key) => ({ key, label: entityLabel(key) })),
+)
 
 /** Entity changed: drop an action that is not applicable to the new entity
  * (otherwise entity+action contradict each other), then apply. */
@@ -234,11 +242,11 @@ function prevPage() {
 }
 
 function entityLabel(e: string): string {
-  return ENTITY_LABELS[e] ?? e
+  return ENTITY_KEYS.includes(e as (typeof ENTITY_KEYS)[number]) ? t(`adminConfig.audit.entity.${e}`) : e
 }
 
 function actionLabel(a: string): string {
-  return ACTION_LABELS[a] ?? a
+  return ACTION_KEYS.includes(a as (typeof ACTION_KEYS)[number]) ? t(`adminConfig.audit.action.${a}`) : a
 }
 
 function actionKindOf(a: string | undefined): ActionKind {
@@ -254,7 +262,7 @@ function actorName(ev: DtoAuditEventView): string {
 function formatTS(ts: string | undefined): string {
   if (!ts) return ''
   const d = new Date(ts)
-  return Number.isNaN(d.getTime()) ? ts : d.toLocaleString('ru-RU')
+  return Number.isNaN(d.getTime()) ? ts : fmtDateTime(d)
 }
 
 function prettyJSON(v: unknown): string {
@@ -295,18 +303,18 @@ onMounted(() => {
 
 <template>
   <section class="al">
-    <p v-if="loading && !items.length" class="al-st">Загрузка...</p>
-    <p v-if="loading && items.length" class="al-refreshing">Обновление…</p>
+    <p v-if="loading && !items.length" class="al-st">{{ t('adminConfig.audit.loading') }}</p>
+    <p v-if="loading && items.length" class="al-refreshing">{{ t('adminConfig.audit.refreshing') }}</p>
     <p v-if="error" class="al-st er">{{ error }}</p>
 
     <!-- The backend does not expose /audit/events (audit.enabled=false):
          a distinct help card instead of the table / a raw 404 error. -->
     <div v-if="disabled" class="al-disabled" role="note">
-      <h3 class="al-disabled-title">Журнал действий отключён на сервере</h3>
+      <h3 class="al-disabled-title">{{ t('adminConfig.audit.disabledTitle') }}</h3>
       <ol class="al-disabled-steps">
-        <li>в config.yaml бэкенда установите <code>audit.enabled: true</code>;</li>
-        <li>перезапустите backend (<code>docker restart erp</code> или <code>docker compose up -d</code>);</li>
-        <li>обновите страницу.</li>
+        <li>{{ t('adminConfig.audit.disabledStep1') }} <code>audit.enabled: true</code>;</li>
+        <li>{{ t('adminConfig.audit.disabledStep2') }}<code>docker restart erp</code> {{ t('adminConfig.audit.disabledStep2Or') }} <code>docker compose up -d</code>);</li>
+        <li>{{ t('adminConfig.audit.disabledStep3') }}</li>
       </ol>
     </div>
 
@@ -318,13 +326,13 @@ onMounted(() => {
       v-if="!disabled && (items.length > 0 || (!loading && !error))"
       :columns="columns"
       :rows="items"
-      title="Журнал действий"
+      :title="t('adminConfig.audit.title')"
       expandable
       resizable
       v-model:column-widths="columnWidths"
       :sort-value="sortValue"
       :default-sort="{ key: 'ts', dir: -1 }"
-      empty-text="Нет записей"
+      :empty-text="t('adminConfig.audit.empty')"
       :class="{ 'al-table--loading': loading && items.length > 0 }"
     >
       <template #actions>
@@ -333,44 +341,44 @@ onMounted(() => {
           v-model="filters.search"
           class="al-search"
           type="text"
-          placeholder="Поиск по строке события..."
+          :placeholder="t('adminConfig.audit.searchPlaceholder')"
           @keyup.enter="applyFilters(0)"
         />
-        <button type="button" class="al-btn" :disabled="loading" @click="applyFilters(offset)">Обновить</button>
-        <button type="button" class="al-btn" @click="resetFilters">Сбросить</button>
+        <button type="button" class="al-btn" :disabled="loading" @click="applyFilters(offset)">{{ t('adminConfig.audit.refreshButton') }}</button>
+        <button type="button" class="al-btn" @click="resetFilters">{{ t('common.reset') }}</button>
       </template>
 
       <!-- Per-column filters — every field renders under its column -->
       <template #filter="{ column }">
         <div v-if="column.key === 'ts'" class="al-filter">
-          <input v-model="filters.when" type="datetime-local" title="Показывать с этого момента" @change="applyFilters(0)" />
+          <input v-model="filters.when" type="datetime-local" :title="t('adminConfig.audit.filterTsTitle')" @change="applyFilters(0)" />
         </div>
         <div v-else-if="column.key === 'actor'" class="al-filter">
-          <input v-model="filters.user" type="text" placeholder="Логин или ФИО" @keyup.enter="applyFilters(0)" />
+          <input v-model="filters.user" type="text" :placeholder="t('adminConfig.audit.filterActorPlaceholder')" @keyup.enter="applyFilters(0)" />
         </div>
         <div v-else-if="column.key === 'entity'" class="al-filter">
           <select v-model="filters.entity" @change="onEntityChange">
-            <option value="">Все</option>
-            <option v-for="(label, key) in ENTITY_LABELS" :key="key" :value="key">{{ label }}</option>
+            <option value="">{{ t('adminConfig.audit.filterAll') }}</option>
+            <option v-for="opt in entityOptions" :key="opt.key" :value="opt.key">{{ opt.label }}</option>
           </select>
         </div>
         <div v-else-if="column.key === 'action'" class="al-filter">
           <select v-model="filters.action" @change="applyFilters(0)">
-            <option value="">Все</option>
+            <option value="">{{ t('adminConfig.audit.filterAll') }}</option>
             <option v-for="opt in actionOptions" :key="opt.key" :value="opt.key">{{ opt.label }}</option>
           </select>
         </div>
         <div v-else-if="column.key === 'id'" class="al-filter">
-          <input v-model="filters.id" type="text" inputmode="numeric" placeholder="ID" title="ID сущности или пользователя" @keyup.enter="applyFilters(0)" />
+          <input v-model="filters.id" type="text" inputmode="numeric" placeholder="ID" :title="t('adminConfig.audit.filterIdTitle')" @keyup.enter="applyFilters(0)" />
         </div>
         <div v-else-if="column.key === 'status'" class="al-filter">
           <select v-model="filters.status" @change="applyFilters(0)">
-            <option value="">Все</option>
+            <option value="">{{ t('adminConfig.audit.filterAll') }}</option>
             <option v-for="g in STATUS_GROUPS" :key="g" :value="g">{{ g }}</option>
           </select>
         </div>
         <div v-else-if="column.key === 'ip'" class="al-filter">
-          <input v-model="filters.ip" type="text" placeholder="IP (точный)" title="Полный IP адрес актора" @keyup.enter="applyFilters(0)" />
+          <input v-model="filters.ip" type="text" :placeholder="t('adminConfig.audit.filterIpPlaceholder')" :title="t('adminConfig.audit.filterIpTitle')" @keyup.enter="applyFilters(0)" />
         </div>
       </template>
 
@@ -406,11 +414,11 @@ onMounted(() => {
           </div>
           <div class="al-detail-cols">
             <div class="al-detail-col">
-              <div class="al-detail-title">Тело запроса</div>
+              <div class="al-detail-title">{{ t('adminConfig.audit.requestBody') }}</div>
               <pre>{{ prettyJSON(asEv(row).request_body) }}</pre>
             </div>
             <div class="al-detail-col">
-              <div class="al-detail-title">Тело ответа</div>
+              <div class="al-detail-title">{{ t('adminConfig.audit.responseBody') }}</div>
               <pre>{{ prettyJSON(asEv(row).response_body) }}</pre>
             </div>
           </div>
@@ -420,9 +428,9 @@ onMounted(() => {
 
     <!-- Pagination -->
     <div v-if="items.length > 0" class="al-pager">
-      <button type="button" :disabled="page <= 1" @click="prevPage">← Назад</button>
-      <span>Стр. {{ page }} (показано {{ items.length }})</span>
-      <button type="button" :disabled="!hasMore" @click="nextPage">Вперёд →</button>
+      <button type="button" :disabled="page <= 1" @click="prevPage">{{ t('adminConfig.audit.prevPage') }}</button>
+      <span>{{ t('adminConfig.audit.page', { page, count: items.length }) }}</span>
+      <button type="button" :disabled="!hasMore" @click="nextPage">{{ t('adminConfig.audit.nextPage') }}</button>
     </div>
   </section>
 </template>

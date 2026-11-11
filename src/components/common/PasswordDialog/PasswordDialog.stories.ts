@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/vue3-vite'
-import { expect } from 'vitest'
+import { expect } from 'storybook/test'
 import PasswordDialog from './PasswordDialog.vue'
 
 const meta: Meta<typeof PasswordDialog> = {

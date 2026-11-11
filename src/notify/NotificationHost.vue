@@ -2,6 +2,7 @@
 import { notifications, dismissNotification } from './state'
 import { notificationsEnabled } from '../settings'
 import { isNavOpen, NAV_WIDTH } from '../composables/useNavDrawer'
+import { t } from '../i18n'
 
 const BASE_LEFT = 20
 </script>
@@ -34,8 +35,8 @@ const BASE_LEFT = 20
         <button
           type="button"
           class="nt-close"
-          aria-label="Закрыть"
-          title="Закрыть"
+          :aria-label="t('common.close')"
+          :title="t('common.close')"
           @click="dismissNotification(n.id)"
         >
           ×

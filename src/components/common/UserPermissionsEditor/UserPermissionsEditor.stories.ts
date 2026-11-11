@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/vue3'
-import { expect } from 'vitest'
+import { expect } from 'storybook/test'
 
 import UserPermissionsEditor from './UserPermissionsEditor.vue'
 import { argTypes, sampleModel, sampleAdminModel } from './argTypes'

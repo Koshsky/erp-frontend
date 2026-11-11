@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { ModalForm } from '../../common'
+import { dateLocale, fmtDateTime } from '@/i18n/date'
+import { t } from '@/i18n'
 import type { DtoCommentResponse } from '@/api'
 import {
   flattenComments,
@@ -38,37 +40,30 @@ const flat = computed(() => flattenComments(props.comments))
 
 const userById = computed(() => new Map((props.users || []).map((u) => [u.id ?? 0, u])))
 
-const fmtDT = new Intl.DateTimeFormat('ru-RU', {
-  day: 'numeric',
-  month: 'short',
-  year: 'numeric',
-  hour: '2-digit',
-  minute: '2-digit',
-})
-const fmtDTFull = new Intl.DateTimeFormat('ru-RU', {
-  day: 'numeric',
-  month: 'long',
-  year: 'numeric',
-  hour: '2-digit',
-  minute: '2-digit',
-  second: '2-digit',
-})
-
 function fmtDate(iso?: string): string {
   if (!iso) return ''
-  const d = new Date(iso)
-  return Number.isNaN(d.getTime()) ? '' : fmtDT.format(d)
+  return fmtDateTime(iso)
 }
 
+/** Full date-time for the hover title (with seconds) */
 function fmtDateFull(iso?: string): string {
   if (!iso) return ''
   const d = new Date(iso)
-  return Number.isNaN(d.getTime()) ? '' : fmtDTFull.format(d)
+  return Number.isNaN(d.getTime())
+    ? ''
+    : d.toLocaleString(dateLocale(), {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+      })
 }
 
 function authorName(c: DtoCommentResponse): string {
   if (c.author_id == null) return '—'
-  return userById.value.get(c.author_id)?.name ?? `Пользователь #${c.author_id}`
+  return userById.value.get(c.author_id)?.name ?? t('planner.taskComments.userFallback', { id: c.author_id })
 }
 
 /** Deletion: own always, others only with canManage (admin/vp) */
@@ -104,14 +99,14 @@ function sendReply(commentId: number) {
 </script>
 
 <template>
-  <ModalForm :open="open" :title="`Комментарии: ${taskTitle || `Задача #${taskId}`}`" @close="emit('close')">
+  <ModalForm :open="open" :title="taskTitle ? t('planner.taskComments.titleNamed', { title: taskTitle }) : t('planner.taskComments.titleFallback', { id: taskId })" @close="emit('close')">
     <div class="tc">
       <p v-if="error" class="tc-error">{{ error }}</p>
       <p v-if="disabledReason" class="tc-offline">{{ disabledReason }}</p>
 
       <div class="tc-list">
-        <div v-if="busy && flat.length === 0" class="tc-state">Загрузка комментариев…</div>
-        <div v-else-if="flat.length === 0" class="tc-state">Комментариев пока нет</div>
+        <div v-if="busy && flat.length === 0" class="tc-state">{{ t('planner.taskComments.loading') }}</div>
+        <div v-else-if="flat.length === 0" class="tc-state">{{ t('planner.taskComments.empty') }}</div>
 
         <div
           v-for="(n, i) in flat"
@@ -121,7 +116,7 @@ function sendReply(commentId: number) {
         >
           <div class="tc-head">
             <span class="tc-author">{{ authorName(n.comment) }}</span>
-            <span v-if="n.orphan" class="tc-orphan" title="Родительский комментарий удалён">в ответ на удалённый комментарий</span>
+            <span v-if="n.orphan" class="tc-orphan" :title="t('planner.taskComments.orphanTitle')">{{ t('planner.taskComments.orphan') }}</span>
             <span class="tc-date" :title="fmtDateFull(n.comment.created_at)">{{ fmtDate(n.comment.created_at) }}</span>
           </div>
           <div class="tc-text">{{ n.comment.content }}</div>
@@ -131,14 +126,14 @@ function sendReply(commentId: number) {
               class="tc-btn"
               :disabled="composerDisabled"
               @click="openReply(n.comment.id ?? 0)"
-            >Ответить</button>
+            >{{ t('planner.taskComments.reply') }}</button>
             <button
               v-if="canDelete(n.comment)"
               type="button"
               class="tc-icon tc-del"
               :disabled="busy"
-              title="Удалить комментарий"
-              aria-label="Удалить комментарий"
+              :title="t('planner.taskComments.deleteTitle')"
+              :aria-label="t('planner.taskComments.deleteTitle')"
               @click="emit('delete', { comment_id: n.comment.id ?? 0 })"
             >
               <svg
@@ -166,7 +161,7 @@ function sendReply(commentId: number) {
               class="tc-input"
               rows="2"
               :disabled="composerDisabled"
-              placeholder="Ответ…"
+              :placeholder="t('planner.taskComments.replyPlaceholder')"
               @keydown.enter.exact.prevent="sendReply(n.comment.id ?? 0)"
             />
             <div class="tc-reply-row">
@@ -175,7 +170,7 @@ function sendReply(commentId: number) {
                 class="tc-btn tc-send"
                 :disabled="composerDisabled || !replyDraft.trim()"
                 @click="sendReply(n.comment.id ?? 0)"
-              >Отправить</button>
+              >{{ t('planner.taskComments.send') }}</button>
             </div>
           </div>
         </div>
@@ -187,7 +182,7 @@ function sendReply(commentId: number) {
           class="tc-input"
           rows="3"
           :disabled="composerDisabled"
-          placeholder="Написать комментарий…"
+          :placeholder="t('planner.taskComments.composerPlaceholder')"
           @keydown.enter.exact.prevent="sendRoot"
         />
         <div class="tc-composer-row">
@@ -197,7 +192,7 @@ function sendReply(commentId: number) {
             class="tc-btn tc-send"
             :disabled="composerDisabled || !rootDraft.trim()"
             @click="sendRoot"
-          >Отправить</button>
+          >{{ t('planner.taskComments.send') }}</button>
         </div>
       </div>
     </div>

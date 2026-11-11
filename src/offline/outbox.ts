@@ -1,10 +1,11 @@
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import axios, { type AxiosError, type AxiosRequestConfig, type Method } from 'axios'
 import { idbAll, idbCount, idbDel, idbPut, IDMAP_STORE_NAME, type IdMapEntry } from './db'
 import { applyToCache } from './cacheApply'
 import { probeBackend } from './state'
 import { getApiUrl } from '@/config'
 import { getAccessToken } from '../token'
+import { appLocale, t } from '../i18n'
 
 /**
  * Mutation queue (outbox pattern): create/update/delete requests made
@@ -120,34 +121,36 @@ export interface QueueViewItem {
   message?: string
 }
 
-/** Russian entity names for display in the queue */
-const ENTITY_LABELS: Record<MutationEntity, string> = {
-  resource: 'Ресурс',
-  user: 'Сотрудник',
-  member: 'Участник ресурса',
-  state: 'Статус',
-  period: 'Период табеля',
-  project: 'Проект',
-  process: 'Процесс',
-  task: 'Задача',
-  milestone: 'Веха',
-  assignment: 'Назначение',
-  reorder: 'Приоритет/порядок',
+/** Catalog keys of the entity names shown in the queue. */
+const ENTITY_KEYS: Record<MutationEntity, string> = {
+  resource: 'offline.entity.resource',
+  user: 'offline.entity.user',
+  member: 'offline.entity.member',
+  state: 'offline.entity.state',
+  period: 'offline.entity.period',
+  project: 'offline.entity.project',
+  process: 'offline.entity.process',
+  task: 'offline.entity.task',
+  milestone: 'offline.entity.milestone',
+  assignment: 'offline.entity.assignment',
+  reorder: 'offline.entity.reorder',
 }
 
+/** Entity name in the active language (resolved at call time). */
 export function entityLabel(entity: MutationEntity): string {
-  return ENTITY_LABELS[entity] ?? entity
+  const key = ENTITY_KEYS[entity]
+  return key ? t(key) : entity
 }
 
 export function operationLabel(method: string): string {
   switch ((method || '').toUpperCase()) {
     case 'POST':
-      return 'Создание'
+      return t('offline.operation.create')
     case 'PUT':
     case 'PATCH':
-      return 'Изменение'
+      return t('offline.operation.update')
     case 'DELETE':
-      return 'Удаление'
+      return t('offline.operation.delete')
     default:
       return (method || '').toUpperCase()
   }
@@ -182,35 +185,41 @@ function summarizeEntry(entry: OutboxEntry): string {
   return firstString(body, ['title', 'name', 'code', 'username', 'last_name']) ?? ''
 }
 
-/** Russian labels for key fields shown in entry details */
-const FIELD_LABELS: Record<string, string> = {
-  code: 'Код',
-  title: 'Название',
-  name: 'Имя',
-  last_name: 'Фамилия',
-  first_name: 'Имя',
-  middle_name: 'Отчество',
-  username: 'Логин',
-  position: 'Должность',
-  preset: 'Пресет прав',
-  priority: 'Приоритет',
-  start_date: 'Начало',
-  end_date: 'Конец',
-  date: 'Дата',
-  owner_id: 'Владелец',
-  project_id: 'Проект',
-  process_id: 'Процесс',
-  task_id: 'Задача',
-  resource_id: 'Ресурс',
-  user_id: 'Сотрудник',
-  state_id: 'Статус',
-  quantity: 'Кол-во',
+/** Catalog keys of the key fields shown in entry details. */
+const FIELD_KEYS: Record<string, string> = {
+  code: 'offline.field.code',
+  title: 'offline.field.title',
+  name: 'offline.field.name',
+  last_name: 'offline.field.lastName',
+  first_name: 'offline.field.firstName',
+  middle_name: 'offline.field.middleName',
+  username: 'offline.field.username',
+  position: 'offline.field.position',
+  preset: 'offline.field.preset',
+  priority: 'offline.field.priority',
+  start_date: 'offline.field.startDate',
+  end_date: 'offline.field.endDate',
+  date: 'offline.field.date',
+  owner_id: 'offline.field.ownerId',
+  project_id: 'offline.field.projectId',
+  process_id: 'offline.field.processId',
+  task_id: 'offline.field.taskId',
+  resource_id: 'offline.field.resourceId',
+  user_id: 'offline.field.userId',
+  state_id: 'offline.field.stateId',
+  quantity: 'offline.field.quantity',
+}
+
+/** Field label in the active language (an unknown field keeps its raw name). */
+function fieldLabel(key: string): string {
+  const catalogKey = FIELD_KEYS[key]
+  return catalogKey ? t(catalogKey) : key
 }
 
 /** Formats one field into a "label → value" pair (for details and comparison). */
 function formatField(k: string, v: unknown): { key: string; value: string } {
   const value = typeof v === 'object' ? JSON.stringify(v) : String(v)
-  return { key: FIELD_LABELS[k] ?? k, value }
+  return { key: fieldLabel(k), value }
 }
 
 /** Fields from a Record into {key,value} pairs, excluding empty/null values. */
@@ -235,9 +244,9 @@ function detailsOf(entry: OutboxEntry): Array<{ key: string; value: string }> {
       const start = u.searchParams.get('start_date')
       const end = u.searchParams.get('end_date')
       const state = u.searchParams.get('state_id')
-      if (start) out.push({ key: 'Начало', value: start })
-      if (end) out.push({ key: 'Конец', value: end })
-      if (state) out.push({ key: 'Статус', value: state })
+      if (start) out.push({ key: t('offline.field.startDate'), value: start })
+      if (end) out.push({ key: t('offline.field.endDate'), value: end })
+      if (state) out.push({ key: t('offline.field.stateId'), value: state })
     } catch {
       // invalid URL — skip the query data
     }
@@ -280,6 +289,14 @@ function toViewItem(entry: OutboxEntry): QueueViewItem {
 
 /** Reactive list of changes awaiting send (for the sync screen) */
 export const queueItems = ref<QueueViewItem[]>([])
+
+/**
+ * The queue view model is materialized into a ref with already-resolved
+ * labels, so it is rebuilt when the interface language changes.
+ */
+watch(appLocale, () => {
+  void refreshQueue()
+})
 
 /** Re-reads the queue into queueItems. Only unsent and non-synced
  *  entries (!quarantined), in send order (FIFO). Quarantined ones are visible in the errors block. */
@@ -389,19 +406,20 @@ export { isNetworkError }
  * When the backend sends a detailed message (e.g. "resource does not
  * belong to the task owner") it is shown as is.
  */
-const GENERIC_SERVER_MESSAGES: Record<string, string> = {
-  forbidden: 'Нет прав на операцию (403)',
-  unauthorized: 'Требуется авторизация (401)',
-  'not found': 'Объект не найден (404)',
-  'bad request': 'Некорректные данные (400)',
-  conflict: 'Конфликт: такой объект уже существует (409)',
-  'validation failed': 'Ошибка валидации (422)',
+const GENERIC_SERVER_MESSAGE_KEYS: Record<string, string> = {
+  forbidden: 'offline.server.forbidden',
+  unauthorized: 'offline.server.unauthorized',
+  'not found': 'offline.server.notFound',
+  'bad request': 'offline.server.badRequest',
+  conflict: 'offline.server.conflict',
+  'validation failed': 'offline.server.validation',
 }
 
 function errorMessage(e: unknown): string {
   const err = e as { response?: { data?: { error?: { message?: string } } }; message?: string }
   const server = err?.response?.data?.error?.message
-  if (server && GENERIC_SERVER_MESSAGES[server] != null) return GENERIC_SERVER_MESSAGES[server]
+  const genericKey = server ? GENERIC_SERVER_MESSAGE_KEYS[server] : undefined
+  if (genericKey) return t(genericKey)
   return server ?? err?.message ?? String(e)
 }
 
@@ -480,7 +498,8 @@ function logOutboxError(entry: OutboxEntry, url: string, e: unknown): void {
         timeout_ms: err.timeout,
         message: err.message,
       }
-  console.error('[outbox] не удалось отправить запись:', base, detail, {
+  // i18n-allow: developer console diagnostics, never rendered in the UI
+  console.error('[outbox] failed to send entry:', base, detail, {
     config: err.config ? { method: err.config.method, url: err.config.url, data: err.config.data } : undefined,
   })
 }
@@ -550,7 +569,7 @@ export async function flushOutbox(): Promise<FlushResult> {
       // reject them by RBAC and the edit would remain "stuck".
       const sender = currentUsername()
       if (entry.creator && sender && entry.creator !== sender) {
-        const message = `Запись создана под аккаунтом «${entry.creator}», а синхронизация идёт как «${sender}»: переключите сохранённый аккаунт на экране «Синхронизация»`
+        const message = t('offline.queue.foreignCreator', { creator: entry.creator, sender })
         await idbPut(OUTBOX_STORE, entry.id, { ...entry, quarantined: true, failed: { message, at: Date.now() } })
         result.failed++
         result.failedEntries.push({ method: entry.method, url: entry.url, message })
@@ -609,7 +628,7 @@ export async function flushOutbox(): Promise<FlushResult> {
           logOutboxError(entry, url, e)
           const attempts = (entry.attempts ?? 0) + 1
           const quarantined = attempts >= MAX_FAILED_ATTEMPTS
-          const message = errorMessage(e) || 'Запрос не выполнен (нет ответа от сервера)'
+          const message = errorMessage(e) || t('offline.queue.noResponse')
           await idbPut(OUTBOX_STORE, entry.id, {
             ...entry,
             attempts,
@@ -648,7 +667,7 @@ export async function flushOutbox(): Promise<FlushResult> {
             const quarantined = !waitsForCreator && (isPermanentFailure(status) || attempts >= MAX_FAILED_ATTEMPTS)
             const message =
               waitsForCreator && status === 404
-                ? 'Объект ещё не создан: сначала синхронизируется запись-создание с временным id'
+                ? t('offline.queue.pendingCreation')
                 : errorMessage(e)
             await idbPut(OUTBOX_STORE, entry.id, {
               ...entry,

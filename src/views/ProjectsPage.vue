@@ -19,8 +19,10 @@ import { useFindPlanningItem } from '../composables/useFindPlanningItem'
 import { usePlanningStore, useAppStore, useRbacStore } from '../store'
 import { isOffline } from '../offline/state'
 import { scheduleNamedRefresh } from '../offline/sync'
-import { addMonthsISO, fmtDate } from '../components/planner/calendar'
+import { t } from '../i18n'
+import { addDaysISO, fmtDate } from '../components/planner/calendar'
 import { CELL_WIDTH } from '../components/planner/layout'
+import { viewSettings } from '../settings'
 import type { DtoProject } from '@/api'
 
 const store = usePlanningStore()
@@ -51,7 +53,7 @@ const projectGroups = computed<PdfGanttGroup[]>(() => {
     project_id: p.id,
     owner_id: p.owner_id ?? undefined,
   }))
-  return rows.length ? [{ id: 'projects', title: 'Проекты', rows }] : []
+  return rows.length ? [{ id: 'projects', title: t('plannerViews.projects.pdfGroup'), rows }] : []
 })
 
 // Right-click menu on the table header: switching the "Day" / "Decade" scale
@@ -106,15 +108,15 @@ const menuItems = computed<ContextMenuItem[]>(() => {
     const id = menu.value.projectId
     const items: ContextMenuItem[] = []
     if (canManageProject(id)) {
-      items.push({ id: 'edit-project', label: 'Редактировать' })
+      items.push({ id: 'edit-project', label: t('plannerViews.projects.menu.edit') })
     }
     if (canDeleteProject(id)) {
-      items.push({ id: 'delete-project', label: 'Удалить проект' })
+      items.push({ id: 'delete-project', label: t('plannerViews.projects.menu.delete') })
     }
     return items
   }
   return canCreateProject.value
-    ? [{ id: 'create-project', label: 'Создать проект' }]
+    ? [{ id: 'create-project', label: t('plannerViews.projects.menu.create') }]
     : []
 })
 
@@ -135,15 +137,15 @@ interface EditState {
 const { open: openEdit, close: closeEdit, submit: submitEdit, bind: editBind } = useEditModal<EditState>(
   (state) => {
     const fields: ModalField[] = [
-      { key: 'code', label: 'Код проекта', type: 'text', value: state.code, required: true },
-      { key: 'color', label: 'Цвет', type: 'color', value: state.color ?? '' },
+      { key: 'code', label: t('plannerViews.projects.field.code'), type: 'text', value: state.code, required: true },
+      { key: 'color', label: t('plannerViews.projects.field.color'), type: 'color', value: state.color ?? '' },
     ]
     // The project owner cannot be changed: the field is hidden unless the
     // matrix grants project.update with scope all
     if (canChangeProjectOwner.value) {
       fields.push({
         key: 'owner_id',
-        label: 'Владелец',
+        label: t('plannerViews.projects.field.owner'),
         type: 'select',
         value: state.ownerId,
         options: ownerOptions.value,
@@ -162,7 +164,7 @@ const { open: openEdit, close: closeEdit, submit: submitEdit, bind: editBind } =
     const ok = await store.updateProjectMeta(state.id, patch)
     return { ok, error: ok ? null : store.error }
   },
-  () => 'Редактировать проект',
+  () => t('plannerViews.projects.edit'),
 )
 
 function onContextMenu(p: { clientX: number; clientY: number; date: string | null; rowIndex: number; projectId?: number }) {
@@ -196,20 +198,19 @@ function openProjectEdit(id: number) {
  *  and the right-click menu); shows the auto-create template feedback. */
 async function createProjectAt(date: string) {
   const res = await store.createProject({
-    code: 'КО_' + Date.now(),
+    code: t('plannerViews.projects.defaultCodePrefix') + Date.now(),
     start_date: date,
-    end_date: addMonthsISO(date, 6),
+    end_date: addDaysISO(date, viewSettings.defaultProjectDays),
   })
   // A failed creation is reported by the global toast (http.ts) — no inline banner.
   if (res.ok && res.autoCreated) {
     const a = res.autoCreated
     showFeedback(
-      'Проект создан. По шаблону автосоздания добавлено: процессов — ' +
-        a.processes +
-        ', задач — ' +
-        a.tasks +
-        ', назначений ресурсов — ' +
-        a.assignments,
+      t('plannerViews.projects.autoCreated', {
+        processes: a.processes,
+        tasks: a.tasks,
+        assignments: a.assignments,
+      }),
     )
   }
 }
@@ -222,7 +223,7 @@ async function handleSelect(id: string) {
   } else if (id === 'edit-project' && projectId != null) {
     openProjectEdit(projectId)
   } else if (id === 'delete-project' && projectId != null) {
-    ask('Удалить проект? Это удалит все его процессы, задачи и вехи.', () => {
+    ask(t('plannerViews.projects.confirm.delete'), () => {
       void store.deleteProject(projectId)
     })
   }
@@ -262,7 +263,7 @@ onMounted(() => {
         :period-from="viewRange.from"
         :period-to="viewRange.to"
         :scale="viewRange.scale"
-        page-title="Диаграмма проектов"
+        :page-title="t('plannerViews.pdf.projects')"
       />
     </div>
 

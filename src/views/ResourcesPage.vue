@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { storeToRefs } from 'pinia'
+import { t } from '@/i18n'
 import { ContextMenu, ModalForm, ConfirmDialog, PendingMark, DataTable } from '../components/common'
 import type { DataTableColumn } from '../components/common'
 import type { ContextMenuItem } from '../components/common/ContextMenu'
@@ -29,12 +30,12 @@ const auth = useAuthStore()
 const asRes = (row: unknown): DtoResourceResponse => row as DtoResourceResponse
 
 /** Table columns; sorting is handled inside DataTable. */
-const columns: DataTableColumn[] = [
-  { key: 'code', label: 'Код', width: '120px' },
-  { key: 'title', label: 'Название', width: 'fit-content(460px)' },
-  { key: 'employees_count', label: 'Сотрудников', width: '120px' },
-  { key: 'owner_id', label: 'Владелец', width: 'fit-content(300px)' },
-]
+const columns = computed<DataTableColumn[]>(() => [
+  { key: 'code', label: t('adminSystem.resources.column.code'), width: '120px' },
+  { key: 'title', label: t('adminSystem.resources.column.title'), width: 'fit-content(460px)' },
+  { key: 'employees_count', label: t('adminSystem.resources.column.employees'), width: '120px' },
+  { key: 'owner_id', label: t('adminSystem.resources.column.owner'), width: 'fit-content(300px)' },
+])
 
 /** Per-user persisted column widths (drag-resize on the header edges). */
 const { columnWidths } = useColumnWidths('resources')
@@ -59,7 +60,7 @@ function canSetOwner(mode: 'create' | 'edit'): boolean {
 /** Resource owner label: admin — name, vp — "Me" */
 function ownerLabel(ownerId?: number | null): string {
   if (ownerId == null) return '—'
-  if (ownerId === userId.value) return 'Я'
+  if (ownerId === userId.value) return t('adminSystem.resources.me')
   const u = users.value.find((x) => x.id === ownerId)
   return u?.name ?? `#${ownerId}`
 }
@@ -75,8 +76,12 @@ const menuItems = computed<ContextMenuItem[]>(() => {
   const res = resources.value.find((r) => r.id === menu.value?.resourceId)
   if (!res) return []
   const items: ContextMenuItem[] = []
-  if (canManageResource(res.owner_id)) items.push({ id: 'edit-resource', label: 'Редактировать' })
-  if (canDeleteResource(res.owner_id)) items.push({ id: 'delete-resource', label: 'Удалить ресурс' })
+  if (canManageResource(res.owner_id)) {
+    items.push({ id: 'edit-resource', label: t('adminSystem.resources.editMenu') })
+  }
+  if (canDeleteResource(res.owner_id)) {
+    items.push({ id: 'delete-resource', label: t('adminSystem.resources.deleteMenu') })
+  }
   return items
 })
 
@@ -107,11 +112,22 @@ const filteredResources = computed(() => {
 const { open: openModal, close: closeModal, submit: submitModal, bind: modalBind } = useEditModal<ModalMode>(
   (state) => {
     const fields: ModalField[] = [
-      { key: 'code', label: 'Код', type: 'text', value: state.type === 'create' ? '' : state.code, required: true },
-      { key: 'title', label: 'Название', type: 'text', value: state.type === 'create' ? '' : state.title },
+      {
+        key: 'code',
+        label: t('adminSystem.resources.column.code'),
+        type: 'text',
+        value: state.type === 'create' ? '' : state.code,
+        required: true,
+      },
+      {
+        key: 'title',
+        label: t('adminSystem.resources.column.title'),
+        type: 'text',
+        value: state.type === 'create' ? '' : state.title,
+      },
       {
         key: 'color',
-        label: 'Цвет',
+        label: t('adminSystem.resources.color'),
         type: 'color',
         value: state.type === 'create' ? '' : (state.color ?? ''),
       },
@@ -120,7 +136,7 @@ const { open: openModal, close: closeModal, submit: submitModal, bind: modalBind
     if (canSetOwner(state.type)) {
       fields.push({
         key: 'ownerId',
-        label: 'Владелец',
+        label: t('adminSystem.resources.column.owner'),
         type: 'select',
         options: ownerOptions.value,
         value: state.type === 'create' ? (userId.value ?? undefined) : (state.ownerId ?? undefined),
@@ -144,8 +160,11 @@ const { open: openModal, close: closeModal, submit: submitModal, bind: modalBind
         : await store.updateResource(state.id, payload)
     return { ok, error: ok ? null : store.resourcesError }
   },
-  (state) => (state.type === 'create' ? 'Создать ресурс' : 'Редактировать ресурс'),
-  (state) => (state.type === 'create' ? 'Создать' : 'Сохранить'),
+  (state) =>
+    state.type === 'create'
+      ? t('adminSystem.resources.create')
+      : t('adminSystem.resources.edit'),
+  (state) => (state.type === 'create' ? t('common.create') : t('common.save')),
 )
 
 function onRowContextMenu(e: MouseEvent, res: DtoResourceResponse) {
@@ -174,7 +193,7 @@ function handleSelect(id: string) {
     openEdit(menu.value.resourceId)
   } else if (id === 'delete-resource') {
     const resourceId = menu.value.resourceId
-    ask('Удалить ресурс?', () => {
+    ask(t('adminSystem.resources.deleteConfirm'), () => {
       void store.deleteResource(resourceId)
     })
   }
@@ -205,7 +224,7 @@ function workersNotIn(id: number) {
   const me = auth.user
   // The owner (vp) can add themselves to their own resource (e.g. the installation service manager resource)
   if (me?.id != null && !ids.has(me.id)) {
-    candidates.push({ id: me.id, name: me.name ?? 'Я' })
+    candidates.push({ id: me.id, name: me.name ?? t('adminSystem.resources.me') })
   }
   return candidates.sort(compareByName)
 }
@@ -241,7 +260,7 @@ function onLoadMore() {
 
 <template>
   <section class="rp">
-    <p v-if="resourcesLoading" class="rp-st">Загрузка...</p>
+    <p v-if="resourcesLoading" class="rp-st">{{ t('adminSystem.resources.loading') }}</p>
     <p v-if="resourcesError" class="rp-st er">{{ resourcesError }}</p>
 
     <!--
@@ -253,16 +272,22 @@ function onLoadMore() {
       v-if="resources.length || (!resourcesLoading && !resourcesError)"
       :columns="columns"
       :rows="filteredResources"
-      title="Ресурсы"
+      :title="t('adminSystem.resources.title')"
       expandable
       resizable
       v-model:column-widths="columnWidths"
-      :empty-text="resources.length ? 'Ничего не найдено' : 'Нет данных о ресурсах'"
+      :empty-text="
+        resources.length
+          ? t('adminSystem.resources.emptyFiltered')
+          : t('adminSystem.resources.emptyNoData')
+      "
       @row-click="(_e, row) => void ensureMembers(asRes(row))"
       @row-contextmenu="(e, row) => onRowContextMenu(e, asRes(row))"
     >
       <template #actions>
-        <button v-if="canCreateResource" type="button" class="rp-add" @click="openCreate">Создать ресурс</button>
+        <button v-if="canCreateResource" type="button" class="rp-add" @click="openCreate">
+          {{ t('adminSystem.resources.create') }}
+        </button>
       </template>
       <template #filter="{ column }">
         <select
@@ -270,7 +295,7 @@ function onLoadMore() {
           v-model="ownerFilter"
           class="rp-filter"
         >
-          <option value="">Все владельцы</option>
+          <option value="">{{ t('adminSystem.resources.allOwners') }}</option>
           <option v-for="u in users.filter((u) => u.preset !== 'worker').sort(compareByName)" :key="u.id" :value="u.id">{{ u.name ?? `#${u.id}` }}</option>
         </select>
       </template>
@@ -286,10 +311,12 @@ function onLoadMore() {
       <template #expanded="{ row }">
         <div class="rp-members">
           <div class="rp-members-head">
-            <span class="rp-members-title">Пользователи ({{ membersFor(asRes(row).id ?? 0).length }})</span>
+            <span class="rp-members-title">
+              {{ t('adminSystem.resources.members', { count: membersFor(asRes(row).id ?? 0).length }) }}
+            </span>
             <div v-if="canManageResource(asRes(row).owner_id)" class="rp-members-add">
               <select v-model="addMemberId" class="rp-filter">
-                <option value="">Добавить пользователя...</option>
+                <option value="">{{ t('adminSystem.resources.addMemberPlaceholder') }}</option>
                 <option v-for="w in workersNotIn(asRes(row).id ?? 0)" :key="w.id" :value="w.id">
                   {{ w.name }}
                 </option>
@@ -300,7 +327,7 @@ function onLoadMore() {
                 :disabled="!addMemberId"
                 @click="onAddMember(asRes(row).id ?? 0)"
               >
-                Добавить
+                {{ t('adminSystem.resources.addMember') }}
               </button>
             </div>
           </div>
@@ -314,11 +341,11 @@ function onLoadMore() {
                 class="rp-member-btn rp-member-remove"
                 @click="onRemoveMember(asRes(row).id ?? 0, m.id ?? 0)"
               >
-                Убрать
+                {{ t('adminSystem.resources.removeMember') }}
               </button>
             </div>
           </div>
-          <p v-else class="rp-members-empty">Нет участников</p>
+          <p v-else class="rp-members-empty">{{ t('adminSystem.resources.membersEmpty') }}</p>
         </div>
       </template>
     </DataTable>
@@ -326,7 +353,14 @@ function onLoadMore() {
     <!-- Resources pagination: the backend returns PAGE_SIZE (50) rows plus a total -->
     <div v-if="store.resourcesHasMore" class="rp-more">
       <button type="button" class="rp-more-btn" :disabled="store.resourcesLoadingMore" @click="onLoadMore">
-        {{ store.resourcesLoadingMore ? 'Загрузка…' : `Показать ещё (${resources.length} из ${store.resourcesTotal})` }}
+        {{
+          store.resourcesLoadingMore
+            ? t('common.loading')
+            : t('adminSystem.resources.loadMore', {
+                loaded: resources.length,
+                total: store.resourcesTotal,
+              })
+        }}
       </button>
     </div>
 

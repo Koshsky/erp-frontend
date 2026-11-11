@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/vue3-vite'
-import { expect } from 'vitest'
+import { expect } from 'storybook/test'
 import Bar from './Bar.vue'
-import { makeDemoTimeline } from '@/components/planner/plannerStoryHelpers'
+import { makeDemoTimeline } from '@/components/planner/demoTimeline'
 
 const DAY_MS = 1000 * 60 * 60 * 24
 

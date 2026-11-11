@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import { t } from '../../../i18n'
 
 withDefaults(
   defineProps<{
@@ -50,7 +51,7 @@ function toggleVisibility() {
         class="pwf-input"
         @input="onInput"
       />
-      <button v-if="toggle" type="button" class="pwf-eye" :aria-label="visible ? 'Скрыть пароль' : 'Показать пароль'" @click="toggleVisibility">
+      <button v-if="toggle" type="button" class="pwf-eye" :aria-label="visible ? t('ui.password.hide') : t('ui.password.show')" @click="toggleVisibility">
         <svg
           v-if="visible"
           viewBox="0 0 24 24"

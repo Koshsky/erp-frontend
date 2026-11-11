@@ -7,6 +7,8 @@ import { useAppStore } from '../store'
 import { ColorField, ConfirmDialog } from '../components/common'
 import { randomPaletteColor } from '../components/common/ColorField/palette'
 import { useConfirm } from '../composables/useConfirm'
+import { notifyError, notifySuccess } from '../notify/state'
+import { t } from '@/i18n'
 
 interface LocalResource {
   resource_id: number
@@ -69,7 +71,6 @@ const { autoCreateConfig, autoCreateLoading, autoCreateError, users, resources }
 const form = reactive<{ enabled: boolean; processes: LocalProcess[] }>({ enabled: true, processes: [] })
 const dirty = ref(false)
 const saving = ref(false)
-const saveMsg = ref<{ ok: boolean; text: string } | null>(null)
 const previewOpen = ref(false)
 
 const { confirm: confirmDialog, ask, proceed, cancel } = useConfirm()
@@ -125,18 +126,15 @@ function resetForm() {
   }))
   dirty.value = false
   saving.value = false
-  saveMsg.value = null
   previewOpen.value = false
 }
 
 watch(autoCreateConfig, () => {
-  // Reload the form when the config arrives/changes externally, but keep a
-  // successful save message (our own save also updates autoCreateConfig).
-  if (autoCreateConfig.value && !saveMsg.value?.ok) resetForm()
+  // Reload the form when the config arrives/changes externally.
+  if (autoCreateConfig.value) resetForm()
 })
 
 async function reload() {
-  saveMsg.value = null
   await app.loadAutoCreateConfig()
   if (autoCreateConfig.value) {
     if (!users.value.length) await app.loadUsers()
@@ -170,10 +168,10 @@ onBeforeRouteLeave((_to, _from, next) => {
     next()
     return
   }
-  ask('Есть несохранённые изменения. Выйти без сохранения?', () => {
+  ask(t('adminConfig.autoCreate.leaveTitle'), () => {
     allowLeave = true
     next()
-  }, 'Выйти')
+  }, t('adminConfig.autoCreate.leaveConfirm'))
   // Navigation stays pending until the user decides (next() in the callback).
 })
 
@@ -187,10 +185,10 @@ function removeProcess(i: number) {
   const p = form.processes[i]
   if (!p) return
   if (p.tasks.length) {
-    ask(`Удалить процесс «${p.title || `#${i + 1}`}» вместе с ${p.tasks.length} задач(ами)?`, () => {
+    ask(t('adminConfig.autoCreate.confirmRemoveProcess', { name: p.title || `#${i + 1}`, count: p.tasks.length }), () => {
       form.processes.splice(i, 1)
       dirty.value = true
-    }, 'Удалить')
+    }, t('common.delete'))
     return
   }
   form.processes.splice(i, 1)
@@ -214,14 +212,14 @@ function addTask(p: LocalProcess) {
 
 /** Removes a task; a task with resources or operations asks for confirmation first */
 function removeTask(p: LocalProcess, ti: number) {
-  const t = p.tasks[ti]
-  if (!t) return
-  const children = t.resources.length + t.operations.length
+  const task = p.tasks[ti]
+  if (!task) return
+  const children = task.resources.length + task.operations.length
   if (children) {
-    ask(`Удалить задачу «${t.title || `#${ti + 1}`}» вместе с ${children} связанными элементами?`, () => {
+    ask(t('adminConfig.autoCreate.confirmRemoveTask', { name: task.title || `#${ti + 1}`, count: children }), () => {
       p.tasks.splice(ti, 1)
       dirty.value = true
-    }, 'Удалить')
+    }, t('common.delete'))
     return
   }
   p.tasks.splice(ti, 1)
@@ -259,45 +257,49 @@ function removeOperation(t: LocalTask, oi: number) {
 
 function validate(): string | null {
   if (form.processes.length > LIMITS.maxProcesses) {
-    return `Слишком много процессов: максимум ${LIMITS.maxProcesses}`
+    return t('adminConfig.autoCreate.limitProcesses', { max: LIMITS.maxProcesses })
   }
   let totalAssignments = 0
   for (let pi = 0; pi < form.processes.length; pi++) {
     const p = form.processes[pi]
-    if (!p.title.trim()) return `Процесс ${pi + 1}: укажите название`
+    if (!p.title.trim()) return t('adminConfig.autoCreate.validationProcessTitle', { n: pi + 1 })
     if (p.tasks.length > LIMITS.maxTasksPerProcess) {
-      return `Процесс «${p.title}»: слишком много задач: максимум ${LIMITS.maxTasksPerProcess}`
+      return t('adminConfig.autoCreate.validationProcessTasks', { name: p.title, max: LIMITS.maxTasksPerProcess })
     }
     for (let ti = 0; ti < p.tasks.length; ti++) {
-      const t = p.tasks[ti]
-      if (!t.title.trim()) return `Процесс «${p.title}», задача ${ti + 1}: укажите название`
-      if (t.resources.length > LIMITS.maxResourcesPerTask) {
-        return `Задача «${t.title}»: слишком много ресурсов: максимум ${LIMITS.maxResourcesPerTask}`
+      const task = p.tasks[ti]
+      if (!task.title.trim()) {
+        return t('adminConfig.autoCreate.validationTaskTitle', { process: p.title, n: ti + 1 })
       }
-      if (t.operations.length > LIMITS.maxOperationsPerTask) {
-        return `Задача «${t.title}»: слишком много операций: максимум ${LIMITS.maxOperationsPerTask}`
+      if (task.resources.length > LIMITS.maxResourcesPerTask) {
+        return t('adminConfig.autoCreate.validationTaskResources', { name: task.title, max: LIMITS.maxResourcesPerTask })
       }
-      for (let oi = 0; oi < t.operations.length; oi++) {
-        if (!t.operations[oi].title.trim()) {
-          return `Задача «${t.title}», операция ${oi + 1}: укажите название`
+      if (task.operations.length > LIMITS.maxOperationsPerTask) {
+        return t('adminConfig.autoCreate.validationTaskOperations', { name: task.title, max: LIMITS.maxOperationsPerTask })
+      }
+      for (let oi = 0; oi < task.operations.length; oi++) {
+        if (!task.operations[oi].title.trim()) {
+          return t('adminConfig.autoCreate.validationOperationTitle', { name: task.title, n: oi + 1 })
         }
       }
-      totalAssignments += t.resources.length
+      totalAssignments += task.resources.length
       const seen = new Set<number>()
-      for (let ri = 0; ri < t.resources.length; ri++) {
-        const r = t.resources[ri]
-        if (!r.resource_id) return `Задача «${t.title}»: выберите ресурс ${ri + 1}`
-        if (seen.has(r.resource_id)) return `Задача «${t.title}»: ресурс «${resourceLabel(r.resource_id)}» указан дважды`
-        if (r.quantity <= 0) return `Задача «${t.title}»: количество должно быть больше 0`
+      for (let ri = 0; ri < task.resources.length; ri++) {
+        const r = task.resources[ri]
+        if (!r.resource_id) return t('adminConfig.autoCreate.validationResourcePick', { name: task.title, n: ri + 1 })
+        if (seen.has(r.resource_id)) {
+          return t('adminConfig.autoCreate.validationResourceDuplicate', { name: task.title, resource: resourceLabel(r.resource_id) })
+        }
+        if (r.quantity <= 0) return t('adminConfig.autoCreate.validationQuantityMin', { name: task.title })
         if (r.quantity > LIMITS.maxQuantity) {
-          return `Задача «${t.title}»: количество не больше ${LIMITS.maxQuantity}`
+          return t('adminConfig.autoCreate.validationQuantityMax', { name: task.title, max: LIMITS.maxQuantity })
         }
         seen.add(r.resource_id)
       }
     }
   }
   if (totalAssignments > LIMITS.maxAssignmentsTotal) {
-    return `Слишком много назначений ресурсов: максимум ${LIMITS.maxAssignmentsTotal}`
+    return t('adminConfig.autoCreate.limitAssignments', { max: LIMITS.maxAssignmentsTotal })
   }
   return null
 }
@@ -306,11 +308,10 @@ async function onSave() {
   if (saving.value || !dirty.value) return
   const err = validate()
   if (err) {
-    saveMsg.value = { ok: false, text: err }
+    notifyError(err)
     return
   }
   saving.value = true
-  saveMsg.value = null
   const ok = await app.saveAutoCreateConfig({
     enabled: form.enabled,
     processes: form.processes.map((p) => ({
@@ -331,8 +332,9 @@ async function onSave() {
   })
   saving.value = false
   // Summary only: the raw API error on failure is surfaced by the global
-  // toast (http.ts), so the inline message stays a generic custom summary.
-  saveMsg.value = { ok, text: ok ? 'Сохранено' : 'Ошибка сохранения' }
+  // toast (http.ts), so the notification stays a generic custom summary.
+  if (ok) notifySuccess(t('adminConfig.autoCreate.saved'))
+  else notifyError(t('adminConfig.autoCreate.saveFailed'))
   if (ok) dirty.value = false
 }
 </script>
@@ -340,44 +342,44 @@ async function onSave() {
 <template>
   <section class="ac">
     <div class="ac-head">
-      <h2 class="ac-title">Триггер создания проекта</h2>
+      <h2 class="ac-title">{{ t('adminConfig.autoCreate.title') }}</h2>
       <HintButton hint="auto-create" />
     </div>
 
-    <p v-if="autoCreateLoading && !autoCreateConfig" class="ac-st">Загрузка...</p>
+    <p v-if="autoCreateLoading && !autoCreateConfig" class="ac-st">{{ t('adminConfig.autoCreate.loading') }}</p>
 
     <div v-else-if="autoCreateError && !autoCreateConfig" class="ac-st ac-er" role="alert">
-      Не удалось загрузить конфигурацию: {{ autoCreateError }}
-      <button type="button" class="ac-retry" @click="reload">Повторить</button>
+      {{ t('adminConfig.autoCreate.loadError', { error: autoCreateError }) }}
+      <button type="button" class="ac-retry" @click="reload">{{ t('adminConfig.autoCreate.retry') }}</button>
     </div>
 
     <div v-if="autoCreateConfig" class="ac-form">
       <label class="ac-enable">
         <input type="checkbox" v-model="form.enabled" @change="dirty = true" />
-        Триггер включён
+        {{ t('adminConfig.autoCreate.enabled') }}
       </label>
 
       <!-- Live preview of what a new project will get from the template -->
       <div class="ac-preview">
         <button type="button" class="ac-preview-toggle" @click="previewOpen = !previewOpen" :aria-expanded="previewOpen">
-          Превью: {{ preview.processes }} процесс(а/ов) · {{ preview.tasks }} задач(и) · {{ preview.operations }} операции(й) · {{ preview.assignments }} назначения(й)
+          {{ t('adminConfig.autoCreate.preview', { processes: preview.processes, tasks: preview.tasks, operations: preview.operations, assignments: preview.assignments }) }}
           <span class="ac-preview-caret">{{ previewOpen ? '▾' : '▸' }}</span>
         </button>
-        <div v-if="!form.enabled" class="ac-preview-off">Триггер выключен — шаблон не применяется</div>
+        <div v-if="!form.enabled" class="ac-preview-off">{{ t('adminConfig.autoCreate.previewOff') }}</div>
         <div v-if="previewOpen" class="ac-preview-tree">
           <div v-if="!form.processes.length" class="ac-preview-empty">
-            Шаблон пуст — при создании проекта ничего не добавляется
+            {{ t('adminConfig.autoCreate.previewEmpty') }}
           </div>
           <div v-for="(p, pi) in form.processes" :key="pi" class="ac-preview-node">
-            <div class="ac-preview-p">{{ p.title || `Процесс ${pi + 1}` }}</div>
-            <div v-for="(t, ti) in p.tasks" :key="ti" class="ac-preview-task">
+            <div class="ac-preview-p">{{ p.title || t('adminConfig.autoCreate.processFallback', { n: pi + 1 }) }}</div>
+            <div v-for="(tsk, ti) in p.tasks" :key="ti" class="ac-preview-task">
               <span
                 class="ac-swatch"
-                :style="{ background: isAccentTask(t.color) ? (t.color || 'var(--ui-accent)') : NEUTRAL_TASK_COLOR }"
+                :style="{ background: isAccentTask(tsk.color) ? (tsk.color || 'var(--ui-accent)') : NEUTRAL_TASK_COLOR }"
               />
-              <span class="ac-preview-t">{{ t.title || `Задача ${ti + 1}` }}</span>
-              <span v-if="t.resources.length" class="ac-preview-res">
-                {{ t.resources.map((r) => `${resourceLabel(r.resource_id)} × ${r.quantity}`).join(', ') }}
+              <span class="ac-preview-t">{{ tsk.title || t('adminConfig.autoCreate.taskFallback', { n: ti + 1 }) }}</span>
+              <span v-if="tsk.resources.length" class="ac-preview-res">
+                {{ tsk.resources.map((r) => `${resourceLabel(r.resource_id)} × ${r.quantity}`).join(', ') }}
               </span>
             </div>
           </div>
@@ -386,47 +388,47 @@ async function onSave() {
 
       <div v-for="(p, pi) in form.processes" :key="pi" class="ac-process">
         <div class="ac-process-head">
-          <button type="button" class="ac-move" :disabled="pi === 0" @click="moveProcess(pi, -1)" aria-label="Переместить процесс вверх">↑</button>
-          <button type="button" class="ac-move" :disabled="pi === form.processes.length - 1" @click="moveProcess(pi, 1)" aria-label="Переместить процесс вниз">↓</button>
-          <input v-model="p.title" type="text" class="ac-input ac-title-input" placeholder="Название процесса" aria-label="Название процесса" @input="dirty = true" />
-          <ColorField v-model="p.color" size="sm" label="Цвет процесса" class="ac-color" @update:model-value="dirty = true" />
-          <select v-model="p.owner_id" class="ac-input ac-owner" aria-label="Владелец процесса" @change="dirty = true">
-            <option :value="null">Владелец не выбран</option>
+          <button type="button" class="ac-move" :disabled="pi === 0" @click="moveProcess(pi, -1)" :aria-label="t('adminConfig.autoCreate.moveProcessUp')">↑</button>
+          <button type="button" class="ac-move" :disabled="pi === form.processes.length - 1" @click="moveProcess(pi, 1)" :aria-label="t('adminConfig.autoCreate.moveProcessDown')">↓</button>
+          <input v-model="p.title" type="text" class="ac-input ac-title-input" :placeholder="t('adminConfig.autoCreate.processTitlePlaceholder')" :aria-label="t('adminConfig.autoCreate.processTitlePlaceholder')" @input="dirty = true" />
+          <ColorField v-model="p.color" size="sm" :label="t('adminConfig.autoCreate.processColorLabel')" class="ac-color" @update:model-value="dirty = true" />
+          <select v-model="p.owner_id" class="ac-input ac-owner" :aria-label="t('adminConfig.autoCreate.ownerAria')" @change="dirty = true">
+            <option :value="null">{{ t('adminConfig.autoCreate.ownerNone') }}</option>
             <option v-for="opt in ownerOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
           </select>
-          <button type="button" class="ac-del" @click="removeProcess(pi)">Удалить процесс</button>
+          <button type="button" class="ac-del" @click="removeProcess(pi)">{{ t('adminConfig.autoCreate.removeProcess') }}</button>
         </div>
-        <p v-if="p.owner_id == null" class="ac-owner-hint">Владелец не выбран — процесс создастся без владельца</p>
+        <p v-if="p.owner_id == null" class="ac-owner-hint">{{ t('adminConfig.autoCreate.ownerHint') }}</p>
 
         <div class="ac-tasks">
-          <div v-for="(t, ti) in p.tasks" :key="ti" class="ac-task">
+          <div v-for="(tsk, ti) in p.tasks" :key="ti" class="ac-task">
             <div class="ac-task-head">
-              <button type="button" class="ac-move" :disabled="ti === 0" @click="moveTask(pi, ti, -1)" aria-label="Переместить задачу вверх">↑</button>
-              <button type="button" class="ac-move" :disabled="ti === p.tasks.length - 1" @click="moveTask(pi, ti, 1)" aria-label="Переместить задачу вниз">↓</button>
-              <input v-model="t.title" type="text" class="ac-input" placeholder="Название задачи" aria-label="Название задачи" @input="dirty = true" />
-              <div class="ac-type" role="group" :aria-label="`Тип цвета задачи «${t.title || ti + 1}»`">
+              <button type="button" class="ac-move" :disabled="ti === 0" @click="moveTask(pi, ti, -1)" :aria-label="t('adminConfig.autoCreate.moveTaskUp')">↑</button>
+              <button type="button" class="ac-move" :disabled="ti === p.tasks.length - 1" @click="moveTask(pi, ti, 1)" :aria-label="t('adminConfig.autoCreate.moveTaskDown')">↓</button>
+              <input v-model="tsk.title" type="text" class="ac-input" :placeholder="t('adminConfig.autoCreate.taskTitlePlaceholder')" :aria-label="t('adminConfig.autoCreate.taskTitlePlaceholder')" @input="dirty = true" />
+              <div class="ac-type" role="group" :aria-label="t('adminConfig.autoCreate.taskTypeAria', { name: tsk.title || ti + 1 })">
                 <button
                   type="button"
                   class="ac-type-btn"
-                  :class="{ active: !isAccentTask(t.color) }"
-                  @click="setTaskType(t, 'neutral')"
+                  :class="{ active: !isAccentTask(tsk.color) }"
+                  @click="setTaskType(tsk, 'neutral')"
                 >
-                  Фон
+                  {{ t('adminConfig.autoCreate.taskTypeNeutral') }}
                 </button>
                 <button
                   type="button"
                   class="ac-type-btn"
-                  :class="{ active: isAccentTask(t.color) }"
-                  @click="setTaskType(t, 'accent')"
+                  :class="{ active: isAccentTask(tsk.color) }"
+                  @click="setTaskType(tsk, 'accent')"
                 >
-                  Акцент
+                  {{ t('adminConfig.autoCreate.taskTypeAccent') }}
                 </button>
               </div>
               <ColorField
-                v-if="isAccentTask(t.color)"
-                v-model="t.color"
+                v-if="isAccentTask(tsk.color)"
+                v-model="tsk.color"
                 size="sm"
-                label="Цвет задачи"
+                :label="t('adminConfig.autoCreate.taskColorLabel')"
                 class="ac-color"
                 @update:model-value="dirty = true"
               />
@@ -434,39 +436,38 @@ async function onSave() {
                 v-else
                 class="ac-swatch ac-swatch-neutral"
                 :style="{ background: NEUTRAL_TASK_COLOR }"
-                :title="`Фоновый цвет: ${NEUTRAL_TASK_COLOR}`"
+                :title="t('adminConfig.autoCreate.neutralColorTitle', { color: NEUTRAL_TASK_COLOR })"
               />
               <button type="button" class="ac-del" @click="removeTask(p, ti)">×</button>
             </div>
-            <div v-if="t.resources.length" class="ac-resources">
-              <div v-for="(r, ri) in t.resources" :key="ri" class="ac-resource">
-                <select v-model="r.resource_id" class="ac-input" aria-label="Ресурс" @change="dirty = true">
-                  <option :value="0">Выбрать ресурс...</option>
+            <div v-if="tsk.resources.length" class="ac-resources">
+              <div v-for="(r, ri) in tsk.resources" :key="ri" class="ac-resource">
+                <select v-model="r.resource_id" class="ac-input" :aria-label="t('adminConfig.autoCreate.resourceAria')" @change="dirty = true">
+                  <option :value="0">{{ t('adminConfig.autoCreate.resourceSelect') }}</option>
                   <option v-for="opt in resourceOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
                 </select>
-                <input v-model.number="r.quantity" type="number" min="1" :max="LIMITS.maxQuantity" class="ac-input ac-qty" aria-label="Количество" @input="dirty = true" />
-                <button type="button" class="ac-del" @click="removeResource(t, ri)">×</button>
+                <input v-model.number="r.quantity" type="number" min="1" :max="LIMITS.maxQuantity" class="ac-input ac-qty" :aria-label="t('adminConfig.autoCreate.quantityAria')" @input="dirty = true" />
+                <button type="button" class="ac-del" @click="removeResource(tsk, ri)">×</button>
               </div>
             </div>
-            <button type="button" class="ac-add-sm" @click="addResource(t)">+ ресурс</button>
-            <div v-if="t.operations.length" class="ac-operations">
-              <div v-for="(o, oi) in t.operations" :key="oi" class="ac-operation">
-                <input v-model="o.title" type="text" class="ac-input" placeholder="Название операции" aria-label="Название операции" @input="dirty = true" />
-                <button type="button" class="ac-del" @click="removeOperation(t, oi)" :aria-label="`Удалить операцию ${oi + 1}`">×</button>
+            <button type="button" class="ac-add-sm" @click="addResource(tsk)">{{ t('adminConfig.autoCreate.addResource') }}</button>
+            <div v-if="tsk.operations.length" class="ac-operations">
+              <div v-for="(o, oi) in tsk.operations" :key="oi" class="ac-operation">
+                <input v-model="o.title" type="text" class="ac-input" :placeholder="t('adminConfig.autoCreate.operationTitlePlaceholder')" :aria-label="t('adminConfig.autoCreate.operationTitlePlaceholder')" @input="dirty = true" />
+                <button type="button" class="ac-del" @click="removeOperation(tsk, oi)" :aria-label="t('adminConfig.autoCreate.removeOperationAria', { n: oi + 1 })">×</button>
               </div>
             </div>
-            <button type="button" class="ac-add-sm" @click="addOperation(t)">+ операция</button>
+            <button type="button" class="ac-add-sm" @click="addOperation(tsk)">{{ t('adminConfig.autoCreate.addOperation') }}</button>
           </div>
-          <button type="button" class="ac-add-sm" @click="addTask(p)">+ задача</button>
+          <button type="button" class="ac-add-sm" @click="addTask(p)">{{ t('adminConfig.autoCreate.addTask') }}</button>
         </div>
       </div>
 
-      <button type="button" class="ac-add" @click="addProcess">Добавить процесс</button>
+      <button type="button" class="ac-add" @click="addProcess">{{ t('adminConfig.autoCreate.addProcess') }}</button>
 
       <div class="ac-actions">
-        <button type="button" class="ac-save" :disabled="saving || !dirty" @click="onSave">Сохранить</button>
-        <button v-if="dirty" type="button" class="ac-cancel" :disabled="saving" @click="resetForm">Отменить</button>
-        <p v-if="saveMsg" class="ac-msg" :class="saveMsg.ok ? 'ok' : 'er'">{{ saveMsg.text }}</p>
+        <button type="button" class="ac-save" :disabled="saving || !dirty" @click="onSave">{{ t('adminConfig.autoCreate.save') }}</button>
+        <button v-if="dirty" type="button" class="ac-cancel" :disabled="saving" @click="resetForm">{{ t('adminConfig.autoCreate.cancel') }}</button>
       </div>
     </div>
 
@@ -759,6 +760,7 @@ async function onSave() {
 .ac-actions {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 10px;
   margin-top: 4px;
 }
@@ -784,15 +786,5 @@ async function onSave() {
   font-size: calc(var(--ui-font-scale, 1) * 14px);
   color: var(--ui-text-2);
   cursor: pointer;
-}
-.ac-msg {
-  margin: 0;
-  font-size: calc(var(--ui-font-scale, 1) * 14px);
-}
-.ac-msg.ok {
-  color: var(--ui-success);
-}
-.ac-msg.er {
-  color: var(--ui-danger);
 }
 </style>

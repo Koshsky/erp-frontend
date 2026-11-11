@@ -28,6 +28,7 @@ import { useRoleAccess } from '../composables/useRoleAccess'
 import { useFindPlanningItem } from '../composables/useFindPlanningItem'
 import { usePlanningStore, useAppStore, useRbacStore } from '../store'
 import { compareByName } from '../utils'
+import { t } from '../i18n'
 import { addDaysISO, shiftSpanDates, clampDateToBounds } from '../components/planner/calendar'
 import type { DependencyType } from '../components/planner/dependencies'
 import { CELL_WIDTH } from '../components/planner/layout'
@@ -143,25 +144,25 @@ const menuItems = computed<ContextMenuItem[]>(() => {
   // follow the exact backend rights for the task's process.
   if (menu.value?.taskId != null) {
     const processId = findTask(menu.value.taskId)?.process_id
-    const items: ContextMenuItem[] = [{ id: 'comments', label: 'Комментарии' }]
-    if (canManageTask(processId)) items.push({ id: 'edit-task', label: 'Редактировать' })
+    const items: ContextMenuItem[] = [{ id: 'comments', label: t('plannerViews.planner.menu.comments') }]
+    if (canManageTask(processId)) items.push({ id: 'edit-task', label: t('plannerViews.planner.menu.editTask') })
     if (canAssignTaskResources(processId)) {
-      items.push({ id: 'manage-resources', label: 'Управление ресурсами' })
+      items.push({ id: 'manage-resources', label: t('plannerViews.planner.menu.manageResources') })
     }
-    if (canDeleteTask(processId)) items.push({ id: 'delete-task', label: 'Удалить задачу' })
+    if (canDeleteTask(processId)) items.push({ id: 'delete-task', label: t('plannerViews.planner.menu.deleteTask') })
     return items
   }
   if (menu.value?.milestoneId != null) {
     const processId = findMilestone(menu.value.milestoneId)?.process_id
     const items: ContextMenuItem[] = []
-    if (canManageMilestone(processId)) items.push({ id: 'edit-milestone', label: 'Редактировать' })
-    if (canDeleteMilestone(processId)) items.push({ id: 'delete-milestone', label: 'Удалить веху' })
+    if (canManageMilestone(processId)) items.push({ id: 'edit-milestone', label: t('plannerViews.planner.menu.editMilestone') })
+    if (canDeleteMilestone(processId)) items.push({ id: 'delete-milestone', label: t('plannerViews.planner.menu.deleteMilestone') })
     return items
   }
   const items: ContextMenuItem[] = []
-  if (canCreateTask(menu.value?.processId)) items.push({ id: 'create-task', label: 'Создать задачу' })
+  if (canCreateTask(menu.value?.processId)) items.push({ id: 'create-task', label: t('plannerViews.planner.menu.createTask') })
   if (canCreateMilestone(menu.value?.processId)) {
-    items.push({ id: 'create-milestone', label: 'Создать веху' })
+    items.push({ id: 'create-milestone', label: t('plannerViews.planner.menu.createMilestone') })
   }
   return items
 })
@@ -181,16 +182,16 @@ const { open: openEdit, close: closeEdit, submit: submitEdit, bind: editBind } =
   (state) => {
     const base: ModalField = {
       key: 'title',
-      label: 'Название',
+      label: t('plannerViews.planner.milestone.field.title'),
       type: 'text',
       value: state.title,
       required: true,
     }
-    const colorField: ModalField = { key: 'color', label: 'Цвет', type: 'color', value: state.color ?? '' }
+    const colorField: ModalField = { key: 'color', label: t('plannerViews.planner.milestone.field.color'), type: 'color', value: state.color ?? '' }
     return [
       base,
       colorField,
-      { key: 'content', label: 'Контент', type: 'textarea', value: state.content },
+      { key: 'content', label: t('plannerViews.planner.milestone.field.content'), type: 'textarea', value: state.content },
     ]
   },
   async (state, values) => {
@@ -201,7 +202,7 @@ const { open: openEdit, close: closeEdit, submit: submitEdit, bind: editBind } =
     })
     return { ok, error: ok ? null : planning.error }
   },
-  () => 'Редактировать веху',
+  () => t('plannerViews.planner.milestone.title'),
 )
 
 // === Task editor modal (left: task fields; right: subtasks todo list) ===
@@ -283,7 +284,7 @@ async function onDeleteSubtask(id: number) {
 // === Task dependencies (scheduling links) ===
 
 /** Predecessor links of the edited task (with the predecessor title resolved
- *  from the planning cache), for the "Зависимости" panel. */
+ *  from the planning cache), for the "Dependencies" panel. */
 const taskEditorDependencies = computed(() => {
   if (taskEditorId.value == null) return []
   const proc = taskPlanning.value?.processes?.find(
@@ -396,7 +397,7 @@ async function handleSelect(id: string) {
       proc?.end_date,
     )
     const _ok = await planning.createTask({
-      title: 'Новая задача',
+      title: t('plannerViews.planner.task.defaultTitle'),
       process_id: processId,
       start_date,
       end_date,
@@ -404,9 +405,10 @@ async function handleSelect(id: string) {
   } else if (id === 'create-milestone') {
     if (processId == null || date == null) return
     const proc = planning.taskPlanning?.processes?.find((p: DtoDetailedProcess) => p.id === processId)
+    const milestoneTitle = t('plannerViews.planner.milestone.defaultTitle')
     await planning.createMilestone({
-      title: 'Новая веха',
-      content: 'Новая веха',
+      title: milestoneTitle,
+      content: milestoneTitle,
       process_id: processId,
       date: clampDateToBounds(date, proc?.start_date, proc?.end_date),
       // A new milestone appears with a vivid random color from the palette.
@@ -421,11 +423,11 @@ async function handleSelect(id: string) {
   } else if (id === 'edit-milestone' && milestoneId != null) {
     openMilestoneEdit(milestoneId)
   } else if (id === 'delete-task' && taskId != null) {
-    ask('Удалить задачу?', () => {
+    ask(t('plannerViews.planner.confirm.deleteTask'), () => {
       void planning.deleteTask(taskId)
     })
   } else if (id === 'delete-milestone' && milestoneId != null) {
-    ask('Удалить веху?', () => {
+    ask(t('plannerViews.planner.confirm.deleteMilestone'), () => {
       void planning.deleteMilestone(milestoneId)
     })
   }
@@ -529,7 +531,7 @@ async function onSendComment(payload: SendCommentPayload) {
 
 function onDeleteComment(payload: DeleteCommentPayload) {
   if (commentsTaskId.value == null) return
-  ask('Удалить комментарий? Ответы останутся.', () => {
+  ask(t('plannerViews.planner.confirm.deleteComment'), () => {
     void planning.deleteTaskComment(commentsTaskId.value ?? 0, payload.comment_id)
   })
 }
@@ -628,7 +630,7 @@ const taskGroups = computed<PdfGanttGroup[]>(() =>
         :period-from="viewRange.from"
         :period-to="viewRange.to"
         :scale="viewRange.scale"
-        page-title="Диаграмма задач"
+        :page-title="t('plannerViews.pdf.tasks')"
       />
       <HintButton hint="planner" />
     </div>
@@ -688,7 +690,7 @@ const taskGroups = computed<PdfGanttGroup[]>(() =>
       :can-manage-dependencies="taskEditorTask ? canManageTask(taskEditorTask.process_id) : false"
       :busy="taskEditorBusy"
       :error="taskEditorError"
-      :disabled-reason="isOffline ? 'Недоступно в офлайне' : null"
+      :disabled-reason="isOffline ? t('plannerViews.offline.disabled') : null"
       @save="onSaveTaskEditor"
       @add-subtask="onAddSubtask"
       @update-subtask="onUpdateSubtask"
@@ -720,7 +722,7 @@ const taskGroups = computed<PdfGanttGroup[]>(() =>
       :users="app.users"
       :busy="planning.commentsLoading"
       :error="planning.commentsError"
-      :disabled-reason="isOffline ? 'Недоступно в офлайне' : null"
+      :disabled-reason="isOffline ? t('plannerViews.offline.disabled') : null"
       :can-manage="canDeleteOthersComments"
       :user-id="userId"
       @send="onSendComment"

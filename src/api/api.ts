@@ -390,15 +390,18 @@ export interface DtoPresetRuleView {
 export interface DtoPresetUpdateInput {
     'description'?: string;
     'name'?: string;
+    'tag'?: string;
 }
 export interface DtoPresetUpsertInput {
     'description'?: string;
     'name': string;
+    'tag': string;
 }
 export interface DtoPresetView {
     'description'?: string;
     'id'?: number;
     'name'?: string;
+    'tag'?: string;
 }
 export interface DtoProcess {
     'color'?: string;
@@ -3996,16 +3999,54 @@ export const RBACApiAxiosParamCreator = function (configuration?: Configuration)
         },
         /**
          * 
-         * @summary Delete a preset
-         * @param {string} name Preset name
+         * @summary Create a preset
+         * @param {DtoPresetUpsertInput} preset Preset
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        rbacPresetsNameDelete: async (name: string, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
-            // verify required parameter 'name' is not null or undefined
-            assertParamExists('rbacPresetsNameDelete', 'name', name)
-            const localVarPath = `/rbac/presets/{name}`
-                .replace('{name}', encodeURIComponent(String(name)));
+        rbacPresetsPost: async (preset: DtoPresetUpsertInput, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'preset' is not null or undefined
+            assertParamExists('rbacPresetsPost', 'preset', preset)
+            const localVarPath = `/rbac/presets`;
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'POST', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication ApiKeyAuth required
+            await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
+
+            localVarHeaderParameter['Content-Type'] = 'application/json';
+            localVarHeaderParameter['Accept'] = 'application/json';
+
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+            localVarRequestOptions.data = serializeDataIfNeeded(preset, localVarRequestOptions, configuration)
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * 
+         * @summary Delete a preset
+         * @param {string} tag Preset tag
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        rbacPresetsTagDelete: async (tag: string, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'tag' is not null or undefined
+            assertParamExists('rbacPresetsTagDelete', 'tag', tag)
+            const localVarPath = `/rbac/presets/{tag}`
+                .replace('{tag}', encodeURIComponent(String(tag)));
             // use dummy base URL string because the URL constructor only accepts absolute URLs.
             const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
             let baseOptions;
@@ -4033,18 +4074,18 @@ export const RBACApiAxiosParamCreator = function (configuration?: Configuration)
         /**
          * 
          * @summary Update a preset
-         * @param {string} name Preset name
+         * @param {string} tag Preset tag
          * @param {DtoPresetUpdateInput} preset Preset
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        rbacPresetsNamePut: async (name: string, preset: DtoPresetUpdateInput, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
-            // verify required parameter 'name' is not null or undefined
-            assertParamExists('rbacPresetsNamePut', 'name', name)
+        rbacPresetsTagPut: async (tag: string, preset: DtoPresetUpdateInput, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'tag' is not null or undefined
+            assertParamExists('rbacPresetsTagPut', 'tag', tag)
             // verify required parameter 'preset' is not null or undefined
-            assertParamExists('rbacPresetsNamePut', 'preset', preset)
-            const localVarPath = `/rbac/presets/{name}`
-                .replace('{name}', encodeURIComponent(String(name)));
+            assertParamExists('rbacPresetsTagPut', 'preset', preset)
+            const localVarPath = `/rbac/presets/{tag}`
+                .replace('{tag}', encodeURIComponent(String(tag)));
             // use dummy base URL string because the URL constructor only accepts absolute URLs.
             const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
             let baseOptions;
@@ -4053,44 +4094,6 @@ export const RBACApiAxiosParamCreator = function (configuration?: Configuration)
             }
 
             const localVarRequestOptions = { method: 'PUT', ...baseOptions, ...options};
-            const localVarHeaderParameter = {} as any;
-            const localVarQueryParameter = {} as any;
-
-            // authentication ApiKeyAuth required
-            await setApiKeyToObject(localVarHeaderParameter, "Authorization", configuration)
-
-            localVarHeaderParameter['Content-Type'] = 'application/json';
-            localVarHeaderParameter['Accept'] = 'application/json';
-
-            setSearchParams(localVarUrlObj, localVarQueryParameter);
-            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
-            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
-            localVarRequestOptions.data = serializeDataIfNeeded(preset, localVarRequestOptions, configuration)
-
-            return {
-                url: toPathString(localVarUrlObj),
-                options: localVarRequestOptions,
-            };
-        },
-        /**
-         * 
-         * @summary Create a preset
-         * @param {DtoPresetUpsertInput} preset Preset
-         * @param {*} [options] Override http request option.
-         * @throws {RequiredError}
-         */
-        rbacPresetsPost: async (preset: DtoPresetUpsertInput, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
-            // verify required parameter 'preset' is not null or undefined
-            assertParamExists('rbacPresetsPost', 'preset', preset)
-            const localVarPath = `/rbac/presets`;
-            // use dummy base URL string because the URL constructor only accepts absolute URLs.
-            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
-            let baseOptions;
-            if (configuration) {
-                baseOptions = configuration.baseOptions;
-            }
-
-            const localVarRequestOptions = { method: 'POST', ...baseOptions, ...options};
             const localVarHeaderParameter = {} as any;
             const localVarQueryParameter = {} as any;
 
@@ -4363,33 +4366,6 @@ export const RBACApiFp = function(configuration?: Configuration) {
         },
         /**
          * 
-         * @summary Delete a preset
-         * @param {string} name Preset name
-         * @param {*} [options] Override http request option.
-         * @throws {RequiredError}
-         */
-        async rbacPresetsNameDelete(name: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<void>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.rbacPresetsNameDelete(name, options);
-            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
-            const localVarOperationServerBasePath = operationServerMap['RBACApi.rbacPresetsNameDelete']?.[localVarOperationServerIndex]?.url;
-            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
-        },
-        /**
-         * 
-         * @summary Update a preset
-         * @param {string} name Preset name
-         * @param {DtoPresetUpdateInput} preset Preset
-         * @param {*} [options] Override http request option.
-         * @throws {RequiredError}
-         */
-        async rbacPresetsNamePut(name: string, preset: DtoPresetUpdateInput, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<RbacPresetsPost201Response>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.rbacPresetsNamePut(name, preset, options);
-            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
-            const localVarOperationServerBasePath = operationServerMap['RBACApi.rbacPresetsNamePut']?.[localVarOperationServerIndex]?.url;
-            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
-        },
-        /**
-         * 
          * @summary Create a preset
          * @param {DtoPresetUpsertInput} preset Preset
          * @param {*} [options] Override http request option.
@@ -4399,6 +4375,33 @@ export const RBACApiFp = function(configuration?: Configuration) {
             const localVarAxiosArgs = await localVarAxiosParamCreator.rbacPresetsPost(preset, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
             const localVarOperationServerBasePath = operationServerMap['RBACApi.rbacPresetsPost']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
+         * 
+         * @summary Delete a preset
+         * @param {string} tag Preset tag
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async rbacPresetsTagDelete(tag: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<void>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.rbacPresetsTagDelete(tag, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['RBACApi.rbacPresetsTagDelete']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
+         * 
+         * @summary Update a preset
+         * @param {string} tag Preset tag
+         * @param {DtoPresetUpdateInput} preset Preset
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async rbacPresetsTagPut(tag: string, preset: DtoPresetUpdateInput, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<RbacPresetsPost201Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.rbacPresetsTagPut(tag, preset, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['RBACApi.rbacPresetsTagPut']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
         /**
@@ -4552,27 +4555,6 @@ export const RBACApiFactory = function (configuration?: Configuration, basePath?
         },
         /**
          * 
-         * @summary Delete a preset
-         * @param {string} name Preset name
-         * @param {*} [options] Override http request option.
-         * @throws {RequiredError}
-         */
-        rbacPresetsNameDelete(name: string, options?: RawAxiosRequestConfig): AxiosPromise<void> {
-            return localVarFp.rbacPresetsNameDelete(name, options).then((request) => request(axios, basePath));
-        },
-        /**
-         * 
-         * @summary Update a preset
-         * @param {string} name Preset name
-         * @param {DtoPresetUpdateInput} preset Preset
-         * @param {*} [options] Override http request option.
-         * @throws {RequiredError}
-         */
-        rbacPresetsNamePut(name: string, preset: DtoPresetUpdateInput, options?: RawAxiosRequestConfig): AxiosPromise<RbacPresetsPost201Response> {
-            return localVarFp.rbacPresetsNamePut(name, preset, options).then((request) => request(axios, basePath));
-        },
-        /**
-         * 
          * @summary Create a preset
          * @param {DtoPresetUpsertInput} preset Preset
          * @param {*} [options] Override http request option.
@@ -4580,6 +4562,27 @@ export const RBACApiFactory = function (configuration?: Configuration, basePath?
          */
         rbacPresetsPost(preset: DtoPresetUpsertInput, options?: RawAxiosRequestConfig): AxiosPromise<RbacPresetsPost201Response> {
             return localVarFp.rbacPresetsPost(preset, options).then((request) => request(axios, basePath));
+        },
+        /**
+         * 
+         * @summary Delete a preset
+         * @param {string} tag Preset tag
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        rbacPresetsTagDelete(tag: string, options?: RawAxiosRequestConfig): AxiosPromise<void> {
+            return localVarFp.rbacPresetsTagDelete(tag, options).then((request) => request(axios, basePath));
+        },
+        /**
+         * 
+         * @summary Update a preset
+         * @param {string} tag Preset tag
+         * @param {DtoPresetUpdateInput} preset Preset
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        rbacPresetsTagPut(tag: string, preset: DtoPresetUpdateInput, options?: RawAxiosRequestConfig): AxiosPromise<RbacPresetsPost201Response> {
+            return localVarFp.rbacPresetsTagPut(tag, preset, options).then((request) => request(axios, basePath));
         },
         /**
          * 
@@ -4731,29 +4734,6 @@ export class RBACApi extends BaseAPI {
 
     /**
      * 
-     * @summary Delete a preset
-     * @param {string} name Preset name
-     * @param {*} [options] Override http request option.
-     * @throws {RequiredError}
-     */
-    public rbacPresetsNameDelete(name: string, options?: RawAxiosRequestConfig) {
-        return RBACApiFp(this.configuration).rbacPresetsNameDelete(name, options).then((request) => request(this.axios, this.basePath));
-    }
-
-    /**
-     * 
-     * @summary Update a preset
-     * @param {string} name Preset name
-     * @param {DtoPresetUpdateInput} preset Preset
-     * @param {*} [options] Override http request option.
-     * @throws {RequiredError}
-     */
-    public rbacPresetsNamePut(name: string, preset: DtoPresetUpdateInput, options?: RawAxiosRequestConfig) {
-        return RBACApiFp(this.configuration).rbacPresetsNamePut(name, preset, options).then((request) => request(this.axios, this.basePath));
-    }
-
-    /**
-     * 
      * @summary Create a preset
      * @param {DtoPresetUpsertInput} preset Preset
      * @param {*} [options] Override http request option.
@@ -4761,6 +4741,29 @@ export class RBACApi extends BaseAPI {
      */
     public rbacPresetsPost(preset: DtoPresetUpsertInput, options?: RawAxiosRequestConfig) {
         return RBACApiFp(this.configuration).rbacPresetsPost(preset, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * 
+     * @summary Delete a preset
+     * @param {string} tag Preset tag
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    public rbacPresetsTagDelete(tag: string, options?: RawAxiosRequestConfig) {
+        return RBACApiFp(this.configuration).rbacPresetsTagDelete(tag, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * 
+     * @summary Update a preset
+     * @param {string} tag Preset tag
+     * @param {DtoPresetUpdateInput} preset Preset
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     */
+    public rbacPresetsTagPut(tag: string, preset: DtoPresetUpdateInput, options?: RawAxiosRequestConfig) {
+        return RBACApiFp(this.configuration).rbacPresetsTagPut(tag, preset, options).then((request) => request(this.axios, this.basePath));
     }
 
     /**

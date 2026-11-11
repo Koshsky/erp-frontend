@@ -6,7 +6,7 @@ import TaskBar from './components/TaskBar/TaskBar.vue'
 import { TaskDependencyLinks } from './components/TaskDependencyLinks'
 import type { TaskGanttProps } from './types'
 import { LABEL_WIDTH } from '../../../layout'
-import { toDate } from '../../../calendar'
+import { fmtDate as fmtDateLocale } from '@/i18n/date'
 
 const props = withDefaults(defineProps<TaskGanttProps>(), {
   canManage: true,
@@ -37,7 +37,7 @@ const groupItems = computed(() => props.tasks)
 const MS_MIN_LABEL_HEIGHT = 64
 
 function fmtDate(d: string | Date | number | null | undefined): string {
-  return d ? toDate(d).toLocaleDateString('ru') : ''
+  return d ? fmtDateLocale(d) : ''
 }
 
 function onBarChange(id: number, d: { start_date: string; end_date: string }) {

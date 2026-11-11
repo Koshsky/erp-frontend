@@ -11,6 +11,7 @@ import { useEditModal } from '../composables/useEditModal'
 import { useRoleAccess } from '../composables/useRoleAccess'
 import { useColumnWidths } from '../composables/useColumnWidths'
 import { useTimesheetStore } from '../store'
+import { t } from '@/i18n'
 import type { DtoStateResponse } from '@/api'
 
 const ts = useTimesheetStore()
@@ -25,11 +26,11 @@ const asState = (row: unknown): DtoStateResponse => row as DtoStateResponse
 // Column config for the DataTable: content-sized tracks with a hard cap
 // (long values wrap instead of shifting the following columns); the
 // component itself appends the 1fr spacer that stretches the bands.
-const columns: DataTableColumn[] = [
-  { key: 'code', label: 'Код', width: '140px' },
-  { key: 'name', label: 'Название', width: 'fit-content(420px)' },
-  { key: 'is_available', label: 'Доступность', width: '160px' },
-]
+const columns = computed<DataTableColumn[]>(() => [
+  { key: 'code', label: t('adminConfig.statuses.colCode'), width: '140px' },
+  { key: 'name', label: t('adminConfig.statuses.colName'), width: 'fit-content(420px)' },
+  { key: 'is_available', label: t('adminConfig.statuses.colAvailable'), width: '160px' },
+])
 
 /** Per-user persisted column widths (drag-resize on the header edges). */
 const { columnWidths } = useColumnWidths('statuses')
@@ -47,8 +48,8 @@ interface MenuState {
 const menu = ref<MenuState | null>(null)
 const menuItems = computed<ContextMenuItem[]>(() => {
   const items: ContextMenuItem[] = []
-  if (canManageState.value) items.push({ id: 'edit-state', label: 'Редактировать' })
-  if (canDeleteState.value) items.push({ id: 'delete-state', label: 'Удалить статус' })
+  if (canManageState.value) items.push({ id: 'edit-state', label: t('adminConfig.statuses.editMenu') })
+  if (canDeleteState.value) items.push({ id: 'delete-state', label: t('adminConfig.statuses.deleteMenu') })
   return items
 })
 
@@ -60,26 +61,26 @@ type ModalMode =
   | { type: 'edit'; id: number; code: string; name: string; isAvailable: boolean; color: string }
 
 /** Status availability (ModalField does not support boolean — we use '1'/'0') */
-const availabilityOptions: ModalField['options'] = [
-  { value: '1', label: 'Доступен' },
-  { value: '0', label: 'Недоступен' },
-]
+const availabilityOptions = computed<ModalField['options']>(() => [
+  { value: '1', label: t('adminConfig.statuses.available') },
+  { value: '0', label: t('adminConfig.statuses.unavailable') },
+])
 
 const { open: openModal, close: closeModal, submit: submitModal, bind: modalBind } = useEditModal<ModalMode>(
   (state) => [
-    { key: 'code', label: 'Код', type: 'text', value: state.type === 'edit' ? state.code : '', required: true },
-    { key: 'name', label: 'Название', type: 'text', value: state.type === 'edit' ? state.name : '', required: true },
+    { key: 'code', label: t('adminConfig.statuses.fieldCode'), type: 'text', value: state.type === 'edit' ? state.code : '', required: true },
+    { key: 'name', label: t('adminConfig.statuses.fieldName'), type: 'text', value: state.type === 'edit' ? state.name : '', required: true },
     {
       key: 'color',
-      label: 'Цвет',
+      label: t('adminConfig.statuses.fieldColor'),
       type: 'color',
       value: state.type === 'edit' ? state.color ?? '' : '',
     },
     {
       key: 'isAvailable',
-      label: 'Доступность',
+      label: t('adminConfig.statuses.fieldAvailable'),
       type: 'select',
-      options: availabilityOptions,
+      options: availabilityOptions.value,
       value: state.type === 'edit' ? (state.isAvailable ? '1' : '0') : '1',
     },
   ],
@@ -97,8 +98,8 @@ const { open: openModal, close: closeModal, submit: submitModal, bind: modalBind
         : await ts.updateState(state.id, payload)
     return { ok, error: ok ? null : error.value }
   },
-  (state) => (state.type === 'create' ? 'Создать статус' : 'Редактировать статус'),
-  (state) => (state.type === 'create' ? 'Создать' : 'Сохранить'),
+  (state) => (state.type === 'create' ? t('adminConfig.statuses.create') : t('adminConfig.statuses.editTitle')),
+  (state) => (state.type === 'create' ? t('common.create') : t('adminConfig.statuses.save')),
 )
 
 function onRowContextMenu(e: MouseEvent, st: DtoStateResponse) {
@@ -132,7 +133,7 @@ function handleSelect(id: string) {
     openEdit(menu.value.stateId)
   } else if (id === 'delete-state') {
     const stateId = menu.value.stateId
-    ask('Удалить статус?', () => {
+    ask(t('adminConfig.statuses.confirmDelete'), () => {
       void ts.deleteState(stateId)
     })
   }
@@ -145,7 +146,7 @@ onMounted(() => {
 
 <template>
   <section class="sp">
-    <p v-if="loading && !states.length" class="sp-st">Загрузка...</p>
+    <p v-if="loading && !states.length" class="sp-st">{{ t('adminConfig.statuses.loading') }}</p>
     <p v-if="error && !states.length" class="sp-st er">{{ error }}</p>
 
     <!--
@@ -157,14 +158,14 @@ onMounted(() => {
       v-if="states.length || (!loading && !error)"
       :columns="columns"
       :rows="states"
-      title="Статусы"
-      empty-text="Нет данных о статусах"
+      :title="t('adminConfig.statuses.title')"
+      :empty-text="t('adminConfig.statuses.empty')"
       resizable
       v-model:column-widths="columnWidths"
       @row-contextmenu="onRowContextMenu"
     >
       <template #actions>
-        <button v-if="canCreateState" type="button" class="tbar-add" @click="openCreate">Создать статус</button>
+        <button v-if="canCreateState" type="button" class="tbar-add" @click="openCreate">{{ t('adminConfig.statuses.create') }}</button>
       </template>
       <template #cell="{ row, column }">
         <span v-if="column.key === 'code'" class="code">
@@ -173,7 +174,7 @@ onMounted(() => {
           <PendingMark entity="state" :id="asState(row).id" />
         </span>
         <span v-else-if="column.key === 'is_available'" class="avail" :class="{ off: !asState(row).is_available }">
-          {{ asState(row).is_available ? 'Доступен' : 'Недоступен' }}
+          {{ asState(row).is_available ? t('adminConfig.statuses.available') : t('adminConfig.statuses.unavailable') }}
         </span>
         <template v-else>{{ asState(row).name }}</template>
       </template>

@@ -3,20 +3,20 @@ import { ref, computed } from 'vue'
 import { useAuthStore } from '../store'
 import { PasswordField, PasswordRequirements } from '../components/common'
 import { passwordRules, validatePassword } from '../composables/usePasswordValidation'
+import { notifyError, notifySuccess } from '../notify/state'
+import { t } from '../i18n'
 
 const auth = useAuthStore()
 
 const oldPassword = ref('')
 const newPassword = ref('')
 const confirmPassword = ref('')
-const changeMsg = ref<string | null>(null)
-const changeOk = ref(false)
 
 const passwordChecks = [
   ...passwordRules(),
   {
     id: 'no-login',
-    label: 'не содержит ваш логин',
+    label: t('adminUsers.profileEdit.ruleNoLogin'),
     test: (value: string) => {
       const login = auth.user?.username?.toLowerCase() ?? ''
       return login === '' || !value.toLowerCase().includes(login)
@@ -28,58 +28,55 @@ const newPasswordValid = computed(() => validatePassword(newPassword.value, pass
 const passwordConfirmed = computed(() => confirmPassword.value === newPassword.value)
 
 async function onChangePassword() {
-  changeMsg.value = null
-  changeOk.value = false
   if (!oldPassword.value || !newPassword.value || !confirmPassword.value) {
-    changeMsg.value = 'Заполните все поля'
+    notifyError(t('adminUsers.profileEdit.error.fillAll'))
     return
   }
   if (!newPasswordValid.value) {
-    changeMsg.value = 'Новый пароль не соответствует требованиям'
+    notifyError(t('adminUsers.profileEdit.error.weak'))
     return
   }
   if (!passwordConfirmed.value) {
-    changeMsg.value = 'Новый пароль не совпадает с подтверждением'
+    notifyError(t('adminUsers.profileEdit.error.mismatch'))
     return
   }
   const ok = await auth.changePassword(oldPassword.value, newPassword.value)
   if (ok) {
-    changeMsg.value = 'Пароль успешно изменён'
-    changeOk.value = true
+    notifySuccess(t('adminUsers.profileEdit.success'))
     oldPassword.value = ''
     newPassword.value = ''
     confirmPassword.value = ''
   } else {
-    changeMsg.value = auth.error ?? 'Не удалось изменить пароль'
+    notifyError(auth.error ?? t('adminUsers.profileEdit.error.changeFailed'))
   }
 }
 </script>
 
 <template>
   <section class="pf">
-    <h2 class="pf-title">Редактирование профиля</h2>
+    <h2 class="pf-title">{{ t('adminUsers.profileEdit.title') }}</h2>
 
     <div class="pf-cards">
       <div class="pf-card pw-form">
-        <h3 class="pf-title sm">Смена пароля</h3>
+        <h3 class="pf-title sm">{{ t('adminUsers.profileEdit.changePassword') }}</h3>
         <form @submit.prevent="onChangePassword">
           <div class="pw-fields">
-            <PasswordField v-model="oldPassword" label="Старый пароль" autocomplete="current-password" placeholder="••••••••" />
-            <PasswordField v-model="newPassword" label="Новый пароль" autocomplete="new-password" placeholder="Придумайте новый пароль" />
-            <PasswordField v-model="confirmPassword" label="Подтверждение пароля" autocomplete="new-password" placeholder="Повторите пароль" />
+            <PasswordField v-model="oldPassword" :label="t('adminUsers.profileEdit.field.oldPassword')" autocomplete="current-password" placeholder="••••••••" />
+            <PasswordField v-model="newPassword" :label="t('adminUsers.profileEdit.field.newPassword')" autocomplete="new-password" :placeholder="t('adminUsers.profileEdit.field.newPasswordPlaceholder')" />
+            <PasswordField v-model="confirmPassword" :label="t('adminUsers.profileEdit.field.confirmPassword')" autocomplete="new-password" :placeholder="t('adminUsers.profileEdit.field.confirmPasswordPlaceholder')" />
             <PasswordRequirements :model-value="newPassword" :rules="passwordChecks" />
           </div>
 
-          <p v-if="changeMsg" class="pf-msg" :class="{ ok: changeOk }">{{ changeMsg }}</p>
-
-          <button type="submit" class="pf-btn" :disabled="auth.loading">
-            {{ auth.loading ? 'Сохранение…' : 'Сменить пароль' }}
-          </button>
+          <div class="pf-actions">
+            <button type="submit" class="pf-btn" :disabled="auth.loading">
+              {{ auth.loading ? t('adminUsers.profileEdit.action.saving') : t('adminUsers.profileEdit.action.submit') }}
+            </button>
+          </div>
         </form>
       </div>
     </div>
 
-    <RouterLink to="/profile" class="pf-back">← Назад к профилю</RouterLink>
+    <RouterLink to="/profile" class="pf-back">{{ t('adminUsers.profileEdit.action.back') }}</RouterLink>
   </section>
 </template>
 
@@ -122,19 +119,14 @@ async function onChangePassword() {
   gap: 14px;
 }
 
-.pf-msg {
-  margin-top: 14px;
-  font-size: calc(var(--ui-font-scale, 1) * 13px);
-  color: var(--ui-danger);
-}
-.pf-msg.ok {
-  color: var(--ui-success);
+.pf-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 18px;
 }
 
 .pf-btn {
-  margin-top: 18px;
-  width: 100%;
-  padding: 12px;
+  padding: 10px 22px;
   border: none;
   border-radius: var(--ui-radius-sm);
   background: var(--ui-accent);

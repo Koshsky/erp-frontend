@@ -3,21 +3,24 @@ import type { Ref } from 'vue'
 
 export interface TimelinePan {
   isPanning: Ref<boolean>
-  /** Subscribe to pointerdown on the container (pan by dragging empty space with LMB) */
+  /** Subscribe to pointerdown on the container (pan by MMB drag from any point) */
   enable: () => void
   /** Unsubscribe */
   disable: () => void
 }
 
 /**
- * Panning the infinite timeline: hold LMB on "empty" space (not bars/labels/
- * handles — see ignoreSelector) and drag — the container scrolls in both
- * directions. Horizontal scroll triggers the regular scroll event, which
- * extends the range (sync).
+ * Panning the infinite timeline: hold MMB (middle mouse button) anywhere —
+ * empty space, bars, milestones, sticky labels, headers — and drag; the
+ * container scrolls in both directions. Table content never blocks moving the
+ * table: LMB interactions (bar drag, resize, reorder) are guarded by the
+ * components themselves, so the MMB pan coexists with them. Horizontal scroll
+ * triggers the regular scroll event, which extends the range (sync).
+ * ignoreSelector (optional) — elements excluded from starting the pan.
  */
 export function useTimelinePan(
   container: Ref<HTMLElement | null>,
-  ignoreSelector: string,
+  ignoreSelector = '',
 ): TimelinePan {
   const isPanning = ref(false)
 
@@ -25,18 +28,30 @@ export function useTimelinePan(
   let lastX = 0
   let lastY = 0
 
+  /**
+   * Blocks the browser's native middle-click autoscroll: cancelling the
+   * pointerdown alone is not enough in all browsers, the autoscroll is a
+   * default action of the derived mousedown.
+   */
+  function onAutoscrollGuard(e: MouseEvent) {
+    if (e.button === 1) e.preventDefault()
+  }
+
   function onPointerDown(e: PointerEvent) {
-    if (e.button !== 0 || e.ctrlKey || e.metaKey) return
+    if (e.button !== 1 || e.ctrlKey || e.metaKey) return
     if (e.pointerType !== 'mouse') return
     const el = container.value
     if (!el) return
-    if ((e.target as HTMLElement).closest(ignoreSelector)) return
+    if (ignoreSelector && (e.target as HTMLElement).closest(ignoreSelector)) return
     e.preventDefault()
     active = true
     lastX = e.clientX
     lastY = e.clientY
     isPanning.value = true
     el.classList.add('tg-panning')
+    // Global "grabbing fist" (body.pan-grabbing) while MMB is held — applies
+    // to the whole page, not only the table area.
+    document.body.classList.add('pan-grabbing')
     document.body.style.userSelect = 'none'
     window.addEventListener('pointermove', onPointerMove)
     window.addEventListener('pointerup', onPointerUp)
@@ -68,6 +83,7 @@ export function useTimelinePan(
     active = false
     isPanning.value = false
     container.value?.classList.remove('tg-panning')
+    document.body.classList.remove('pan-grabbing')
     document.body.style.userSelect = ''
     window.removeEventListener('pointermove', onPointerMove)
     window.removeEventListener('pointerup', onPointerUp)
@@ -76,10 +92,12 @@ export function useTimelinePan(
 
   function enable() {
     container.value?.addEventListener('pointerdown', onPointerDown)
+    container.value?.addEventListener('mousedown', onAutoscrollGuard)
   }
 
   function disable() {
     container.value?.removeEventListener('pointerdown', onPointerDown)
+    container.value?.removeEventListener('mousedown', onAutoscrollGuard)
     onPointerUp()
   }
 
