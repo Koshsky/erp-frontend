@@ -54,12 +54,17 @@ function clampPanel() {
 }
 
 function toggle() {
+  if (props.disabled) return
   if (open.value) {
     close()
   } else {
     open.value = true
   }
 }
+
+watch(() => props.disabled, (disabled) => {
+  if (disabled) close()
+})
 
 watch(open, (isOpen) => {
   if (!isOpen) return
@@ -68,11 +73,13 @@ watch(open, (isOpen) => {
 })
 
 function select(color: string) {
+  if (props.disabled) return
   if (color !== props.modelValue) emit('update:modelValue', color)
   close()
 }
 
 function clear() {
+  if (props.disabled) return
   if (props.modelValue !== '') emit('update:modelValue', '')
   close()
 }
@@ -85,6 +92,7 @@ function close() {
 const flexInputRef = ref<HTMLInputElement | null>(null)
 
 function openFlexPalette() {
+  if (props.disabled) return
   flexInputRef.value?.click()
 }
 
@@ -141,6 +149,7 @@ const panelSizeClass = computed(() => (props.size === 'sm' ? 'cf-panel--sm' : ''
       ref="triggerRef"
       type="button"
       class="cf-trigger"
+      :disabled="disabled"
       :class="{ 'cf-trigger--empty': !modelValue, 'is-open': open }"
       :style="triggerStyle"
       :aria-label="label ? label : t('ui.color.label')"

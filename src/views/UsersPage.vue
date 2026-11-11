@@ -102,7 +102,7 @@ function onRowContextMenu(e: MouseEvent, u: DtoAdminUserResponse) {
 const { open: openMenu, close: closeMenu, select, bind: menuBind } = useContextMenu(menu, menuItems, handleSelect)
 
 function handleSelect(id: string) {
-  if (!menu.value) return
+  if (!menu.value || !menuItems.value.some((item) => item.id === id)) return
   const u = adminUsers.value.find((x) => x.id === menu.value?.userId)
   if (!u) return
   if (id === 'edit-user') {

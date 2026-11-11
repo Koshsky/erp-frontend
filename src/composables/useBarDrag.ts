@@ -2,7 +2,6 @@ import { onBeforeUnmount, ref } from 'vue'
 import type { Ref } from 'vue'
 import type { CellSpan } from '../components/planner/calendar'
 import type { TimelineCtx } from './timeline-context'
-import { LABEL_WIDTH } from '../components/planner/layout'
 import { clamp, useWindowPointerTrack } from '../utils'
 
 export type BarDragMode = 'move' | 'resizeStart' | 'resizeEnd'
@@ -53,12 +52,17 @@ export function useBarDrag(options: UseBarDragOptions): BarDrag {
   let rafId: number | null = null
   let scrollDir = 0
 
+  /**
+   * Fractional cell under the pointer. Goes through the timeline context so the
+   * fractional scroll of the window and the zoom are accounted for — the delta
+   * below is computed from two such samples, and a formula that ignores the scroll
+   * phase shifts both ends inconsistently.
+   */
   function currentPointerCell(clientX: number): number {
     const t = options.timeline()
     const el = options.scrollEl()
     if (!el) return startPointerCell
-    const rect = el.getBoundingClientRect()
-    return t.windowStart + ((clientX - rect.left) / t.scale - LABEL_WIDTH) / t.cellPx
+    return t.cellCoordAtPointer(clientX, el.getBoundingClientRect()) ?? startPointerCell
   }
 
   function computeSpan(clientX: number) {

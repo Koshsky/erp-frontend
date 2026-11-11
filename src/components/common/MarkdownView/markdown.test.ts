@@ -93,3 +93,23 @@ describe('renderMarkdown', () => {
     expect(renderMarkdown('   ').trim()).toBe('')
   })
 })
+
+describe('Markdown URL XSS regressions', () => {
+  it.each([
+    'java\tscript:alert(1)', 'java\nscript:alert(1)', 'java\rscript:alert(1)',
+    '\u0000javascript:alert(1)', ' JAVASCRIPT:alert(1)', 'data:text/html,test',
+    'vbscript:msgbox(1)', 'file:///etc/passwd', 'http://',
+  ])('rejects browser-normalized unsafe URL %j', url => {
+    expect(isSafeUrl(url)).toBe(false)
+  })
+
+  it('does not emit an anchor for the embedded-tab bypass', () => {
+    const html = renderMarkdown('[probe](<java\tscript:alert(1)>)')
+    expect(html).not.toContain('<a ')
+    expect(html).toContain('probe')
+  })
+
+  it.each(['../page', '?search=a%20b', '#section', 'https://example.com/a b', 'MAILTO:user@example.com'])('keeps legitimate URL %s', url => {
+    expect(isSafeUrl(url)).toBe(true)
+  })
+})

@@ -19,11 +19,14 @@ export interface AddResourcePayload {
 }
 
 export interface ResourceManagerModalProps {
+  embedded?: boolean
   open: boolean
   taskId: number
   taskTitle?: string
   resources: ResourceOption[]
   assigned: AssignedResource[]
+  canCreate?: boolean
+  canDelete?: boolean
   busy?: boolean
   error?: string | null
 }

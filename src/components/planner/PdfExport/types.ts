@@ -56,6 +56,7 @@ export interface PdfExportProcess {
 }
 
 export interface PdfExportProps {
+  captureTarget?: () => HTMLElement | null
   /** Ready print model: groups → rows (built by the planner page) */
   groups?: PdfGanttGroup[] | null
   /** Timeline anchor: cell with index 0 (starting position) */

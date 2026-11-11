@@ -1,4 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/vue3-vite'
+import { nextTick } from 'vue'
+import { expect } from 'storybook/test'
+import { viewSettings } from '@/settings'
 import ProcessBar from './ProcessBar.vue'
 import type { ProcessBarProps } from './types'
 import { makeDemoTimeline } from '@/components/planner/demoTimeline'
@@ -34,6 +37,8 @@ function withProcess(props: Partial<ProcessBarProps>): Story['render'] {
             :ownerName="ownerName"
             :color="color"
             :opacity="opacity"
+            :ownerName="ownerName"
+            :responsibleName="responsibleName"
           />
         </div>
       </div>
@@ -67,4 +72,37 @@ export const WithBounds: Story = {
     groupStartDate: iso(day(1, 5)),
     groupEndDate: iso(day(2, 25)),
   }),
+}
+
+export const PeopleBadgesFollowSettings: Story = {
+  render: withProcess({
+    startDate: iso(day(1, 1)), endDate: iso(day(1, 25)),
+    title: 'Badge demo', projectCode: 'BADGES-DEMO',
+    ownerName: 'Owner Example', responsibleName: 'Responsible Example',
+  }),
+  play: async ({ canvasElement }) => {
+    const before = { owner: viewSettings.badgeProcessOwner, responsible: viewSettings.badgeProcessResponsible }
+    try {
+      viewSettings.badgeProcessOwner = true
+      viewSettings.badgeProcessResponsible = true
+      await nextTick()
+      expect(canvasElement.querySelector('.lb-owner')?.textContent).toBe('Owner E.')
+      expect(canvasElement.querySelector('.lb-responsible')?.textContent).toBe('Responsible E.')
+      viewSettings.badgeProcessOwner = false
+      await nextTick()
+      expect(canvasElement.querySelector('.lb-owner')).toBeNull()
+      expect(canvasElement.querySelector('.lb-responsible')).toBeTruthy()
+      viewSettings.badgeProcessResponsible = false
+      await nextTick()
+      expect(canvasElement.querySelector('.lb-responsible')).toBeNull()
+      viewSettings.badgeProcessOwner = true
+      viewSettings.badgeProcessResponsible = true
+      await nextTick()
+      expect(canvasElement.querySelector('.lb-owner')).toBeTruthy()
+      expect(canvasElement.querySelector('.lb-responsible')).toBeTruthy()
+    } finally {
+      viewSettings.badgeProcessOwner = before.owner
+      viewSettings.badgeProcessResponsible = before.responsible
+    }
+  },
 }

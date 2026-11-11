@@ -104,7 +104,7 @@ export async function renderPdfPreview(bytes: Uint8Array, container: HTMLElement
   // Byte copy: pdf.js takes the TypedArray over (transfer)
   const copy = new Uint8Array(bytes.byteLength)
   copy.set(bytes)
-  const loadingTask = pdfjs.getDocument({ data: copy })
+  const loadingTask = pdfjs.getDocument({ data: copy, isEvalSupported: false })
   const destroyed = { value: false }
 
   /** Wraps a promise with a timeout: on expiry destroy the task and reject */

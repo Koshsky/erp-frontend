@@ -165,27 +165,68 @@ onMounted(() => {
           <h3 class="st-card-title">{{ t('adminSystem.settings.appearance.title') }}</h3>
 
           <h4 class="st-group-title">{{ t('adminSystem.settings.badges.title') }}</h4>
-          <label class="st-option">
-            <input v-model="viewSettings.badgeResource" type="checkbox" />
-            <span>{{ t('adminSystem.settings.badges.resource') }}</span>
-          </label>
-          <label class="st-option">
-            <input v-model="viewSettings.badgeProjectCode" type="checkbox" />
-            <span>{{ t('adminSystem.settings.badges.projectCode') }}</span>
-          </label>
-          <label class="st-option">
-            <input v-model="viewSettings.badgeProgress" type="checkbox" />
-            <span>{{ t('adminSystem.settings.badges.progress') }}</span>
-          </label>
-          <label class="st-option">
-            <input v-model="viewSettings.badgeOwner" type="checkbox" />
-            <span>{{ t('adminSystem.settings.badges.owner') }}</span>
-          </label>
-          <label class="st-option">
-            <input v-model="viewSettings.badgeComments" type="checkbox" />
-            <span>{{ t('adminSystem.settings.badges.comments') }}</span>
-          </label>
-          <BarBadgesPreview />
+          <fieldset class="st-badge-group" data-badge-group="project">
+            <legend class="st-badge-title">{{ t('adminSystem.settings.badges.projectGroup') }}</legend>
+            <BarBadgesPreview kind="project" />
+            <div class="st-badge-options">
+              <label class="st-option">
+                <input v-model="viewSettings.badgeProjectOwner" type="checkbox" />
+                <span>{{ t('adminSystem.settings.badges.projectOwner') }}</span>
+              </label>
+              <label class="st-option">
+                <input v-model="viewSettings.badgeProjectResponsible" type="checkbox" />
+                <span>{{ t('adminSystem.settings.badges.projectResponsible') }}</span>
+              </label>
+            </div>
+          </fieldset>
+          <fieldset class="st-badge-group" data-badge-group="process">
+            <legend class="st-badge-title">{{ t('adminSystem.settings.badges.processGroup') }}</legend>
+            <BarBadgesPreview kind="process" />
+            <div class="st-badge-options">
+              <label class="st-option">
+                <input v-model="viewSettings.badgeProcessProjectCode" type="checkbox" />
+                <span>{{ t('adminSystem.settings.badges.projectCode') }}</span>
+              </label>
+              <label class="st-option">
+                <input v-model="viewSettings.badgeProcessOwner" type="checkbox" />
+                <span>{{ t('adminSystem.settings.badges.processOwner') }}</span>
+              </label>
+              <label class="st-option">
+                <input v-model="viewSettings.badgeProcessResponsible" type="checkbox" />
+                <span>{{ t('adminSystem.settings.badges.processResponsible') }}</span>
+              </label>
+            </div>
+          </fieldset>
+          <fieldset class="st-badge-group" data-badge-group="task">
+            <legend class="st-badge-title">{{ t('adminSystem.settings.badges.taskGroup') }}</legend>
+            <BarBadgesPreview kind="task" />
+            <div class="st-badge-options">
+              <label class="st-option">
+                <input v-model="viewSettings.badgeTaskProjectCode" type="checkbox" />
+                <span>{{ t('adminSystem.settings.badges.projectCode') }}</span>
+              </label>
+              <label class="st-option">
+                <input v-model="viewSettings.badgeTaskOwner" type="checkbox" />
+                <span>{{ t('adminSystem.settings.badges.taskOwner') }}</span>
+              </label>
+              <label class="st-option">
+                <input v-model="viewSettings.badgeTaskResponsible" type="checkbox" />
+                <span>{{ t('adminSystem.settings.badges.taskResponsible') }}</span>
+              </label>
+              <label class="st-option">
+                <input v-model="viewSettings.badgeResource" type="checkbox" />
+                <span>{{ t('adminSystem.settings.badges.resource') }}</span>
+              </label>
+              <label class="st-option">
+                <input v-model="viewSettings.badgeProgress" type="checkbox" />
+                <span>{{ t('adminSystem.settings.badges.progress') }}</span>
+              </label>
+              <label class="st-option">
+                <input v-model="viewSettings.badgeComments" type="checkbox" />
+                <span>{{ t('adminSystem.settings.badges.comments') }}</span>
+              </label>
+            </div>
+          </fieldset>
 
           <h4 class="st-group-title">{{ t('adminSystem.settings.appearance.linksGroup') }}</h4>
           <div class="st-field">
@@ -257,8 +298,8 @@ onMounted(() => {
                   <span>{{ t('adminSystem.settings.defaults.unitDay') }}</span>
                 </label>
                 <label class="st-radio">
-                  <input v-model="viewSettings.defaultUnit" type="radio" value="decade" />
-                  <span>{{ t('adminSystem.settings.defaults.unitDecade') }}</span>
+                  <input v-model="viewSettings.defaultUnit" type="radio" value="week" />
+                  <span>{{ t('adminSystem.settings.defaults.unitWeek') }}</span>
                 </label>
               </div>
             </div>
@@ -414,6 +455,29 @@ onMounted(() => {
 }
 
 /* Group heading inside a card that carries more than one group of settings. */
+.st-badge-group {
+  min-width: 0;
+  margin: 16px 0 0;
+  padding: 12px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
+}
+.st-badge-title {
+  margin: 0;
+  padding: 0 4px;
+  font-size: calc(var(--ui-font-scale, 1) * 13px);
+  font-weight: 600;
+  color: var(--ui-text);
+}
+.st-badge-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  margin-top: 12px;
+}
+.st-badge-options .st-option {
+  margin: 0;
+}
 .st-group-title {
   font-size: calc(var(--ui-font-scale, 1) * 14px);
   font-weight: 600;

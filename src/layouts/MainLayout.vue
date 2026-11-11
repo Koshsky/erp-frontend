@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import AppHeader from '../components/common/AppHeader/AppHeader.vue'
 import AppNavDrawer from '../components/common/AppNavDrawer/AppNavDrawer.vue'
 import { useRbacStore } from '../store'
+import { pageAllowed } from '@/utils/pageAccess'
 import { useNavigation } from '../composables/useNavigation'
 import { saveCategoryOrder, saveItemOrder } from '../composables/useNavigationOrder'
 import {
@@ -15,6 +16,11 @@ import {
 
 const route = useRoute()
 const rbac = useRbacStore()
+const router = useRouter()
+
+watch(() => rbac.permsLoaded && !pageAllowed(String(route.name), rbac.can), (denied) => {
+  if (denied) void router.replace({ name: 'profile' })
+}, { immediate: true })
 const { visibleCategories } = useNavigation()
 
 /**

@@ -5,7 +5,7 @@ import { useTimelineItem } from '../../../composables/useTimelineItem'
 import { useWindowPointerTrack } from '../../../utils'
 import { TooltipCell } from '../../common'
 import { t } from '@/i18n'
-import { viewSettings } from '@/settings'
+import { shortName } from '@/utils'
 import type { BarProps } from './types'
 
 const slots = useSlots()
@@ -25,6 +25,11 @@ const props = withDefaults(defineProps<BarProps>(), {
   groupStartDate: null,
   groupEndDate: null,
 })
+
+const ownerLabel = computed(() => (props.ownerName || props.ownerShort)
+  ? props.ownerShort ?? shortName({ name: props.ownerName }) : '')
+const responsibleLabel = computed(() => (props.responsibleName || props.responsibleShort)
+  ? props.responsibleShort ?? shortName({ name: props.responsibleName }) : '')
 
 const emit = defineEmits<{
   change: [payload: { start_date: string; end_date: string }]
@@ -298,7 +303,9 @@ function onContextMenu(e: MouseEvent) {
     <TooltipCell v-if="hasTooltip" :text="tooltip ?? ''" :multiline="true" @open="emit('tooltip-open')">
       <slot>
         <span class="lb-title">{{ title }}</span>
-        <span v-if="projectCode && viewSettings.badgeProjectCode" class="lb-code">{{ projectCode }}</span>
+        <span v-if="projectCode" class="lb-code">{{ projectCode }}</span>
+        <span v-if="ownerLabel" class="lb-owner" :title="t('planner.bar.owner', { owner: ownerName })">{{ ownerLabel }}</span>
+        <span v-if="responsibleLabel" class="lb-responsible" :title="t('planner.bar.responsible', { name: responsibleName })">{{ responsibleLabel }}</span>
       </slot>
       <template #popup>
         <slot name="tooltip" :dateRange="dateRange">
@@ -311,7 +318,9 @@ function onContextMenu(e: MouseEvent) {
     </TooltipCell>
     <slot v-else>
       <span class="lb-title">{{ title }}</span>
-      <span v-if="projectCode && viewSettings.badgeProjectCode" class="lb-code">{{ projectCode }}</span>
+      <span v-if="projectCode" class="lb-code">{{ projectCode }}</span>
+      <span v-if="ownerLabel" class="lb-owner" :title="t('planner.bar.owner', { owner: ownerName })">{{ ownerLabel }}</span>
+      <span v-if="responsibleLabel" class="lb-responsible" :title="t('planner.bar.responsible', { name: responsibleName })">{{ responsibleLabel }}</span>
     </slot>
     <template v-if="draggable">
       <span
@@ -356,7 +365,7 @@ function onContextMenu(e: MouseEvent) {
 .gantt-bar:focus-visible {
   outline: 2px solid var(--ui-focus);
   outline-offset: 1px;
-  z-index: 1;
+  z-index: var(--z-grid);
 }
 .gb-draggable {
   touch-action: none;
@@ -374,7 +383,7 @@ function onContextMenu(e: MouseEvent) {
   top: 0;
   bottom: 0;
   width: 6px;
-  z-index: 2;
+  z-index: var(--z-bar);
   touch-action: none;
 }
 .gb-handle-l {
@@ -389,12 +398,34 @@ function onContextMenu(e: MouseEvent) {
   background: rgba(255, 255, 255, 0.35);
 }
 .lb-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-size: calc(var(--ui-font-scale, 1) * 12px);
   font-weight: 700;
   color: var(--ui-accent-on);
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
   white-space: nowrap;
   pointer-events: none;
+}
+.lb-owner,
+.lb-responsible {
+  flex-shrink: 0;
+  font-size: calc(var(--ui-font-scale, 1) * 10px);
+  font-weight: 600;
+  line-height: 1.6;
+  color: var(--ui-accent-on);
+  border-radius: 10px;
+  padding: 0 7px;
+  margin-left: 6px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.lb-owner {
+  background: rgba(13, 102, 134, 0.85);
+}
+.lb-responsible {
+  background: rgba(99, 76, 170, 0.85);
 }
 .lb-code {
   font-size: calc(var(--ui-font-scale, 1) * 10px);

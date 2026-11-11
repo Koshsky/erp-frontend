@@ -14,7 +14,11 @@
  *  - tiling & monotonicity: consecutive cells are contiguous (end + 1 day ===
  *    next start), indices strictly follow the calendar order, negative
  *    indices work both for day and decade units;
- *  - spanToDates / cellRangeForSpan round-trips on the split-anchor layout.
+ *  - spanToDates / cellRangeForSpan round-trips on the split-anchor layout;
+ *  - dateAtCellCoord: the date under a fractional cell coordinate (the pointer
+ *    conversion feeding the context menu and the bar drag);
+ *  - fitSpanDates: span of an item created by a right click inside its parent
+ *    (start stays at the clicked cell, the length is truncated by the parent).
  */
 import { describe, expect, it } from 'vitest'
 import {
@@ -23,7 +27,13 @@ import {
   cellIndexForDate,
   cellRangeForSpan,
   cellStartDate,
+  dateAtCellCoord,
+  fitSpanDates,
+  isoWeek,
+  weekCoordinate,
+  romanNumeral,
   spanToDates,
+  weekOfMonth,
   windowCells,
   type PlanningUnit,
 } from './calendar'
@@ -176,6 +186,105 @@ describe('decade unit — leap-month end anchor (Feb 29, split at month end)', (
   })
 })
 
+describe('week unit — Monday anchor (no split)', () => {
+  const origin = '2026-07-06' // Monday
+
+  it('cell 0 is the full Monday–Sunday week', () => {
+    expect(fmt(cellStartDate(origin, 'week', 0))).toBe('2026-07-06')
+    expect(fmt(cellEndDate(origin, 'week', 0))).toBe('2026-07-12')
+    expect(fmt(cellStartDate(origin, 'week', 1))).toBe('2026-07-13')
+    expect(fmt(cellEndDate(origin, 'week', 1))).toBe('2026-07-19')
+    expect(fmt(cellStartDate(origin, 'week', -1))).toBe('2026-06-29')
+    expect(fmt(cellEndDate(origin, 'week', -1))).toBe('2026-07-05')
+  })
+
+  it('maps dates to weeks', () => {
+    expect(cellIndexForDate(origin, 'week', '2026-07-06')).toBe(0)
+    expect(cellIndexForDate(origin, 'week', '2026-07-12')).toBe(0)
+    expect(cellIndexForDate(origin, 'week', '2026-07-13')).toBe(1)
+    expect(cellIndexForDate(origin, 'week', '2026-07-05')).toBe(-1)
+    expect(cellIndexForDate(origin, 'week', '2026-06-29')).toBe(-1)
+  })
+
+  it('tiles contiguously across month boundaries', () => {
+    expectContiguous(origin, 'week', -4, 9)
+  })
+})
+
+describe('week unit — mid-week anchor (full ISO weeks)', () => {
+  const origin = '2026-07-01' // Wednesday
+
+  it('cell 0 covers the full Monday–Sunday week containing the anchor', () => {
+    expect(fmt(cellStartDate(origin, 'week', 0))).toBe('2026-06-29')
+    expect(fmt(cellEndDate(origin, 'week', 0))).toBe('2026-07-05')
+  })
+
+  it('negative cells remain full weeks', () => {
+    expect(fmt(cellStartDate(origin, 'week', -1))).toBe('2026-06-22')
+    expect(fmt(cellEndDate(origin, 'week', -1))).toBe('2026-06-28')
+    expect(fmt(cellStartDate(origin, 'week', -2))).toBe('2026-06-15')
+  })
+
+  it('maps dates before and after the anchor into the same week', () => {
+    expect(cellIndexForDate(origin, 'week', '2026-06-29')).toBe(0)
+    expect(cellIndexForDate(origin, 'week', '2026-06-30')).toBe(0)
+    expect(cellIndexForDate(origin, 'week', '2026-07-01')).toBe(0)
+    expect(cellIndexForDate(origin, 'week', '2026-07-05')).toBe(0)
+    expect(cellIndexForDate(origin, 'week', '2026-07-06')).toBe(1)
+    expect(cellIndexForDate(origin, 'week', '2026-06-25')).toBe(-1)
+  })
+
+  it('tiles contiguously across the anchor', () => {
+    expectContiguous(origin, 'week', -3, 8)
+  })
+})
+
+describe('ISO week numbering and month boundaries', () => {
+  it.each([
+    ['2026-07-27', 2026, 31],
+    ['2026-08-02', 2026, 31],
+    ['2026-12-28', 2026, 53],
+    ['2027-01-01', 2026, 53],
+    ['2027-01-03', 2026, 53],
+    ['2027-01-04', 2027, 1],
+    ['2024-12-30', 2025, 1],
+  ])('%s belongs to ISO year %i, week %i', (value, year, week) => {
+    expect(isoWeek(new Date(`${value}T12:00:00`))).toEqual({ year, week })
+  })
+
+  it('positions a month boundary inside an intact week', () => {
+    expect(weekCoordinate('2026-07-27', new Date(2026, 7, 1))).toBeCloseTo(5 / 7)
+    expect(cellIndexForDate('2026-07-27', 'week', '2026-08-01')).toBe(0)
+    expect(fmt(cellEndDate('2026-07-27', 'week', 0))).toBe('2026-08-02')
+  })
+
+  it('keeps weekly coordinates aligned across daylight-saving transitions', () => {
+    expect(weekCoordinate('2026-03-23', new Date(2026, 3, 1))).toBeCloseTo(9 / 7)
+    expect(cellIndexForDate('2026-03-23', 'week', '2026-03-30')).toBe(1)
+  })
+})
+
+describe('week-of-month ordinal and Roman numerals', () => {
+  it('numbers the week containing the 1st as I, incrementing per Monday week', () => {
+    expect(weekOfMonth(new Date(2026, 6, 1))).toBe(1) // Wed Jul 1 → I (Thu Jul 2)
+    expect(weekOfMonth(new Date(2026, 6, 6))).toBe(2)
+    expect(weekOfMonth(new Date(2026, 6, 13))).toBe(3)
+    expect(weekOfMonth(new Date(2026, 6, 20))).toBe(4)
+    expect(weekOfMonth(new Date(2026, 6, 27))).toBe(5)
+  })
+
+  it('resets to I in a new month (week belonging to August)', () => {
+    expect(weekOfMonth(new Date(2026, 7, 3))).toBe(1) // Mon Aug 3 → Thu Aug 6 → I
+  })
+
+  it('romanNumeral renders I…VI', () => {
+    expect(romanNumeral(1)).toBe('I')
+    expect(romanNumeral(4)).toBe('IV')
+    expect(romanNumeral(5)).toBe('V')
+    expect(romanNumeral(6)).toBe('VI')
+  })
+})
+
 describe('index monotonicity across mixed spans and units', () => {
   it('day indexes are non-decreasing along the calendar', () => {
     const dates = ['2024-12-20', '2025-01-01', '2025-02-28', '2025-03-01', '2025-03-10', '2025-06-15']
@@ -236,5 +345,108 @@ describe('day-step sanity', () => {
   it('steps by calendar days, never by 23/25 h', () => {
     expect(addDaysISO('2025-03-08', 4)).toBe('2025-03-12')
     expect(addDaysISO('2025-03-08', 1)).toBe('2025-03-09')
+  })
+})
+/**
+ * dateAtCellCoord turns the fractional cell coordinate produced by
+ * cellCoordAtViewportX (composables/timelineHelpers) into a date. For a day cell
+ * the result must be that cell's own day for EVERY position inside it — the
+ * coordinate already carries the scroll phase, so the date may not shift by a day
+ * when the click lands near the cell's left edge.
+ */
+describe('dateAtCellCoord', () => {
+  const origin = '2026-07-01'
+
+  it('day unit: the whole cell maps to its own day, fractions included', () => {
+    expect(fmt(dateAtCellCoord(origin, 'day', 0))).toBe('2026-07-01')
+    expect(fmt(dateAtCellCoord(origin, 'day', 0.001))).toBe('2026-07-01')
+    expect(fmt(dateAtCellCoord(origin, 'day', 0.999))).toBe('2026-07-01')
+    expect(fmt(dateAtCellCoord(origin, 'day', 1))).toBe('2026-07-02')
+    expect(fmt(dateAtCellCoord(origin, 'day', 15.4))).toBe('2026-07-16')
+  })
+
+  it('day unit: negative coordinates (cells before the origin) floor towards -infinity', () => {
+    // Cell -1 spans coordinates [-1, 0), cell -2 spans [-2, -1): a coordinate of
+    // -1.5 lies inside cell -2, exactly as the positive side behaves.
+    expect(fmt(dateAtCellCoord(origin, 'day', -1))).toBe('2026-06-30')
+    expect(fmt(dateAtCellCoord(origin, 'day', -0.001))).toBe('2026-06-30')
+    expect(fmt(dateAtCellCoord(origin, 'day', -1.5))).toBe('2026-06-29')
+    expect(fmt(dateAtCellCoord(origin, 'day', -1.999))).toBe('2026-06-29')
+  })
+
+  it('decade unit: the fraction marks a day inside the decade, never the neighbour', () => {
+    const cellStart = cellStartDate(origin, 'decade', 1)
+    const cellEnd = cellEndDate(origin, 'decade', 1)
+    for (const frac of [0, 0.25, 0.5, 0.99]) {
+      const d = dateAtCellCoord('2026-07-01', 'decade', 1 + frac)
+      const cell = cellIndexForDate('2026-07-01', 'decade', d)
+      expect(cell, `coord ${1 + frac} landed in cell ${cell}`).toBe(1)
+      expect(d.getTime()).toBeGreaterThanOrEqual(cellStart.getTime())
+      expect(d.getTime()).toBeLessThanOrEqual(cellEnd.getTime())
+    }
+  })
+
+  it('decade unit: the very start of a cell is its first day', () => {
+    for (const i of [-2, 0, 1, 4]) {
+      expect(dateAtCellCoord('2026-07-01', 'decade', i).getTime())
+        .toBe(cellStartDate('2026-07-01', 'decade', i).getTime())
+    }
+  })
+})
+
+/**
+ * fitSpanDates decides where a right-click-created item lands. The start must be the
+ * clicked cell: fitting the default length into the parent may only truncate the
+ * length, never slide the start left. The old shiftSpanDates moved the whole span,
+ * so a task created near the end of its process started up to a full default length
+ * earlier — e.g. a click on the process's last day produced a 7-day task beginning a
+ * week before the click, and a click 6 days before the end began exactly one cell
+ * early (the reported "starts at t-1").
+ */
+describe('fitSpanDates', () => {
+  const proc = ['2026-07-15', '2026-08-22'] as const
+
+  it('keeps the clicked start when the default length fits', () => {
+    expect(fitSpanDates('2026-08-10', '2026-08-17', ...proc))
+      .toEqual({ start_date: '2026-08-10', end_date: '2026-08-17' })
+    expect(fitSpanDates('2026-08-15', '2026-08-22', ...proc))
+      .toEqual({ start_date: '2026-08-15', end_date: '2026-08-22' })
+  })
+
+  it('truncates the length at the parent end instead of moving the start', () => {
+    // 08-16 + 7 days sticks out of the process: the old code started at 08-15
+    expect(fitSpanDates('2026-08-16', '2026-08-23', ...proc))
+      .toEqual({ start_date: '2026-08-16', end_date: '2026-08-22' })
+    expect(fitSpanDates('2026-08-22', '2026-08-29', ...proc))
+      .toEqual({ start_date: '2026-08-22', end_date: '2026-08-22' })
+  })
+
+  it('clamps the start only when the click is outside the parent', () => {
+    expect(fitSpanDates('2026-07-10', '2026-07-17', ...proc))
+      .toEqual({ start_date: '2026-07-15', end_date: '2026-07-17' })
+    // past the parent end: one day on the last day, not a week earlier
+    expect(fitSpanDates('2026-08-25', '2026-09-01', ...proc))
+      .toEqual({ start_date: '2026-08-22', end_date: '2026-08-22' })
+  })
+
+  it('keeps the whole parent when the default length exceeds it', () => {
+    const short = ['2026-07-15', '2026-07-19'] as const
+    expect(fitSpanDates('2026-07-16', '2026-07-23', ...short))
+      .toEqual({ start_date: '2026-07-16', end_date: '2026-07-19' })
+    expect(fitSpanDates('2026-07-15', '2026-07-23', ...short))
+      .toEqual({ start_date: '2026-07-15', end_date: '2026-07-19' })
+  })
+
+  it('returns the span untouched without bounds', () => {
+    expect(fitSpanDates('2026-08-16', '2026-08-23'))
+      .toEqual({ start_date: '2026-08-16', end_date: '2026-08-23' })
+    expect(fitSpanDates('2026-08-16', '2026-08-23', null, null))
+      .toEqual({ start_date: '2026-08-16', end_date: '2026-08-23' })
+  })
+
+  it('accepts Date objects and mixed inputs', () => {
+    const d = new Date(2026, 7, 16) // 2026-08-16, local midnight
+    expect(fitSpanDates(d, '2026-08-23', new Date(2026, 6, 15), new Date(2026, 7, 22)))
+      .toEqual({ start_date: '2026-08-16', end_date: '2026-08-22' })
   })
 })

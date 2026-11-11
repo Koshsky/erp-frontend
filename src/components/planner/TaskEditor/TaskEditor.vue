@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, nextTick, onBeforeUnmount } from 'vue'
 import { ModalForm, ColorField, PendingMark, TooltipCell } from '../../common'
 import { t } from '@/i18n'
 import type {
@@ -7,11 +7,19 @@ import type {
   NewSubtaskPayload,
   UpdateSubtaskPayload,
   TaskEditorPatch,
+  TaskEditorSection,
 } from './types'
 import type { DependencyType } from '../dependencies'
 import { dependencyLabel, DEPENDENCY_TYPES } from '../dependencies'
 
 const props = withDefaults(defineProps<TaskEditorProps>(), {
+  workspace: false,
+  section: 'details',
+  context: '',
+  schedule: '',
+  resourceCount: 0,
+  commentCount: 0,
+  hasRelatedDrafts: false,
   task: null,
   canManage: false,
   canCreateSubtask: false,
@@ -24,7 +32,8 @@ const props = withDefaults(defineProps<TaskEditorProps>(), {
 })
 
 const emit = defineEmits<{
-  save: [patch: TaskEditorPatch]
+  save: [patch: TaskEditorPatch, acknowledge?: (saved: boolean) => void]
+  'update:section': [section: TaskEditorSection]
   addSubtask: [payload: NewSubtaskPayload]
   updateSubtask: [payload: UpdateSubtaskPayload]
   deleteSubtask: [id: number]
@@ -39,6 +48,10 @@ const title = ref('')
 const color = ref('')
 const status = ref('')
 const ownerId = ref<number | ''>('')
+const responsibleId = ref<number | ''>('')
+const newTitle = ref('')
+const newDepTaskId = ref<number | ''>('')
+const newDepType = ref<DependencyType>('fs')
 
 // Status catalog (fixed 3-set, mirrors the backend CHECK). Computed so the
 // labels re-render after a language switch.
@@ -48,35 +61,111 @@ const statusOptions = computed(() => [
   { value: 'done', label: t('planner.taskStatus.done') },
 ])
 
+const baseline = ref('')
+const saving = ref(false)
+const saveFailed = ref(false)
+const confirmClose = ref(false)
+const closeAfterSave = ref(false)
+const confirmationEl = ref<HTMLElement | null>(null)
+let returnFocus: HTMLElement | null = null
+function draftSnapshot() {
+  return JSON.stringify([title.value, color.value, status.value, ownerId.value, responsibleId.value])
+}
+const dirty = computed(() => draftSnapshot() !== baseline.value)
+const hasDrafts = computed(() => dirty.value || props.hasRelatedDrafts || !!newTitle.value.trim() || newDepTaskId.value !== '')
+const sections = computed(() => [
+  { id: 'details' as const, label: t('planner.workspace.details') },
+  { id: 'subtasks' as const, label: t('planner.workspace.subtasks'), count: props.subtasks.length },
+  { id: 'dependencies' as const, label: t('planner.taskEditor.dependenciesTitle'), count: props.dependencies.length },
+  { id: 'resources' as const, label: t('planner.workspace.resources'), count: props.resourceCount },
+  { id: 'discussion' as const, label: t('planner.workspace.discussion'), count: props.commentCount },
+])
+
 watch(
-  () => props.open,
-  (open) => {
+  [() => props.open, () => props.task?.id],
+  ([open]) => {
     if (!open || !props.task) return
     title.value = props.task.title ?? ''
     color.value = props.task.color ?? ''
     status.value = props.task.status ?? 'not_started'
     ownerId.value = props.task.owner_id ?? ''
+    responsibleId.value = props.task.responsible_id ?? ''
+    baseline.value = draftSnapshot()
+    confirmClose.value = false
+    saving.value = false
+    closeAfterSave.value = false
+    saveFailed.value = false
+    newTitle.value = ''
+    newDepTaskId.value = ''
+    newDepType.value = 'fs'
   },
+  { immediate: true },
 )
 
-const canSave = computed(() => props.canManage && !props.busy && title.value.trim() !== '')
+function requestClose() {
+  if (props.busy || saving.value) return
+  if (!props.workspace || !hasDrafts.value) {
+    emit('close')
+    return
+  }
+  if (confirmClose.value) {
+    continueEditing()
+    return
+  }
+  returnFocus = document.activeElement as HTMLElement | null
+  confirmClose.value = true
+  void nextTick(() => confirmationEl.value?.focus())
+}
+
+function continueEditing() {
+  confirmClose.value = false
+  void nextTick(() => returnFocus?.isConnected && returnFocus.focus({ preventScroll: true }))
+}
+
+function beforeUnload(event: BeforeUnloadEvent) {
+  if (!props.open || !props.workspace || !hasDrafts.value) return
+  event.preventDefault()
+  event.returnValue = ''
+}
+if (typeof window !== 'undefined') window.addEventListener('beforeunload', beforeUnload)
+onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
+
+const canSave = computed(() => props.canManage && !props.busy && !saving.value && title.value.trim() !== '')
 
 function onSave() {
   if (!canSave.value) return
   const owner =
     ownerId.value === '' ? null : Number(ownerId.value)
   // Owner cannot be removed: null means "not sent" (the backend keeps the old).
-  const patch: { title?: string; color?: string; status?: string; owner_id?: number } = {
+  const patch: { title?: string; color?: string; status?: string; owner_id?: number; responsible_id?: number } = {
     title: title.value.trim(),
     color: color.value || undefined,
     status: status.value,
   }
   if (owner != null) patch.owner_id = owner
-  emit('save', patch)
+  // 0 is the "clear responsible" sentinel (no responsible person).
+  patch.responsible_id = responsibleId.value === '' ? 0 : Number(responsibleId.value)
+  if (!props.workspace) {
+    emit('save', patch)
+    return
+  }
+  const snapshot = draftSnapshot()
+  const taskId = props.task?.id
+  saving.value = true
+  saveFailed.value = false
+  emit('save', patch, (saved) => {
+    if (props.task?.id !== taskId) return
+    saving.value = false
+    saveFailed.value = !saved
+    if (saved) {
+      baseline.value = snapshot
+      if (closeAfterSave.value) emit('close')
+    }
+    closeAfterSave.value = false
+  })
 }
 
 // === Right panel: subtasks (todo list) ===
-const newTitle = ref('')
 
 const canAdd = computed(
   () => props.canCreateSubtask && !props.busy && newTitle.value.trim() !== '',
@@ -102,6 +191,7 @@ function subtaskStatusLabel(s: { status?: string }): string {
 
 /** Cycle a subtask status: not_started → in_progress → done → not_started */
 function cycleStatus(s: { id: number; status?: string }) {
+  if (props.busy || !(props.canUpdateSubtask?.(s.id) ?? props.canManage)) return
   const next =
     s.status === 'not_started'
       ? 'in_progress'
@@ -112,12 +202,11 @@ function cycleStatus(s: { id: number; status?: string }) {
 }
 
 function onDeleteSubtask(id: number) {
+  if (props.busy || !(props.canDeleteSubtask?.(id) ?? props.canManage)) return
   emit('deleteSubtask', id)
 }
 
 // === Dependencies panel (predecessor links) ===
-const newDepTaskId = ref<number | ''>('')
-const newDepType = ref<DependencyType>('fs')
 
 /** Type options with the localized labels (Finish → Start, ...). Computed
  *  so the option labels re-render after a language switch. */
@@ -141,11 +230,12 @@ function onAddDependency() {
 }
 
 function onDepTypeChange(dep: { id: number; type: DependencyType }, type: DependencyType) {
-  if (dep.type === type) return
+  if (props.busy || !props.canManageDependencies || dep.type === type) return
   emit('updateDependency', { id: dep.id, type })
 }
 
 function onDeleteDependency(id: number) {
+  if (props.busy || !props.canManageDependencies) return
   emit('deleteDependency', id)
 }
 </script>
@@ -154,18 +244,40 @@ function onDeleteDependency(id: number) {
   <ModalForm
     :open="open"
     :title="task ? t('planner.taskEditor.titleNamed', { title: task.title }) : t('planner.taskEditor.title')"
-    :max-width="'960px'"
-    @close="emit('close')"
+    :max-width="workspace ? '1180px' : '960px'"
+    :dialog-class="workspace ? 'te-workspace' : undefined"
+    :close-disabled="workspace && (busy || saving)"
+    @close="requestClose"
   >
-    <div class="te-body">
-      <div class="te-left">
+    <div v-if="workspace" class="te-context">
+      <span v-if="context">{{ context }}</span>
+      <span v-if="schedule">{{ schedule }}</span>
+    </div>
+    <div v-if="confirmClose" ref="confirmationEl" class="te-confirm" tabindex="-1">
+      <h4>{{ t('planner.workspace.unsavedTitle') }}</h4>
+      <p>{{ t('planner.workspace.unsavedBody') }}</p>
+      <div class="te-confirm-actions">
+        <button type="button" class="te-cancel" @click="continueEditing">{{ t('planner.workspace.continueEditing') }}</button>
+        <button type="button" class="te-cancel te-discard" @click="emit('close')">{{ t('planner.workspace.discard') }}</button>
+        <button v-if="dirty && !hasRelatedDrafts && !newTitle.trim() && newDepTaskId === ''" type="button" class="te-save" :disabled="!canSave" @click="closeAfterSave = true; onSave()">{{ t('planner.workspace.saveAndClose') }}</button>
+      </div>
+    </div>
+    <div v-show="!confirmClose" class="te-body" :class="{ 'te-workspace-body': workspace }">
+      <nav v-if="workspace" class="te-nav" :aria-label="t('planner.workspace.sections')">
+        <button v-for="item in sections" :key="item.id" type="button" :class="{ 'is-active': section === item.id }" :aria-current="section === item.id ? 'page' : undefined" :aria-controls="`task-${task?.id}-${item.id}`" @click="emit('update:section', item.id)">
+          <span>{{ item.label }}</span><span v-if="item.count != null" class="te-count">{{ item.count }}</span>
+        </button>
+      </nav>
+      <div class="te-content">
+      <div v-show="!workspace || section === 'details'" :id="`task-${task?.id}-details`" class="te-left">
+        <h4 v-if="workspace" class="te-section-title">{{ t('planner.workspace.details') }}</h4>
         <label class="te-field">
           <span class="te-label">{{ t('planner.taskEditor.field.name') }}</span>
           <input
             v-model="title"
             class="te-input"
             type="text"
-            :disabled="!canManage || busy"
+            :disabled="!canManage || busy || saving"
             :placeholder="task?.title || t('planner.taskEditor.field.namePlaceholder')"
           />
         </label>
@@ -174,8 +286,9 @@ function onDeleteDependency(id: number) {
           <span class="te-label">{{ t('planner.taskEditor.field.status') }}</span>
           <select
             v-model="status"
+            :aria-label="t('planner.taskEditor.field.status')"
             class="te-input te-select"
-            :disabled="!canManage || busy"
+            :disabled="!canManage || busy || saving"
           >
             <option v-for="o in statusOptions" :key="o.value" :value="o.value">
               {{ o.label }}
@@ -187,8 +300,9 @@ function onDeleteDependency(id: number) {
           <span class="te-label">{{ t('planner.taskEditor.field.owner') }}</span>
           <select
             v-model="ownerId"
+            :aria-label="t('planner.taskEditor.field.owner')"
             class="te-input te-select"
-            :disabled="!canManage || busy"
+            :disabled="!canManage || busy || saving"
           >
             <option value="">{{ t('planner.taskEditor.field.ownerNone') }}</option>
             <option v-for="o in ownerOptions" :key="o.value" :value="o.value">
@@ -198,19 +312,34 @@ function onDeleteDependency(id: number) {
         </div>
 
         <div class="te-field">
+          <span class="te-label">{{ t('planner.taskEditor.field.responsible') }}</span>
+          <select
+            v-model="responsibleId"
+            :aria-label="t('planner.taskEditor.field.responsible')"
+            class="te-input te-select"
+            :disabled="!canManage || busy || saving"
+          >
+            <option value="">{{ t('planner.taskEditor.field.responsibleNone') }}</option>
+            <option v-for="o in ownerOptions" :key="o.value" :value="o.value">
+              {{ o.label }}
+            </option>
+          </select>
+        </div>
+
+        <div class="te-field">
           <span class="te-label">{{ t('planner.taskEditor.field.color') }}</span>
-          <ColorField v-model="color" :label="t('planner.taskEditor.field.colorLabel')" />
+          <ColorField v-model="color" :disabled="!canManage || busy || saving" :label="t('planner.taskEditor.field.colorLabel')" />
         </div>
 
         <p v-if="!canManage && !disabledReason" class="te-note">
           {{ t('planner.taskEditor.readonly') }}
         </p>
 
-        <div class="te-actions">
+        <div v-if="!workspace" class="te-actions">
           <button
             type="button"
             class="te-cancel"
-            @click="emit('close')"
+            @click="requestClose"
           >
             {{ t('common.cancel') }}
           </button>
@@ -227,7 +356,8 @@ function onDeleteDependency(id: number) {
       </div>
 
       <div class="te-right">
-        <h4 class="te-subtitle">{{ t('planner.taskEditor.subtasksTitle') }}</h4>
+        <section v-show="!workspace || section === 'subtasks'" :id="`task-${task?.id}-subtasks`" class="te-section">
+        <h4 class="te-subtitle">{{ t(workspace ? 'planner.workspace.subtasks' : 'planner.taskEditor.subtasksTitle') }}</h4>
         <p v-if="error" class="te-error">{{ error }}</p>
 
         <div v-if="subtasks.length" class="te-list">
@@ -238,7 +368,7 @@ function onDeleteDependency(id: number) {
                 class="te-status"
                 :class="`is-${s.status || 'not_started'}`"
                 :title="t('planner.taskEditor.subtaskStatusHint', { status: subtaskStatusLabel(s) })"
-                :disabled="!canManage || busy"
+                :disabled="!(canUpdateSubtask?.(s.id) ?? canManage) || busy"
                 @click="cycleStatus(s)"
               />
             </TooltipCell>
@@ -247,7 +377,7 @@ function onDeleteDependency(id: number) {
             <button
               type="button"
               class="te-remove"
-              :disabled="!canManage || busy"
+              :disabled="!(canDeleteSubtask?.(s.id) ?? canManage) || busy"
               :aria-label="t('planner.taskEditor.subtask.deleteAria', { title: s.title })"
               @click="onDeleteSubtask(s.id)"
             >✕</button>
@@ -275,6 +405,8 @@ function onDeleteDependency(id: number) {
         </div>
         <p v-if="disabledReason" class="te-note">{{ disabledReason }}</p>
 
+        </section>
+        <section v-show="!workspace || section === 'dependencies'" :id="`task-${task?.id}-dependencies`" class="te-section">
         <h4 class="te-subtitle">{{ t('planner.taskEditor.dependenciesTitle') }}</h4>
 
         <div v-if="dependencies.length" class="te-list">
@@ -334,6 +466,27 @@ function onDeleteDependency(id: number) {
           </button>
         </div>
         <p class="te-note">{{ t('planner.taskEditor.dependencyNote') }}</p>
+        </section>
+      </div>
+      <section v-if="workspace" v-show="section === 'resources'" :id="`task-${task?.id}-resources`" class="te-section te-slot">
+        <h4 class="te-section-title">{{ t('planner.workspace.resources') }}</h4>
+        <slot name="resources" />
+      </section>
+      <section v-if="workspace" v-show="section === 'discussion'" :id="`task-${task?.id}-discussion`" class="te-section te-slot te-discussion">
+        <h4 class="te-section-title">{{ t('planner.workspace.discussion') }}</h4>
+        <slot name="discussion" />
+      </section>
+      </div>
+    </div>
+    <div v-if="workspace" class="te-footer">
+      <p v-if="error || saveFailed" class="te-error" role="alert">{{ error || t('planner.workspace.saveFailed') }}</p>
+      <span v-else-if="dirty" class="te-note">{{ t('planner.workspace.unsaved') }}</span>
+      <span v-else class="te-note">{{ t('planner.workspace.independentActions') }}</span>
+      <div v-if="!confirmClose" class="te-actions">
+        <button type="button" class="te-cancel" :disabled="busy || saving" @click="requestClose">{{ t('common.close') }}</button>
+        <button v-if="canManage" type="button" class="te-save" :disabled="!canSave || !dirty" @click="onSave">
+          <span v-if="saving" class="te-spinner" />{{ t('planner.workspace.saveTask') }}
+        </button>
       </div>
     </div>
   </ModalForm>
@@ -347,6 +500,8 @@ function onDeleteDependency(id: number) {
   gap: 24px;
   padding: 16px;
 }
+.te-content { display: contents; }
+.te-section { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .te-left,
 .te-right {
   display: flex;
@@ -580,5 +735,50 @@ function onDeleteDependency(id: number) {
   .te-body {
     grid-template-columns: 1fr;
   }
+}
+</style>
+<style scoped>
+:global(.te-workspace .mf-title) { min-width: 0; overflow-wrap: anywhere; }
+:global(.te-workspace .mf-close) { flex-shrink: 0; }
+:global(.te-workspace) { display: flex; flex-direction: column; max-height: calc(100dvh - 32px); }
+.te-context { flex-shrink: 0; display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; padding: 10px 20px; color: var(--ui-text-muted); font-size: calc(var(--ui-font-scale, 1) * 12px); border-bottom: 1px solid var(--ui-border); }
+.te-context:empty { display: none; }
+.te-context span { min-width: 0; overflow-wrap: anywhere; }
+.te-workspace-body { grid-template-columns: 184px minmax(0, 1fr); gap: 0; padding: 0; height: min(620px, calc(100dvh - 230px)); min-height: 180px; overflow: hidden; }
+.te-nav { padding: 16px 10px; display: flex; flex-direction: column; gap: 5px; background: var(--ui-surface-2); border-right: 1px solid var(--ui-border); overflow-y: auto; }
+.te-nav button { display: flex; align-items: center; justify-content: space-between; gap: 8px; border: 0; border-radius: var(--ui-radius-sm); padding: 11px 12px; background: transparent; color: var(--ui-text-2); font: inherit; font-size: calc(var(--ui-font-scale, 1) * 13px); cursor: pointer; text-align: left; }
+.te-nav button:hover { background: var(--ui-border); }
+.te-nav button.is-active { background: var(--ui-surface); color: var(--ui-accent); box-shadow: var(--ui-shadow-sm); font-weight: 600; }
+.te-count { font-size: calc(var(--ui-font-scale, 1) * 11px); color: var(--ui-text-muted); font-variant-numeric: tabular-nums; }
+.te-workspace-body .te-content { display: block; min-width: 0; overflow-y: auto; padding: 24px; }
+.te-workspace-body .te-right { display: contents; }
+.te-workspace-body .te-left { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+.te-workspace-body .te-left > :first-child, .te-workspace-body .te-left > label, .te-workspace-body .te-note { grid-column: 1 / -1; }
+.te-section-title { margin: 0 0 4px; color: var(--ui-text); font-size: calc(var(--ui-font-scale, 1) * 16px); }
+.te-slot :deep(.rm-body), .te-slot :deep(.tc) { padding: 0; }
+.te-discussion { height: 100%; min-height: 0; }
+.te-discussion > :deep(div) { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.te-discussion :deep(.tc) { flex: 1; min-height: 0; }
+.te-discussion :deep(.tc-list) { flex: 1; min-height: 0; max-height: none; overflow-y: auto; }
+.te-discussion :deep(.tc-composer) { flex-shrink: 0; }
+.te-discussion :deep(.tc-composer textarea) { max-height: 180px; }
+.te-slot :deep(.rm-btn) { align-self: flex-start; }
+.te-footer { flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; border-top: 1px solid var(--ui-border); padding: 14px 20px; }
+.te-footer .te-actions { margin-left: auto; flex-wrap: wrap; justify-content: flex-end; max-width: 100%; }
+.te-confirm { padding: 32px 24px; color: var(--ui-text); outline: none; }
+.te-confirm h4 { margin: 0 0 12px; }
+.te-confirm p { color: var(--ui-text-2); line-height: 1.5; }
+.te-confirm-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 24px; }
+.te-discard { color: var(--ui-danger); }
+@media (max-width: 640px) {
+  .te-workspace-body { display: flex; flex-direction: column; height: calc(100dvh - 220px); }
+  .te-nav { flex-shrink: 0; flex-direction: row; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--ui-border); padding: 8px; }
+  .te-nav button { white-space: nowrap; padding: 9px; }
+  .te-workspace-body .te-content { padding: 16px; }
+  .te-workspace-body .te-left { grid-template-columns: 1fr; gap: 14px; }
+  .te-footer { padding: 12px; }
+  .te-footer > .te-note { display: none; }
+  .te-context { padding: 8px 16px; gap: 4px; }
+  .te-workspace-body .te-dep-add { flex-wrap: wrap; }
 }
 </style>

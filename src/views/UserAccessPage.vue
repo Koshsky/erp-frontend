@@ -20,6 +20,9 @@ const app = useAppStore()
 const auth = useAuthStore()
 const rbac = useRbacStore()
 const { adminUsers } = storeToRefs(app)
+const editor = ref<InstanceType<typeof UserPermissionsEditor> | null>(null)
+const permissionSaving = ref(false)
+const presetSaving = ref(false)
 
 const staticPresetOptions = () => builtinPresetOptions()
 const presetOptions = computed(() =>
@@ -31,7 +34,7 @@ const presetOptions = computed(() =>
 /** Permission editing is admin-only (as on the user editor page). */
 const permsReady = computed(() => rbac.permsLoaded || rbac.myPermissions.length > 0)
 const canManageUserRights = computed(() =>
-  permsReady.value ? rbac.can('rbac_config', 'view') : auth.user?.preset === 'admin',
+  permsReady.value ? rbac.can('rbac_config', 'update') : auth.user?.preset === 'admin',
 )
 
 const userId = computed(() => {
@@ -45,22 +48,28 @@ const loading = ref(true)
 const missing = ref(false)
 const user = ref<{ id: number; name: string; username: string; preset: string } | null>(null)
 
-onMounted(async () => {
+async function loadUser() {
+  const id = userId.value
+  loading.value = true
+  missing.value = false
+  user.value = null
+  permissionDirty.value = false
+  permissionSaved.value = false
   void rbac.ensurePresets()
   await app.loadAdminUsers()
+  if (id !== userId.value) return
+  const found = adminUsers.value.find((entry) => entry.id === id)
+  user.value = found ? {
+    id: found.id ?? 0,
+    name: found.name ?? found.username ?? `#${found.id}`,
+    username: found.username ?? '',
+    preset: found.preset ?? 'worker',
+  } : null
+  missing.value = !found
   loading.value = false
-  const found = adminUsers.value.find((x) => x.id === userId.value)
-  if (found) {
-    user.value = {
-      id: found.id ?? 0,
-      name: found.name ?? found.username ?? `#${found.id}`,
-      username: found.username ?? '',
-      preset: found.preset ?? 'worker',
-    }
-  } else {
-    missing.value = true
-  }
-})
+}
+onMounted(loadUser)
+watch(userId, loadUser)
 
 /* ── overrides (staged) + saving ─────────────── */
 const permissionOverrides = ref<PermissionOverride[]>([])
@@ -69,25 +78,38 @@ const permissionSaved = ref(false)
 
 async function savePermissions(): Promise<boolean> {
   const id = userId.value
-  if (id == null) return false
-  // A failed save is reported by the global toast (http.ts), not inline.
-  const ok = await rbac.saveUserPermissions(id, permissionOverrides.value)
-  if (!ok) return false
-  permissionDirty.value = false
-  permissionSaved.value = true
-  // Refresh the server snapshot so the yellow "changed" rows clear — a row is
-  // highlighted only while the frontend staged value differs from the backend.
-  void rbac.loadUserPermissions(id)
-  return true
+  if (id == null || permissionSaving.value || presetSaving.value) return false
+  permissionSaving.value = true
+  const overrides = permissionOverrides.value.map((rule) => ({ ...rule }))
+  try {
+    const ok = await rbac.saveUserPermissions(id, overrides)
+    if (!ok || id !== userId.value) return false
+    permissionSaved.value = true
+    await rbac.loadUserPermissions(id)
+    return true
+  } finally {
+    permissionSaving.value = false
+  }
 }
 
-/** A preset change on the permissions page is saved immediately (it is a
- *  profile property). Save errors go to the global toast (http.ts). */
-function onChangePreset(preset: string) {
+function cancelPermissions() {
+  editor.value?.cancelChanges()
+  permissionSaved.value = false
+}
+
+async function onChangePreset(preset: string) {
   const id = userId.value
-  if (id == null || user.value == null || user.value.preset === preset) return
+  if (id == null || !user.value || user.value.preset === preset || presetSaving.value || permissionSaving.value) return
+  const previous = user.value.preset
   user.value.preset = preset
-  void app.updateUser(id, { preset })
+  presetSaving.value = true
+  try {
+    const ok = await app.updateUser(id, { preset })
+    if (!ok && id === userId.value && user.value) user.value.preset = previous
+    if (ok && id === userId.value) permissionSaved.value = false
+  } finally {
+    presetSaving.value = false
+  }
 }
 
 watch(permissionDirty, (dirty) => {
@@ -115,7 +137,10 @@ watch(permissionDirty, (dirty) => {
 
     <div v-else class="ua-card">
       <UserPermissionsEditor
+        ref="editor"
+        :key="userId ?? 0"
         mode="user"
+        :busy="permissionSaving || presetSaving"
         :user-id="userId ?? 0"
         :preset="user?.preset ?? 'worker'"
         :preset-options="presetOptions"
@@ -124,16 +149,18 @@ watch(permissionDirty, (dirty) => {
         @update:dirty="permissionDirty = $event"
       />
 
-      <div class="ua-actions">
-        <p v-if="permissionSaved" class="ua-ok" role="status">{{ t('adminUsers.userAccess.saved') }}</p>
+      <p v-if="permissionSaved && !permissionDirty" class="ua-ok" role="status">{{ t('adminUsers.userAccess.saved') }}</p>
+      <div v-if="permissionDirty" class="ua-actions">
+        <span class="ua-change-note">{{ t('adminConfig.editor.unsaved') }}</span>
         <button
           type="button"
           class="ua-save"
-          :disabled="!permissionDirty || rbac.saving"
+          :disabled="permissionSaving || presetSaving"
           @click="savePermissions"
         >
-          {{ rbac.saving ? t('adminUsers.userForm.action.saving') : t('common.save') }}
+          {{ permissionSaving ? t('adminUsers.userForm.action.saving') : t('common.save') }}
         </button>
+        <button type="button" class="ua-cancel" :disabled="permissionSaving || presetSaving" @click="cancelPermissions">{{ t('adminConfig.presets.cancel') }}</button>
       </div>
     </div>
   </section>
@@ -145,7 +172,8 @@ watch(permissionDirty, (dirty) => {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  max-width: 1200px;
+  width: 100%;
+  box-sizing: border-box;
   margin: 0 auto;
   padding: 16px;
 }
@@ -197,6 +225,14 @@ watch(permissionDirty, (dirty) => {
   color: var(--ui-success, #22c55e);
 }
 .ua-actions {
+  position: sticky;
+  bottom: 12px;
+  z-index: var(--z-content-top);
+  padding: 12px 16px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-md);
+  background: var(--ui-surface);
+  box-shadow: var(--ui-shadow-sm);
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -212,6 +248,10 @@ watch(permissionDirty, (dirty) => {
   background: var(--ui-accent);
   color: var(--ui-accent-on);
 }
+.ua-change-note { margin-right: auto; color: var(--ui-text-muted); font-size: calc(var(--ui-font-scale, 1) * 13px); }
+.ua-cancel { border: 1px solid var(--ui-border-strong); background: var(--ui-surface); color: var(--ui-text-2); border-radius: var(--ui-radius-sm); padding: 8px 16px; font: inherit; font-size: calc(var(--ui-font-scale, 1) * 13px); cursor: pointer; }
+.ua-cancel:disabled { opacity: .55; cursor: not-allowed; }
+@media (max-width: 520px) { .ua-actions { flex-wrap: wrap; } .ua-change-note { flex-basis: 100%; } }
 .ua-save:disabled {
   opacity: 0.55;
   cursor: not-allowed;

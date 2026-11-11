@@ -5,7 +5,7 @@
  * memory — never in localStorage — and the module exposes a trivial get/set
  * store. The proactive-refresh margin math (REFRESH_MARGIN_MS /
  * accessTokenExpiring) and the exp payload decoding live in store/index.ts
- * and are exercised there as the auth store's accessExpired computed
+ * and are exercised there as the auth store's accessExpired check
  * (see src/store/index.test.ts).
  */
 import { beforeEach, describe, expect, it } from 'vitest'

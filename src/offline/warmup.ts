@@ -1,4 +1,6 @@
 import { ref } from 'vue'
+import { hasActiveMutations } from './mutationGuard'
+import { pendingCount, pendingRefs } from './outbox'
 import { AssignmentsApi } from '@/api'
 import { apiConfig, useAppStore, useAuthStore, usePlanningStore, useRbacStore, useTimesheetStore } from '@/store'
 import { isOffline } from './state'
@@ -12,7 +14,7 @@ import { warmupEnabled } from '@/settings'
  * Rendering is local-first (hydrateFromCache) — pages NEVER fetch. The ONLY
  * network GETs belong here (plus auth/health/probe):
  *  - full warmup: after login / re-login, on network return, manual "Обновить";
- *  - the 10-second maintenance cycle (offline/cycle.ts) refreshes only domains
+ *  - the minute maintenance cycle (offline/connection.ts) refreshes only domains
  *    whose cached copy is older than its TTL — no constant unnecessary GETs.
  *
  * Requests run sequentially at WARMUP_RATE_PER_SECOND (10/sec); a repeated
@@ -58,7 +60,7 @@ export interface PullStep {
   refresh: () => Promise<unknown>
   /** Staleness limit; the step is skipped while the cache copy is younger */
   ttl?: number
-  /** If true — never pulled by the 10-second cycle (heavy/logical), full warmup only */
+  /** If true — never pulled by the minute cycle (heavy/logical), full warmup only */
   cycle?: boolean
 }
 
@@ -99,7 +101,8 @@ export function buildPullSteps(): PullStep[] {
     permsReady ? rbac.can(resource, 'view') : roles.includes(preset)
 
   // Which data domains the user actually reads, per the matrix:
-  const timesheet = canView('worker', ['vp', 'admin']) // states / employees / periods
+  const timesheet = canView('worker', ['vp', 'admin']) // employees / periods
+  const dayTypes = canView('state', ['vp', 'admin'])
   const resourceList = canView('resource', ['vp', 'admin']) || canView('task', ['dp', 'rp', 'admin', 'vp'])
   const planningData =
     canView('task', ['dp', 'rp', 'admin', 'vp']) ||
@@ -130,8 +133,17 @@ export function buildPullSteps(): PullStep[] {
     // same keys. Re-check both after regenerating src/api.
     steps.push({ name: 'projects', path: apiPath('/project'), refresh: () => app.refreshProjects() })
   }
+  if (resourceList || planningData) {
+    steps.push({ name: 'users', path: apiPath('/user/all'), refresh: () => app.refreshUsers() })
+  }
   if (resourceList) {
-    steps.push({ name: 'resources', path: apiPath('/resources'), refresh: () => app.refreshResources() })
+    steps.push({
+      name: 'resources',
+      path: apiPath('/resources'),
+      // Silent: a background pull must not flip the Resources page's loading
+      // flag (the "Загрузка…" line would flash over a full table every cycle).
+      refresh: () => app.refreshResources(true),
+    })
     // Resource members (/resources/{id}/members): consumed by the "Employees"
     // resource badges and the "Resources" expandable rows. They are read
     // local-first (cache hydrate); without a PULL step the cache stays empty
@@ -142,14 +154,13 @@ export function buildPullSteps(): PullStep[] {
       path: apiPath('/resources'),
       keyPredicate: (key) => /\/resources\/\d+\/members/.test(key),
       refresh: async () => {
-        if (!app.resources.length) await app.refreshResources()
+        if (!app.resources.length) await app.refreshResources(true)
         for (const r of app.resources) {
           if (r.id != null) await app.refreshResourceMembers(r.id)
         }
       },
       cycle: false,
     })
-    steps.push({ name: 'users', path: apiPath('/user/all'), refresh: () => app.refreshUsers() })
     // Assignments reference (fallback in removeResource)
     steps.push({
       name: 'assignments',
@@ -183,12 +194,14 @@ export function buildPullSteps(): PullStep[] {
       refresh: () => planning.refreshTaskPlanning(true),
     })
   }
-  if (timesheet) {
+  if (dayTypes) {
     steps.push({
       name: 'states',
       path: apiPath('/timesheet/states'),
       refresh: () => ts.refreshStates(),
     })
+  }
+  if (timesheet) {
     steps.push({
       name: 'employees',
       path: apiPath('/user'),
@@ -246,13 +259,14 @@ async function runPull(settings: { cycle: boolean; refreshAll?: boolean }): Prom
   let refreshed = 0
   warmupProgress.value = total > 0 ? 0 : null
   for (const step of targets) {
-    if (isOffline.value || !useAuthStore().isAuthenticated) break
+    if (isOffline.value || !useAuthStore().isAuthenticated || hasActiveMutations() || pendingCount.value > 0 || pendingRefs.value.size > 0) break
     // Fresh cached copies are left alone in every mode, unless an explicit
     // full refresh was requested.
     if (!settings.refreshAll && (await isStepFresh(step))) {
       done++
       continue
     }
+    if (isOffline.value || hasActiveMutations() || pendingCount.value > 0 || pendingRefs.value.size > 0) break
     try {
       await step.refresh()
       refreshed++
@@ -296,7 +310,7 @@ export function warmNow(force = false): Promise<boolean> {
 }
 
 /**
- * The 10-second cycle PULL: refreshes only stale domains (younger copies are
+ * The minute cycle PULL: refreshes only stale domains (younger copies are
  * left alone — no constant unnecessary GETs). Returns the number of domains
  * refreshed (0 — everything was already fresh).
  */

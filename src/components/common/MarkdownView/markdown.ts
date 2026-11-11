@@ -13,7 +13,7 @@
  */
 import { marked, type Parser, type Renderer, type RendererObject, type Tokens } from 'marked'
 
-/** URL schemes allowed in rendered links (scheme-less URLs are always fine). */
+/** Relative links are resolved against an inert HTTPS base before validation. */
 const SAFE_PROTOCOLS = ['http:', 'https:', 'mailto:']
 
 /** HTML-escapes a string for safe text/attribute output. */
@@ -28,12 +28,15 @@ export function escapeHtml(value: string): string {
 
 /** True when a URL may be used as a link target in rendered Markdown. */
 export function isSafeUrl(url: string): boolean {
+  // Browsers strip embedded tabs and newlines before interpreting a scheme.
+  if (/[\u0000-\u001f\u007f]/.test(url)) return false
   const trimmed = url.trim()
-  if (trimmed === '') return false
-  // Scheme-less (relative path / anchor) — safe by construction.
-  if (!/^[a-z][a-z0-9+.-]*:/i.test(trimmed)) return true
-  const lower = trimmed.toLowerCase()
-  return SAFE_PROTOCOLS.some((p) => lower.startsWith(p))
+  if (!trimmed) return false
+  try {
+    return SAFE_PROTOCOLS.includes(new URL(trimmed, 'https://markdown.invalid/').protocol)
+  } catch {
+    return false
+  }
 }
 
 /** Renders link/image inline tokens to HTML via the active parser. */

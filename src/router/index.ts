@@ -1,3 +1,4 @@
+import { PAGE_PERMISSIONS, pageAllowed } from '@/utils/pageAccess'
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore, useRbacStore } from '../store'
 import { isOffline } from '../offline/state'
@@ -46,8 +47,8 @@ const router = createRouter({
             const auth = useAuthStore()
             const permsReady = rbac.permsLoaded || rbac.myPermissions.length > 0
             const role = auth.user?.preset ?? ''
-            const tab = FIRST_ACCESSIBLE_TABS.find(([, perm, roles]) =>
-              permsReady ? !perm || rbac.can(perm[0], perm[1]) : roles.includes(role),
+            const tab = FIRST_ACCESSIBLE_TABS.find(([name, perm, roles]) =>
+              permsReady ? !perm || pageAllowed(name, rbac.can) : roles.includes(role),
             )
             return tab ? { name: tab[0] } : { name: 'profile' }
           },
@@ -84,8 +85,7 @@ const router = createRouter({
         },
         {
           path: 'statuses',
-          name: 'statuses',
-          component: () => import('../views/StatusesPage.vue'),
+          redirect: '/timesheet',
         },
         {
           path: 'users',
@@ -138,7 +138,7 @@ const router = createRouter({
         {
           path: 'profile/edit',
           name: 'profile-edit',
-          component: () => import('../views/ProfileEditPage.vue'),
+          redirect: { name: 'profile', query: { section: 'security' } },
         },
         {
           path: 'system/console',
@@ -195,10 +195,9 @@ const FIRST_ACCESSIBLE_TABS: Array<[string, [string, string] | null, string[]]> 
   ['employees', ['worker', 'view'], ['vp', 'admin']],
   ['resources', ['resource', 'view'], ['vp', 'admin']],
   ['users', ['user_admin', 'view'], ['admin']],
-  ['statuses', ['state_admin', 'view'], ['admin']],
   ['structure', ['org_structure', 'view'], ['admin']],
-  ['auto-create', ['rbac_config', 'view'], ['admin']],
-  ['permissions', ['rbac_config', 'view'], ['admin']],
+  ['auto-create', ['auto_create', 'update'], ['admin']],
+  ['permissions', ['rbac_config', 'update'], ['admin']],
 ]
 
 async function pageAccessible(
@@ -236,7 +235,7 @@ router.beforeEach(async (to) => {
 
   if (
     to.meta.requiresAuth &&
-    (!auth.isAuthenticated || auth.accessExpired) &&
+    (!auth.isAuthenticated || auth.accessExpired() || isLoggedOut()) &&
     !isOffline.value
   ) {
     if (isElectron && shouldAutoSync() && !isLoggedOut()) {
@@ -258,7 +257,12 @@ router.beforeEach(async (to) => {
               ),
             ])
           : auth.refreshSession()
-      await refresh
+      // Cached identity lets the local permission gate run even before renewal finishes.
+      if (auth.isAuthenticated) {
+        void refresh
+      } else {
+        await refresh
+      }
     }
   }
 
@@ -268,7 +272,7 @@ router.beforeEach(async (to) => {
   }
 
   // Already-authenticated users are not allowed on the login page
-  if (to.name === 'login' && auth.isAuthenticated) {
+  if (to.name === 'login' && auth.isAuthenticated && !isLoggedOut()) {
     return { name: 'home' }
   }
 
@@ -280,29 +284,13 @@ router.beforeEach(async (to) => {
   // Show actions/pages by matrix permissions, not by roles.
   // Business pages — by the view permission; admin sections — a temporary fallback
   // to the role (TODO: virtual resource sections).
-  const pagePerm: Record<string, [string, string]> = {
-    timesheet: ['worker', 'view'],
-    employees: ['worker', 'view'],
-    projects: ['project', 'view'],
-    processes: ['process', 'view'],
-    planner: ['task', 'view'],
-    resources: ['resource', 'view'],
-    statuses: ['state_admin', 'view'],
-    users: ['user_admin', 'view'],
-    'user-new': ['user_admin', 'view'],
-    'user-edit': ['user_admin', 'view'],
-    'user-access': ['user_admin', 'view'],
-    structure: ['org_structure', 'view'],
-    'auto-create': ['rbac_config', 'view'],
-    permissions: ['rbac_config', 'view'],
-    audit: ['audit', 'view'],
-  }
-  const needed = pagePerm[to.name as string]
+  const needed = PAGE_PERMISSIONS[to.name as string]
   if (needed && to.meta.requiresAuth) {
     // Decide access by matrix permissions after WAITING for them: on a cold
     // start (F5 / Ctrl+Shift+R) rbac.can() evaluated before the permissions
     // arrive sees an empty list and wrongly redirects the page to the profile.
-    const allowed = await pageAccessible(rbac, auth.user?.preset, needed[0], needed[1])
+    const viewAllowed = await pageAccessible(rbac, auth.user?.preset, needed[0], needed[1])
+    const allowed = rbac.permsLoaded ? pageAllowed(String(to.name), rbac.can) : viewAllowed
     if (!allowed) {
       return { name: 'profile' }
     }
@@ -318,7 +306,7 @@ router.beforeEach(async (to) => {
     to.name !== 'system-queue' &&
     to.name !== 'system-status' &&
     to.name !== 'system-settings' &&
-    !pagePerm[to.name as string]
+    !PAGE_PERMISSIONS[to.name as string]
   ) {
     const permsReady = rbac.permsLoaded || rbac.myPermissions.length > 0
     const hasAnyViewPerm =

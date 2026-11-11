@@ -18,6 +18,7 @@ import { shortName } from '@/utils'
 const props = withDefaults(defineProps<{
   processes?: DtoDetailedProcess[] | null
   resources?: DtoResourceResponse[] | null
+  resourceBadgeIds?: ReadonlySet<number>
   /** Resource availability (periods from /timesheet/calendar), "today ± 1 year" window */
   calendar?: DtoResourceCalendar[] | null
   /** Resource-member absences (for the UsageCell tooltip) by resource id */
@@ -29,9 +30,10 @@ const props = withDefaults(defineProps<{
   /** Cell unit: day or decade */
   unit?: PlanningUnit
   /** Allows modifying tasks and milestones: moving dates, editing, deleting */
-  canManage?: boolean
+  canManage?: boolean | ((taskId: number, processId: number) => boolean)
+  canManageMilestones?: boolean | ((processId: number) => boolean)
   /** Enables vertical row drag to reorder tasks within each process */
-  reorderable?: boolean
+  reorderable?: boolean | ((processId: number) => boolean)
   /** Users to display the owner (owner_id → name) in tooltips */
   users?: DtoUserInfo[] | null
   /** On open, scroll the timeline to this date (navigation from another tab) */
@@ -50,12 +52,17 @@ const props = withDefaults(defineProps<{
   origin: '',
   unit: 'day',
   canManage: true,
+  canManageMilestones: undefined,
   reorderable: false,
   users: null,
   focusDate: null,
   focusGroupId: null,
   commentsByTask: null,
 })
+
+function taskManager(processId: number): (id: number) => boolean {
+  return (id) => typeof props.canManage === 'function' ? props.canManage(id, processId) : props.canManage
+}
 
 const emit = defineEmits<{
   change: [payload: { id: number; start_date: string; end_date: string }]
@@ -94,6 +101,7 @@ const displayProcesses = computed<Process[]>(() =>
       .sort((a, b) => (a.order ?? a.id ?? 0) - (b.order ?? b.id ?? 0))
       .map((t) => {
         const owner = t.owner_id != null ? userById.value.get(t.owner_id) : undefined
+        const responsible = t.responsible_id != null ? userById.value.get(t.responsible_id) : undefined
         return {
           id: t.id ?? 0,
           title: t.title ?? '',
@@ -103,6 +111,9 @@ const displayProcesses = computed<Process[]>(() =>
           owner_id: t.owner_id ?? null,
           owner_name: owner?.name,
           owner_short: owner ? shortName(owner) : undefined,
+          responsible_id: t.responsible_id ?? null,
+          responsible_name: responsible?.name,
+          responsible_short: responsible ? shortName(responsible) : undefined,
           comments_count: t.comments_count ?? 0,
           status: t.status ?? 'not_started',
           subtasks: (t.subtasks || []).map((s: DtoDetailedTask) => ({
@@ -238,12 +249,14 @@ function onGridCtx(p: { clientX: number; clientY: number; date: string | null; r
           :projectCode="proc.project_code"
           :processId="proc.id"
           :tasks="proc.tasks || []"
+          :resource-badge-ids="resourceBadgeIds"
           :milestones="proc.milestones || []"
           :dependencies="proc.dependencies || []"
           :groupStartDate="proc.start_date"
           :groupEndDate="proc.end_date"
-          :can-manage="canManage"
-          :reorderable="reorderable"
+          :can-manage="typeof canManage === 'function' ? taskManager(proc.id) : canManage"
+          :can-manage-milestones="typeof canManageMilestones === 'function' ? canManageMilestones(proc.id) : canManageMilestones"
+          :reorderable="typeof reorderable === 'function' ? reorderable(proc.id) : reorderable"
           :users="users"
           :comments-by-task="commentsByTask"
           @change="(p) => emit('change', p)"

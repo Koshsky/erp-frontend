@@ -1,33 +1,40 @@
-# Rights presets
+# Roles and permissions
 
-A preset is a set of base rights. On the left, select a preset; on the right — its rights per row (resource + action).
+Select a role and configure its capabilities. Saved rights apply to its employees unless individually overridden.
 
-- The buttons in a row — which records the right applies to; you can select several at once.
-- "⛔ no access" — the row has no rule.
-- Changes accumulate at the bottom: "Save" applies them immediately, "Cancel" discards them, "Reset everything to defaults" returns the factory matrix.
-- Other users will see the changes within the TTL (up to 30 seconds).
+## Planning
 
-What the buttons mean:
+View opens records. Manage groups creation, editing and deletion, while the server checks each action separately. Mixed permissions preserve previously different action settings until an explicit common choice is made.
 
-```
-Project → Process → Task → subtasks
-```
+Viewing a project opens all its processes, tasks, subtasks, milestones and assignments. Viewing a process opens its contents; viewing a task opens its subtasks and assignments. A child denial cannot cancel parent visibility. Disabled controls explain this on hover. Through parent only removes an independent grant while retaining inherited visibility. Management never inherits this way.
 
-Everything inside a record is its descendants, everything outside (the project for a task, etc.) — its ancestors. Every record has an owner. A rule grants access if you are the owner of the record itself, of an ancestor of it, or of a record inside it.
+In employee projects checks the project owner; In employee processes checks the process owner. Nested records may have different owners. With employee processes opens a project containing that employee's process and thus the entire project for viewing; owning only a task is insufficient. Selected conditions are combined with OR. Previously stored advanced conditions remain effective until replaced.
 
-Buttons:
+Project priority is separate from other edits. An assigned resource and its process must always share an owner, even for administrators.
 
-1. "Own" (self) — you are the owner of the record. Example: "tasks = Own" — only your tasks.
-2. "Parents" (up1) — you are the owner of its immediate parent. Example: "tasks = Parents" — tasks of your processes.
-3. "Ancestors" (up) — you are the owner of any ancestor. Example: "tasks = Ancestors" — tasks of your processes and projects.
-4. "Siblings" (sib) — neighboring records under the same parent. Example: "processes = Siblings" — all processes of your project.
-5. "Subtree" (down) — there is one of your records inside the record. Example: "projects = Subtree" — projects that contain your tasks.
-6. "All" (all) — the whole catalog. "⛔" — deny.
+## Employees, timesheets and resources
 
-"Tasks = Ancestors" and "projects = Subtree" are different rules: the former gives the tasks of your projects, the latter the projects with your tasks.
+- **Employees and timesheet** controls employee visibility and attendance or absence periods. Own means direct subordinates, not the employee's own account.
+- **Timesheet day types** provides working-day, vacation, sickness and other day labels, unrelated to task statuses. Dictionary access does not allow changing employee calendars.
+- **Planning resources** groups employees assigned to tasks and used for capacity calculations. Own means resources owned by the employee. Resource management and task assignment are separate rights.
+- **Employee selection in forms** provides candidates for owners, responsible people and similar fields. It does not open accounts, timesheets or the company chart.
 
-Combine the buttons: "Own" + "Siblings" = your own and neighboring ones. "All" and "⛔" — separately (they reset the rest). Milestones and assignments have no "Own"/"Siblings"/"Subtree"; a project has no "Parents"/"Ancestors"/"Siblings".
+## Administration
 
-Presets on the left: "+ Add" — create; ✕ on the button — delete (confirmation by typing the tag); right-click the button — "Rename". A preset has three fields: name (shown in the list), tag — the access code (in the blue badge) and description; all three are set at creation and edited on rename. Deleting removes the preset's rules and the base rights of the users assigned to it (the "admin" preset is protected).
+One card contains independent capabilities:
 
-Comments on tasks: the rights are the same as on the task — those who can see the task see them.
+- **View user accounts** opens the directory, profile details and roles. No password or profile changes, and no timesheet access.
+- **Manage user accounts** allows creation, editing, password resets and deletion. The UI also requires account viewing. Only administrators may assign roles.
+- **Roles and permissions** allows full role and individual permission configuration, including your own. It is an administrative capability, not a read-only mode. It also opens profiles needed for permission editing. It does not allow password resets or template changes by itself.
+- **New-project template** allows viewing and configuring processes and tasks automatically created with a project, independently of role management. Legacy read-only access remains read-only until configuration is explicitly granted.
+- **Edit timesheet day types** allows creating, editing and deleting day labels. The dictionary opens with Day types inside the timesheet; there is no separate page. Viewing day types is also required. Dictionary-only administrators do not see employees or their calendars. It does not allow changing employee calendars.
+- **View company structure** opens the reporting hierarchy without logins, passwords or timesheet entries. It does not allow manager changes; those require account editing.
+- **View activity log** opens user activity history; request and response bodies may contain operational data. It grants no other administrative access.
+
+Choose Available or No access for each common setting. Mixed permissions show the individual saved actions. Choosing a common setting replaces only its own actions and preserves unrelated permissions.
+
+## Saving
+
+Save applies role changes. Cancel discards unsaved changes. The page reset restores built-in defaults after confirmation.
+
+Administrators always retain full access. Permissions are enforced on the server; hidden pages and controls are additional UI checks.

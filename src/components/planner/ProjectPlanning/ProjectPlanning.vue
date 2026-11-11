@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { shortName } from '@/utils'
 import { t } from '@/i18n'
 import CalendarHeader from '../CalendarHeader/CalendarHeader.vue'
 import TimelineGrid from '../TimelineGrid/TimelineGrid.vue'
@@ -54,7 +55,8 @@ const emit = defineEmits<{
   'visible-range': [payload: { from: string; to: string; cellWidthPx: number; scale: number }]
 }>()
 
-const userNames = computed(() => new Map((props.users || []).map((u) => [u.id, u.name])))
+const userNames = computed(() => new Map((props.users || []).map((u) => [u.id, u.name?.trim() || [u.last_name, u.first_name, u.middle_name].filter(Boolean).join(' ').trim()])))
+const userShortNames = computed(() => new Map((props.users || []).map((u) => [u.id, shortName(u)])))
 
 const displayProjects = computed(() =>
   (props.projects || []).map((dto) => ({
@@ -65,6 +67,9 @@ const displayProjects = computed(() =>
     end_date: dto.end_date ?? '',
     priority: dto.priority,
     owner_name: dto.owner_id != null ? userNames.value.get(dto.owner_id) : undefined,
+    owner_short: dto.owner_id != null ? userShortNames.value.get(dto.owner_id) : undefined,
+    responsible_name: dto.responsible_id != null ? userNames.value.get(dto.responsible_id) : undefined,
+    responsible_short: dto.responsible_id != null ? userShortNames.value.get(dto.responsible_id) : undefined,
   })),
 )
 

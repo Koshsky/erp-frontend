@@ -4,6 +4,7 @@
 export default {
   /** TimesheetPage.vue */
   page: {
+    dayTypes: 'Виды дней',
     title: 'Табель',
     /** Visibility note: the viewer sees every employee (worker.view scope all) */
     allEmployees: 'Все сотрудники',

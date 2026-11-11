@@ -8,6 +8,9 @@ export interface ProjectBarProps {
   projectCode: string
   priority?: number
   ownerName?: string
+  ownerShort?: string
+  responsibleName?: string
+  responsibleShort?: string
   color?: string
   opacity?: number
   /** Enables dragging and duration-resize handles */

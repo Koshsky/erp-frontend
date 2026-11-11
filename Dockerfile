@@ -23,6 +23,7 @@ RUN npm run build
 # Stage 2: serve via nginx
 FROM nginx:1.28-alpine
 COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY security-headers.conf /etc/nginx/snippets/erp-security-headers.conf
 COPY --from=builder /app/dist /usr/share/nginx/html
 EXPOSE 80
 

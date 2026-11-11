@@ -20,11 +20,12 @@
  *  - id-less rows are dropped (they cannot be deduplicated).
  *
  * The auth-store section checks the real token.expiry decoding contract that
- * drives the proactive-refresh margin (accessExpired computed).
+ * drives the proactive-refresh margin (accessExpired check).
  */
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
-import { useAppStore, useTimesheetStore, useAuthStore } from './index'
+import { useAppStore, useTimesheetStore, useAuthStore, useRbacStore } from './index'
+import { buildPullSteps } from '../offline/warmup'
 import { reloadDomainsFor } from '../offline/sync'
 import { getAccessToken, setAccessToken } from '@/token'
 import type { DtoUserInfo } from '@/api'
@@ -33,6 +34,9 @@ import type { DtoUserInfo } from '@/api'
 const api = vi.hoisted(() => ({
   resourcesGet: vi.fn(),
   userGet: vi.fn(),
+  userAccountsGet: vi.fn(),
+  rbacUsersIdPermissionsGet: vi.fn(),
+  rbacUsersIdPermissionsPut: vi.fn(),
 }))
 
 vi.mock('@/api', () => {
@@ -42,6 +46,7 @@ vi.mock('@/api', () => {
     }
   }
   class UsersApi {
+    userAccountsGet(...args: unknown[]) { return api.userAccountsGet(...args) }
     userGet(...args: unknown[]) {
       return api.userGet(...args)
     }
@@ -64,7 +69,10 @@ vi.mock('@/api', () => {
     UsersApi,
     AssignmentsApi: class {},
     AutoCreateApi: class {},
-    RBACApi: class {},
+    RBACApi: class {
+      rbacUsersIdPermissionsGet(...args: unknown[]) { return api.rbacUsersIdPermissionsGet(...args) }
+      rbacUsersIdPermissionsPut(...args: unknown[]) { return api.rbacUsersIdPermissionsPut(...args) }
+    },
     PermissionsApi: class {},
     AuditApi: class {},
     Configuration,
@@ -206,6 +214,64 @@ describe('mergeResourceLists / sameResources (via refreshResources)', () => {
   })
 })
 
+/**
+ * The loading/error flags drive the "Загрузка…" line and the error line of the
+ * Resources page. A background pull (the 60-second PULL cycle, the members
+ * step) must not touch them — otherwise the page repaints its status line over
+ * an already rendered table on every cycle.
+ */
+describe('refreshResources: silent background mode', () => {
+  it('a silent refresh leaves the loading and error flags untouched', async () => {
+    pageResources([{ id: 1, code: 'R1', title: 'Один' }], 1)
+    appStore.resourcesError = 'прошлая ошибка'
+
+    await appStore.refreshResources(true)
+
+    expect(appStore.resourcesLoading).toBe(false)
+    expect(appStore.resourcesError).toBe('прошлая ошибка')
+  })
+
+  it('a silent refresh still applies the data', async () => {
+    appStore.resources = [{ id: 1, code: 'R1', title: 'Один' }]
+    pageResources([{ id: 1, code: 'R1', title: 'Один (свежий)' }], 1)
+
+    await appStore.refreshResources(true)
+
+    expect(appStore.resources[0]?.title).toBe('Один (свежий)')
+  })
+
+  it('a silent failure records nothing (no error line over a good table)', async () => {
+    api.resourcesGet.mockRejectedValue(new Error('boom'))
+
+    await appStore.refreshResources(true)
+
+    expect(appStore.resourcesError).toBeNull()
+    expect(appStore.resourcesLoading).toBe(false)
+  })
+
+  it('a loud refresh raises the flags and clears the previous error', async () => {
+    pageResources([], 0)
+    appStore.resourcesError = 'прошлая ошибка'
+
+    const pending = appStore.refreshResources()
+    expect(appStore.resourcesLoading).toBe(true)
+
+    await pending
+
+    expect(appStore.resourcesLoading).toBe(false)
+    expect(appStore.resourcesError).toBeNull()
+  })
+
+  it('a loud failure lands in the error flag', async () => {
+    api.resourcesGet.mockRejectedValue(new Error('boom'))
+
+    await appStore.refreshResources()
+
+    expect(appStore.resourcesError).toBe('boom')
+    expect(appStore.resourcesLoading).toBe(false)
+  })
+})
+
 describe('mergeEmployeeLists / sameEmployees (via refreshEmployees)', () => {
   it('dedups the roster by id, fresh wins, extras preserved, order stable', async () => {
     tsStore.employees = [
@@ -283,22 +349,49 @@ describe('auth access-expiry decoding (a token-margin contract)', () => {
   beforeEach(() => setAccessToken(null))
 
   it('reports the token expired when missing', () => {
-    expect(useAuthStore().accessExpired).toBe(true)
+    expect(useAuthStore().accessExpired()).toBe(true)
   })
 
   it('reports the token expired when exp has passed', () => {
     setAccessToken(jwt(Math.floor(Date.now() / 1000) - 60))
-    expect(useAuthStore().accessExpired).toBe(true)
+    expect(useAuthStore().accessExpired()).toBe(true)
   })
 
   it('reports a valid (far-future exp) token as not expired', () => {
     setAccessToken(jwt(Math.floor(Date.now() / 1000) + 3600))
-    expect(useAuthStore().accessExpired).toBe(false)
+    expect(useAuthStore().accessExpired()).toBe(false)
   })
 
   it('treats an unparseable token as expired', () => {
     setAccessToken('not-a-jwt')
-    expect(useAuthStore().accessExpired).toBe(true)
+    expect(useAuthStore().accessExpired()).toBe(true)
+  })
+
+  it('stops reporting expiry after a saved session restores a valid token', () => {
+    const auth = useAuthStore()
+    expect(auth.accessExpired()).toBe(true)
+    setAccessToken(jwt(Math.floor(Date.now() / 1000) + 3600))
+    expect(auth.accessExpired()).toBe(false)
+  })
+
+  it('detects expiry as time passes without replacing the token', () => {
+    const now = Date.now()
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(now)
+    try {
+      setAccessToken(jwt(Math.floor(now / 1000) + 60))
+      const auth = useAuthStore()
+      expect(auth.accessExpired()).toBe(false)
+      clock.mockReturnValue(now + 61_000)
+      expect(auth.accessExpired()).toBe(true)
+    } finally { clock.mockRestore() }
+  })
+
+  it('detects a removed token after previously observing a valid one', () => {
+    setAccessToken(jwt(Math.floor(Date.now() / 1000) + 3600))
+    const auth = useAuthStore()
+    expect(auth.accessExpired()).toBe(false)
+    setAccessToken(null)
+    expect(auth.accessExpired()).toBe(true)
   })
 
   it('round-trips through the in-memory token store', () => {
@@ -356,5 +449,160 @@ describe('reloadDomainsFor — the entity → affected-domains map (online post-
     const names = reloadDomainsFor('period').map((r) => r.name)
     expect(names).toContain('employees')
     expect(names).toContain('periods')
+    expect(names).toContain('calendar')
+  })
+})
+
+it('explicit none scopes never enable resource navigation or actions', () => {
+  const rbac = useRbacStore()
+  rbac.myPermissions = ['view', 'create', 'update', 'delete'].map((action) => ({ resource: 'resource', action, scope: 'none' }))
+  for (const action of ['view', 'create', 'update', 'delete']) expect(rbac.can('resource', action)).toBe(false)
+})
+
+describe('RBAC peer probes reach the scope evaluator', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.stubGlobal('window', { addEventListener: vi.fn(), removeEventListener: vi.fn() })
+    vi.stubGlobal('document', { addEventListener: vi.fn(), removeEventListener: vi.fn() })
+    useAuthStore().user = { id: 7, preset: 'worker' }
+  })
+  afterEach(() => vi.unstubAllGlobals())
+
+  it.each(['sib', 'sib_project'])('uses the supplied %s probe and denies missing evidence', (scope) => {
+    const rbac = useRbacStore()
+    rbac.myPermissions = [{ resource: 'task', action: 'update', scope }]
+    expect(rbac.canOwn('task', 'update', { processOwner: 7, projectOwner: 7 })).toBe(false)
+    expect(rbac.canOwn('task', 'update', {}, { sibling: scope === 'sib', projectSibling: scope === 'sib_project' })).toBe(true)
+    expect(rbac.canOwn('task', 'delete', {}, { sibling: true, projectSibling: true })).toBe(false)
+  })
+})
+
+
+describe('individual permission snapshots', () => {
+  const snapshot = (id: number, scope = 'self') => ({
+    user_id: id, preset: 'worker', overrides: [{ resource: 'resource', action: 'view', scope, granted: true }],
+  })
+  const response = (id: number, scope = 'self') => ({ data: { data: snapshot(id, scope) } })
+  function deferred<T>() {
+    let resolve!: (value: T) => void
+    const promise = new Promise<T>((done) => { resolve = done })
+    return { promise, resolve }
+  }
+  beforeEach(() => {
+    api.rbacUsersIdPermissionsGet.mockReset()
+    api.rbacUsersIdPermissionsPut.mockReset()
+  })
+  it('retains the same employee snapshot during a refresh', async () => {
+    const store = useRbacStore()
+    store.userPermissions = snapshot(5)
+    const get = deferred<ReturnType<typeof response>>()
+    api.rbacUsersIdPermissionsGet.mockReturnValueOnce(get.promise)
+    const loading = store.loadUserPermissions(5)
+    expect(store.userPermissions).toEqual(snapshot(5))
+    expect(store.userPermissionsLoading).toBe(true)
+    get.resolve(response(5, 'all'))
+    expect(await loading).toBe(true)
+    expect(store.userPermissions).toEqual(snapshot(5, 'all'))
+  })
+  it('conceals another employee snapshot and rejects a late old read', async () => {
+    const store = useRbacStore()
+    store.userPermissions = snapshot(5)
+    const old = deferred<ReturnType<typeof response>>()
+    const recent = deferred<ReturnType<typeof response>>()
+    api.rbacUsersIdPermissionsGet.mockReturnValueOnce(old.promise).mockReturnValueOnce(recent.promise)
+    const first = store.loadUserPermissions(5)
+    const second = store.loadUserPermissions(6)
+    expect(store.userPermissions).toBeNull()
+    recent.resolve(response(6))
+    expect(await second).toBe(true)
+    old.resolve(response(5, 'all'))
+    expect(await first).toBe(false)
+    expect(store.userPermissions?.user_id).toBe(6)
+  })
+  it('a confirmed save wins over an older GET and updates the saved baseline', async () => {
+    const store = useRbacStore()
+    store.userPermissions = snapshot(5)
+    const get = deferred<ReturnType<typeof response>>()
+    api.rbacUsersIdPermissionsGet.mockReturnValueOnce(get.promise)
+    const loading = store.loadUserPermissions(5)
+    api.rbacUsersIdPermissionsPut.mockResolvedValueOnce({})
+    const overrides = snapshot(5, 'all').overrides
+    expect(await store.saveUserPermissions(5, overrides)).toBe(true)
+    get.resolve(response(5))
+    expect(await loading).toBe(false)
+    expect(store.userPermissions?.overrides).toEqual(overrides)
+    expect(store.userPermissionsLoading).toBe(false)
+  })
+  it('a failed save leaves confirmed permissions intact', async () => {
+    const store = useRbacStore()
+    store.userPermissions = snapshot(5)
+    api.rbacUsersIdPermissionsPut.mockRejectedValueOnce(new Error('save rejected'))
+    expect(await store.saveUserPermissions(5, snapshot(5, 'all').overrides)).toBe(false)
+    expect(store.userPermissions).toEqual(snapshot(5))
+  })
+  it('a failed refresh retains permissions already confirmed by the server', async () => {
+    const store = useRbacStore()
+    store.userPermissions = snapshot(5)
+    api.rbacUsersIdPermissionsPut.mockResolvedValueOnce({})
+    expect(await store.saveUserPermissions(5, snapshot(5, 'all').overrides)).toBe(true)
+    api.rbacUsersIdPermissionsGet.mockRejectedValueOnce(new Error('refresh failed'))
+    expect(await store.loadUserPermissions(5)).toBe(false)
+    expect(store.userPermissions?.overrides).toEqual(snapshot(5, 'all').overrides)
+    expect(store.userPermissionsLoading).toBe(false)
+  })
+  it('saving a previously opened employee does not cancel the current employee read', async () => {
+    const store = useRbacStore()
+    store.userPermissions = snapshot(5)
+    const put = deferred<unknown>()
+    const get = deferred<ReturnType<typeof response>>()
+    api.rbacUsersIdPermissionsPut.mockReturnValueOnce(put.promise)
+    const saving = store.saveUserPermissions(5, [])
+    api.rbacUsersIdPermissionsGet.mockReturnValueOnce(get.promise)
+    const loading = store.loadUserPermissions(6)
+    put.resolve({})
+    expect(await saving).toBe(true)
+    expect(store.userPermissionsLoading).toBe(true)
+    get.resolve(response(6))
+    expect(await loading).toBe(true)
+    expect(store.userPermissions?.user_id).toBe(6)
+  })
+  it.each([true, false])('a previous employee save does not alter current load errors (success=%s)', async (success) => {
+    const store = useRbacStore()
+    store.userPermissions = snapshot(6)
+    store.userPermissionsError = 'Current employee refresh failed'
+    if (success) api.rbacUsersIdPermissionsPut.mockResolvedValueOnce({})
+    else api.rbacUsersIdPermissionsPut.mockRejectedValueOnce(new Error('Previous employee save failed'))
+    expect(await store.saveUserPermissions(5, [])).toBe(success)
+    expect(store.userPermissionsError).toBe('Current employee refresh failed')
+    expect(store.userPermissions?.user_id).toBe(6)
+  })
+
+})
+
+
+describe('dictionary administration without employee-calendar access', () => {
+  beforeAll(() => {
+    vi.stubGlobal('window', { addEventListener: vi.fn(), removeEventListener: vi.fn() })
+    vi.stubGlobal('document', { addEventListener: vi.fn(), removeEventListener: vi.fn() })
+  })
+  afterAll(() => vi.unstubAllGlobals())
+  beforeEach(() => { useAuthStore().user = { id: 42, preset: 'worker' } })
+  it('refreshes dictionary changes without loading employees or their periods', () => {
+    const rbac = useRbacStore()
+    rbac.permsLoaded = true
+    rbac.myPermissions = [{ resource: 'state', action: 'view', scope: 'all' }]
+    expect(reloadDomainsFor('state').map((domain) => domain.name)).toEqual(['states'])
+    expect(reloadDomainsFor('period')).toEqual([])
+    const names = buildPullSteps().map((step) => step.name)
+    expect(names).toContain('states')
+    expect(names).not.toContain('employees')
+    expect(names).not.toContain('periods')
+  })
+  it('employee-calendar access alone never refreshes a forbidden dictionary', () => {
+    const rbac = useRbacStore()
+    rbac.permsLoaded = true
+    rbac.myPermissions = [{ resource: 'worker', action: 'view', scope: 'all' }]
+    expect(reloadDomainsFor('state')).toEqual([])
+    expect(buildPullSteps().map((step) => step.name)).not.toContain('states')
   })
 })

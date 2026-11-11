@@ -25,6 +25,12 @@ export interface Task {
   owner_name?: string
   /** Short owner name "Lastname I.O." — for the badge on the task bar */
   owner_short?: string
+  /** Task responsible: id of the accountable user */
+  responsible_id?: number | null
+  /** Responsible name (resolved from responsible_id) */
+  responsible_name?: string
+  /** Short responsible name "Lastname I.O." — for the badge on the task bar */
+  responsible_short?: string
   /** Number of active task comments (from /planning/tasks); 0 — no badge */
   comments_count?: number
   /** Execution status: not_started | in_progress | done (fixed catalog) */
@@ -36,6 +42,7 @@ export interface Task {
 export interface TaskBarProps {
   timeline: TimelineCtx
   task: Task
+  resourceBadgeIds?: ReadonlySet<number>
   /** Project code — displayed as a badge right after the task title */
   projectCode?: string
   /** Custom task color (#RRGGBB); empty — the standard token */

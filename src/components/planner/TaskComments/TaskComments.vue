@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { ModalForm } from '../../common'
 import { dateLocale, fmtDateTime } from '@/i18n/date'
 import { t } from '@/i18n'
@@ -24,7 +24,8 @@ const props = withDefaults(defineProps<TaskCommentsProps>(), {
 
 const emit = defineEmits<{
   close: []
-  send: [payload: SendCommentPayload]
+  send: [payload: SendCommentPayload, acknowledge?: (saved: boolean) => void]
+  draftChange: [dirty: boolean]
   delete: [payload: DeleteCommentPayload]
 }>()
 
@@ -33,7 +34,10 @@ const rootDraft = ref('')
 const replyTo = ref<number | null>(null)
 const replyDraft = ref('')
 
-const composerDisabled = computed(() => props.busy || props.disabledReason != null)
+const sending = ref(false)
+const sendError = ref(false)
+watch([rootDraft, replyDraft], () => emit('draftChange', !!rootDraft.value.trim() || !!replyDraft.value.trim()))
+const composerDisabled = computed(() => props.busy || sending.value || props.disabledReason != null)
 
 /** Flat pre-order list for indented rendering */
 const flat = computed(() => flattenComments(props.comments))
@@ -82,26 +86,40 @@ function openReply(commentId: number) {
   replyDraft.value = ''
 }
 
-function sendRoot() {
-  const content = rootDraft.value.trim()
+function sendDraft(parentId?: number) {
+  const draft = parentId == null ? rootDraft : replyDraft
+  const content = draft.value.trim()
   if (!content || composerDisabled.value) return
-  emit('send', { content })
-  rootDraft.value = ''
+  sendError.value = false
+  if (!props.embedded) {
+    emit('send', { content, parent_id: parentId })
+    draft.value = ''
+    if (parentId != null) replyTo.value = null
+    return
+  }
+  sending.value = true
+  emit('send', { content, parent_id: parentId }, (saved) => {
+    sending.value = false
+    sendError.value = !saved
+    if (!saved) return
+    draft.value = ''
+    if (parentId != null) replyTo.value = null
+  })
+}
+
+function sendRoot() {
+  sendDraft()
 }
 
 function sendReply(commentId: number) {
-  const content = replyDraft.value.trim()
-  if (!content || composerDisabled.value) return
-  emit('send', { content, parent_id: commentId })
-  replyTo.value = null
-  replyDraft.value = ''
+  sendDraft(commentId)
 }
 </script>
 
 <template>
-  <ModalForm :open="open" :title="taskTitle ? t('planner.taskComments.titleNamed', { title: taskTitle }) : t('planner.taskComments.titleFallback', { id: taskId })" @close="emit('close')">
+  <component :is="embedded ? 'div' : ModalForm" v-bind="embedded ? {} : { open, title: taskTitle ? t('planner.taskComments.titleNamed', { title: taskTitle }) : t('planner.taskComments.titleFallback', { id: taskId }) }" @close="emit('close')">
     <div class="tc">
-      <p v-if="error" class="tc-error">{{ error }}</p>
+      <p v-if="error || sendError" class="tc-error" role="alert">{{ error || t('planner.workspace.saveFailed') }}</p>
       <p v-if="disabledReason" class="tc-offline">{{ disabledReason }}</p>
 
       <div class="tc-list">
@@ -131,7 +149,7 @@ function sendReply(commentId: number) {
               v-if="canDelete(n.comment)"
               type="button"
               class="tc-icon tc-del"
-              :disabled="busy"
+              :disabled="composerDisabled"
               :title="t('planner.taskComments.deleteTitle')"
               :aria-label="t('planner.taskComments.deleteTitle')"
               @click="emit('delete', { comment_id: n.comment.id ?? 0 })"
@@ -159,6 +177,7 @@ function sendReply(commentId: number) {
             <textarea
               v-model="replyDraft"
               class="tc-input"
+              :aria-label="t('planner.taskComments.replyPlaceholder')"
               rows="2"
               :disabled="composerDisabled"
               :placeholder="t('planner.taskComments.replyPlaceholder')"
@@ -180,6 +199,7 @@ function sendReply(commentId: number) {
         <textarea
           v-model="rootDraft"
           class="tc-input"
+          :aria-label="t('planner.taskComments.composerPlaceholder')"
           rows="3"
           :disabled="composerDisabled"
           :placeholder="t('planner.taskComments.composerPlaceholder')"
@@ -196,7 +216,7 @@ function sendReply(commentId: number) {
         </div>
       </div>
     </div>
-  </ModalForm>
+  </component>
 </template>
 
 <style scoped>

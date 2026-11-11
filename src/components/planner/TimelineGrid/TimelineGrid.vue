@@ -10,6 +10,7 @@ import {
   type TimelineCtx,
 } from '../../../composables/timeline-context'
 import { useTimelinePan } from '../../../composables/useTimelinePan'
+import { LABEL_WIDTH } from '../layout'
 import TodayLine from '../TodayLine/TodayLine.vue'
 import ScaleBadge from '../ScaleBadge/ScaleBadge.vue'
 
@@ -53,6 +54,20 @@ const unit = computed(() => props.unit)
 const originDate = props.origin ? toDate(props.origin) : new Date()
 
 const tl = useInfiniteTimeline(originDate, unit, scrollEl, contentEl, props.id)
+
+/**
+ * Visible height in LOCAL px of the zoomed content. The grid is scaled by a CSS
+ * `zoom` (Ctrl+wheel) on .tg-content, which multiplies every length inside it, so
+ * covering the visible area takes viewportHeight / scale. Percentage and viewport
+ * units cannot do that job: inside a zoomed element browsers disagree on whether
+ * they compensate the factor (Firefox does not — at 50% zoom a `min-height: 100%`
+ * box, and with it the "today" line and the grid that derive their height from
+ * that box, end at half the visible height), while `100dvh` is never compensated
+ * anywhere. Measured px divided by the scale works in every engine.
+ */
+const fitHeight = computed(() =>
+  Math.round(tl.viewportHeight.value / (tl.tableScale.value || 1)),
+)
 
 provide(TimelineScrollKey, scrollEl)
 provide(TimelineSyncKey, tl.sync)
@@ -120,7 +135,7 @@ watch(
   async (newUnit, oldUnit) => {
     const sc = scrollEl.value
     if (!sc || newUnit === oldUnit) return
-    const centerDate = tl.dateAtLocalX(sc.clientWidth / 2, oldUnit)
+    const centerDate = tl.dateAtViewportX(sc.clientWidth / 2, oldUnit)
     await nextTick()
     if (centerDate) tl.scrollToCenterDate(centerDate)
   },
@@ -201,6 +216,7 @@ const ctx: TimelineCtx = reactive({
   cellStart: tl.cellStart,
   cellEnd: tl.cellEnd,
   dateAtPointer: tl.dateAtPointer,
+  cellCoordAtPointer: tl.cellCoordAtPointer,
 })
 
 /** Right-click on empty timeline space (bars/labels/milestones intercept it themselves via .stop).
@@ -236,8 +252,23 @@ function onContextMenu(e: MouseEvent) {
 </script>
 
 <template>
-  <div ref="scrollEl" class="tg-scroll" @contextmenu.prevent="onContextMenu">
-    <div ref="contentEl" class="tg-content" :style="{ width: ctx.contentWidth + 'px' }">
+  <div
+    ref="scrollEl"
+    class="tg-scroll"
+    :style="{ '--label-width': LABEL_WIDTH + 'px' }"
+    @contextmenu.prevent="onContextMenu"
+  >
+    <div
+      ref="contentEl"
+      class="tg-content"
+      :style="{ width: ctx.contentWidth + 'px', '--tg-fit-height': fitHeight + 'px' }"
+    >
+      <!-- Opaque band of the side column: covers the whole visible height so the
+           grid, the today line and the row backgrounds never show through it.
+           Sits above the content (--z-side-backdrop) and below the sticky labels,
+           and lets every pointer event reach what is underneath. -->
+      <div class="tg-side-col" aria-hidden="true" />
+
       <!-- Grid lines for the visible window only (under the content) -->
       <div
         class="tg-gridlines"
@@ -268,6 +299,28 @@ function onContextMenu(e: MouseEvent) {
   overflow: auto;
   max-height: var(--planner-max-height, calc(100vh - 160px));
 }
+/* The side column of names is one opaque band for the whole visible height:
+   the rows paint their own labels only where rows exist, so everywhere else the
+   grid, the today line and the group backgrounds used to show through the
+   column. The band is sticky (stays at the left edge while panning) and exactly
+   as tall as the visible area — measured px divided by the zoom (--tg-fit-height),
+   NOT a viewport unit or a percentage: everything inside .tg-content is
+   multiplied by the zoom, so `100dvh` covers only half the column at 50% zoom.
+   The negative margin keeps its flow contribution at zero. It never intercepts
+   pointer events: panning, the context menu and bar interactions are unchanged. */
+.tg-side-col {
+  position: sticky;
+  top: 0;
+  left: 0;
+  width: var(--label-width, 0px);
+  height: var(--tg-fit-height, 0px);
+  margin-bottom: calc(-1 * var(--tg-fit-height, 0px));
+  background: var(--ui-surface);
+  border-right: 1px solid var(--ui-border);
+  box-sizing: border-box;
+  z-index: var(--z-side-backdrop);
+  pointer-events: none;
+}
 /* Resting state is the plain arrow cursor everywhere (headers, rows, the empty
    strip below the rows); the "drag hand" appears only while MMB panning. */
 .tg-scroll.tg-panning,
@@ -278,15 +331,20 @@ function onContextMenu(e: MouseEvent) {
   user-select: none;
   -webkit-user-select: none;
 }
+/* Not a percentage: everything inside .tg-content is multiplied by the zoom, so
+   `min-height: 100%` shrinks the whole content box at zoom < 1 in engines that do
+   not compensate the factor (Firefox) — the today line, the grid and the side
+   column then end at half the visible height. --tg-fit-height is the measured
+   container height divided by the scale, in local px. */
 .tg-content {
   position: relative;
-  min-height: 100%;
+  min-height: var(--tg-fit-height, 0px);
 }
 .tg-gridlines {
   position: absolute;
   top: 0;
   bottom: 0;
-  z-index: 1;
+  z-index: var(--z-grid);
   pointer-events: none;
 }
 .tg-line {

@@ -41,7 +41,7 @@ onBeforeUnmount(() => {
   bottom: 12px;
   left: 100%;
   transform: translateX(calc(-100% - 12px));
-  z-index: 50;
+  z-index: var(--z-scale-badge);
   display: inline-flex;
   align-items: center;
   gap: 6px;

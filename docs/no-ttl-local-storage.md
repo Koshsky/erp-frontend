@@ -36,7 +36,8 @@ cleaned up by time**. Data is only every removed by:
    **not** wipe the queue: it is shared by every tab of the profile and a sibling
    tab of the same user may still have pending edits (H-OFF-3);
 4. successful delivery / idempotent terminal states — a sent queue entry is
-   deleted after its request succeeds (and its temp→real idmap entry afterwards).
+   deleted after its request succeeds. Its temp→real mapping remains available to
+   later edits from other tabs until explicit queue clearing or account cleanup.
 
 Server-side TTLs (refresh session 168h, access 15m) are validated **only** by
 the backend.

@@ -15,6 +15,7 @@ export interface TaskEditorTask {
   color?: string
   status?: string
   owner_id?: number | null
+  responsible_id?: number | null
   process_id: number
 }
 
@@ -23,13 +24,15 @@ export interface OwnerOption {
   label: string
 }
 
-/** Patch emitted by the left panel (status/owner/title/color). owner_id is
- *  included only when a user is actually selected (null — not sent). */
+/** Patch emitted by the left panel (status/owner/responsible/title/color).
+ *  owner_id is included only when a user is actually selected (null — not
+ *  sent); responsible_id=0 clears the responsible person. */
 export interface TaskEditorPatch {
   title?: string
   color?: string
   status?: string
   owner_id?: number
+  responsible_id?: number
 }
 
 export interface NewSubtaskPayload {
@@ -65,7 +68,16 @@ export interface UpdateDependencyPayload {
   type: DependencyType
 }
 
+export type TaskEditorSection = 'details' | 'subtasks' | 'dependencies' | 'resources' | 'discussion'
+
 export interface TaskEditorProps {
+  workspace?: boolean
+  section?: TaskEditorSection
+  context?: string
+  schedule?: string
+  resourceCount?: number
+  commentCount?: number
+  hasRelatedDrafts?: boolean
   /** Modal visibility */
   open: boolean
   /** The edited task (null — header shows a placeholder) */
@@ -83,6 +95,8 @@ export interface TaskEditorProps {
   canManage?: boolean
   /** Whether the user can add subtasks (same as canManage) */
   canCreateSubtask?: boolean
+  canUpdateSubtask?: (id: number) => boolean
+  canDeleteSubtask?: (id: number) => boolean
   /** Whether the user can manage dependencies (same as canManage) */
   canManageDependencies?: boolean
   busy?: boolean
@@ -93,7 +107,8 @@ export interface TaskEditorProps {
 
 export interface TaskEditorEmits {
   /** Left panel: save the edited task fields */
-  save: [patch: TaskEditorPatch]
+  save: [patch: TaskEditorPatch, acknowledge?: (saved: boolean) => void]
+  'update:section': [section: TaskEditorSection]
   /** Right panel: add a subtask */
   addSubtask: [payload: NewSubtaskPayload]
   /** Right panel: update a subtask field */

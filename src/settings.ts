@@ -181,12 +181,19 @@ export const VIEW_SETTINGS_KEY = 'mvs_erp_view_settings'
 export interface ViewSettings {
   /** Gantt badges: resource (specialization) on the task bars */
   badgeResource: boolean
-  /** Gantt badge: the project code on bars */
-  badgeProjectCode: boolean
+  /** Project-code badges are independent for process and task bars. */
+  badgeProcessProjectCode: boolean
+  badgeTaskProjectCode: boolean
   /** Gantt badge: "% of completed operations" on task bars */
   badgeProgress: boolean
-  /** Gantt badges/labels: assignee on tasks, owner on process/project bars */
-  badgeOwner: boolean
+  /** Gantt badges/labels — per entity: owner (assignee/владелец) and
+   *  responsible (ответственный), toggled independently per entity. */
+  badgeProjectOwner: boolean
+  badgeProjectResponsible: boolean
+  badgeProcessOwner: boolean
+  badgeProcessResponsible: boolean
+  badgeTaskOwner: boolean
+  badgeTaskResponsible: boolean
   /** Gantt badge: the comments bubble + counter on task bars (the panel itself
    *  stays reachable from the bar context menu either way) */
   badgeComments: boolean
@@ -207,9 +214,15 @@ export interface ViewSettings {
 
 const DEFAULT_VIEW_SETTINGS: ViewSettings = {
   badgeResource: true,
-  badgeProjectCode: true,
+  badgeProcessProjectCode: true,
+  badgeTaskProjectCode: true,
   badgeProgress: true,
-  badgeOwner: true,
+  badgeProjectOwner: true,
+  badgeProjectResponsible: true,
+  badgeProcessOwner: true,
+  badgeProcessResponsible: true,
+  badgeTaskOwner: true,
+  badgeTaskResponsible: true,
   badgeComments: true,
   defaultUnit: 'day',
   defaultScale: 100,
@@ -223,9 +236,18 @@ function readViewSettings(): ViewSettings {
   try {
     const raw = localStorage.getItem(VIEW_SETTINGS_KEY)
     if (raw == null) return { ...DEFAULT_VIEW_SETTINGS }
-    const parsed = JSON.parse(raw) as Partial<ViewSettings>
+    const parsed = JSON.parse(raw) as Partial<ViewSettings> & { badgeProjectCode?: boolean }
+    const { badgeProjectCode: legacyProjectCode, ...stored } = parsed
     // The stored blob may predate this key (or hold garbage) — never trust it.
-    return { ...DEFAULT_VIEW_SETTINGS, ...parsed, connector: normalizeLinkStyle(parsed.connector) }
+    // A stale "decade" default is coerced to day: the default unit is now
+    // only day or week (decade stays an in-session scale, not a default).
+    const defaultUnit = parsed.defaultUnit === 'week' ? 'week' : 'day'
+    return {
+      ...DEFAULT_VIEW_SETTINGS, ...stored, defaultUnit,
+      badgeProcessProjectCode: parsed.badgeProcessProjectCode ?? legacyProjectCode ?? true,
+      badgeTaskProjectCode: parsed.badgeTaskProjectCode ?? legacyProjectCode ?? true,
+      connector: normalizeLinkStyle(parsed.connector),
+    }
   } catch {
     return { ...DEFAULT_VIEW_SETTINGS }
   }

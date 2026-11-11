@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { fmtDate } from '@/components/planner/calendar'
 import TooltipCell from '../TooltipCell/TooltipCell.vue'
 import { InfoTooltip } from '../Tooltips'
 import UsageCell from '../UsageCell/UsageCell.vue'
@@ -81,8 +82,9 @@ const labelsH = computed(() => resourceCells.value.length * rowH.value)
 </script>
 
 <template>
-  <!-- Resource code layer: a separate sticky side-panel element (z 80), outside
-       the resource block's stacking context — above the current-date line (25) -->
+  <!-- Resource code layer: a separate sticky side-panel element (--z-side-panel),
+       outside the resource block's stacking context — above the current-date line
+       (--z-today) -->
   <div
     class="rs-labels"
     :style="{
@@ -115,6 +117,8 @@ const labelsH = computed(() => resourceCells.value.length * rowH.value)
           v-for="(u, k) in rc.cells"
           :key="'rc' + t.visibleIndices[k]"
           class="rs-cell"
+          :data-resource-id="rc.res.id"
+          :data-date="fmtDate(t.cellStart(t.visibleIndices[k]))"
           :style="{ left: t.cellLeft(t.visibleIndices[k]) + 'px', width: t.cellPx + 'px' }"
         >
           <UsageCell :used="u.used" :available="u.available" :isWeekend="u.isWeekend" :show-text="showText" :absentees="u.absentees" />
@@ -128,13 +132,13 @@ const labelsH = computed(() => resourceCells.value.length * rowH.value)
 @import "../../../styles/tokens.css";
 
 /* Resource code layer — side panel: sticks to the left and top edges (below the
- * calendar header), sits above the current-date line (25). Height and negative margin
- * are set inline so the cell block is not shifted. */
+ * calendar header), sits above the current-date line (--z-today). Height and
+ * negative margin are set inline so the cell block is not shifted. */
 .rs-labels {
   position: sticky;
   left: 0;
   background: var(--ui-surface);
-  z-index: 80;
+  z-index: var(--z-side-panel);
   box-sizing: border-box;
 }
 .rs-label {
@@ -158,10 +162,11 @@ const labelsH = computed(() => resourceCells.value.length * rowH.value)
   letter-spacing: 0.5px;
 }
 /* Load-cell block "4/5": sticks right below the calendar header.
- * z 20 — above content (bars 2, milestones 3), but below the current-date line (25). */
+ * --z-resource-cells — above the content (--z-bar, --z-content-top), but below the
+ * current-date line (--z-today). The ladder itself lives in styles/tokens.css. */
 .rs-block {
   position: sticky;
-  z-index: 20;
+  z-index: var(--z-resource-cells);
   background: var(--ui-surface);
 }
 .rs-row {

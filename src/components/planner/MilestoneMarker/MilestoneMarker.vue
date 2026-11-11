@@ -195,7 +195,7 @@ function onKeydown(e: KeyboardEvent) {
   top: 0;
   bottom: 0;
   pointer-events: none;
-  z-index: 3;
+  z-index: var(--z-content-top);
 }
 .ms-marker {
   position: absolute;

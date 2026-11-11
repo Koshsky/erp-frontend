@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { shortName } from '@/utils'
 import CalendarHeader from '../CalendarHeader/CalendarHeader.vue'
 import TimelineGrid from '../TimelineGrid/TimelineGrid.vue'
 import { PlannerStates } from '@/components/common'
@@ -18,9 +19,9 @@ const props = withDefaults(defineProps<{
   /** Users to display the owner (owner_id → name) in tooltips */
   users?: DtoUserInfo[] | null
   /** Allows modifying processes: moving dates, editing, deleting */
-  canManage?: boolean
+  canManage?: boolean | ((processId: number) => boolean)
   /** Enables vertical row drag to reorder processes within each project */
-  reorderable?: boolean
+  reorderable?: boolean | ((projectId: number) => boolean)
   /** On open, scroll the timeline to this date (navigation from another tab) */
   focusDate?: string | null
   /** On open, scroll vertically to the group (project row) */
@@ -49,7 +50,8 @@ const emit = defineEmits<{
   'visible-range': [payload: { from: string; to: string; cellWidthPx: number; scale: number }]
 }>()
 
-const userNames = computed(() => new Map((props.users || []).map((u) => [u.id, u.name])))
+const userNames = computed(() => new Map((props.users || []).map((u) => [u.id, u.name?.trim() || [u.last_name, u.first_name, u.middle_name].filter(Boolean).join(' ').trim()])))
+const userShortNames = computed(() => new Map((props.users || []).map((u) => [u.id, shortName(u)])))
 
 /** Map the DTO (from /planning/processes) into the internal type. Processes are
  *  sorted by their per-project order (fallback: id). */
@@ -70,6 +72,10 @@ const displayProjects = computed(() =>
         end_date: p.end_date ?? '',
         owner_id: p.owner_id,
         owner_name: p.owner_id != null ? userNames.value.get(p.owner_id) : undefined,
+        owner_short: p.owner_id != null ? userShortNames.value.get(p.owner_id) : undefined,
+        responsible_id: p.responsible_id,
+        responsible_name: p.responsible_id != null ? userNames.value.get(p.responsible_id) : undefined,
+        responsible_short: p.responsible_id != null ? userShortNames.value.get(p.responsible_id) : undefined,
         project_id: p.project_id,
         order: p.order,
       })),
@@ -104,7 +110,7 @@ function onGridCtx(p: { clientX: number; clientY: number; date: string | null; r
           :groupStartDate="project.start_date"
           :groupEndDate="project.end_date"
           :can-manage="canManage"
-          :reorderable="reorderable"
+          :reorderable="typeof reorderable === 'function' ? reorderable(project.id) : reorderable"
           @change="(p) => emit('change', p)"
           @contextmenu="(p) => emit('contextmenu', p)"
           @reorder="(p) => emit('reorder', { projectId: project.id, ...p })"

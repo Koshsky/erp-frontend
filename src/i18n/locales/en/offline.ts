@@ -31,7 +31,7 @@ export default {
     middleName: 'Middle name',
     username: 'Login',
     position: 'Position',
-    preset: 'Permission preset',
+    preset: 'Role',
     priority: 'Priority',
     startDate: 'Start',
     endDate: 'End',
@@ -62,6 +62,8 @@ export default {
     retry: 'Retry',
   },
   db: {
+    timeout: 'Local storage is not responding. Close other app tabs and try again. Saved data has not been deleted.',
+    operationFailed: 'Could not complete the local storage operation',
     unavailable: 'IndexedDB is unavailable',
     openFailed: 'Failed to open IndexedDB',
     repairFailed: 'Failed to repair IndexedDB',

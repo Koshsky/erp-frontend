@@ -28,6 +28,9 @@ const emit = defineEmits<{
 const ownerRow = computed(() =>
   t('planner.bar.owner', { owner: props.ownerName }),
 )
+const responsibleRow = computed(() =>
+  t('planner.bar.responsible', { name: props.responsibleName }),
+)
 </script>
 
 <template>
@@ -38,9 +41,13 @@ const ownerRow = computed(() =>
     :groupStartDate="groupStartDate"
     :groupEndDate="groupEndDate"
     :title="title"
-    :projectCode="projectCode"
+    :projectCode="viewSettings.badgeProcessProjectCode ? projectCode : undefined"
     :color="color || 'var(--ui-gantt-process)'"
     :opacity="opacity"
+    :ownerShort="viewSettings.badgeProcessOwner ? ownerShort : undefined"
+    :responsibleShort="viewSettings.badgeProcessResponsible ? responsibleShort : undefined"
+    :ownerName="viewSettings.badgeProcessOwner ? ownerName : undefined"
+    :responsibleName="viewSettings.badgeProcessResponsible ? responsibleName : undefined"
     :height="height"
     :top="top"
     :minWidth="40"
@@ -57,7 +64,11 @@ const ownerRow = computed(() =>
         <BarTooltip
           :title="title"
           :accent="color || 'var(--ui-gantt-process)'"
-          :rows="[viewSettings.badgeOwner && props.ownerName ? ownerRow : '', dateRange].filter(Boolean)"
+          :rows="[
+            viewSettings.badgeProcessOwner && props.ownerName ? ownerRow : '',
+            viewSettings.badgeProcessResponsible && props.responsibleName ? responsibleRow : '',
+            dateRange,
+          ].filter(Boolean)"
         />
       </slot>
     </template>

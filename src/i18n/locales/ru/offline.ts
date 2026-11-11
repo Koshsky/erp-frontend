@@ -32,7 +32,7 @@ export default {
     middleName: 'Отчество',
     username: 'Логин',
     position: 'Должность',
-    preset: 'Пресет прав',
+    preset: 'Роль',
     priority: 'Приоритет',
     startDate: 'Начало',
     endDate: 'Конец',
@@ -63,6 +63,8 @@ export default {
     retry: 'Повторить',
   },
   db: {
+    timeout: 'Локальное хранилище не отвечает. Закройте другие вкладки приложения и повторите попытку. Сохранённые данные не удалены.',
+    operationFailed: 'Не удалось выполнить операцию с локальным хранилищем',
     unavailable: 'IndexedDB недоступен',
     openFailed: 'Не удалось открыть IndexedDB',
     repairFailed: 'Не удалось восстановить IndexedDB',

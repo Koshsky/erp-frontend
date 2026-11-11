@@ -107,7 +107,7 @@ const arrows = computed<DependencyArrow[]>(() => {
   height: 100%;
   overflow: visible;
   pointer-events: none;
-  z-index: 3;
+  z-index: var(--z-content-top);
 }
 .tdl-path {
   fill: none;

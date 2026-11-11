@@ -6,6 +6,136 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 The web app and the desktop wrapper are versioned together.
 
+## [1.6.3] - 2026-11-11
+
+### Fixed
+
+- The task diagram resource-owner filter now also filters resource badges on bars.
+
+- Multiple tabs release idle storage connections, serialize queue delivery and safely coordinate session renewal without reverting tokens or losing pending references.
+
+- Blocked local storage no longer leaves login pending indefinitely; timed-out writes are cancelled and connections can recover.
+
+- Cached profiles no longer masquerade as logged-out sessions; 401 responses reach login without redirect loops and preserve queued work.
+
+- Administrators see all resources; the owner filter affects resource-header rows and resource badges, and offers resource owners only.
+
+## [1.6.2] - 2026-11-11
+
+### Fixed
+
+- Cached pages open during sibling session renewal, and pending edits no longer leave reloaded diagrams empty.
+
+- Shared-tab session renewal and offline retries preserve queued changes through expiry, re-login and lost responses.
+
+- Page navigation after session restoration no longer triggers redundant token refreshes.
+
+### Changed
+
+- Administration settings share one card; the day-type dictionary opens inside the timesheet.
+
+## [1.6.1] - 2026-11-10
+
+### Changed
+
+- Web and desktop CSP restricts code execution while preserving PDF export, printing and offline synchronization.
+
+- Task details, subtasks, dependencies, resources and discussion share a large card that preserves drafts between sections.
+
+- PDF preserves diagram colors, badges, dates and zoom, printing complete selected items with repeated headers while retaining filters and Ctrl+S/Ctrl+P.
+
+- Scope choices are simplified without peers, with explicit inherited viewing and separate priority controls.
+
+- Preset Manage controls configure create, update and delete together while server permissions remain separate.
+- Tasks support shared-project access; shared-process access covers all tasks and subtasks, with consistent list, diagram and direct-ID scoping.
+
+### Fixed
+
+- Fixed Markdown URL and SVG filter bypasses; stored XSS coverage includes user fields online, from offline cache and in PDF exports.
+
+- Pages, context menus, editors and dragging check each action and object independently; revoked access closes the page.
+
+- Individual permissions preserve separate action rules, support cancellation and reject stale responses after saving.
+
+- Deselecting the last preset condition stages No access without automatically selecting a replacement.
+- Process permissions follow the project owner and task permissions follow the process owner for all actions.
+- Resource navigation and actions follow individual permissions; new roles start with own access, and task planning supports a read-only administrator subject view.
+- Offline retries preserve the original idempotency key, FIFO order and exact temporary ID mappings across interruptions.
+- Automatic synchronization flushes queued edits before refreshing the offline cache once a minute and preserves unconfirmed changes.
+- Resource headers update optimistically for task dates, assignments and employee absences, with rollback on rejected changes.
+
+## [1.6.0] - 2026-11-09
+
+### Changed
+
+- The read-only company chart groups employees inside manager cards, initially shows two manager levels and preserves the table view.
+
+- The personal account groups user details, password security and application information into separate sections.
+
+## [1.5.1] - 2026-11-07
+
+### Fixed
+
+- The project/process editor recalculates the displayed duration as the start/end dates change.
+
+- Person badges recover automatically when the local user catalog is empty.
+
+- Person badges consistently use surname and initials, omitting missing name parts without extra punctuation.
+
+- Project and process owner/responsible badges now appear on Gantt bars and follow their display settings.
+
+- The selected timeline unit, position and zoom are preserved when switching between projects, processes and tasks.
+
+### Changed
+
+- Project-code badges have independent settings for process and task bars.
+
+- Weekly timelines use ISO 8601 week numbers and continuous Monday–Sunday weeks, with month boundaries positioned within weeks.
+
+## [1.5.0] - 2026-11-07
+
+### Added
+
+- A Week timeline scale (week-of-month numbered in Roman numerals), with the today line placed precisely inside the current week and highlighting it.
+
+### Changed
+
+- The Decade scale is no longer offered in the scale menu or as the default unit (day/week only).
+
+## [1.4.0] - 2026-11-06
+
+### Added
+
+- The project and process editors show the start/end dates with a computed duration.
+- Projects, processes and tasks expose a responsible-person picker; owner and responsible badges are toggled per entity in Settings → Diagrams.
+
+## [1.3.3] - 2026-10-20
+
+### Fixed
+
+- Dragging a project or process bar applies the new dates at once: the bar stays where it was dropped instead of jumping back to the old span until the change is saved.
+- Renaming a project offline shows the new code immediately.
+
+## [1.3.2] - 2026-10-13
+
+### Fixed
+
+- The permissions screen shows preset rights again: the full right set comes from the API, including sections that were hidden before.
+
+## [1.3.1] - 2026-10-08
+
+### Changed
+
+- Diagrams: Projects, Processes and Tasks share one view position — the first visible date, the zoom and the cell width survive switching between the tabs.
+
+### Fixed
+
+- Badges on task bars are no longer dropped at fine zoom: the markers enabled in the settings always stay visible.
+- The Resources page no longer paints "Loading…" over a filled table on a background refresh.
+- Diagrams: the side column of names is an opaque band for the whole area height at any zoom — the content underneath no longer shows through.
+- Diagrams: when zoomed, the "today" line and the grid lines no longer stop halfway down, and no empty scroll area is left below the last row.
+- Diagrams: an object created from the context menu (project/process/task/milestone) starts exactly in the clicked cell, at any scroll offset and zoom; at the parent's edge its length is truncated instead of moving the start.
+
 ## [1.3.0] - 2026-10-07
 
 ### Added

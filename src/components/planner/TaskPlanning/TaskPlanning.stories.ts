@@ -1,5 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/vue3-vite'
+import { expect } from 'storybook/test'
 import TaskPlanning from './TaskPlanning.vue'
+import { LABEL_WIDTH } from '../layout'
 import type { DtoDetailedProcess, DtoResource } from '@/api'
 
 const now = new Date()
@@ -91,5 +93,58 @@ export const YearDecades: Story = {
     resources,
     origin: '2026-01-01',
     unit: 'decade',
+  },
+}
+
+/**
+ * The side panel is exactly one number wide: `LABEL_WIDTH` (planner/layout.ts)
+ * drives every layer of it — the corner cell, the row and merged labels, the
+ * resource codes and the group divider, which reads it through the
+ * `--label-width` custom property. The guard is deliberate: these layers used to
+ * repeat `180px` in their own styles, so changing the constant moved only some
+ * of them and the panel split at the seams.
+ */
+export const LabelColumnLayers: Story = {
+  tags: ['vitest'],
+  args: {
+    processes: [
+      process(7, 15, 8, 22, 1, 0),
+      process(8, 5, 9, 18, 2, 100),
+    ],
+    resources,
+    origin: '2026-07-01',
+  },
+  play: async ({ canvasElement, step }) => {
+    await new Promise((r) => setTimeout(r, 60))
+
+    await step('every side-panel layer is LABEL_WIDTH wide', () => {
+      const layers = Array.from(
+        canvasElement.querySelectorAll<HTMLElement>('.th-corner, .rs-labels, .gg-merged, .gg-label'),
+      )
+      // corner + resource codes + at least one group label
+      expect(layers.length).toBeGreaterThan(2)
+      for (const layer of layers) {
+        const width = Math.round(layer.getBoundingClientRect().width)
+        expect(width, `${layer.className} is ${width}px wide`).toBe(LABEL_WIDTH)
+      }
+    })
+
+    await step('the group divider starts where the side panel ends', () => {
+      const groups = Array.from(canvasElement.querySelectorAll<HTMLElement>('.gg-group'))
+      expect(groups.length).toBeGreaterThan(0)
+      for (const group of groups) {
+        expect(getComputedStyle(group, '::after').left).toBe(`${LABEL_WIDTH}px`)
+      }
+    })
+
+    await step('the corner and the label column share one right edge', () => {
+      const corner = canvasElement.querySelector<HTMLElement>('.th-corner')
+      const label = canvasElement.querySelector<HTMLElement>('.gg-merged, .gg-label')
+      expect(corner).toBeTruthy()
+      expect(label).toBeTruthy()
+      expect(Math.round(corner!.getBoundingClientRect().right)).toBe(
+        Math.round(label!.getBoundingClientRect().right),
+      )
+    })
   },
 }

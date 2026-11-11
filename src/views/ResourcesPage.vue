@@ -10,7 +10,7 @@ import { useConfirm } from '../composables/useConfirm'
 import { useContextMenu } from '../composables/useContextMenu'
 import { useEditModal } from '../composables/useEditModal'
 import { useRoleAccess } from '../composables/useRoleAccess'
-import { useAppStore, useTimesheetStore, useAuthStore, useRbacStore } from '../store'
+import { useAppStore, useTimesheetStore, useAuthStore, useRbacStore, usePlanningStore } from '../store'
 import { compareByName } from '../utils'
 import { useColumnWidths } from '../composables/useColumnWidths'
 import { isOffline } from '../offline/state'
@@ -45,6 +45,7 @@ const { columnWidths } = useColumnWidths('resources')
 const { canCreateResource, canManageResource, canDeleteResource, role, userId } = useRoleAccess()
 
 const rbac = useRbacStore()
+const planning = usePlanningStore()
 /** Permissions arrived (or were cached) — the matrix is authoritative; the preset is the cold-start fallback. */
 const permsReady = computed(() => rbac.permsLoaded || rbac.myPermissions.length > 0)
 /** The "Все владельцы" filter — for an unrestricted resource list (resource.view scope all). */
@@ -103,7 +104,11 @@ const ownerOptions = computed<ModalField['options']>(() =>
 /** Filter by owner (owner_id) — client-side: rendering always reads local data */
 const ownerFilter = ref<number | ''>('')
 const filteredResources = computed(() => {
-  const list = resources.value
+  const list = resources.value.filter((resource) => rbac.canOwn('resource', 'view', { owner: resource.owner_id ?? null }, {
+    projectResources: (planning.processPlanning?.projects ?? []).some((project) =>
+      project.owner_id === userId.value && (project.processes ?? []).some((process) => process.owner_id === resource.owner_id),
+    ),
+  }))
   return typeof ownerFilter.value === 'number'
     ? list.filter((r) => (r as { owner_id?: number | null }).owner_id === ownerFilter.value)
     : list
@@ -165,6 +170,7 @@ const { open: openModal, close: closeModal, submit: submitModal, bind: modalBind
       ? t('adminSystem.resources.create')
       : t('adminSystem.resources.edit'),
   (state) => (state.type === 'create' ? t('common.create') : t('common.save')),
+  (state) => state.type === 'create' ? canCreateResource.value : canManageResource(resources.value.find((resource) => resource.id === state.id)?.owner_id),
 )
 
 function onRowContextMenu(e: MouseEvent, res: DtoResourceResponse) {
@@ -188,7 +194,7 @@ function openEdit(id: number) {
 }
 
 function handleSelect(id: string) {
-  if (!menu.value) return
+  if (!menu.value || !menuItems.value.some((item) => item.id === id)) return
   if (id === 'edit-resource') {
     openEdit(menu.value.resourceId)
   } else if (id === 'delete-resource') {
@@ -240,6 +246,10 @@ async function onRemoveMember(resourceId: number, userId: number) {
 }
 
 onMounted(() => {
+  if (rbac.perm('resource', 'view').includes('project_resources')) {
+    void planning.loadProcessPlanning()
+    if (!isOffline.value) void planning.refreshProcessPlanning(true)
+  }
   if (!resources.value.length) store.loadResources()
   // The user catalog feeds the owner select/filter options — load it only when
   // those controls can appear (a scope-all resource right or the owner filter).
@@ -260,8 +270,13 @@ function onLoadMore() {
 
 <template>
   <section class="rp">
-    <p v-if="resourcesLoading" class="rp-st">{{ t('adminSystem.resources.loading') }}</p>
-    <p v-if="resourcesError" class="rp-st er">{{ resourcesError }}</p>
+    <!--
+      Both lines are gated on an empty list, like every other list page here:
+      a background refresh (the PULL cycle, a post-mutation reload) must not
+      paint "Загрузка…" or a stale error over an already rendered table.
+    -->
+    <p v-if="resourcesLoading && !resources.length" class="rp-st">{{ t('adminSystem.resources.loading') }}</p>
+    <p v-if="resourcesError && !resources.length" class="rp-st er">{{ resourcesError }}</p>
 
     <!--
       The table frame (header included) stays visible even when the filters

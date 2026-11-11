@@ -1,10 +1,11 @@
+import { readStamp, mayApplyRead } from './offline/mutationGuard'
 import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios'
 import router from './router'
 import { apiErrorMessage } from './utils'
 import { currentLocale, t } from './i18n'
 import { notifyError } from './notify/state'
 import { cacheGet, cacheGetByPath, cachePut, userCachePrefix } from './offline/cache'
-import { replayOutboxToCache, scheduleReplayOutboxToCache } from './offline/outbox'
+import { replayOutboxToCache, scheduleReplayOutboxToCache, createMutationKey } from './offline/outbox'
 import { isOffline } from './offline/state'
 import { getAccessToken } from './token'
 import { ensureAutoSession } from './offline/sync'
@@ -47,12 +48,14 @@ function redirectToLogin() {
  * generated API clients (src/api/base.ts: globalAxios).
  */
 export function setupHttp() {
+  const reads = new WeakMap<object, number | null>()
   // Never attach an EMPTY Authorization header ("Bearer ") — the backend
   // answers such requests with INVALID_TOKEN (invalid authorization format),
   // which the UI misreads as «Сессия истекла». Without a token the header is
   // simply omitted; protected endpoints then return a plain 401 that flows
   // through the normal refresh/retry path below.
   axios.interceptors.request.use((config) => {
+    if ((config.method ?? 'get').toLowerCase() === 'get') reads.set(config, readStamp())
     const token = getAccessToken()
     config.headers = config.headers ?? {}
     const auth = String(config.headers['authorization'] || config.headers['Authorization'] || '')
@@ -64,6 +67,10 @@ export function setupHttp() {
     // interface language so error texts arrive already translated. Resolved per
     // request, so a language switch applies to the next call.
     config.headers['Accept-Language'] = currentLocale()
+    const method = (config.method ?? 'get').toLowerCase()
+    if (!['get', 'head', 'options'].includes(method) && !config.url?.includes('/auth/')) {
+      if (!config.headers.get('Idempotency-Key')) config.headers.set('Idempotency-Key', createMutationKey())
+    }
     return config
   })
 
@@ -77,7 +84,9 @@ export function setupHttp() {
         status < 300 &&
         config.method === 'get' &&
         config.url &&
-        !AUTH_PATHS.some((path) => config.url!.includes(path))
+        !AUTH_PATHS.some((path) => config.url!.includes(path)) &&
+        !config.headers.get('X-View-User-ID') &&
+        mayApplyRead(reads.get(config) ?? null)
       ) {
         await cachePut(cacheKey(config), response.data)
         // Invariant "cache = server + queue": after a fresh write we re-apply
@@ -99,6 +108,7 @@ export function setupHttp() {
       // serve the last saved response from the cache (same { data, error } format). Read-time
       // overlay: before reading we apply unsynchronized mutations on top of the warmed cache.
       // This runs in every environment — web and desktop share the same offline read path.
+      if (!error.response && config.headers?.get('X-View-User-ID')) return Promise.reject(error)
       if (!error.response) {
         if ((config.method ?? 'get').toLowerCase() === 'get') {
           await replayOutboxToCache()
@@ -192,6 +202,8 @@ export function setupHttp() {
       // reuse (revoking ALL user sessions) — plus the UI would show a false
       // "Session expired" instead of the expected "logged out" state.
       if (isLoggedOut()) {
+        // The router must see the cleared in-memory state before entering /login.
+        await ensureAutoSession()
         redirectToLogin()
         return Promise.reject(error)
       }

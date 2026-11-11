@@ -1,7 +1,6 @@
-/** Timeline cell unit: day or decade (10 days) */
-export type PlanningUnit = 'day' | 'decade'
+/** Timeline cell unit: day, decade (10 days) or week (Monday-start 7 days) */
+export type PlanningUnit = 'day' | 'decade' | 'week'
 
-import { LABEL_WIDTH } from './layout'
 import { DAY_MS, clamp } from '../../utils'
 import { fmtDateRange } from '@/i18n/date'
 
@@ -161,6 +160,7 @@ export function cellIndexForDate(
   const o = toDayStart(origin)
   const d = toDayStart(date)
   if (unit === 'day') return Math.round((d.getTime() - o.getTime()) / DAY_MS)
+  if (unit === 'week') return weekIndexForDate(o, d)
   const { month, anchorDay, anchorDec, split, base, cells } = decadeLayout(o)
   const dm = monthNumber(d)
   if (dm === month) {
@@ -178,6 +178,7 @@ export function cellIndexForDate(
 export function cellStartDate(origin: Date | string | number, unit: PlanningUnit, i: number): Date {
   const o = toDayStart(origin)
   if (unit === 'day') return new Date(o.getFullYear(), o.getMonth(), o.getDate() + i)
+  if (unit === 'week') return weekCellStart(o, i)
   const { month, anchorDec, base, cells } = decadeLayout(o)
   if (i >= base + cells) {
     const rel = i - (base + cells)
@@ -201,6 +202,7 @@ export function cellStartDate(origin: Date | string | number, unit: PlanningUnit
 /** End date of cell i (inclusive, local midnight). */
 export function cellEndDate(origin: Date | string | number, unit: PlanningUnit, i: number): Date {
   if (unit === 'day') return cellStartDate(origin, unit, i)
+  if (unit === 'week') return weekCellEnd(toDayStart(origin), i)
   const o = toDayStart(origin)
   const { anchorDay, anchorDec, split, base } = decadeLayout(o)
   const start = cellStartDate(origin, unit, i)
@@ -215,6 +217,73 @@ export function cellEndDate(origin: Date | string | number, unit: PlanningUnit, 
   }
   if (decadeOfCell(o, i) === 2) return lastDayOfMonth(start)
   return new Date(start.getFullYear(), start.getMonth(), start.getDate() + 9)
+}
+
+// ============================================================================
+// Weeks stay Monday–Sunday even when the timeline anchor falls mid-week.
+// ============================================================================
+
+/** Day-of-week with Monday = 0 … Sunday = 6. */
+function dowMonday(d: Date): number {
+  return (d.getDay() + 6) % 7
+}
+
+/** Monday of the week containing d (local midnight). */
+function mondayOfWeek(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() - dowMonday(d))
+}
+
+/** Civil-day coordinates avoid daylight-saving shifts in calendar geometry. */
+function civilDay(d: Date): number {
+  return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / DAY_MS
+}
+
+function weekIndexForDate(origin: Date, d: Date): number {
+  return (civilDay(mondayOfWeek(d)) - civilDay(mondayOfWeek(origin))) / 7
+}
+
+function weekCellStart(origin: Date, i: number): Date {
+  const monday = mondayOfWeek(origin)
+  return new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 7 * i)
+}
+
+function weekCellEnd(origin: Date, i: number): Date {
+  const start = weekCellStart(origin, i)
+  return new Date(start.getFullYear(), start.getMonth(), start.getDate() + 6)
+}
+
+/** ISO 8601 assigns a week to the year containing its Thursday. */
+export function isoWeek(d: Date): { year: number; week: number } {
+  const thursday = thursdayOfWeek(d)
+  const year = thursday.getFullYear()
+  const firstMonday = mondayOfWeek(new Date(year, 0, 4))
+  return { year, week: Math.floor((civilDay(thursday) - civilDay(firstMonday)) / 7) + 1 }
+}
+
+/** Month boundaries can fall inside a weekly cell rather than on its edge. */
+export function weekCoordinate(origin: Date | string | number, date: Date): number {
+  return (civilDay(date) - civilDay(mondayOfWeek(toDayStart(origin)))) / 7
+}
+
+/** Thursday of the week containing d (the week's ISO-style month anchor). */
+function thursdayOfWeek(d: Date): Date {
+  const monday = mondayOfWeek(d)
+  return new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 3)
+}
+
+/** 1-based ordinal of the week within its month: the week containing the month's
+ *  1st day is #1; the month is taken from the week's Thursday (ISO week convention),
+ *  so a week straddling two months is counted for the month holding its majority. */
+export function weekOfMonth(d: Date): number {
+  const thursday = thursdayOfWeek(d)
+  return Math.floor((thursday.getDate() - 1) / 7) + 1
+}
+
+const ROMAN_NUMERALS = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII']
+
+/** Week-of-month ordinal as a Roman numeral (I…VI for a calendar month). */
+export function romanNumeral(n: number): string {
+  return ROMAN_NUMERALS[n] ?? String(n)
 }
 
 /** count consecutive cells starting from fromCell (absolute indices). */
@@ -318,14 +387,16 @@ export function clampDateToBounds(
 }
 
 /**
- * Fits the interval [start, end] into the parent bounds [bStart, bEnd], preserving
- * duration (unlike clampSpanDates, which truncates): if the interval lies entirely
- * (or sticks out) left of the parent start — it is pushed to the start and grows
- * right by its own length; right of the end — pushed to the end and grows left;
- * if the duration exceeds the parent — it occupies the parent entirely.
- * If the bounds are not set — the interval is unchanged.
+ * Fits a NEW item created at `start` with the default length [start, end] into the
+ * parent bounds [bStart, bEnd] WITHOUT moving the start: the start is the cell the
+ * user clicked, and only containment may move it (a click outside the parent is
+ * clamped to the nearest bound). The default length is truncated by the parent's
+ * end — the item gets shorter instead of sliding left, which used to make a task
+ * created near the end of its process start several cells earlier than the click
+ * (a click on the last day produced a task starting a week before it). Never
+ * shorter than one day. If the bounds are not set — the interval is unchanged.
  */
-export function shiftSpanDates(
+export function fitSpanDates(
   start: Date | string | number,
   end: Date | string | number,
   bStart?: Date | string | number | null,
@@ -338,48 +409,27 @@ export function shiftSpanDates(
   }
   const bs = toDayStart(bStart).getTime()
   const be = toDayStart(bEnd).getTime()
-  const len = e.getTime() - s.getTime()
-  let ns = s.getTime()
-  let ne = ns + len
-  if (len >= be - bs) {
-    ns = bs
-    ne = be
-  } else {
-    if (ns < bs) {
-      ns = bs
-      ne = ns + len
-    }
-    if (ne > be) {
-      ne = be
-      ns = ne - len
-    }
-  }
+  const ns = clamp(s.getTime(), bs, be)
+  const ne = clamp(e.getTime(), ns, be)
   return { start_date: fmtDate(new Date(ns)), end_date: fmtDate(new Date(ne)) }
 }
 
 /**
- * Date under the mouse pointer on the infinite timeline.
- * windowStartCell — absolute cell index at the left edge of the timeline (visible window),
- * cellPx — cell width in px, rect — the container (including the LABEL_WIDTH label column),
- * scale — CSS zoom of the container (viewport coordinates are divided by the scale).
- * Returns YYYY-MM-DD (local timezone) or null if the click is left of the timeline.
+ * Date under a fractional absolute cell coordinate (as produced by
+ * `cellCoordAtViewportX` in composables/timelineHelpers): the cell's own day for a
+ * day cell (its start and end dates coincide), or the day the fraction marks inside
+ * a decade cell. The coordinate comes from the CONTENT position, so the fractional
+ * scroll of the visible window is already accounted for — the caller must not add
+ * a window start of its own.
  */
-export function dateForPointer(
+export function dateAtCellCoord(
   origin: Date | string | number,
   unit: PlanningUnit,
-  windowStartCell: number,
-  cellPx: number,
-  rect: DOMRect | null,
-  clientX: number,
-  scale = 1,
-): string | null {
-  if (!rect || cellPx <= 0) return null
-  const x = (clientX - rect.left) / scale
-  if (x < LABEL_WIDTH) return null
-  const raw = (x - LABEL_WIDTH) / cellPx
-  const i = Math.floor(raw)
-  const frac = raw - i
-  const start = cellStartDate(origin, unit, windowStartCell + i).getTime()
-  const end = cellEndDate(origin, unit, windowStartCell + i).getTime()
-  return fmtDate(new Date(start + Math.round(frac * (end - start))))
+  coord: number,
+): Date {
+  const i = Math.floor(coord)
+  const frac = coord - i
+  const start = cellStartDate(origin, unit, i).getTime()
+  const end = cellEndDate(origin, unit, i).getTime()
+  return new Date(start + Math.round(frac * (end - start)))
 }

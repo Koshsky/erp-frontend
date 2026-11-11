@@ -40,7 +40,11 @@ const SESSION_STORE = 'session'
 /** Every object store the app relies on (must all exist after openDb). */
 const ALL_STORES = [CACHE_STORE, OUTBOX_STORE, IDMAP_STORE, SESSION_STORE] as const
 
+const DB_OPERATION_TIMEOUT_MS = 4000
+
 let dbPromise: Promise<IDBDatabase> | null = null
+let activeDb: IDBDatabase | null = null
+const transactions = new WeakMap<IDBDatabase, number>()
 
 /** Creates any missing object store (runs inside onupgradeneeded). */
 function ensureStores(db: IDBDatabase): void {
@@ -59,98 +63,131 @@ function hasAllStores(db: IDBDatabase): boolean {
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     if (typeof indexedDB === 'undefined') {
-      // i18n-allow: the reason of a failed internal promise, not a rendered label
       reject(new Error(t('offline.db.unavailable')))
       return
     }
 
-    // Open WITHOUT requesting a fixed version: a database created by an older
-    // bundle (or by our own repair bump) may already sit above DB_VERSION, and
-    // indexedDB.open(name, version) then fails with VersionError ("the stored
-    // database is a higher version than the version requested"). Opening at
-    // the current version never errors; missing stores are added below via a
-    // version bump only when actually needed.
-    const open = indexedDB.open(DB_NAME)
-    open.onupgradeneeded = () => ensureStores(open.result)
-    open.onblocked = () => {
-      console.warn('[db] open blocked by an older connection in another tab — retrying')
+    let settled = false
+    const fail = (error: unknown) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      reject(error)
     }
-    open.onerror = () => reject(open.error ?? new Error(t('offline.db.openFailed')))
-    open.onsuccess = () => {
-      const db = open.result
-      // Close this connection when the database is upgraded by another tab —
-      // an open connection of the old version would block their version bump.
-      // Drop the cached handle so the next access reopens the new version.
-      db.onversionchange = () => {
-        resetDb()
-        db.close()
-      }
-      if (hasAllStores(db)) {
-        resolve(db)
-        return
-      }
-
-      // Self-healing: the existing database is missing one of the required
-      // object stores (e.g. a database created by an older bundle before the
-      // session store was added). Bump the version one step above the current
-      // one so the upgrade handler runs and creates the missing stores.
-      const repairedVersion = db.version + 1
-      console.warn(
-        `[db] missing object store(s), repairing (version ${db.version} → ${repairedVersion})`,
-      )
-      db.close()
-
-      const repair = indexedDB.open(DB_NAME, repairedVersion)
-      repair.onupgradeneeded = () => ensureStores(repair.result)
-      repair.onblocked = () => {
-        console.warn('[db] repair blocked by an older connection in another tab — retrying')
-      }
-      repair.onerror = () => reject(repair.error ?? new Error(t('offline.db.repairFailed')))
-      repair.onsuccess = () => {
-        const repaired = repair.result
-        // Same cross-tab rule: close on an external version bump.
-        repaired.onversionchange = () => {
-          resetDb()
-          repaired.close()
+    // Opening and schema repair share a deadline: a legacy tab can block an upgrade indefinitely.
+    const timer = setTimeout(() => fail(new Error(t('offline.db.timeout'))), DB_OPERATION_TIMEOUT_MS)
+    const connect = (version?: number) => {
+      const request = version == null ? indexedDB.open(DB_NAME) : indexedDB.open(DB_NAME, version)
+      request.onupgradeneeded = () => {
+        if (settled) {
+          request.transaction?.abort()
+          return
         }
-        resolve(repaired)
+        ensureStores(request.result)
       }
+      request.onerror = () => fail(request.error ?? new Error(t('offline.db.openFailed')))
+      request.onsuccess = () => {
+        const db = request.result
+        // A timed-out open must not retain a handle or perform a delayed schema repair.
+        if (settled) {
+          db.close()
+          return
+        }
+        if (!hasAllStores(db)) {
+          const repairedVersion = db.version + 1
+          db.close()
+          try {
+            connect(repairedVersion)
+          } catch (error) {
+            fail(error)
+          }
+          return
+        }
+        activeDb = db
+        db.onversionchange = () => {
+          resetDb(db)
+          db.close()
+        }
+        db.onclose = () => resetDb(db)
+        settled = true
+        clearTimeout(timer)
+        resolve(db)
+      }
+    }
+    try {
+      // Accept newer schemas; only upgrade if a required store is actually missing.
+      connect()
+    } catch (error) {
+      fail(error)
     }
   })
 }
 
 function getDb(): Promise<IDBDatabase> {
   if (!dbPromise) {
-    dbPromise = openDb().catch((e) => {
-      dbPromise = null
-      throw e
+    const pending = openDb().catch((error) => {
+      if (dbPromise === pending) dbPromise = null
+      throw error
     })
+    dbPromise = pending
   }
   return dbPromise
 }
 
-/** Drop the cached connection (used after a close/version change) so the next
- *  call reopens the database. */
-function resetDb(): void {
+function resetDb(db: IDBDatabase): void {
+  // An event from an old handle must not invalidate its replacement.
+  if (activeDb !== db) return
+  activeDb = null
   dbPromise = null
 }
 
-function txAll(
+async function txAll(
   store: string,
   mode: IDBTransactionMode,
   fn: (s: IDBObjectStore) => IDBRequest,
 ): Promise<IDBRequest['result']> {
+  const db = await getDb()
   return new Promise((resolve, reject) => {
-    getDb()
-      .then((db) => {
-        const tx = db.transaction(store, mode)
-        const req = fn(tx.objectStore(store))
-        tx.oncomplete = () => resolve(req.result)
-        tx.onabort = () => reject(tx.error)
-        tx.onerror = () => reject(tx.error)
-        req.onerror = () => reject(req.error)
-      })
-      .catch(reject)
+    const tx = db.transaction(store, mode)
+    transactions.set(db, (transactions.get(db) ?? 0) + 1)
+    const release = () => {
+      const remaining = (transactions.get(db) ?? 1) - 1
+      transactions.set(db, remaining)
+      if (remaining === 0) {
+        // An idle or suspended tab must not block another tab's schema upgrade.
+        resetDb(db)
+        db.close()
+      }
+    }
+    let settled = false
+    const fail = (error: unknown) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      release()
+      reject(error ?? new Error(t('offline.db.operationFailed')))
+    }
+    const timer = setTimeout(() => {
+      fail(new Error(t('offline.db.timeout')))
+      // Cancel pending writes as well as rejecting: a late refresh write could replace a newer token.
+      try { tx.abort() } catch { /* The transaction may already have finished. */ }
+    }, DB_OPERATION_TIMEOUT_MS)
+    tx.onabort = () => fail(tx.error)
+    tx.onerror = () => fail(tx.error)
+    try {
+      const req = fn(tx.objectStore(store))
+      tx.oncomplete = () => {
+        if (settled) return
+        settled = true
+        clearTimeout(timer)
+        release()
+        resolve(req.result)
+      }
+      req.onerror = () => fail(req.error)
+    } catch (error) {
+      fail(error)
+      try { tx.abort() } catch { /* No transaction remains to cancel. */ }
+    }
   })
 }
 

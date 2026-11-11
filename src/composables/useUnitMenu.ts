@@ -33,7 +33,7 @@ export function useUnitMenu(unit: Ref<PlanningUnit>) {
   }
 
   function select(id: string) {
-    if (id === 'day' || id === 'decade') unit.value = id
+    if (id === 'day' || id === 'week') unit.value = id
     close()
   }
 

@@ -4,7 +4,8 @@ import {
   cellEndDate,
   cellIndexForDate,
   cellStartDate,
-  dateForPointer,
+  dateAtCellCoord,
+  fmtDate,
   windowCells,
   toDate,
   type CalendarCell,
@@ -12,7 +13,14 @@ import {
 } from '../components/planner/calendar'
 import { CELL_WIDTH, LABEL_WIDTH } from '../components/planner/layout'
 import { viewSettings, MAX_CELL_PX } from '../settings'
-import { ensureRange, growStep, readRootCellWidth, windowStartFor, type TimelineRange } from './timelineHelpers'
+import {
+  cellCoordAtViewportX,
+  ensureRange,
+  growStep,
+  readRootCellWidth,
+  windowStartFor,
+  type TimelineRange,
+} from './timelineHelpers'
 import { useTableState } from './useTableState'
 import { useTimelineZoom } from './useTimelineZoom'
 
@@ -27,6 +35,13 @@ export interface InfiniteTimeline {
   windowStart: Ref<number>
   /** How many cells fit in the visible timeline area */
   viewportCells: ComputedRef<number>
+  /**
+   * Height of the visible timeline area in px (clientHeight, horizontal scrollbar
+   * excluded). Unscaled: lengths inside the zoomed content (.tg-content) are
+   * multiplied by tableScale, so a consumer that has to cover the visible area
+   * divides this by tableScale (see TimelineGrid's --tg-fit-height).
+   */
+  viewportHeight: Ref<number>
   /** Cells "materialized" to the left of the origin (origin is index 0) */
   leftPad: Ref<number>
   /** Total content width in px: LABEL_WIDTH + (leftPad+rightCells)*cellPx */
@@ -45,8 +60,10 @@ export interface InfiniteTimeline {
   cellEnd: (i: number) => Date
   /** Date under the pointer (for context menu) */
   dateAtPointer: (rect: DOMRect | null, clientX: number) => string | null
-  /** Exact date at a local container coordinate (for centering when the scale changes) */
-  dateAtLocalX: (localX: number, unit?: PlanningUnit) => Date | null
+  /** Date at a viewport x inside the container (for centering when the unit changes) */
+  dateAtViewportX: (viewportX: number, unit?: PlanningUnit) => Date | null
+  /** Fractional absolute cell coordinate under the pointer (null — left of the grid) */
+  cellCoordAtPointer: (clientX: number, rect?: DOMRect | null) => number | null
   /** Programmatic scroll to a date (the cell with the date lands at the window's left edge) */
   scrollToDate: (date: Date | string | number) => void
   /** Programmatic scroll: the date becomes the window center (day/decade scale change) */
@@ -84,6 +101,7 @@ export function useInfiniteTimeline(
   const rightCells = ref(0)
   const windowStart = ref(0)
   const viewportWidth = ref(0)
+  const viewportHeight = ref(0)
   const tableScale = ref(1)
   /** Incremented on every actual scale change (zoom/reset) */
   const scaleBump = ref(0)
@@ -130,28 +148,47 @@ export function useInfiniteTimeline(
     return cellEndDate(toDate(origin), unit.value, i)
   }
 
-  function dateAtPointer(rect: DOMRect | null, clientX: number): string | null {
-    return dateForPointer(
-      toDate(origin),
-      unit.value,
-      windowStart.value,
-      cellPx.value,
-      rect,
-      clientX,
+  /**
+   * Fractional absolute cell coordinate under the pointer (scroll- and zoom-aware):
+   * `cellLeft(floor(value))` is the left edge of the cell under the pointer, the
+   * fraction is the position inside it. null — the pointer is left of the timeline
+   * area (over the label column).
+   *
+   * Everything that turns a pointer position into a cell or a date goes through
+   * this function (context menu, bar drag): the visible window is scrolled by an
+   * arbitrary fraction of a cell, so a formula that only looks at the pointer
+   * offset from the container edge and adds `windowStart` silently resolves clicks
+   * near the left edge of a cell to the previous one.
+   */
+  function cellCoordAtPointer(clientX: number, rect?: DOMRect | null): number | null {
+    const el = container.value
+    if (!el) return null
+    const r = rect ?? el.getBoundingClientRect()
+    return cellCoordAtViewportX(
+      clientX - r.left,
+      el.scrollLeft,
       tableScale.value,
+      cellPx.value,
+      leftPad.value,
     )
   }
 
+  function dateAtPointer(rect: DOMRect | null, clientX: number): string | null {
+    const coord = cellCoordAtPointer(clientX, rect)
+    return coord == null ? null : fmtDate(dateAtCellCoord(toDate(origin), unit.value, coord))
+  }
+
   /**
-   * Exact date at a local x-coordinate of the container (px, unscaled), consistent
-   * with the rendered cells: accounts for the actual scrollLeft/leftPad/cellPx.
-   * Unlike dateAtPointer, the fractional position inside a cell is computed
-   * correctly — important for centering on day/decade scale changes.
+   * Date at a viewport x-coordinate inside the container (px as rendered, i.e. from
+   * the container's left edge), with the fractional position inside the cell
+   * preserved — used to keep the timeline centered on the same date when the unit
+   * changes. Accounts for scrollLeft, the zoom and leftPad.
    */
-  function dateAtLocalX(localX: number, u: PlanningUnit = unit.value): Date | null {
+  function dateAtViewportX(viewportX: number, u: PlanningUnit = unit.value): Date | null {
     const el = container.value
     if (!el) return null
-    const contentX = el.scrollLeft / tableScale.value + localX
+    const scale = tableScale.value || 1
+    const contentX = (el.scrollLeft + viewportX) / scale
     if (contentX < LABEL_WIDTH) return null
     const cell = Math.floor((contentX - LABEL_WIDTH) / cellPx.value) - leftPad.value
     const s = cellStartDate(toDate(origin), u, cell).getTime()
@@ -175,11 +212,12 @@ export function useInfiniteTimeline(
     sync,
   })
 
-  /** Update container width and cellPx from the CSS variable */
+  /** Update container size and cellPx from the CSS variable */
   function measure() {
     const el = container.value
     if (!el) return
     viewportWidth.value = el.clientWidth
+    viewportHeight.value = el.clientHeight
     const raw = getComputedStyle(el).getPropertyValue('--cell-width').trim()
     const px = raw ? parseFloat(raw) : CELL_WIDTH
     if (px > 0 && !Number.isNaN(px)) cellPx.value = px
@@ -202,11 +240,12 @@ export function useInfiniteTimeline(
   }
 
   /**
-   * Programmatic scroll to cell i: the cell becomes the left edge of the visible window.
-   * The range is extended to cover the target position (including far past — leftPad
-   * grows to step − i); applied after the DOM flush.
+   * Programmatic scroll to cell i (optionally `fraction` cells further, 0..1): the
+   * cell becomes the left edge of the visible window. The range is extended to
+   * cover the target position (including far past — leftPad grows to step − i);
+   * applied after the DOM flush.
    */
-  function scrollToCell(i: number) {
+  function scrollToCell(i: number, fraction = 0) {
     const el = container.value
     if (!el) return
     const step = growStep(viewportCells.value)
@@ -216,7 +255,7 @@ export function useInfiniteTimeline(
     if (needLeft > leftPad.value) leftPad.value = needLeft
     const scale = tableScale.value
     void nextTick().then(() => {
-      el.scrollLeft = (i + leftPad.value) * cellPx.value * scale
+      el.scrollLeft = (i + fraction + leftPad.value) * cellPx.value * scale
       sync()
     })
   }
@@ -309,24 +348,21 @@ export function useInfiniteTimeline(
     const step = growStep(viewportCells.value)
     leftPad.value = step
     rightCells.value = viewportCells.value + step * 2
-    // Extend the range for the saved scrollLeft up front (before flush), otherwise
-    // the browser clamps scrollLeft to the smaller content width and the position is lost.
-    const restoreLeft = stored ? stored.scrollLeft : 0
-    if (restoreLeft > 0 || openedScale > 1) {
-      const local = (restoreLeft / (stored ? tableScale.value : openedScale)) || 0
-      const vs = windowStartFor(local, cellPx.value, leftPad.value)
-      ensureRange(vs, range)
+    // The horizontal position is restored in mount(), after the content width has
+    // been applied: only the saved DATE is meaningful (see useTableState), and
+    // scrollToCell extends the range before setting scrollLeft.
+    if (!stored) {
+      const el = container.value
+      // Fresh open (no state at all): the origin sits at the left edge, scaled by the
+      // opening zoom so the initial picture is identical at any default scale.
+      if (el) el.scrollLeft = leftPad.value * cellPx.value * openedScale
+      windowStart.value = 0
     }
-    const el = container.value
-    // scrollLeft is in scaled px — multiply by the active scale so the opening
-    // position (origin near the left edge) is identical at any default zoom.
-    if (el) el.scrollLeft = leftPad.value * cellPx.value * (stored ? tableScale.value : openedScale)
-    windowStart.value = 0
   }
 
   let observer: ResizeObserver | null = null
 
-  /** scrollLeft/scrollTop restore has been applied (otherwise unmount overwrites the store with defaults) */
+  /** view restore has been applied (otherwise unmount overwrites the store with defaults) */
   let stateReady = false
 
   function onScroll() {
@@ -338,22 +374,33 @@ export function useInfiniteTimeline(
     if (!el) return
     initialize()
     const stored = tableState.get(id)
-    // Content width updates reactively (leftPad/rightCells) — wait for the DOM
-    // to apply, otherwise scrollLeft clamps to the old (zero) width and origin does not reach the left edge.
+    // Content width updates reactively (leftPad/rightCells) — wait for the DOM to
+    // apply, otherwise scrollLeft clamps to the old (zero) width and the position
+    // does not reach its cell. scrollToCell extends the range itself (a date far in
+    // the past needs a large leftPad), so it runs on its own tick as well.
     void nextTick().then(() => {
-      if (stored) {
-        el.scrollLeft = stored.scrollLeft
-        // The table may have changed size since the state was saved: a vertical
-        // position beyond the current scrollable range would be silently clamped
-        // by the browser to the bottom, pinning the last rows into view with no
-        // user scroll. A stale position is meaningless — open at the top.
-        const maxScroll = el.scrollHeight - el.clientHeight
-        el.scrollTop = stored.scrollTop <= maxScroll ? stored.scrollTop : 0
-        sync()
+      if (stored?.firstDate) {
+        // Restore by DATE: a saved scrollLeft in px would mean a different date,
+        // because the range grown to the left is re-seeded on every mount.
+        scrollToCell(
+          cellIndexForDate(toDate(origin), unit.value, stored.firstDate),
+          stored.firstFraction,
+        )
       } else {
+        // Fresh open (or a state without a date): the origin sits at the left edge.
+        // Re-applied here, after the content width has been patched into the DOM:
+        // before the flush the browser clamps scrollLeft to the old width.
         el.scrollLeft = leftPad.value * cellPx.value * openedScale
         windowStart.value = 0
       }
+      // The table may have changed size since the state was saved: a vertical
+      // position beyond the current scrollable range would be silently clamped
+      // by the browser to the bottom, pinning the last rows into view with no
+      // user scroll. A stale position is meaningless — open at the top.
+      const savedTop = tableState.getScrollTop(id)
+      const maxScroll = el.scrollHeight - el.clientHeight
+      el.scrollTop = savedTop <= maxScroll ? savedTop : 0
+      sync()
       stateReady = true
     })
     observer = new ResizeObserver(() => {
@@ -373,12 +420,29 @@ export function useInfiniteTimeline(
     // If the restore has not applied yet (fast remount due to a loading flip),
     // the store state is still valid — do not overwrite it.
     if (id && el && stateReady) {
+      // The first VISIBLE cell: the label column lives inside the zoomed content, so
+      // the timeline area starts at LABEL_WIDTH * scale rendered px, not at 0. The
+      // coordinate goes through the same primitive as the pointer mapping — it
+      // carries the boundary guard, without which a position exactly on a cell edge
+      // is saved one cell short and the view walks left on every tab switch.
+      const scale = tableScale.value || 1
+      const coord = cellCoordAtViewportX(
+        LABEL_WIDTH * scale,
+        el.scrollLeft,
+        scale,
+        cellPx.value,
+        leftPad.value,
+      )
+      const cell = coord == null ? null : Math.floor(coord)
       tableState.save(id, {
+        firstDate: cell == null
+          ? null
+          : fmtDate(cellStartDate(toDate(origin), unit.value, cell)),
+        firstFraction: cell == null || coord == null ? 0 : coord - cell,
         cellPx: cellPx.value,
         scale: tableScale.value,
-        scrollLeft: el.scrollLeft,
-        scrollTop: el.scrollTop,
       })
+      tableState.saveScrollTop(id, el.scrollTop)
     }
     stateReady = false
     el?.removeEventListener('scroll', onScroll)
@@ -392,6 +456,7 @@ export function useInfiniteTimeline(
     scaleBump,
     windowStart,
     viewportCells,
+    viewportHeight,
     leftPad,
     contentWidth,
     visibleCells,
@@ -401,7 +466,8 @@ export function useInfiniteTimeline(
     cellStart,
     cellEnd,
     dateAtPointer,
-    dateAtLocalX,
+    dateAtViewportX,
+    cellCoordAtPointer,
     scrollToDate,
     scrollToCenterDate,
     initialize,

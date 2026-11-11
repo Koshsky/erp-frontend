@@ -239,7 +239,7 @@ export const DiagramsSection: Story = {
       viewSettings.badgeComments = true
       await settle()
       expect(canvasElement.querySelector('.tb-comments')?.textContent?.trim()).toBe('3')
-      const box = checkboxByLabel(canvasElement, 'Комментарии на задачах')
+      const box = checkboxByLabel(canvasElement, 'Комментарии')
       expect(box).toBeTruthy()
       box?.click()
       await settle()
@@ -266,5 +266,67 @@ export const DiagramsSection: Story = {
       expect(calendar).toBeTruthy()
       expect(calendar?.querySelector('select')).toBeNull()
     })
+  },
+}
+
+export const BadgeGroupsMatchTheirBars: Story = {
+  play: async ({ canvasElement, step }) => {
+    const groups = [
+      ['project', 'badgeProjectOwner', 'badgeProjectResponsible'],
+      ['process', 'badgeProcessOwner', 'badgeProcessResponsible'],
+      ['task', 'badgeTaskOwner', 'badgeTaskResponsible'],
+    ] as const
+    const previous = { ...viewSettings }
+    try {
+      for (const [, owner, responsible] of groups) {
+        viewSettings[owner] = true
+        viewSettings[responsible] = true
+      }
+      viewSettings.badgeProcessProjectCode = true
+      viewSettings.badgeTaskProjectCode = true
+      await openDiagramsSection(canvasElement)
+      expect(canvasElement.querySelectorAll('.bbp-preview .gantt-bar')).toHaveLength(3)
+      for (const [kind] of groups) {
+        await step(`${kind} controls affect only the matching preview`, async () => {
+          const group = canvasElement.querySelector<HTMLElement>(`[data-badge-group="${kind}"]`)!
+          const selector = kind === 'task' ? '.tb-owner' : '.lb-owner'
+          const box = group.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')[kind === 'project' ? 0 : 1]!
+          expect(group.querySelector(selector)).toBeTruthy()
+          box.click()
+          await settle()
+          expect(group.querySelector(selector)).toBeNull()
+          for (const [other] of groups) {
+            if (other === kind) continue
+            const otherSelector = other === 'task' ? '.tb-owner' : '.lb-owner'
+            expect(canvasElement.querySelector(`[data-badge-group="${other}"] ${otherSelector}`)).toBeTruthy()
+          }
+          box.click()
+          await settle()
+          expect(group.querySelector(selector)).toBeTruthy()
+        })
+      }
+      await step('project-code switches are independent for processes and tasks', async () => {
+        const process = canvasElement.querySelector<HTMLElement>('[data-badge-group="process"]')!
+        const task = canvasElement.querySelector<HTMLElement>('[data-badge-group="task"]')!
+        const processBox = process.querySelector<HTMLInputElement>('input')!
+        const taskBox = task.querySelector<HTMLInputElement>('input')!
+        processBox.click()
+        await settle()
+        expect(process.querySelector('.lb-code')).toBeNull()
+        expect(task.querySelector('.tb-proj')).toBeTruthy()
+        taskBox.click()
+        await settle()
+        expect(task.querySelector('.tb-proj')).toBeNull()
+        processBox.click()
+        await settle()
+        expect(process.querySelector('.lb-code')).toBeTruthy()
+        expect(task.querySelector('.tb-proj')).toBeNull()
+        taskBox.click()
+        await settle()
+        expect(task.querySelector('.tb-proj')).toBeTruthy()
+      })
+    } finally {
+      Object.assign(viewSettings, previous)
+    }
   },
 }

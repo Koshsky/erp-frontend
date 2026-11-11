@@ -1,35 +1,37 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { useAuthStore } from '../store'
+import { useRoute } from 'vue-router'
+import { useAuthStore, useRbacStore } from '../store'
 import { isOffline } from '../offline/state'
 import { t } from '../i18n'
+import { fullName } from '../utils/fullName'
+import { presetLabelFromCatalog } from '../utils/presets'
+import ProfileEditPage from './ProfileEditPage.vue'
 
 const auth = useAuthStore()
+const rbac = useRbacStore()
+const route = useRoute()
 
-interface ProfileField {
-  label: string
-  value: string
-}
-
-// Real profile of the current user, fetched from the API (auth.user)
-const profile = computed<ProfileField[]>(() => {
-  const u = auth.user
-  return [
-    { label: t('adminUsers.profile.field.login'), value: u?.username || '—' },
-    { label: t('adminUsers.profile.field.name'), value: u?.name || '—' },
-    { label: t('adminUsers.profile.field.preset'), value: u?.preset || '—' },
-    { label: t('adminUsers.profile.field.id'), value: u?.id != null ? String(u.id) : '—' },
-  ]
-})
-
-/** Connection status (mirrors the colors of the "Status" diagnostics page). */
+const sections = computed(() => [
+  { id: 'data', label: t('adminUsers.profile.section.data') },
+  { id: 'security', label: t('adminUsers.profile.section.security') },
+  { id: 'about', label: t('adminUsers.profile.section.about') },
+])
+const activeSection = computed(() =>
+  sections.value.some((section) => section.id === route.query.section) ? route.query.section : 'data',
+)
+const displayName = computed(() => fullName(auth.user).trim() || auth.user?.name?.trim() || auth.user?.username || '—')
+const headingName = computed(() =>
+  [auth.user?.first_name?.trim(), auth.user?.last_name?.trim()].filter(Boolean).join(' ') || displayName.value,
+)
+const initials = computed(() =>
+  headingName.value.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => [...part][0]).join('').toUpperCase(),
+)
+const presetLabel = computed(() => presetLabelFromCatalog(auth.user?.preset, rbac.presets))
 const connectionLabel = computed(() =>
   isOffline.value ? t('adminUsers.profile.offline') : t('adminUsers.profile.online'),
 )
-
-/** Version of the running bundle (injected at build time). */
 const appBuildVersion = __APP_VERSION__
-/** Version of the deployed app bundle from the precache manifest (guarded). */
 const appVersion = ref('—')
 
 async function refreshAppInfo() {
@@ -40,69 +42,69 @@ async function refreshAppInfo() {
       appVersion.value = data.version ?? '—'
     }
   } catch {
-    // the manifest is not critical — keep the fallback
+    // An unavailable manifest must not prevent access to account settings.
   }
 }
 
 onMounted(() => {
   const id = auth.user?.id
-  if (id != null) auth.fetchProfile(id)
+  if (id != null) void auth.fetchProfile(id)
+  if (!isOffline.value) void rbac.ensurePresets()
   void refreshAppInfo()
 })
 </script>
 
 <template>
-  <section class="pf">
-    <div class="pf-head">
-      <h2 class="pf-title">{{ t('adminUsers.profile.title') }}</h2>
-      <!-- Square icon button → the "Edit profile" page -->
-      <RouterLink
-        to="/profile/edit"
-        class="pf-edit"
-        :title="t('adminUsers.profile.edit')"
-        :aria-label="t('adminUsers.profile.edit')"
-      >
-        <!-- Pencil icon (line style, matches the CopyField/PasswordField icons) -->
-        <svg
-          viewBox="0 0 24 24"
-          width="20"
-          height="20"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.8"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          aria-hidden="true"
-        >
-          <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
-        </svg>
-      </RouterLink>
-    </div>
-
-    <div class="pf-cards">
-      <div class="pf-card">
-        <div v-for="field in profile" :key="field.label" class="pf-row">
-          <span class="pf-label">{{ field.label }}</span>
-          <span class="pf-value">{{ field.value }}</span>
-        </div>
-      </div>
+  <section class="pf" aria-labelledby="profile-title">
+    <h2 id="profile-title" class="pf-title">{{ t('adminUsers.profile.title') }}</h2>
+    <div class="pf-layout">
+      <nav class="pf-nav" :aria-label="t('adminUsers.profile.navigation')">
+        <RouterLink
+          v-for="section in sections"
+          :key="section.id"
+          :to="{ name: 'profile', query: { section: section.id } }"
+          class="pf-nav-link"
+          :class="{ active: activeSection === section.id }"
+          :aria-current="activeSection === section.id ? 'page' : undefined"
+        >{{ section.label }}</RouterLink>
+      </nav>
 
       <div class="pf-card">
-        <div class="pf-row">
-          <span class="pf-label">{{ t('adminUsers.profile.field.state') }}</span>
-          <span class="pf-value" :class="isOffline ? 'off' : 'on'">{{ connectionLabel }}</span>
-        </div>
-      </div>
+        <section v-if="activeSection === 'data'" class="pf-panel" aria-labelledby="profile-data-title">
+          <div class="pf-identity">
+            <div class="pf-avatar" aria-hidden="true">{{ initials }}</div>
+            <div class="pf-person">
+              <h3 class="pf-name">{{ headingName }}</h3>
+              <p class="pf-login">{{ auth.user?.username ? `@${auth.user.username}` : '—' }}</p>
+            </div>
+          </div>
+          <h3 id="profile-data-title" class="pf-section-title">{{ t('adminUsers.profile.section.data') }}</h3>
+          <dl class="pf-fields">
+            <div><dt>{{ t('adminUsers.profile.field.name') }}</dt><dd>{{ displayName }}</dd></div>
+            <div><dt>{{ t('adminUsers.profile.field.login') }}</dt><dd>{{ auth.user?.username || '—' }}</dd></div>
+            <div><dt>{{ t('adminUsers.profile.field.preset') }}</dt><dd>{{ presetLabel }}</dd></div>
+          </dl>
+        </section>
 
-      <div class="pf-card">
-        <div class="pf-row">
-          <span class="pf-label">{{ t('adminUsers.profile.field.appVersion') }}</span>
-          <span class="pf-value">{{ appVersion }}</span>
-        </div>
-        <div class="pf-row">
-          <span class="pf-label">{{ t('adminUsers.profile.field.buildVersion') }}</span>
-          <span class="pf-value">{{ appBuildVersion }}</span>
-        </div>
+        <section v-else-if="activeSection === 'security'" class="pf-panel" aria-labelledby="profile-security-title">
+          <h3 id="profile-security-title" class="pf-section-title">{{ t('adminUsers.profile.section.security') }}</h3>
+          <ProfileEditPage embedded />
+        </section>
+
+        <section v-else class="pf-panel" aria-labelledby="profile-about-title">
+          <h3 id="profile-about-title" class="pf-section-title">{{ t('adminUsers.profile.section.about') }}</h3>
+          <dl class="pf-fields">
+            <div>
+              <dt>{{ t('adminUsers.profile.field.state') }}</dt>
+              <dd class="pf-connection" :class="isOffline ? 'off' : 'on'" role="status">
+                <span class="pf-dot" aria-hidden="true"></span>{{ connectionLabel }}
+              </dd>
+            </div>
+            <div><dt>{{ t('adminUsers.profile.field.appVersion') }}</dt><dd class="pf-version">{{ appVersion }}</dd></div>
+            <div><dt>{{ t('adminUsers.profile.field.buildVersion') }}</dt><dd class="pf-version">{{ appBuildVersion }}</dd></div>
+            <div><dt>{{ t('adminUsers.profile.field.id') }}</dt><dd>{{ auth.user?.id ?? '—' }}</dd></div>
+          </dl>
+        </section>
       </div>
     </div>
   </section>
@@ -111,86 +113,69 @@ onMounted(() => {
 <style scoped>
 @import '../styles/tokens.css';
 
+.pf { max-width: 900px; }
 .pf-title {
+  margin: 0 0 24px;
   font-size: calc(var(--ui-font-scale, 1) * 24px);
   font-weight: 700;
   color: var(--ui-text);
-  margin-bottom: 20px;
 }
-
-/* Header row: title + square edit button */
-.pf-head {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 20px;
+.pf-layout { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 24px; align-items: start; }
+.pf-nav { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.pf-nav-link {
+  padding: 11px 14px;
+  border-radius: var(--ui-radius-sm);
+  color: var(--ui-text-muted);
+  text-decoration: none;
+  font-size: calc(var(--ui-font-scale, 1) * 14px);
+  overflow-wrap: anywhere;
+  transition: background var(--ui-duration), color var(--ui-duration);
 }
-
-.pf-head .pf-title {
-  margin-bottom: 0;
-}
-
-.pf-cards {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-  max-width: 720px;
-}
-
+.pf-nav-link:hover { background: var(--ui-surface-3); color: var(--ui-text); }
+.pf-nav-link.active { background: var(--ui-accent-soft); color: var(--ui-accent); font-weight: 600; }
 .pf-card {
+  min-width: 0;
   background: var(--ui-surface);
   border-radius: var(--ui-radius-md);
   box-shadow: var(--ui-shadow-sm);
-  overflow: hidden;
 }
-
-.pf-row {
+.pf-panel { min-height: 390px; padding: 24px; }
+.pf-identity {
   display: flex;
-  justify-content: space-between;
-  padding: 14px 20px;
-  border-bottom: 1px solid var(--ui-border);
-  font-size: calc(var(--ui-font-scale, 1) * 14px);
-}
-.pf-row:last-child { border-bottom: none; }
-
-.pf-label {
-  color: var(--ui-text-faint);
-}
-.pf-value {
-  font-weight: 600;
-  color: var(--ui-text);
-}
-
-/* Connection state colors (match the "Status" diagnostics page). */
-.pf-value.on {
-  color: var(--ui-success);
-}
-.pf-value.off {
-  color: var(--ui-warning);
-}
-
-/* Square icon button → the edit page */
-.pf-edit {
-  width: 40px;
-  height: 40px;
-  flex-shrink: 0;
-  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  border: 1px solid var(--ui-border-strong);
-  border-radius: var(--ui-radius-sm);
-  background: var(--ui-surface);
-  color: var(--ui-text-muted);
-  cursor: pointer;
-  transition: background var(--ui-duration), color var(--ui-duration), transform 0.1s;
+  gap: 14px;
+  padding-bottom: 24px;
+  margin-bottom: 24px;
+  border-bottom: 1px solid var(--ui-border);
 }
-
-.pf-edit:hover {
-  background: var(--ui-surface-3);
+.pf-avatar {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--ui-accent-soft);
   color: var(--ui-accent);
+  font-size: calc(var(--ui-font-scale, 1) * 18px);
+  font-weight: 600;
 }
-
-.pf-edit:active {
-  transform: scale(0.96);
+.pf-person { min-width: 0; }
+.pf-name { margin: 0; font-size: calc(var(--ui-font-scale, 1) * 18px); font-weight: 600; color: var(--ui-text); overflow-wrap: anywhere; }
+.pf-login { margin: 4px 0 0; font-size: calc(var(--ui-font-scale, 1) * 13px); color: var(--ui-text-muted); overflow-wrap: anywhere; }
+.pf-section-title { margin: 0; font-size: calc(var(--ui-font-scale, 1) * 16px); font-weight: 600; color: var(--ui-text); }
+.pf-fields { display: grid; gap: 22px; margin: 24px 0 0; font-size: calc(var(--ui-font-scale, 1) * 14px); }
+.pf-fields dt { margin-bottom: 6px; color: var(--ui-text-muted); font-size: calc(var(--ui-font-scale, 1) * 13px); }
+.pf-fields dd { margin: 0; color: var(--ui-text); font-weight: 500; overflow-wrap: anywhere; }
+.pf-version { font-family: var(--ui-font-mono, monospace); }
+.pf-connection { display: flex; align-items: center; gap: 8px; }
+.pf-connection.on { color: var(--ui-success); }
+.pf-connection.off { color: var(--ui-warning); }
+.pf-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+@media (max-width: 640px) {
+  .pf-layout { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .pf-nav { flex-direction: row; flex-wrap: wrap; gap: 4px; }
+  .pf-nav-link { padding: 10px 12px; }
+  .pf-panel { padding: 20px; }
 }
 </style>

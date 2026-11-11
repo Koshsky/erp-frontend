@@ -5,6 +5,7 @@ import { applyToCache } from './cacheApply'
 import { probeBackend } from './state'
 import { getApiUrl } from '@/config'
 import { getAccessToken } from '../token'
+import { isLoggedOut } from '../loggedOut'
 import { appLocale, t } from '../i18n'
 
 /**
@@ -50,6 +51,8 @@ export type MutationEntity =
   | 'reorder'
 
 export interface OutboxEntry {
+  /** Survives a lost initial response; legacy entries use their queue id. */
+  idempotencyKey?: string
   id: string
   /** Send order (FIFO) */
   ts: number
@@ -301,7 +304,8 @@ watch(appLocale, () => {
 /** Re-reads the queue into queueItems. Only unsent and non-synced
  *  entries (!quarantined), in send order (FIFO). Quarantined ones are visible in the errors block. */
 export async function refreshQueue(): Promise<void> {
-  const entries = await idbAll<OutboxEntry>(OUTBOX_STORE).catch(() => [] as OutboxEntry[])
+  const entries = await idbAll<OutboxEntry>(OUTBOX_STORE).catch(() => null)
+  if (!entries) return
   queueItems.value = entries
     .filter((e) => !e.quarantined)
     .sort((a, b) => a.ts - b.ts)
@@ -309,7 +313,8 @@ export async function refreshQueue(): Promise<void> {
 }
 
 export async function refreshPendingCount(): Promise<void> {
-  const entries = await idbAll<OutboxEntry>(OUTBOX_STORE).catch(() => [] as OutboxEntry[])
+  const entries = await idbAll<OutboxEntry>(OUTBOX_STORE).catch(() => null)
+  if (!entries) return
   pendingCount.value = entries.filter((e) => !e.quarantined).length
   // Rebuild the "awaiting sync" mark set from all queued entries (quarantined
   // included — they still wait for a manual retry). Entries without a resolvable
@@ -323,7 +328,7 @@ export async function refreshPendingCount(): Promise<void> {
   await refreshQueue()
 }
 
-function uid(): string {
+export function createMutationKey(): string {
   return typeof crypto !== 'undefined' && 'randomUUID' in crypto
     ? crypto.randomUUID()
     : `m-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
@@ -344,18 +349,20 @@ function normalizeBody(body: unknown): unknown {
 export async function enqueueMutation(
   entry: Omit<OutboxEntry, 'id' | 'ts' | 'failed'>,
 ): Promise<void> {
-  const rec: OutboxEntry = { ...entry, body: normalizeBody(entry.body), id: uid(), ts: Date.now(), creator: currentUsername() ?? undefined }
+  const rec: OutboxEntry = { ...entry, body: normalizeBody(entry.body), id: createMutationKey(), ts: Date.now(), creator: currentUsername() ?? undefined }
   // Deduplication: a repeated click on the same mutation (method+url+body) does not
   // spawn identical entries — the queue stays clean and flush does not send duplicate batches.
   const bodyKey = rec.body != null ? JSON.stringify(rec.body) : ''
   const existing = await idbAll<OutboxEntry>(OUTBOX_STORE).catch(() => [] as OutboxEntry[])
   const dup = existing.some(
     (e) =>
+      (rec.idempotencyKey != null ? e.idempotencyKey === rec.idempotencyKey : e.idempotencyKey == null) &&
       e.method === rec.method &&
       e.url === rec.url &&
       (e.body != null ? JSON.stringify(e.body) : '') === bodyKey,
   )
   if (dup) return
+  rec.ts = existing.reduce((latest, entry) => Math.max(latest, entry.ts + 1), rec.ts)
   await idbPut(OUTBOX_STORE, rec.id, rec)
   await refreshPendingCount()
   // Write-through: apply the delta to "warmed" data (cache of GET responses)
@@ -364,12 +371,23 @@ export async function enqueueMutation(
 }
 
 /** Replaces temporary ids with real ones (after successful creates in the queue) */
-function rewriteIds(input: string, idMap: Map<number, number>): string {
-  let out = input
-  for (const [temp, real] of idMap) {
-    out = out.split(String(temp)).join(String(real))
+function rewriteUrlIds(input: string, idMap: Map<number, number>): string {
+  const url = new URL(input, 'http://relative.invalid')
+  const mapped = (value: string) => /^-\d+$/.test(value) ? String(idMap.get(Number(value)) ?? value) : value
+  url.pathname = url.pathname.replace(/(?<=\/)-\d+(?=\/|$)/g, mapped)
+  for (const [key, value] of url.searchParams) {
+    const replacement = value.split(',').map(mapped).join(',')
+    if (replacement !== value) url.searchParams.set(key, replacement)
   }
-  return out
+  return input.startsWith('/') ? url.pathname + url.search + url.hash : url.toString()
+}
+
+function rewriteBodyIds(value: unknown, idMap: Map<number, number>): unknown {
+  if (Array.isArray(value)) return value.map((item) => rewriteBodyIds(item, idMap))
+  if (value != null && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, rewriteBodyIds(item, idMap)]))
+  }
+  return typeof value === 'number' ? idMap.get(value) ?? value : value
 }
 
 /**
@@ -536,8 +554,20 @@ function pause(): Promise<void> {
  * Sends the queue to the backend. One run at a time; when the network
  * returns again, the remaining entries go out with the next flush.
  */
+function emptyFlush(): FlushResult {
+  return { ok: 0, failed: 0, interrupted: false, entities: new Set<MutationEntity>(), failedEntries: [] }
+}
+
 export async function flushOutbox(): Promise<FlushResult> {
-  const empty = () => ({ ok: 0, failed: 0, interrupted: false, entities: new Set<MutationEntity>(), failedEntries: [] as FailedSyncItem[] })
+  if (typeof navigator !== 'undefined' && navigator.locks) {
+    // Never queue behind a suspended tab: the next minute cycle retries ownership.
+    return navigator.locks.request('mvs_erp_outbox', { ifAvailable: true }, lock => lock ? flushOwnedOutbox() : emptyFlush())
+  }
+  return flushOwnedOutbox()
+}
+
+async function flushOwnedOutbox(): Promise<FlushResult> {
+  const empty = emptyFlush
   if (flushing) return empty()
   flushing = true
   const result: FlushResult = { ok: 0, failed: 0, interrupted: false, entities: new Set(), failedEntries: [] }
@@ -558,6 +588,10 @@ export async function flushOutbox(): Promise<FlushResult> {
     let done = 0
 
     for (const entry of entries) {
+      if (isLoggedOut()) {
+        result.interrupted = true
+        break
+      }
       // Quarantine and backoff: don't touch entries the server just rejected.
       if (entry.quarantined) continue
       if (entry.failed && Date.now() - entry.failed.at < FAILED_BACKOFF_MS) continue
@@ -577,8 +611,8 @@ export async function flushOutbox(): Promise<FlushResult> {
         continue
       }
 
-      const url = rewriteIds(rebasedUrl(entry.url), idMap)
-      const body = entry.body != null ? rewriteIds(JSON.stringify(entry.body), idMap) : undefined
+      const url = rewriteUrlIds(rebasedUrl(entry.url), idMap)
+      const body = entry.body != null ? JSON.stringify(rewriteBodyIds(entry.body, idMap)) : undefined
       try {
         const token = getAccessToken()
         const res = await axios({
@@ -588,7 +622,7 @@ export async function flushOutbox(): Promise<FlushResult> {
           headers: {
             'Content-Type': 'application/json',
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
-            ...(needsIdempotencyKey(entry.method) ? { 'Idempotency-Key': entry.id } : {}),
+            ...(needsIdempotencyKey(entry.method) ? { 'Idempotency-Key': entry.idempotencyKey ?? entry.id } : {}),
           },
           timeout: 15000,
           // The sync toast (SyncToast) is the feedback channel for queued
@@ -648,6 +682,11 @@ export async function flushOutbox(): Promise<FlushResult> {
           // flush sorts entries by enqueue time, so the creator entry goes out first
           // and rewriteIds substitutes the real id before this DELETE is sent.
           const status = err.response.status
+          // Session renewal can fail independently of the saved mutation.
+          if (status === 401) {
+            result.interrupted = true
+            break
+          }
           const method = (entry.method || '').toUpperCase()
           if (method === 'DELETE' && (status === 404 || status === 410)) {
             await idbDel(OUTBOX_STORE, entry.id)
@@ -690,15 +729,8 @@ export async function flushOutbox(): Promise<FlushResult> {
     flushing = false
     pushProgress.value = null
     await refreshPendingCount()
-    // The queue was fully sent (no entries, no dependencies) — the mappings
-    // are no longer needed (reconcile returned real ids to the store). If the queue
-    // still has entries (interruption/errors) — keep the mapping: the next
-    // run will rewrite dependent URL/body with it.
-    const remaining = await idbAll<OutboxEntry>(OUTBOX_STORE).catch(() => [] as OutboxEntry[])
-    if (remaining.length === 0) {
-      const maps = await idbAll<IdMapEntry>(IDMAP_STORE_NAME).catch(() => [] as IdMapEntry[])
-      await Promise.all(maps.map((m) => idbDel(IDMAP_STORE_NAME, String(m.temp))))
-    }
+    // Keep temp-id mappings: another tab may still enqueue an edit of a completed create.
+    // Explicit queue clearing and account cleanup own their removal.
   }
   return result
 }
@@ -808,7 +840,7 @@ export async function replayOutboxToCache(): Promise<void> {
   replayInFlight = (async () => {
     try {
       const entries = await idbAll<OutboxEntry>(OUTBOX_STORE).catch(() => [] as OutboxEntry[])
-      for (const entry of entries) {
+      for (const entry of entries.sort((a, b) => a.ts - b.ts)) {
         await applyToCache(entry)
       }
     } finally {

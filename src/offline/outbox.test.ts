@@ -68,7 +68,7 @@ vi.mock('axios', () => ({
   default: axiosCall.fn,
 }))
 
-import { enqueueMutation, flushOutbox, clearOutbox, type OutboxEntry } from './outbox'
+import { enqueueMutation, flushOutbox, clearOutbox, createMutationKey, replayOutboxToCache, type OutboxEntry } from './outbox'
 import { idbPut, idbDel, idbAll } from './db'
 
 const okResponse = { data: { data: {} } }
@@ -172,9 +172,9 @@ describe('flushOutbox — temp-id → real-id mapping (idmap)', () => {
     const depCall = axiosCall.fn.mock.calls[1][0] as { url?: string; data?: unknown }
     expect(depCall?.url).toContain('/api/v1/user/42/days')
     expect((depCall?.data as { user_id?: number })?.user_id).toBe(42)
-    // Both entries are gone and the idmap is cleaned up after a full flush.
+    // Completed mappings remain available to later edits from sibling tabs.
     expect(fake.store('outbox').size).toBe(0)
-    expect(fake.store('idmap').size).toBe(0)
+    expect(fake.store('idmap').size).toBe(1)
   })
 
   it('reads the real id from the nested data.user shape of a user create', async () => {
@@ -269,4 +269,164 @@ describe('clearOutbox', () => {
     expect(fake.store('idmap').size).toBe(0)
     void idbDel
   })
+})
+describe('P0 persistence and replay regressions', () => {
+  it('generates keys on insecure origins without crypto.randomUUID', () => {
+    vi.stubGlobal('crypto', {})
+    try {
+      const first = createMutationKey()
+      const second = createMutationKey()
+      expect(first).toMatch(/^m-/)
+      expect(second).not.toBe(first)
+    } finally { vi.unstubAllGlobals() }
+  })
+
+  it('retains the initial online request key across persistence and replay', async () => {
+    await enqueueMutation({ entity: 'task', method: 'POST', url: 'http://api.test/api/v1/task', body: { title: 'Lost response' }, tempId: -1, idempotencyKey: 'initial-key' })
+    axiosCall.fn.mockResolvedValueOnce({ data: { data: { id: 42 } } })
+    await flushOutbox()
+    expect(axiosCall.fn.mock.calls[0][0].headers['Idempotency-Key']).toBe('initial-key')
+  })
+
+  it('gives sequential enqueues a stable order even within the same millisecond', async () => {
+    const now = vi.spyOn(Date, 'now').mockReturnValue(100)
+    try {
+      await enqueueMutation({ entity: 'task', method: 'POST', url: 'http://api.test/api/v1/task', body: { title: 'First' }, tempId: -1 })
+      await enqueueMutation({ entity: 'task', method: 'PUT', url: 'http://api.test/api/v1/task/-1', body: { title: 'Second' } })
+      const entries = [...fake.store('outbox').values()] as OutboxEntry[]
+      expect(entries[0].ts).toBeLessThan(entries[1].ts)
+    } finally { now.mockRestore() }
+  })
+
+  it('rewrites complete numeric ids without changing titles, dates or longer ids', async () => {
+    seed({ id: 'create', ts: 1, entity: 'task', method: 'POST', url: 'http://api.test/api/v1/task', body: {}, tempId: -1 })
+    seed({ id: 'update', ts: 2, entity: 'task', method: 'PUT', url: 'http://api.test/api/v1/task/-10', body: { task_id: -1, other_id: -10, title: 'Task -1', start_date: '2026-11-10' } })
+    axiosCall.fn.mockResolvedValueOnce({ data: { data: { id: 42 } } }).mockResolvedValue(okResponse)
+    await flushOutbox()
+    const request = axiosCall.fn.mock.calls[1][0]
+    expect(request.url).toContain('/task/-10')
+    expect(request.data).toEqual({ task_id: 42, other_id: -10, title: 'Task -1', start_date: '2026-11-10' })
+  })
+
+  it('rewrites temporary ids in query parameters without changing date values', async () => {
+    seed({ id: 'create', ts: 1, entity: 'state', method: 'POST', url: 'http://api.test/api/v1/timesheet/states', body: {}, tempId: -1 })
+    seed({ id: 'clear', ts: 2, entity: 'period', method: 'DELETE', url: 'http://api.test/api/v1/user/5/days?state_id=-1&start_date=2026-11-10', body: {} })
+    axiosCall.fn.mockResolvedValueOnce({ data: { data: { id: 42 } } }).mockResolvedValue(okResponse)
+    await flushOutbox()
+    const url = new URL(axiosCall.fn.mock.calls[1][0].url)
+    expect(url.searchParams.get('state_id')).toBe('42')
+    expect(url.searchParams.get('start_date')).toBe('2026-11-10')
+  })
+
+  it('retains an interrupted suffix and its id map for the next process', async () => {
+    const { probeBackend } = await import('./state')
+    vi.mocked(probeBackend).mockResolvedValueOnce(true).mockResolvedValueOnce(false)
+    seed({ id: 'create', ts: 1, entity: 'task', method: 'POST', url: 'http://api.test/api/v1/task', body: {}, tempId: -1 })
+    seed({ id: 'edit', ts: 2, entity: 'task', method: 'PUT', url: 'http://api.test/api/v1/task/-1', body: { title: 'Edited' } })
+    seed({ id: 'assign', ts: 3, entity: 'assignment', method: 'POST', url: 'http://api.test/api/v1/assignment', body: { task_id: -1, resource_id: 3, quantity: 2 } })
+    axiosCall.fn.mockResolvedValueOnce({ data: { data: { id: 42 } } }).mockRejectedValueOnce(new Error('offline'))
+    const first = await flushOutbox()
+    expect(first.ok).toBe(1)
+    expect(first.interrupted).toBe(true)
+    expect(fake.store('outbox').size).toBe(2)
+    expect(fake.store('idmap').size).toBe(1)
+    axiosCall.fn.mockResolvedValue(okResponse)
+    const second = await flushOutbox()
+    expect(second.ok).toBe(2)
+    expect(axiosCall.fn.mock.calls[2][0].url).toContain('/task/42')
+    expect(axiosCall.fn.mock.calls[3][0].data.task_id).toBe(42)
+    expect(fake.store('outbox').size).toBe(0)
+  })
+})
+
+
+it('replays the cached overlay in FIFO order rather than IndexedDB key order', async () => {
+  const { applyToCache } = await import('./cacheApply')
+  seed({ id: 'a', ts: 2, entity: 'task', method: 'PUT', url: 'http://api.test/api/v1/task/1', body: { title: 'Second' } })
+  seed({ id: 'z', ts: 1, entity: 'task', method: 'PUT', url: 'http://api.test/api/v1/task/1', body: { title: 'First' } })
+  await replayOutboxToCache()
+  expect(vi.mocked(applyToCache).mock.calls.map(([item]) => item.id)).toEqual(['z', 'a'])
+})
+
+describe('flushOutbox — expired authorization', () => {
+  it.each(['POST', 'PUT', 'DELETE'] as const)('pauses on %s 401 without damaging the queue', async (method) => {
+    seed({ id: 'unauthorized', ts: 100, method, url: 'http://api.test/api/v1/task/1', entity: 'task', idempotencyKey: 'stable-key' })
+    seed({ id: 'later', ts: 200, method: 'PUT', url: 'http://api.test/api/v1/task/2', entity: 'task' })
+    const before = structuredClone([...fake.store('outbox').values()])
+    axiosCall.fn.mockRejectedValueOnce(httpError(401))
+
+    const result = await flushOutbox()
+
+    expect(result.interrupted).toBe(true)
+    expect(result.failed).toBe(0)
+    expect(result.ok).toBe(0)
+    expect(axiosCall.fn).toHaveBeenCalledTimes(1)
+    expect([...fake.store('outbox').values()]).toEqual(before)
+    expect(fake.store('idmap').size).toBe(0)
+
+    axiosCall.fn.mockResolvedValue(okResponse)
+    const resumed = await flushOutbox()
+    expect(resumed.ok).toBe(2)
+    expect(fake.store('outbox').size).toBe(0)
+    expect(axiosCall.fn.mock.calls[1][0].headers['Idempotency-Key']).toBe('stable-key')
+  })
+})
+
+it('does not let a second tab send a queue already being flushed', async () => {
+  const held = new Set<string>()
+  vi.stubGlobal('navigator', { locks: { request: async (name: string, _options: unknown, run: (lock: object | null) => Promise<unknown>) => {
+    if (held.has(name)) return run(null)
+    held.add(name)
+    try { return await run({}) } finally { held.delete(name) }
+  } } })
+  let reply!: (result: unknown) => void
+  axiosCall.fn.mockImplementationOnce(() => new Promise(resolve => { reply = resolve }))
+  seed({ id: 'shared', ts: 1, method: 'PUT', url: '/task/7', entity: 'task', body: { title: 'updated' } })
+  const first = flushOutbox()
+  await vi.waitFor(() => expect(axiosCall.fn).toHaveBeenCalledTimes(1))
+  vi.resetModules()
+  const sibling = await import('./outbox')
+  const second = sibling.flushOutbox()
+  await new Promise(resolve => setTimeout(resolve, 10))
+  const calls = axiosCall.fn.mock.calls.length
+  reply(okResponse)
+  await Promise.all([first, second])
+  vi.unstubAllGlobals()
+  expect(calls).toBe(1)
+  expect(fake.store('outbox').size).toBe(0)
+})
+
+it('keeps completed id mappings for dependent edits enqueued later by another tab', async () => {
+  seed({ id: 'create', ts: 1, method: 'POST', url: '/task', entity: 'task', tempId: -20, body: { title: 'draft' } })
+  axiosCall.fn.mockResolvedValueOnce({ data: { data: { id: 200 } } })
+  await flushOutbox()
+  seed({ id: 'late-edit', ts: 2, method: 'PUT', url: '/task/-20', entity: 'task', body: { title: 'edited' } })
+  await flushOutbox()
+  expect(axiosCall.fn.mock.calls[1][0].url).toContain('/task/200')
+  expect(fake.store('outbox').size).toBe(0)
+})
+
+
+it('preserves visible pending work when a temporary storage error prevents reading the queue', async () => {
+  const { pendingCount, pendingRefs, refreshPendingCount } = await import('./outbox')
+  seed({ id: 'pending', ts: 1, method: 'PUT', url: '/task/7', entity: 'task' })
+  await refreshPendingCount()
+  expect(pendingCount.value).toBe(1)
+  const before = pendingRefs.value
+  vi.mocked(idbAll).mockRejectedValueOnce(new Error('temporarily blocked'))
+  await refreshPendingCount()
+  expect(pendingCount.value).toBe(1)
+  expect(pendingRefs.value).toBe(before)
+  expect(fake.store('outbox').size).toBe(1)
+})
+
+
+it('stops a sibling flush after shared logout without changing its queued work', async () => {
+  vi.stubGlobal('localStorage', { getItem: (key: string) => key === 'mvs_erp_logged_out' ? '1' : null })
+  try {
+    seed({ id: 'after-logout', ts: 1, method: 'PUT', url: '/task/7', entity: 'task' })
+    expect((await flushOutbox()).interrupted).toBe(true)
+    expect(axiosCall.fn).not.toHaveBeenCalled()
+    expect(fake.store('outbox').size).toBe(1)
+  } finally { vi.unstubAllGlobals() }
 })

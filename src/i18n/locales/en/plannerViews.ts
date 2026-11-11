@@ -5,7 +5,7 @@ import type { Translation } from '../types'
 export default {
   unit: {
     day: 'Day',
-    decade: 'Decade',
+    week: 'Week',
   },
   pdf: {
     tasks: 'Task chart',
@@ -16,6 +16,8 @@ export default {
     disabled: 'Unavailable offline',
   },
   planner: {
+    viewAs: 'Resource owner',
+    wholeSystem: 'All resources',
     menu: {
       comments: 'Comments',
       editTask: 'Edit',
@@ -56,6 +58,12 @@ export default {
       code: 'Project code',
       color: 'Color',
       owner: 'Owner',
+      startDate: 'Start date',
+      endDate: 'End date',
+      duration: 'Duration: {days} days',
+      responsible: 'Responsible',
+      responsibleHint: 'group lead',
+      noResponsible: '— none —',
     },
     pdfGroup: 'Projects',
     confirm: {
@@ -73,7 +81,13 @@ export default {
     field: {
       title: 'Name',
       color: 'Color',
+      startDate: 'Start date',
+      endDate: 'End date',
+      duration: 'Duration: {days} days',
       owner: 'Owner',
+      responsible: 'Responsible',
+      responsibleHint: 'group lead',
+      noResponsible: '— none —',
     },
     defaultTitle: 'New process',
     confirm: {

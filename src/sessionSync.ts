@@ -53,7 +53,10 @@ interface RefreshLock {
 function readLock(): RefreshLock | null {
   try {
     const raw = localStorage.getItem(LOCK_KEY)
-    return raw ? (JSON.parse(raw) as RefreshLock) : null
+    const value = raw ? JSON.parse(raw) as Partial<RefreshLock> : null
+    return value && typeof value.owner === 'string' && typeof value.ts === 'number' && Number.isFinite(value.ts)
+      ? value as RefreshLock
+      : null
   } catch {
     return null
   }
@@ -63,7 +66,7 @@ function readLock(): RefreshLock | null {
 export function tryAcquireRefreshLock(): boolean {
   const now = Date.now()
   const lock = readLock()
-  if (lock && now - lock.ts < LOCK_TTL_MS && lock.owner !== REFRESH_OWNER) {
+  if (lock && now >= lock.ts && now - lock.ts < LOCK_TTL_MS && lock.owner !== REFRESH_OWNER) {
     return false
   }
   try {
@@ -84,6 +87,22 @@ export function releaseRefreshLock(): void {
       // ignore — the lock expires via TTL
     }
   }
+}
+
+/** Web Locks makes acquisition atomic; the storage lock also coordinates older clients. */
+export async function withRefreshLock(refresh: () => Promise<boolean>): Promise<boolean | null> {
+  const run = async () => {
+    if (!tryAcquireRefreshLock()) return null
+    try {
+      return await refresh()
+    } finally {
+      releaseRefreshLock()
+    }
+  }
+  if (typeof navigator !== 'undefined' && navigator.locks) {
+    return navigator.locks.request('mvs_erp_refresh', { ifAvailable: true }, lock => lock ? run() : null)
+  }
+  return run()
 }
 
 /** Session payload broadcast to sibling tabs (access + rotated refresh) */

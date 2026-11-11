@@ -6,6 +6,7 @@ import { useDragPreview } from '@/composables/useDragPreview'
 import { fmtDateTime } from '@/i18n/date'
 import { t } from '@/i18n'
 import { viewSettings } from '@/settings'
+import { resourceBadgeRows } from '@/utils/resourceAccess'
 import type { Task } from './types'
 import type { TimelineCtx } from '@/composables/timeline-context'
 import type { DtoCommentResponse, DtoUserInfo } from '@/api'
@@ -14,6 +15,7 @@ const props = withDefaults(
   defineProps<{
     timeline: TimelineCtx
     task: Task
+    resourceBadgeIds?: ReadonlySet<number>
     projectCode?: string
     /** Custom task color (#RRGGBB); empty — the standard token */
     color?: string
@@ -53,12 +55,16 @@ const emit = defineEmits<{
   'keyboardmove': [payload: { start_date: string; end_date: string }]
 }>()
 
-/** Tooltip rows: owner (if assigned) + execution status + progress + date range */
+/** Tooltip rows: owner + responsible (if assigned) + execution status + progress + date range */
 const tooltipRows = (dateRange: string): string[] =>
-  [taskOwnerLabel.value, statusLabel.value, progressLabel.value, dateRange].filter(Boolean)
+  [taskOwnerLabel.value, taskResponsibleLabel.value, statusLabel.value, progressLabel.value, dateRange].filter(Boolean)
 
 const taskOwnerLabel = computed<string>(() =>
   props.task.owner_name ? t('planner.taskBar.owner', { owner: props.task.owner_name }) : '',
+)
+
+const taskResponsibleLabel = computed<string>(() =>
+  props.task.responsible_name ? t('planner.taskBar.responsible', { name: props.task.responsible_name }) : '',
 )
 
 /** Execution status label + color (fixed catalog, mirrors the badge stripe) */
@@ -151,50 +157,39 @@ function badgeLabel(r: { code?: string; title?: string }): string {
   return r.code || r.title || '?'
 }
 
-// === Badges: project code, owner + a stack of resource badges ===
-// The project code badge goes right after the title; after it — the owner badge
-// ("Last Name I.O."). If either does not fit next to the title — it is hidden.
-// Resource badges stack up when space is tight.
+const visibleResourceBadges = computed(() => resourceBadgeRows(props.task.resources, props.resourceBadgeIds))
+
+// === Badges: project code, owner, progress + a stack of resource badges ===
+// Enabled badges are ALWAYS rendered: the title is the only flexible element in
+// the row (`flex: 0 1 auto` + ellipsis), so it yields the space and the badges
+// never get dropped just because the text is long. The badges are rigid
+// (`flex-shrink: 0`), so the only remaining question is whether the resource
+// strip still fits next to them — when it does not, its chips overlap each
+// other (hovering the bar shows a tooltip with all of them).
 const contentRef = ref<HTMLElement | null>(null)
-const titleRef = ref<HTMLElement | null>(null)
-const projRef = ref<HTMLElement | null>(null)
-const ownerRef = ref<HTMLElement | null>(null)
-const progressRef = ref<HTMLElement | null>(null)
 const badgesRef = ref<HTMLElement | null>(null)
-const projWidth = ref(0)
-const ownerWidth = ref(0)
-const progressWidth = ref(0)
-const showProj = ref(true)
-const showOwner = ref(true)
 const stacked = ref(false)
 
 let resizeObserver: ResizeObserver | null = null
 
+/** Natural width of the resource strip: chips + the 6px gap between them.
+ *  Independent of the stacked state, so measuring never feeds back into it. */
+function naturalStripWidth(badges: HTMLElement): number {
+  const chips = Array.from(badges.children) as HTMLElement[]
+  if (!chips.length) return 0
+  const w = chips.reduce((sum, chip) => sum + chip.getBoundingClientRect().width, 0)
+  return w + 6 * (chips.length - 1)
+}
+
 function updateStacked() {
   const content = contentRef.value
-  const title = titleRef.value
   const badges = badgesRef.value
-  if (!content || !title || !badges) return
-  // Refresh the badge width cache only while they are visible (with display:none scrollWidth = 0)
-  const proj = projRef.value
-  if (proj && showProj.value) projWidth.value = proj.scrollWidth
-  const owner = ownerRef.value
-  if (owner && showOwner.value) ownerWidth.value = owner.scrollWidth
-  const progress = progressRef.value
-  if (progress) progressWidth.value = progress.scrollWidth
-  const available = content.clientWidth - title.scrollWidth
-  const pw = props.projectCode ? projWidth.value : 0
-  showProj.value = pw > 0 && available >= pw
-  const ow = props.task.owner_short ? ownerWidth.value : 0
-  showOwner.value = ow > 0 && available - (showProj.value ? pw : 0) >= ow
-  // The progress badge always has room while the task has operations
-  const gw = taskProgress.value == null ? 0 : progressWidth.value
-  // The comments badge reserves space (like the project code/owner) — only while
-  // it is actually drawn, otherwise the resource badges would stack for nothing.
-  const cw = showComments.value ? 22 : 0
-  const availForRes =
-    available - (showProj.value ? pw : 0) - (showOwner.value ? ow : 0) - gw - cw
-  stacked.value = badges.scrollWidth > availForRes
+  if (!content || !badges) return
+  // Free room left for the strip in the current layout: everything to its left
+  // (status stripe, the title as actually truncated, the badges before it) is
+  // already placed, so the strip starts where it starts.
+  const free = content.getBoundingClientRect().right - badges.getBoundingClientRect().left
+  stacked.value = naturalStripWidth(badges) > free
 }
 
 onMounted(() => {
@@ -209,7 +204,7 @@ onBeforeUnmount(() => {
 
 // After the resource set or the project code changes, recompute the layout
 watch(
-  () => props.task.resources,
+  () => visibleResourceBadges.value,
   () => requestAnimationFrame(updateStacked),
 )
 watch(
@@ -225,7 +220,13 @@ watch(
   () => requestAnimationFrame(updateStacked),
 )
 watch(
-  () => [props.task.owner_short, props.task.owner_name],
+  () => [props.task.owner_short, props.task.owner_name, props.task.responsible_short, props.task.responsible_name],
+  () => requestAnimationFrame(updateStacked),
+)
+// The title's own width moves the resource strip (the title is the flexible
+// element), so a longer title has to re-evaluate the strip's room.
+watch(
+  () => props.task.title,
   () => requestAnimationFrame(updateStacked),
 )
 </script>
@@ -258,33 +259,35 @@ watch(
         :style="{ background: statusInfo.color }"
         :title="statusInfo.label"
       ></span>
-      <span ref="titleRef" class="tb-title">{{ task.title }}</span>
+      <span class="tb-title">{{ task.title }}</span>
       <span
-        v-if="showProj && viewSettings.badgeProjectCode"
-        ref="projRef"
+        v-if="viewSettings.badgeTaskProjectCode && projectCode"
         class="tb-proj"
       >{{ projectCode }}</span>
       <span
-        v-if="showOwner && viewSettings.badgeOwner"
-        ref="ownerRef"
+        v-if="viewSettings.badgeTaskOwner && task.owner_short"
         class="tb-owner"
         :title="task.owner_name"
       >{{ task.owner_short }}</span>
       <span
+        v-if="viewSettings.badgeTaskResponsible && task.responsible_short"
+        class="tb-responsible"
+        :title="task.responsible_name"
+      >{{ task.responsible_short }}</span>
+      <span
         v-if="taskProgress != null && viewSettings.badgeProgress"
-        ref="progressRef"
         class="tb-progress"
         :class="{ 'is-done': taskProgress === 100, 'is-empty': taskProgress === 0 }"
         :title="progressLabel"
       >{{ taskProgress }}%</span>
       <span
-        v-if="viewSettings.badgeResource"
+        v-if="viewSettings.badgeResource && visibleResourceBadges.length"
         ref="badgesRef"
         class="tb-badges"
         :class="{ 'is-stacked': stacked }"
       >
         <span
-          v-for="r in task.resources"
+          v-for="r in visibleResourceBadges"
           :key="r.resource_id"
           class="tb-badge"
           :style="r.color ? { background: r.color } : undefined"
@@ -374,6 +377,20 @@ watch(
   white-space: nowrap;
   pointer-events: none;
 }
+/* Responsible person badge — distinct tint from the owner chip */
+.tb-responsible {
+  flex-shrink: 0;
+  font-size: calc(var(--ui-font-scale, 1) * 10px);
+  font-weight: 600;
+  line-height: 1.6;
+  color: #fff;
+  background: rgba(99, 76, 170, 0.85);
+  border-radius: 10px;
+  padding: 0 7px;
+  margin-left: 6px;
+  white-space: nowrap;
+  pointer-events: none;
+}
 /* Completion percentage of the task's operations (badge on the bar) */
 .tb-progress {
   flex-shrink: 0;
@@ -398,6 +415,9 @@ watch(
   display: flex;
   align-items: center;
   flex-shrink: 0;
+  /* The strip starts 6px after the previous badge, like every other badge in
+     the row (its first chip has no left margin of its own). */
+  margin-left: 6px;
   white-space: nowrap;
 }
 /* Badge — a plain flex item, sized exactly to the text; 6px gap between badges */

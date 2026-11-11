@@ -62,6 +62,15 @@ export interface TimelineCtx {
   cellStart: (i: number) => Date
   /** End date of cell i (inclusive) */
   cellEnd: (i: number) => Date
-  /** Date under the pointer */
+  /** Date under the pointer (YYYY-MM-DD, local) — null over the label column */
   dateAtPointer: (rect: DOMRect | null, clientX: number) => string | null
+  /**
+   * Fractional absolute cell coordinate under the pointer: `cellLeft(floor(v))` is
+   * the left edge of the clicked cell, the fraction is the position inside it.
+   * null — the pointer is left of the grid. Goes through the content coordinate, so
+   * the fractional scroll of the window and the zoom are accounted for; use it (and
+   * not the raw pointer offset + windowStart) for anything that maps a pointer to a
+   * cell or a date.
+   */
+  cellCoordAtPointer: (clientX: number, rect?: DOMRect | null) => number | null
 }

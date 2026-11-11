@@ -1,30 +1,18 @@
 <script setup lang="ts">
-/**
- * UserPermissionsEditor — права доступа пользователя.
- *
- * Карточки по ресурсам (вариант A): у каждого ресурса — карточка с шапкой
- * (название + сводка) и строками действий; в строке видны сразу все чипы
- * зон (self/up1/up/sib/down/all) + «⛔ запрет»; сочетания собираются
- * отметкой нескольких чипов. Подсказка — одна кнопка «?» в шапке блока
- * (центральная панель).
- *
- * В шапке блока — переключатель пресета (вместо текста «от пресета …»).
- * Выбранный пресет сразу перестраивает базис правил ниже: в режиме draft —
- * черновик из матрицы пресета, в режиме user — пересчёт эффективного базиса
- * по матрице выбранного пресета поверх серверных переопределений.
- *
- * Режимы: user (загрузка из стора) | draft (базис из матрицы пресета).
- * Админ-пресет — read-only заглушка.
- * Эмиты: update:overrides (полный набор переопределений), update:dirty,
- * update:preset (смена пресета).
- */
-import { computed, onMounted, reactive, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRbacStore } from '../../../store'
 import type { PermissionCell, PermissionOverride, UserPermissionsModel } from './types'
-import { GROUPS, ACTIONS, SCOPE_OPTIONS, resourceTitle, actionTitle, scopeOptionLabel } from './labels'
-import { canonicalScope, scopeMoves, toggleScopeMove } from '@/rbacScope'
+import {
+  GROUPS, ACTIONS, permissionBlocks, permissionActionGroups, SCOPE_OPTIONS, FALLBACK_SCOPE_OPTIONS, resourceTitle, actionTitle,
+  resourceDescription, scopeOptionLabel, scopeOptionDescription, scopeLabel, simpleScope, hasAdditionalScope, viewParentResources,
+} from './labels'
+import { NO_ACCESS, commonPresetScope, type PresetActionGroup } from '@/utils/rbacGrid'
+import { scopeMoves } from '@/rbacScope'
+import { togglePresetScope } from '@/utils/presetDefaults'
+import { applyPermissionGroup, overrideSignature } from './draft'
 import { t } from '@/i18n'
 import HintButton from '../HintButton/HintButton.vue'
+import TooltipCell from '../TooltipCell/TooltipCell.vue'
 
 const props = defineProps<{
   userId: number
@@ -32,6 +20,7 @@ const props = defineProps<{
   preset?: string
   presetOptions?: Array<{ value: string; label: string }>
   preview?: UserPermissionsModel | null
+  busy?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -42,24 +31,13 @@ const emit = defineEmits<{
 
 const rbac = useRbacStore()
 const isDraft = computed(() => props.mode === 'draft')
+const root = ref<HTMLElement | null>(null)
+const singleColumn = ref(false)
+let resizeObserver: ResizeObserver | undefined
 
-/* ── модель данных ─────────────────────────────────────── */
-/** Baseline cells of a preset from the effective matrix (like the page backend view). */
 function cellsOf(preset: string): PermissionCell[] {
-  return rbac.matrix
-    .filter((c) => c.preset === preset && c.resource && c.action && c.scope)
-    .map((c) => ({ resource: c.resource ?? '', action: c.action ?? '', scope: c.scope ?? '' }))
-}
-
-/** Final cells: the preset baseline merged with the per-user overrides. */
-function effectiveOf(presetScope: PermissionCell[], overrides: PermissionOverride[]): PermissionCell[] {
-  const byKey = new Map(presetScope.map((p) => [key(p.resource, p.action), p]))
-  for (const o of overrides) {
-    const k = key(o.resource, o.action)
-    if (o.granted) byKey.set(k, { resource: o.resource, action: o.action, scope: o.scope ?? '' })
-    else byKey.delete(k)
-  }
-  return [...byKey.values()]
+  return rbac.matrix.filter((cell) => cell.preset === preset && cell.resource && cell.action)
+    .map((cell) => ({ resource: cell.resource ?? '', action: cell.action ?? '', scope: cell.scope ?? '' }))
 }
 
 const model = computed<UserPermissionsModel | null>(() => {
@@ -69,273 +47,199 @@ const model = computed<UserPermissionsModel | null>(() => {
     const cells = cellsOf(preset)
     return { preset, admin: preset === 'admin', overrides: [], presetScope: cells, effective: cells }
   }
-  const v = rbac.userPermissions
-  if (!v) return null
-  const preset = props.preset || v.preset || null
-  const overrides = (v.overrides ?? []).map((o) => ({ resource: o.resource, action: o.action, scope: o.scope ?? '', granted: o.granted ?? false }))
-  const fromServer = (v.preset_scope ?? []).map((p) => ({ resource: p.resource ?? '', action: p.action ?? '', scope: p.scope ?? '' }))
-  // The selected preset drives the visible baseline: switching it in the header
-  // immediately rebuilds the rows below. Falls back to the server snapshot
-  // while the matrix is not loaded yet.
-  const presetScope = rbac.matrix.length ? cellsOf(preset ?? '') : fromServer
-  return { preset, admin: v.admin ?? false, overrides, presetScope, effective: effectiveOf(presetScope, overrides) }
+  const saved = rbac.userPermissions
+  if (!saved || saved.user_id !== props.userId) return null
+  const preset = props.preset ?? saved.preset ?? null
+  return {
+    preset,
+    admin: preset === 'admin' || (!!saved.admin && preset === saved.preset),
+    overrides: (saved.overrides ?? []).map((rule) => ({
+      resource: rule.resource, action: rule.action, scope: rule.scope ?? '', granted: rule.granted ?? false,
+    })),
+    presetScope: rbac.matrix.length ? cellsOf(preset ?? '') : (saved.preset_scope ?? []).map((cell) => ({
+      resource: cell.resource ?? '', action: cell.action ?? '', scope: cell.scope ?? '',
+    })),
+    effective: [],
+  }
 })
 
-const loading = computed(() => (isDraft.value ? false : rbac.userPermissionsLoading))
-const loadError = computed(() => (isDraft.value ? null : rbac.userPermissionsError))
-
-function key(resource: string, action: string) { return `${resource}/${action}` }
-
-const presetMap = computed<Record<string, string>>(() => {
-  const m: Record<string, string> = {}
-  for (const p of model.value?.presetScope ?? []) m[key(p.resource, p.action)] = p.scope
-  return m
-})
-
+const loading = computed(() => !isDraft.value && rbac.userPermissionsLoading)
+const loadError = computed(() => isDraft.value ? null : rbac.userPermissionsError)
 const staged = reactive<Record<string, PermissionOverride>>({})
+const savedOverrides = ref<PermissionOverride[]>([])
+let loadedUserId: number | null = null
+function key(resource: string, action: string) { return `${resource}/${action}` }
+const overridesList = computed(() => Object.values(staged).map((rule) => ({ ...rule })))
+const dirty = computed(() => overrideSignature(overridesList.value) !== overrideSignature(savedOverrides.value))
 
-function fromView(): Record<string, PermissionOverride> {
-  const out: Record<string, PermissionOverride> = {}
-  for (const o of model.value?.overrides ?? []) out[key(o.resource, o.action)] = o
-  return out
+function replaceDraft(overrides: readonly PermissionOverride[]) {
+  for (const entry of Object.keys(staged)) delete staged[entry]
+  for (const rule of overrides) staged[key(rule.resource, rule.action)] = { ...rule }
 }
 
-// Объявлены ДО watch(model) — иначе TDZ при immediate в draft-режиме.
-const overridesList = computed<PermissionOverride[]>(() =>
-  Object.values(staged).map((o) => ({ resource: o.resource, action: o.action, scope: o.scope ?? '', granted: o.granted })),
-)
-const dirty = computed<boolean>(() => JSON.stringify(overridesList.value) !== lastSaved)
-let lastSaved = '000'
-
-watch(model, (m) => {
-  if (!m || !Array.isArray(m.overrides)) return
-  // Seed `staged` from the server overrides only when the override set itself
-  // changed (initial load / reload). In draft mode every model change re-seeds —
-  // switching the preset resets the draft overrides to the new baseline. In user
-  // mode a preset switch keeps the unsaved per-capability edits (only the
-  // baseline below changes).
-  const sig = JSON.stringify(m.overrides)
-  if (!isDraft.value && sig === lastSaved) return
-  lastSaved = sig
-  for (const k of Object.keys(staged)) delete staged[k]
-  Object.assign(staged, fromView())
-  emit('update:overrides', overridesList.value)
-  emit('update:dirty', false)
+watch(model, (next) => {
+  if (!next) return
+  const sameUser = loadedUserId === props.userId
+  if (!isDraft.value && sameUser && overrideSignature(next.overrides) === overrideSignature(savedOverrides.value)) return
+  loadedUserId = props.userId
+  savedOverrides.value = next.overrides.map((rule) => ({ ...rule }))
+  replaceDraft(next.overrides)
 }, { immediate: true })
+watch(overridesList, (overrides) => emit('update:overrides', overrides), { deep: true, immediate: true })
+watch(dirty, (value) => emit('update:dirty', value), { immediate: true })
 
-watch(overridesList, () => {
-  emit('update:overrides', overridesList.value)
-  emit('update:dirty', dirty.value)
-}, { deep: true })
+const baseline = computed(() => model.value?.presetScope ?? [])
+function presetZone(resource: string, action: string): string {
+  const scope = baseline.value.find((cell) => cell.resource === resource && cell.action === action)?.scope ?? ''
+  return scope === NO_ACCESS ? '' : scope
+}
+function effectiveZone(resource: string, action: string): string {
+  const override = staged[key(resource, action)]
+  return override ? override.granted ? override.scope ?? '' : '' : presetZone(resource, action)
+}
+
+const editorCells = computed(() => {
+  if (rbac.matrix.length && !props.preview) return rbac.matrix
+  const fallback = GROUPS.flatMap((group) => group.resources.flatMap((resource) =>
+    [...ACTIONS, ...(resource === 'project' ? ['prioritize'] : [])].map((action) => ({ resource, action })),
+  ))
+  return [...fallback, ...baseline.value, ...overridesList.value]
+})
+const blocks = computed(() => permissionBlocks(editorCells.value))
+const blockColumns = computed(() => singleColumn.value ? [blocks.value] : [
+  blocks.value.filter((block) => block.index % 2 === 0),
+  blocks.value.filter((block) => block.index % 2 === 1),
+])
+function actionGroups(resource: string) {
+  const groups = permissionActionGroups(resource, editorCells.value)
+  const order = ['view', 'manage', 'prioritize']
+  return groups.sort((a, b) => (order.indexOf(a.key) < 0 ? order.length : order.indexOf(a.key)) -
+    (order.indexOf(b.key) < 0 ? order.length : order.indexOf(b.key)))
+}
+function groupTitle(group: PresetActionGroup) {
+  if (group.title) return t(`adminConfig.administration.title.${group.title}`)
+  return group.key === 'manage' ? t('adminConfig.presets.manage') : actionTitle(group.key)
+}
+function groupScope(resource: string, group: PresetActionGroup) {
+  return commonPresetScope(group.actions.map((action) => simpleScope(resource, effectiveZone(resource, action))))
+}
+function inheritedViewScopes(resource: string) {
+  return viewParentResources(resource).map((parent) => effectiveZone(parent, 'view'))
+    .filter((scope) => scope && scope !== NO_ACCESS)
+}
+function locked(resource: string, group: PresetActionGroup) {
+  return group.key === 'view' && inheritedViewScopes(resource).includes('all')
+}
+function isChipOn(resource: string, group: PresetActionGroup, value: string) {
+  if (locked(resource, group)) return value === 'all'
+  const scope = groupScope(resource, group)
+  return value === NO_ACCESS ? scope === NO_ACCESS : scopeMoves(scope ?? '').includes(value)
+}
+function groupChanged(resource: string, group: PresetActionGroup) {
+  return group.actions.some((action) => overrideSignature(overridesList.value.filter((rule) => rule.resource === resource && rule.action === action)) !==
+    overrideSignature(savedOverrides.value.filter((rule) => rule.resource === resource && rule.action === action)))
+}
+function groupIndividual(resource: string, group: PresetActionGroup) {
+  return group.actions.some((action) => !!staged[key(resource, action)])
+}
+function chooseScope(resource: string, group: PresetActionGroup, value: string) {
+  if (props.busy || locked(resource, group)) return
+  const scope = groupScope(resource, group)
+  if (value === NO_ACCESS && scope === NO_ACCESS) return
+  const next = value === NO_ACCESS || scope === null || hasAdditionalScope(resource, scope)
+    ? value : togglePresetScope(scope, value)
+  replaceDraft(applyPermissionGroup(overridesList.value, baseline.value, resource, group.actions, next))
+}
+function revertGroup(resource: string, group: PresetActionGroup) {
+  if (props.busy || locked(resource, group)) return
+  replaceDraft(overridesList.value.filter((rule) => rule.resource !== resource || !group.actions.includes(rule.action)))
+}
+function cancelChanges() { replaceDraft(savedOverrides.value) }
+function resetAll() { replaceDraft([]) }
+defineExpose({ cancelChanges, resetAll })
 
 function ensureLoaded(id: number) {
   if (props.preview) return
-  // The live baseline (both modes) is built from the effective matrix.
   if (!rbac.matrix.length && !rbac.loading) void rbac.loadRbac()
-  if (isDraft.value) return
-  if (id <= 0) return
-  // Load per user: the store keeps the snapshot of the LAST opened user; a
-  // non-null snapshot of another user must not block this one (otherwise the
-  // editor shows the previous user's permissions — e.g. the admin stub for a
-  // non-admin).
-  if (rbac.userPermissions?.user_id === id) return
-  void rbac.loadUserPermissions(id)
+  if (!isDraft.value && id > 0 && rbac.userPermissions?.user_id !== id) void rbac.loadUserPermissions(id)
 }
-onMounted(() => ensureLoaded(props.userId))
-watch(() => props.userId, (id) => ensureLoaded(id))
-
-/* ── состояние способности ─────────────────────────────── */
-function overrideOf(r: string, a: string) { return staged[key(r, a)] }
-function effectiveZone(r: string, a: string): string {
-  const ov = overrideOf(r, a)
-  if (ov) return ov.granted ? ov.scope ?? '' : ''
-  return presetMap.value[key(r, a)] ?? ''
-}
-type Src = 'preset' | 'override' | 'revoked' | 'none'
-function rowSource(r: string, a: string): Src {
-  const ov = overrideOf(r, a)
-  if (ov) { if (!ov.granted) return 'revoked'; return ov.scope ? 'override' : 'none' }
-  return presetMap.value[key(r, a)] ? 'preset' : 'none'
-}
-function hasAccess(r: string, a: string) { return effectiveZone(r, a) !== '' }
-
-/* ── действия ──────────────────────────────────────────── */
-function pick(r: string, a: string, val: string) {
-  if (val === 'revert') { delete staged[key(r, a)]; return }
-  if (val === 'revoke') { staged[key(r, a)] = { resource: r, action: a, scope: '', granted: false }; return }
-  staged[key(r, a)] = { resource: r, action: a, scope: val, granted: true }
-}
-function resetAll() { for (const k of Object.keys(staged)) delete staged[k] }
-
-/* ── выражения области (дерево владения) ───────────────── */
-/** Текущая зона строки как выражение ('' — нет доступа/запрет); показывается
- *  компактной подписью при нескольких выбранных ходах. */
-function exprText(r: string, a: string): string {
-  const z = effectiveZone(r, a)
-  if (!z || !hasAccess(r, a)) return ''
-  return z
-}
-
-/** Чип активен, если его ход присутствует в текущем выражении зоны
- *  (мульти-выбор: активны все отмеченные ходы). */
-function isChipOn(r: string, a: string, value: string): boolean {
-  const z = effectiveZone(r, a)
-  if (!z) return false
-  return scopeMoves(z).includes(value)
-}
-
-/** Клик по чипу переключает ход в выражении (мульти-выбор); all/none
- *  эксклюзивны. Снятие всех ходов или результат, равный пресету, —
- *  возврат к пресету. */
-function onChipClick(r: string, a: string, value: string) {
-  const next = toggleScopeMove(effectiveZone(r, a), value)
-  if (next === '') { pick(r, a, 'revert'); return }
-  const preset = presetMap.value[key(r, a)] ?? ''
-  if (preset && canonicalScope(next) === canonicalScope(preset)) { pick(r, a, 'revert'); return }
-  pick(r, a, next)
-}
-
-/** Переключатель «запрет»: повторный клик возвращает к пресету. */
-function onRevokeClick(r: string, a: string) {
-  if (rowSource(r, a) === 'revoked') pick(r, a, 'revert')
-  else pick(r, a, 'revoke')
-}
-
-/** Пресе-ход строки (стиль «по пресету»). */
-function isPresetZone(r: string, a: string, value: string): boolean {
-  return rowSource(r, a) === 'preset' && isChipOn(r, a, value)
-}
-
-/**
- * Server snapshot of the user's effective permissions — what the BACKEND holds
- * right now: the loaded rbac.userPermissions preset rules (preset_scope) merged
- * with the saved overrides, using the same effectiveOf logic as the model but
- * built ONLY from the server snapshot (never from the live matrix). It drives
- * the "changed" rows in user mode: a row must be highlighted only while the
- * frontend staged value differs from this snapshot, not from the preset
- * baseline — so after a successful save (and a reload of the snapshot) the
- * highlight clears.
- */
-const serverSnapshot = computed<Record<string, string>>(() => {
-  const v = rbac.userPermissions
-  if (!v) return {}
-  const presetScope = (v.preset_scope ?? []).map((p) => ({
-    resource: p.resource ?? '',
-    action: p.action ?? '',
-    scope: p.scope ?? '',
-  }))
-  const overrides = (v.overrides ?? []).map((o) => ({
-    resource: o.resource,
-    action: o.action,
-    scope: o.scope ?? '',
-    granted: o.granted ?? false,
-  }))
-  const m: Record<string, string> = {}
-  for (const c of effectiveOf(presetScope, overrides)) m[key(c.resource, c.action)] = c.scope
-  return m
-})
-
-/** Реальное изменение строки относительно базиса: запрет — всегда; override
- *  — только если его зона канонически отличается от зоны пресета (override,
- *  совпадающий с пресетом, изменением не является). */
-function isChangedCell(r: string, a: string): boolean {
-  if (isDraft.value) {
-    // Draft mode (create): no server exists — compare against the preset baseline.
-    const s = rowSource(r, a)
-    if (s === 'revoked') return true
-    if (s !== 'override') return false
-    return canonicalScope(effectiveZone(r, a)) !== canonicalScope(presetMap.value[key(r, a)] ?? '')
+onMounted(() => {
+  ensureLoaded(props.userId)
+  if (root.value) {
+    singleColumn.value = root.value.clientWidth < 780
+    resizeObserver = new ResizeObserver(([entry]) => { singleColumn.value = entry.contentRect.width < 780 })
+    resizeObserver.observe(root.value)
   }
-  // User mode: yellow only when the staged row differs from what the backend
-  // holds (the server snapshot); a saved row matches the snapshot → not yellow.
-  const ov = overrideOf(r, a)
-  let stagedScope: string
-  if (ov) stagedScope = ov.granted ? ov.scope ?? '' : ''
-  else stagedScope = presetMap.value[key(r, a)] ?? ''
-  return canonicalScope(stagedScope) !== canonicalScope(serverSnapshot.value[key(r, a)] ?? '')
-}
-
-/* ── сводка карточки ресурса ───────────────────────────── */
-function cardSummary(res: string): string {
-  const ind = ACTIONS.filter((a) => rowSource(res, a) === 'override' && isChangedCell(res, a)).length
-  const rev = ACTIONS.filter((a) => rowSource(res, a) === 'revoked').length
-  if (ind === 0 && rev === 0) return t('adminConfig.editor.summaryByPreset')
-  const parts: string[] = []
-  if (ind) parts.push(t('adminConfig.editor.summaryIndividual', { count: ind, total: ACTIONS.length }))
-  if (rev) parts.push(t(rev > 1 ? 'adminConfig.editor.summaryRevokedPlural' : 'adminConfig.editor.summaryRevoked', { count: rev }))
-  return parts.join(' · ')
-}
+})
+watch(() => props.userId, ensureLoaded)
+onBeforeUnmount(() => resizeObserver?.disconnect())
 </script>
 
 <template>
-  <section class="uped">
-    <!-- Шапка: строка 1 — заголовок, строка 2 — переключатель пресета и действия.
-         Смена пресета сразу перестраивает базис правил ниже (edit) / черновик (create). -->
+  <section ref="root" class="uped">
     <div class="uped-head">
-      <h3 class="uped-title">{{ t('adminConfig.editor.title') }}</h3>
-      <div class="uped-tools">
-        <select
-          v-if="presetOptions && presetOptions.length"
-          class="uped-preset-select"
-          :value="preset ?? model?.preset ?? ''"
-          :aria-label="t('adminConfig.editor.presetAria')"
-          @change="$emit('update:preset', ($event.target as HTMLSelectElement).value)"
-        >
-          <option v-for="opt in presetOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-        </select>
-        <span v-if="dirty" class="uped-dirty">{{ t('adminConfig.editor.dirty') }}</span>
-        <button v-if="dirty" type="button" class="uped-reset" @click="resetAll">{{ t('adminConfig.editor.resetIndividual') }}</button>
-        <!-- Единственная подсказка блока — в шапке (центральная панель) -->
+      <div class="uped-heading">
+        <h3 class="uped-title">{{ t('adminConfig.editor.title') }}</h3>
         <HintButton hint="permissions-editor" />
       </div>
+      <div class="uped-tools">
+        <label v-if="presetOptions?.length" class="uped-role">
+          <span>{{ t('adminConfig.editor.role') }}</span>
+          <select class="uped-preset-select" :value="preset ?? model?.preset ?? ''" :disabled="busy" :aria-label="t('adminConfig.editor.presetAria')"
+            @change="$emit('update:preset', ($event.target as HTMLSelectElement).value)">
+            <option v-for="opt in presetOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+          </select>
+        </label>
+        <button class="uped-reset" type="button" :disabled="busy || !overridesList.length" @click="resetAll">{{ t('adminConfig.editor.resetIndividual') }}</button>
+      </div>
     </div>
-
-    <p v-if="loading" class="uped-st">{{ t('adminConfig.editor.loading') }}</p>
-    <p v-else-if="loadError" class="uped-st er" role="alert">{{ loadError }}</p>
-
-    <div v-else-if="model?.admin" class="uped-admin" role="note">
-      {{ t('adminConfig.editor.adminNote') }}
-    </div>
-
-    <!-- Список карточек ресурсов (вариант A: шапка-сводка + строки действий с чипами) -->
+    <p v-if="!isDraft && !preview && model && !model.admin" class="ur-action-hint">{{ t('adminConfig.editor.roleHint') }}</p>
+    <p v-if="dirty" class="uped-dirty" role="status">{{ t('adminConfig.editor.dirty') }}</p>
+    <p v-if="loading && !model" class="uped-st">{{ t('adminConfig.editor.loading') }}</p>
+    <p v-if="loadError" class="uped-st er" role="alert">{{ loadError }}</p>
+    <div v-if="model?.admin" class="uped-admin" role="note">{{ t('adminConfig.editor.adminNote') }}</div>
     <div v-else-if="model" class="uped-list">
-      <div v-for="group in GROUPS" :key="group.key" class="uped-group">
-        <h4 class="uped-group-title">{{ t(`adminConfig.perm.group.${group.key}`) }}</h4>
-        <div v-for="res in group.resources" :key="res" class="uped-res-card">
+      <div v-for="(column, columnIndex) in blockColumns" :key="columnIndex" class="uped-column">
+        <div v-for="{ resource, group, index } in column" :key="resource" class="uped-res-card" :data-resource="resource" :data-order="index">
           <div class="uped-res-head">
-            <span class="uped-res-title">{{ resourceTitle(res) }}</span>
-            <span class="uped-res-summary">{{ cardSummary(res) }}</span>
+            <h4 class="uped-res-title">{{ resourceTitle(resource) }}</h4>
+            <span class="uped-group-title">{{ t(`adminConfig.perm.group.${group}`) }}</span>
           </div>
-
-          <div v-for="act in ACTIONS" :key="act" class="ur-row" :class="{ changed: isChangedCell(res, act) }">
-            <span class="ur-cap">{{ actionTitle(act) }}</span>
-
-            <div class="ur-chips">
-              <button
-                v-for="opt in SCOPE_OPTIONS[res] ?? []"
-                :key="opt.value"
-                type="button"
-                class="ur-chip"
-                :class="{
-                  on: isChipOn(res, act, opt.value),
-                  preset: isPresetZone(res, act, opt.value),
-                }"
-                :title="scopeOptionLabel(res, opt.value)"
-                @click="onChipClick(res, act, opt.value)"
-              >
-                {{ scopeOptionLabel(res, opt.value) }}
-              </button>
-              <button
-                type="button"
-                class="ur-chip rev"
-                :class="{ on: rowSource(res, act) === 'revoked' }"
-                :title="rowSource(res, act) === 'revoked' ? t('adminConfig.editor.revertToPreset') : t('adminConfig.editor.revoke')"
-                @click="onRevokeClick(res, act)"
-              >{{ t('adminConfig.editor.revokeChip') }}</button>
-              <!-- Собранное выражение при множественном выборе -->
-              <span v-if="scopeMoves(exprText(res, act)).length > 1" class="ur-zone-mini">
-                {{ exprText(res, act) }}
-              </span>
+          <p v-if="resourceDescription(resource)" class="uped-resource-description">{{ resourceDescription(resource) }}</p>
+          <div class="uped-actions" :class="{ 'uped-actions--project': resource === 'project', 'uped-actions--administration': resource === 'administration' }">
+            <div v-for="actionGroup in actionGroups(resource)" :key="actionGroup.key" class="ur-row"
+              :data-action-group="actionGroup.key" :data-capability-resource="actionGroup.resource" :class="{ changed: groupChanged(actionGroup.resource, actionGroup) }">
+              <div class="ur-action-head">
+                <span class="ur-cap">{{ groupTitle(actionGroup) }}</span>
+                <span v-if="actionGroup.description" class="ur-action-hint">{{ t(`adminConfig.administration.description.${actionGroup.description}`) }}</span>
+                <span v-else-if="actionGroup.key === 'manage'" class="ur-action-hint">{{ t('adminConfig.presets.manageHint') }}</span>
+              </div>
+              <p v-if="actionGroup.key === 'view' && inheritedViewScopes(actionGroup.resource).length" class="ur-inherited">
+                {{ t(locked(actionGroup.resource, actionGroup) ? 'adminConfig.presets.inheritedLocked' : 'adminConfig.presets.inheritedView') }}
+              </p>
+              <details v-if="groupScope(actionGroup.resource, actionGroup) === null" class="ur-mixed">
+                <summary>{{ t('adminConfig.presets.mixed') }}</summary>
+                <ul><li v-for="action in actionGroup.actions" :key="action">{{ actionTitle(action) }}: {{ effectiveZone(actionGroup.resource, action) ? scopeLabel(actionGroup.resource, effectiveZone(actionGroup.resource, action)) : t('adminConfig.presets.revokeChip') }}</li></ul>
+                <p>{{ t('adminConfig.presets.mixedHint') }}</p>
+              </details>
+              <p v-else-if="hasAdditionalScope(actionGroup.resource, groupScope(actionGroup.resource, actionGroup) ?? '')" class="ur-action-hint">
+                {{ t('adminConfig.presets.savedCondition') }}: {{ scopeLabel(actionGroup.resource, groupScope(actionGroup.resource, actionGroup) ?? '') }}
+              </p>
+              <TooltipCell class="ur-choice-tooltip" :text="t('adminConfig.presets.inheritedTooltip')" :disabled="!locked(actionGroup.resource, actionGroup)"
+                :tabindex="locked(actionGroup.resource, actionGroup) ? 0 : undefined"
+                :aria-label="locked(actionGroup.resource, actionGroup) ? t('adminConfig.presets.inheritedTooltip') : undefined" multiline>
+                <template #popup><span class="ur-inherited-tooltip">{{ t('adminConfig.presets.inheritedTooltip') }}</span></template>
+                <div class="ur-chips" :class="{ 'ur-chips--inherited': locked(actionGroup.resource, actionGroup) }">
+                  <button v-for="opt in SCOPE_OPTIONS[actionGroup.resource] ?? FALLBACK_SCOPE_OPTIONS" :key="opt.value" type="button" class="ur-chip"
+                    :class="{ on: isChipOn(actionGroup.resource, actionGroup, opt.value) }" :data-scope="opt.value" :disabled="busy || locked(actionGroup.resource, actionGroup)"
+                    :aria-pressed="isChipOn(actionGroup.resource, actionGroup, opt.value)" :title="scopeOptionDescription(actionGroup.resource, opt.value)"
+                    @click="chooseScope(actionGroup.resource, actionGroup, opt.value)">{{ resource === 'administration' ? t('adminConfig.administration.allowed') : scopeOptionLabel(actionGroup.resource, opt.value) }}</button>
+                  <button type="button" class="ur-chip rev" data-scope="none" :disabled="busy || locked(actionGroup.resource, actionGroup)"
+                    :class="{ on: isChipOn(actionGroup.resource, actionGroup, NO_ACCESS) }" :aria-pressed="isChipOn(actionGroup.resource, actionGroup, NO_ACCESS)"
+                    @click="chooseScope(actionGroup.resource, actionGroup, NO_ACCESS)">{{ t(actionGroup.key === 'view' && inheritedViewScopes(actionGroup.resource).length ? 'adminConfig.presets.onlyInherited' : 'adminConfig.presets.revokeChip') }}</button>
+                </div>
+              </TooltipCell>
+              <button v-if="groupIndividual(actionGroup.resource, actionGroup)" type="button" class="ur-revert" :disabled="busy || locked(actionGroup.resource, actionGroup)" @click="revertGroup(actionGroup.resource, actionGroup)">{{ t('adminConfig.editor.revertToRole') }}</button>
             </div>
           </div>
         </div>
@@ -346,161 +250,59 @@ function cardSummary(res: string): string {
 
 <style scoped>
 @import '../../../styles/tokens.css';
-
-.uped {
-  background: var(--ui-surface);
-  border: 1px solid var(--ui-border);
-  border-radius: var(--ui-radius-md);
-  box-shadow: var(--ui-shadow-sm);
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.uped-head {
-  display: flex; flex-direction: column; gap: 8px;
-}
-.uped-tools {
-  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-}
-.uped-title { margin: 0; font-size: calc(var(--ui-font-scale, 1) * 16px); font-weight: 700; color: var(--ui-text); }
-.uped-preset-select {
-  font-family: inherit; font-size: calc(var(--ui-font-scale, 1) * 12px); color: var(--ui-text);
-  background: var(--ui-surface); border: 1px solid var(--ui-border-strong);
-  border-radius: 8px; padding: 4px 10px; cursor: pointer;
-  transition: border-color 0.15s ease-out;
-}
-.uped-preset-select:hover { border-color: var(--ui-accent); }
-.uped-preset-select:focus {
-  outline: none; border-color: var(--ui-accent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ui-accent) 18%, transparent);
-}
-.uped-dirty { font-size: calc(var(--ui-font-scale, 1) * 12px); font-weight: 600; color: var(--ui-accent); }
-.uped-reset {
-  margin-left: auto; font-size: calc(var(--ui-font-scale, 1) * 12px); color: var(--ui-text-muted);
-  background: var(--ui-surface); border: 1px solid var(--ui-border-strong);
-  border-radius: 999px; padding: 4px 12px; cursor: pointer;
-}
-.uped-reset:hover { color: var(--ui-text); border-color: var(--ui-accent); }
-.uped-st { color: var(--ui-text-2); font-size: calc(var(--ui-font-scale, 1) * 14px); padding: 20px; text-align: center; }
+.uped { display: flex; flex-direction: column; gap: 16px; min-width: 0; container-type: inline-size; }
+.uped-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.uped-heading, .uped-tools { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.uped-title { margin: 0; color: var(--ui-text); font-size: calc(var(--ui-font-scale, 1) * 16px); font-weight: 600; }
+.uped-heading :deep(.hb) { border: 1px solid var(--ui-border-strong); background: var(--ui-surface); color: var(--ui-text-muted); box-shadow: none; }
+.uped-role { display: flex; align-items: center; gap: 8px; color: var(--ui-text-muted); font-size: calc(var(--ui-font-scale, 1) * 12px); }
+.uped-preset-select, .uped-reset { border: 1px solid var(--ui-border-strong); background: var(--ui-surface); color: var(--ui-text-2); border-radius: var(--ui-radius-sm); padding: 8px 11px; font: inherit; font-size: calc(var(--ui-font-scale, 1) * 12px); }
+.uped-preset-select { max-width: 280px; cursor: pointer; }
+.uped-reset { cursor: pointer; }
+.uped-reset:not(:disabled):hover, .uped-preset-select:not(:disabled):hover { border-color: var(--ui-accent); }
+.uped-reset:disabled, .uped-preset-select:disabled { opacity: .5; cursor: not-allowed; }
+.uped-dirty, .uped-st, .uped-admin { margin: 0; font-size: calc(var(--ui-font-scale, 1) * 13px); color: var(--ui-text-muted); }
+.uped-dirty { color: var(--ui-accent); }
+.uped-admin { border: 1px solid var(--ui-border); border-radius: var(--ui-radius-md); background: var(--ui-surface); padding: 18px; }
 .er { color: var(--ui-danger); }
-.uped-admin {
-  padding: 16px; border: 1px dashed var(--ui-border-strong);
-  border-radius: var(--ui-radius-sm); color: var(--ui-text-2); font-size: calc(var(--ui-font-scale, 1) * 13px);
-}
-.uped-list { display: flex; flex-direction: column; gap: 2px; }
-.uped-group { margin-bottom: 8px; }
-.uped-group-title {
-  margin: 10px 0 6px; font-size: calc(var(--ui-font-scale, 1) * 11px); font-weight: 700;
-  letter-spacing: 0.05em; text-transform: uppercase; color: var(--ui-text-muted);
-}
-
-/* Карточка ресурса — мягкая тень, скругление */
-.uped-res-card {
-  background: var(--ui-surface);
-  border: 1px solid var(--ui-border);
-  border-radius: 12px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
-  margin-bottom: 8px;
-}
-.uped-res-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 14px 8px;
-  border-bottom: 1px solid var(--ui-border);
-}
-.uped-res-title {
-  font-size: calc(var(--ui-font-scale, 1) * 13px);
-  font-weight: 700;
-  color: var(--ui-text);
-}
-.uped-res-summary {
-  font-size: calc(var(--ui-font-scale, 1) * 11px);
-  color: var(--ui-text-muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* Строка действия: подпись + чипы зон + запрет/выражение */
-.ur-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 7px 14px;
-  flex-wrap: wrap;
-  transition: background 0.12s;
-}
-.ur-row + .ur-row { border-top: 1px solid var(--ui-border); }
-.ur-row:hover { background: var(--ui-surface-3); }
-/* Реальное изменение (override ≠ пресет или запрет) — подсветка;
-   без изменения строка сохраняет исходный цвет. */
+.uped-list { display: flex; align-items: flex-start; gap: 16px; min-width: 0; }
+.uped-column { display: flex; flex-direction: column; gap: 16px; flex: 1; min-width: 0; }
+.uped-res-card { background: var(--ui-surface); border: 1px solid var(--ui-border); border-radius: var(--ui-radius-md); box-shadow: var(--ui-shadow-sm); overflow: hidden; }
+.uped-res-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 12px 14px; border-bottom: 1px solid var(--ui-border); }
+.uped-res-title { margin: 0; font-size: calc(var(--ui-font-scale, 1) * 13px); font-weight: 600; color: var(--ui-text); }
+.uped-group-title { color: var(--ui-text-muted); font-size: calc(var(--ui-font-scale, 1) * 10px); }
+.uped-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.uped-actions--project { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.ur-row { display: flex; flex-direction: column; align-items: stretch; gap: 8px; min-width: 0; padding: 12px; }
+.ur-row + .ur-row { border-left: 1px solid var(--ui-border); }
 .ur-row.changed { background: var(--ui-warning-soft); }
-
-.ur-cap {
-  width: 84px;
-  flex-shrink: 0;
-  font-size: calc(var(--ui-font-scale, 1) * 12px);
-  color: var(--ui-text);
+.ur-action-head { display: flex; flex-direction: column; gap: 3px; min-height: 34px; }
+.ur-cap { font-size: calc(var(--ui-font-scale, 1) * 12px); color: var(--ui-text); }
+.ur-action-hint, .ur-inherited, .ur-mixed { margin: 0; color: var(--ui-text-muted); font-size: calc(var(--ui-font-scale, 1) * 11px); line-height: 1.45; }
+.ur-mixed { padding: 8px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-sm); background: var(--ui-surface-2); }
+.ur-mixed summary { cursor: pointer; }
+.ur-mixed ul { margin: 6px 0; padding-left: 16px; }
+.ur-choice-tooltip { display: block; min-width: 0; }
+.ur-chips { display: flex; flex-direction: column; align-items: stretch; gap: 5px; min-width: 0; }
+.ur-chip { border: 1px solid var(--ui-border-strong); border-radius: var(--ui-radius-sm); background: var(--ui-surface); padding: 6px 9px; font: inherit; font-size: calc(var(--ui-font-scale, 1) * 12px); color: var(--ui-text-2); text-align: left; white-space: normal; overflow-wrap: anywhere; cursor: pointer; transition: background .12s, border-color .12s, color .12s; }
+.ur-chip:not(:disabled):hover { border-color: var(--ui-accent); background: var(--ui-surface-2); }
+.ur-chip.on { background: var(--ui-accent-soft); color: var(--ui-accent); border-color: var(--ui-accent); font-weight: 500; }
+.ur-chips--inherited { cursor: not-allowed; }
+.ur-chip:disabled { pointer-events: none; opacity: .55; cursor: not-allowed; color: var(--ui-text-muted); background: var(--ui-surface-2); border-color: var(--ui-border); }
+.ur-chip.on:disabled { opacity: .85; color: var(--ui-text-2); background: var(--ui-surface-3); border-color: var(--ui-border-strong); }
+.ur-inherited-tooltip { white-space: pre-line; }
+.ur-revert { align-self: flex-start; padding: 0; border: 0; color: var(--ui-text-muted); font: inherit; font-size: calc(var(--ui-font-scale, 1) * 11px); background: transparent; cursor: pointer; text-align: left; }
+.ur-revert:not(:disabled):hover { color: var(--ui-accent); }
+.ur-revert:disabled { opacity: .5; cursor: not-allowed; }
+@container (max-width: 420px) {
+  .uped-head, .uped-tools { align-items: stretch; flex-direction: column; }
+  .uped-preset-select { width: 100%; max-width: none; }
+  .uped-role { align-items: stretch; flex-direction: column; }
+  .uped-actions--project { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .uped-actions--project .ur-row:last-child { grid-column: 1 / -1; border-top: 1px solid var(--ui-border); border-left: 0; }
 }
-.ur-chips {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-  flex: 1;
-  min-width: 0;
-}
-.ur-chip {
-  border: 1px solid var(--ui-border-strong);
-  border-radius: 999px;
-  padding: 3px 10px;
-  font-size: calc(var(--ui-font-scale, 1) * 11px);
-  font-family: inherit;
-  color: var(--ui-text-2);
-  background: var(--ui-surface);
-  cursor: pointer;
-  transition: background 0.12s, border-color 0.12s, color 0.12s;
-  white-space: nowrap;
-}
-.ur-chip:hover { border-color: var(--ui-accent); }
-.ur-chip.on {
-  background: var(--ui-accent);
-  border-color: var(--ui-accent);
-  color: var(--ui-accent-on);
-  font-weight: 600;
-}
-/* Активная зона, унаследованная от пресета — полупрозрачная подсветка */
-.ur-chip.on.preset {
-  background: color-mix(in srgb, var(--ui-accent) 16%, transparent);
-  border-color: var(--ui-accent);
-  color: var(--ui-accent);
-  font-weight: 600;
-}
-.ur-chip.rev {
-  color: var(--ui-danger);
-  border-color: light-dark(rgba(185, 28, 28, 0.45), rgba(248, 113, 113, 0.55));
-  background: transparent;
-}
-.ur-chip.rev.on {
-  background: var(--ui-danger);
-  border-color: var(--ui-danger);
-  color: #fff;
-}
-
-/* Собранное выражение множественного выбора — компактная подпись */
-.ur-zone-mini {
-  font-family: ui-monospace, Menlo, Consolas, monospace;
-  font-size: calc(var(--ui-font-scale, 1) * 10px);
-  color: var(--ui-text-muted);
-  background: var(--ui-surface-2);
-  border-radius: 5px;
-  padding: 2px 7px;
-}
-
-@media (max-width: 640px) {
-  .ur-cap { width: 100%; }
-}
+.uped-actions--administration { display: flex; flex-direction: column; }
+.uped-actions--administration > div + div { border-left: 0; border-top: 1px solid var(--ui-border); }
+.uped-actions--administration .ur-chips { flex-direction: row; flex-wrap: wrap; }
+.uped-resource-description { margin: 0; padding: 10px 14px; color: var(--ui-text-muted); font-size: calc(var(--ui-font-scale, 1) * 11px); line-height: 1.5; border-bottom: 1px solid var(--ui-border); }
 </style>

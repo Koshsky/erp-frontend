@@ -38,6 +38,8 @@
  * custom/hints/README.md) can never be picked up as a hint page.
  */
 
+import DOMPurify from 'dompurify'
+
 export type AssetKind = 'hints' | 'icons'
 
 export type AssetValidator = (raw: unknown) => boolean
@@ -127,23 +129,56 @@ export function resolveAsset(kind: AssetKind, name: string, isValid?: AssetValid
   return resolveAssets(kind, isValid).get(name) ?? null
 }
 
-/**
- * Validates a raw string as an inert, well-formed inline SVG: exactly one
- * root `<svg>` element, no <script>, no inline `on…=` handlers and no
- * `javascript:` URLs. Used for fetched custom icons (and safely reusable
- * for any other SVG consumer).
- */
+const SVG_NAMESPACE = 'http://www.w3.org/2000/svg'
+const ICON_TAGS = ['svg', 'g', 'path', 'circle', 'ellipse', 'rect', 'line', 'polyline', 'polygon', 'title', 'desc']
+const STATIC_PAINT = /^(?:[a-z]+|#[0-9a-f]{3,8}|(?:rgb|hsl)a?\([-\d.%\s,+/]*\))$/i
+const ICON_ATTRIBUTES = [
+  'xmlns', 'class', 'role', 'aria-label', 'width', 'height', 'viewbox',
+  'fill', 'fill-rule', 'fill-opacity', 'clip-rule', 'opacity',
+  'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin', 'stroke-miterlimit',
+  'stroke-dasharray', 'stroke-dashoffset', 'stroke-opacity',
+  'd', 'x', 'y', 'x1', 'x2', 'y1', 'y2', 'cx', 'cy', 'r', 'rx', 'ry',
+  'points', 'transform', 'vector-effect', 'preserveaspectratio',
+]
+
+/** Only static geometry belongs in navigation icons; return parsed output,
+ *  never the original markup that may change meaning when parsed as HTML. */
+export function sanitizeSvg(raw: unknown): string | null {
+  if (typeof raw !== 'string' || !DOMPurify.isSupported) return null
+  const fragment = DOMPurify.sanitize(raw, {
+    // DOMPurify uses a body container; only its SVG child is returned.
+    ALLOWED_TAGS: [...ICON_TAGS, 'body'],
+    ALLOWED_ATTR: ICON_ATTRIBUTES,
+    ALLOW_DATA_ATTR: false,
+    ALLOW_ARIA_ATTR: false,
+    RETURN_DOM_FRAGMENT: true,
+  })
+  // Keep the invalid-override fallback. Safety comes from the sanitized DOM,
+  // including when the sanitizer did not record a removed node.
+  if (DOMPurify.removed.some(entry => 'attribute' in entry || entry.element.nodeType !== 8)) return null
+  const nodes = [...fragment.childNodes].filter(node => node.nodeType !== 8 && (node.nodeType !== 3 || node.textContent?.trim()))
+  if (nodes.length !== 1 || !(nodes[0] instanceof Element)) return null
+  const svg = nodes[0]
+  if (svg.localName !== 'svg' || svg.namespaceURI !== SVG_NAMESPACE || svg.querySelector('svg')) return null
+  for (const element of [svg, ...svg.querySelectorAll('*')]) {
+    if (element.namespaceURI !== SVG_NAMESPACE) return null
+    for (const attribute of element.attributes) {
+      if (attribute.name === 'xmlns' && attribute.value !== SVG_NAMESPACE) return null
+      // Static paints also reject CSS-escaped URL functions.
+      if (['fill', 'stroke'].includes(attribute.name) && !STATIC_PAINT.test(attribute.value.trim())) return null
+      if (/url\s*\(/i.test(attribute.value) || /[\u0000-\u001f\u007f]/.test(attribute.value)) return null
+    }
+  }
+  return svg.outerHTML
+}
+
+/** Acceptance check for callers; rendering must use sanitizeSvg's output. */
 export function isValidSvg(raw: unknown): boolean {
-  if (typeof raw !== 'string') return false
-  if ((raw.match(/<svg[\s>]/g) ?? []).length !== 1) return false
-  if (/<script/i.test(raw)) return false
-  if (/on[a-z]+\s*=/i.test(raw)) return false
-  if (/javascript:/i.test(raw)) return false
-  return true
+  return sanitizeSvg(raw) !== null
 }
 
 export interface ResolveAssetWithCustomOptions {
-  /** Validator applied to the fetched payload. Defaults to `isValidSvg` for the 'icons' kind. */
+  /** Additional validation; SVG sanitization cannot be disabled by a caller. */
   isValid?: AssetValidator
   /** Base URL override for the custom-asset prefix (tests / non-browser environments). */
   baseURL?: string
@@ -172,7 +207,7 @@ export async function resolveAssetWithCustom(
   if (runtimeCustomCache.has(cacheKey)) {
     return runtimeCustomCache.get(cacheKey) as unknown | null
   }
-  const isValid = opts?.isValid ?? (kind === 'icons' ? isValidSvg : undefined)
+  const isValid = opts?.isValid
   const baseURL = opts?.baseURL ?? import.meta.env.BASE_URL
   let resolved: unknown | null = null
   try {
@@ -180,7 +215,8 @@ export async function resolveAssetWithCustom(
     if (!res.ok) throw new Error(`custom asset unavailable (HTTP ${res.status})`)
     const raw = await res.text()
     if (isValid && !isValid(raw)) throw new Error('custom asset failed validation')
-    resolved = raw
+    resolved = kind === 'icons' ? sanitizeSvg(raw) : raw
+    if (resolved === null) throw new Error('custom icon failed sanitization')
   } catch {
     // 404 / network error / invalid payload — fall back to the bundled default below.
   }

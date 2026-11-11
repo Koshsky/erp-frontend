@@ -6,6 +6,8 @@ import { passwordRules, validatePassword } from '../composables/usePasswordValid
 import { notifyError, notifySuccess } from '../notify/state'
 import { t } from '../i18n'
 
+defineProps<{ embedded?: boolean }>()
+
 const auth = useAuthStore()
 
 const oldPassword = ref('')
@@ -16,7 +18,7 @@ const passwordChecks = [
   ...passwordRules(),
   {
     id: 'no-login',
-    label: t('adminUsers.profileEdit.ruleNoLogin'),
+    labelKey: 'adminUsers.profileEdit.ruleNoLogin',
     test: (value: string) => {
       const login = auth.user?.username?.toLowerCase() ?? ''
       return login === '' || !value.toLowerCase().includes(login)
@@ -53,17 +55,17 @@ async function onChangePassword() {
 </script>
 
 <template>
-  <section class="pf">
-    <h2 class="pf-title">{{ t('adminUsers.profileEdit.title') }}</h2>
+  <section class="pf" :class="{ 'pf--embedded': embedded }">
+    <h2 v-if="!embedded" class="pf-title">{{ t('adminUsers.profileEdit.title') }}</h2>
 
     <div class="pf-cards">
       <div class="pf-card pw-form">
         <h3 class="pf-title sm">{{ t('adminUsers.profileEdit.changePassword') }}</h3>
         <form @submit.prevent="onChangePassword">
           <div class="pw-fields">
-            <PasswordField v-model="oldPassword" :label="t('adminUsers.profileEdit.field.oldPassword')" autocomplete="current-password" placeholder="••••••••" />
-            <PasswordField v-model="newPassword" :label="t('adminUsers.profileEdit.field.newPassword')" autocomplete="new-password" :placeholder="t('adminUsers.profileEdit.field.newPasswordPlaceholder')" />
-            <PasswordField v-model="confirmPassword" :label="t('adminUsers.profileEdit.field.confirmPassword')" autocomplete="new-password" :placeholder="t('adminUsers.profileEdit.field.confirmPasswordPlaceholder')" />
+            <PasswordField id="profile-current-password" v-model="oldPassword" :label="t('adminUsers.profileEdit.field.oldPassword')" autocomplete="current-password" placeholder="••••••••" />
+            <PasswordField id="profile-new-password" v-model="newPassword" :label="t('adminUsers.profileEdit.field.newPassword')" autocomplete="new-password" :placeholder="t('adminUsers.profileEdit.field.newPasswordPlaceholder')" />
+            <PasswordField id="profile-confirm-password" v-model="confirmPassword" :label="t('adminUsers.profileEdit.field.confirmPassword')" autocomplete="new-password" :placeholder="t('adminUsers.profileEdit.field.confirmPasswordPlaceholder')" />
             <PasswordRequirements :model-value="newPassword" :rules="passwordChecks" />
           </div>
 
@@ -76,7 +78,7 @@ async function onChangePassword() {
       </div>
     </div>
 
-    <RouterLink to="/profile" class="pf-back">{{ t('adminUsers.profileEdit.action.back') }}</RouterLink>
+    <RouterLink v-if="!embedded" to="/profile" class="pf-back">{{ t('adminUsers.profileEdit.action.back') }}</RouterLink>
   </section>
 </template>
 
@@ -154,4 +156,11 @@ async function onChangePassword() {
 .pf-back:hover {
   text-decoration: underline;
 }
+
+.pf--embedded .pf-cards { max-width: none; margin-top: 24px; }
+.pf--embedded .pf-card { box-shadow: none; border-radius: 0; }
+.pf--embedded .pw-form { padding: 0; }
+.pf--embedded .pw-fields { max-width: 420px; }
+.pf--embedded .pf-actions { justify-content: flex-start; }
+.pf--embedded .pf-title.sm { font-size: calc(var(--ui-font-scale, 1) * 14px); color: var(--ui-text-muted); font-weight: 400; }
 </style>

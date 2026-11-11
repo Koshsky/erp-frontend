@@ -4,6 +4,7 @@ import type { Translation } from '../types'
 /** English catalog mirroring locales/ru/timesheet.ts. */
 export default {
   page: {
+    dayTypes: 'Day types',
     title: 'Timesheet',
     allEmployees: 'All employees',
     searchPlaceholder: 'Search by name or position',

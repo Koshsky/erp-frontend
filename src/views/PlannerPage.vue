@@ -13,6 +13,7 @@ import type {
   UpdateSubtaskPayload,
   TaskEditorTask,
   TaskEditorPatch,
+  TaskEditorSection,
 } from '../components/planner/TaskEditor'
 import { ContextMenu, ModalForm, ConfirmDialog } from '../components/common'
 import type { ContextMenuItem } from '../components/common/ContextMenu'
@@ -26,19 +27,23 @@ import { usePlanningOrigin } from '../composables/usePlanningOrigin'
 import { useUnitMenu } from '../composables/useUnitMenu'
 import { useRoleAccess } from '../composables/useRoleAccess'
 import { useFindPlanningItem } from '../composables/useFindPlanningItem'
-import { usePlanningStore, useAppStore, useRbacStore } from '../store'
+import { usePlanningStore, useAppStore } from '../store'
 import { compareByName } from '../utils'
 import { t } from '../i18n'
-import { addDaysISO, shiftSpanDates, clampDateToBounds } from '../components/planner/calendar'
+import { fmtDateRange } from '../i18n/date'
+import { addDaysISO, fitSpanDates, clampDateToBounds } from '../components/planner/calendar'
 import type { DependencyType } from '../components/planner/dependencies'
 import { CELL_WIDTH } from '../components/planner/layout'
 import { randomPaletteColor } from '../components/common/ColorField/palette'
 import type { PdfGanttGroup } from '../components/planner/PdfExport/pdfRenderer'
+import { useOwnedResources } from '@/composables/useOwnedResources'
+import { resourceHeaderRows, resourceHeaderOwners } from '@/utils/resourceAccess'
 import type { DtoDetailedProcess, DtoDetailedTask, DtoTaskDependency, DtoResource, DtoMilestone } from '@/api'
 
 const planning = usePlanningStore()
 const app = useAppStore()
 const route = useRoute()
+const resourceOwner = ref('')
 
 const { taskPlanning, loading, error } = storeToRefs(planning)
 const { resources, calendar } = storeToRefs(app)
@@ -89,8 +94,6 @@ const focusGroupId = computed(() => {
   return id ? id : null
 })
 
-// vp owns the tasks/milestones/assignments of their processes; rp — view only
-// (the task list for them is already filtered by the backend), dp — read-only.
 const {
   canCreateTask,
   canManageTask,
@@ -100,24 +103,21 @@ const {
   canManageMilestone,
   canDeleteMilestone,
   canViewTasks,
-  canDeleteOthersComments,
   canViewProjects,
   role,
   userId,
 } = useRoleAccess()
 
-const rbac = useRbacStore()
-/** Permissions arrived (or were cached) — the matrix is authoritative; presets are only the cold-start fallback. */
-const permsReady = computed(() => rbac.permsLoaded || rbac.myPermissions.length > 0)
-/** Unrestricted resource visibility (resource.view scope all) — e.g. admin sees every resource. */
-const seesAllResources = computed(() =>
-  permsReady.value ? rbac.perm('resource', 'view') === 'all' : role.value === 'admin',
-)
+const allResourceOwners = computed(() => role.value === 'admin')
+const availableResources = useOwnedResources(resources, userId, ref(true), allResourceOwners)
+const resourceOwners = computed(() => resourceHeaderOwners(app.users, availableResources.value))
+const headerResources = computed(() => allResourceOwners.value && !resourceOwner.value
+  ? availableResources.value
+  : resourceHeaderRows(availableResources.value, allResourceOwners.value ? Number(resourceOwner.value) : userId.value))
 
-/** Drag/resize/reorder/assign are enabled when the user can manage at least one visible process */
-const anyManageableTask = computed(() =>
-  (taskPlanning.value?.processes ?? []).some((p: DtoDetailedProcess) => canManageTask(p.id)),
-)
+const resourceBadgeIds = computed(() => allResourceOwners.value && resourceOwner.value
+  ? new Set(headerResources.value.flatMap(resource => resource.id == null ? [] : [resource.id]))
+  : undefined)
 
 const { findTask, findMilestone } = useFindPlanningItem()
 
@@ -145,11 +145,11 @@ const menuItems = computed<ContextMenuItem[]>(() => {
   if (menu.value?.taskId != null) {
     const processId = findTask(menu.value.taskId)?.process_id
     const items: ContextMenuItem[] = [{ id: 'comments', label: t('plannerViews.planner.menu.comments') }]
-    if (canManageTask(processId)) items.push({ id: 'edit-task', label: t('plannerViews.planner.menu.editTask') })
-    if (canAssignTaskResources(processId)) {
+    if (canManageTask(processId, menu.value.taskId)) items.push({ id: 'edit-task', label: t('plannerViews.planner.menu.editTask') })
+    if (canAssignTaskResources(processId, menu.value.taskId) || canAssignTaskResources(processId, menu.value.taskId, 'delete')) {
       items.push({ id: 'manage-resources', label: t('plannerViews.planner.menu.manageResources') })
     }
-    if (canDeleteTask(processId)) items.push({ id: 'delete-task', label: t('plannerViews.planner.menu.deleteTask') })
+    if (canDeleteTask(processId, menu.value.taskId)) items.push({ id: 'delete-task', label: t('plannerViews.planner.menu.deleteTask') })
     return items
   }
   if (menu.value?.milestoneId != null) {
@@ -203,10 +203,16 @@ const { open: openEdit, close: closeEdit, submit: submitEdit, bind: editBind } =
     return { ok, error: ok ? null : planning.error }
   },
   () => t('plannerViews.planner.milestone.title'),
+  undefined,
+  (state) => canManageMilestone(findMilestone(state.id)?.process_id),
 )
 
-// === Task editor modal (left: task fields; right: subtasks todo list) ===
+// One task context is shared by all card sections.
 const taskEditorId = ref<number | null>(null)
+const taskSection = ref<TaskEditorSection>('details')
+const commentDraftDirty = ref(false)
+const resourceDraftDirty = ref(false)
+const commentSending = ref(false)
 const taskEditorBusy = ref(false)
 const taskEditorError = ref<string | null>(null)
 
@@ -221,6 +227,7 @@ const taskEditorTask = computed<TaskEditorTask | null>(() => {
     color: t.color ?? '',
     status: t.status ?? 'not_started',
     owner_id: t.owner_id ?? null,
+    responsible_id: t.responsible_id ?? null,
     process_id: t.process_id ?? 0,
   }
 })
@@ -236,30 +243,60 @@ const taskEditorSubtasks = computed(() => {
   }))
 })
 
-function openTaskEdit(id: number) {
-  const task = findTask(id)
-  if (!task) return
+const taskContext = computed(() => {
+  const process = taskPlanning.value?.processes?.find((p) => p.id === taskEditorTask.value?.process_id)
+  return [process?.project_code, process?.title].filter(Boolean).join(' / ')
+})
+const taskSchedule = computed(() => {
+  const task = findTask(taskEditorId.value ?? 0)
+  return task ? fmtDateRange(task.start_date, task.end_date) : ''
+})
+
+function selectTaskSection(section: TaskEditorSection) {
+  taskSection.value = section
+  if (section === 'discussion' && taskEditorId.value != null) {
+    void planning.loadTaskComments(taskEditorId.value)
+  }
+}
+
+function openTaskEdit(id: number, section: TaskEditorSection = 'details') {
+  if (!canViewTasks.value || !findTask(id)) return
+  if (taskEditorId.value != null && taskEditorId.value !== id) return
   taskEditorId.value = id
   taskEditorError.value = null
-  taskEditorBusy.value = false
+  resourcesError.value = null
+  commentDraftDirty.value = false
+  resourceDraftDirty.value = false
+  selectTaskSection(section)
 }
 
 function closeTaskEdit() {
   taskEditorId.value = null
   taskEditorError.value = null
+  commentDraftDirty.value = false
+  resourceDraftDirty.value = false
 }
 
-async function onSaveTaskEditor(patch: TaskEditorPatch) {
-  if (taskEditorId.value == null) return
+async function onSaveTaskEditor(patch: TaskEditorPatch, acknowledge?: (saved: boolean) => void) {
+  if (taskEditorId.value == null || !canManageTask(taskEditorTask.value?.process_id, taskEditorId.value)) {
+    acknowledge?.(false)
+    return
+  }
   taskEditorBusy.value = true
   taskEditorError.value = null
-  // Mutation failures are reported by the global toast (http.ts) — no inline banner.
-  await planning.updateTaskMeta(taskEditorId.value, patch)
-  taskEditorBusy.value = false
+  planning.error = null
+  try {
+    const saved = await planning.updateTaskMeta(taskEditorId.value, patch)
+    acknowledge?.(saved)
+  } catch {
+    acknowledge?.(false)
+  } finally {
+    taskEditorBusy.value = false
+  }
 }
 
 async function onAddSubtask(payload: NewSubtaskPayload) {
-  if (taskEditorId.value == null) return
+  if (taskEditorId.value == null || !canCreateTask(taskEditorTask.value?.process_id)) return
   taskEditorBusy.value = true
   taskEditorError.value = null
   // Mutation failures are reported by the global toast (http.ts) — no inline banner.
@@ -268,6 +305,7 @@ async function onAddSubtask(payload: NewSubtaskPayload) {
 }
 
 async function onUpdateSubtask(payload: UpdateSubtaskPayload) {
+  if (!canManageTask(taskEditorTask.value?.process_id, payload.id)) return
   taskEditorBusy.value = true
   taskEditorError.value = null
   // Mutation failures are reported by the global toast (http.ts) — no inline banner.
@@ -276,7 +314,7 @@ async function onUpdateSubtask(payload: UpdateSubtaskPayload) {
 }
 
 async function onDeleteSubtask(id: number) {
-  if (taskEditorId.value == null) return
+  if (taskEditorId.value == null || !canDeleteTask(taskEditorTask.value?.process_id, id)) return
   // Mutation failures are reported by the global toast (http.ts) — no inline banner.
   await planning.deleteSubtask(id)
 }
@@ -320,7 +358,7 @@ const taskEditorDependencyOptions = computed(() => {
 })
 
 async function onAddDependency(payload: { depends_on_task_id: number; type: DependencyType }) {
-  if (taskEditorId.value == null) return
+  if (taskEditorId.value == null || !canManageTask(taskEditorTask.value?.process_id, taskEditorId.value)) return
   taskEditorBusy.value = true
   taskEditorError.value = null
   // Mutation failures are reported by the global toast (http.ts) — no inline banner.
@@ -329,7 +367,7 @@ async function onAddDependency(payload: { depends_on_task_id: number; type: Depe
 }
 
 async function onChangeDependency(payload: { id: number; type: DependencyType }) {
-  if (taskEditorId.value == null) return
+  if (taskEditorId.value == null || !canManageTask(taskEditorTask.value?.process_id, taskEditorId.value)) return
   taskEditorBusy.value = true
   taskEditorError.value = null
   // Mutation failures are reported by the global toast (http.ts) — no inline banner.
@@ -338,7 +376,7 @@ async function onChangeDependency(payload: { id: number; type: DependencyType })
 }
 
 async function onDeleteDependency(id: number) {
-  if (taskEditorId.value == null) return
+  if (taskEditorId.value == null || !canManageTask(taskEditorTask.value?.process_id, taskEditorId.value)) return
   taskEditorError.value = null
   // Mutation failures are reported by the global toast (http.ts) — no inline banner.
   await planning.deleteTaskDependency(id, taskEditorId.value)
@@ -377,20 +415,21 @@ function onTaskBarEdit(id: number) {
 
 function openMilestoneEdit(id: number) {
   const ms = findMilestone(id)
-  if (ms) {
+  if (ms && canManageMilestone(ms.process_id)) {
     openEdit({ type: 'milestone', id, title: ms.title ?? '', content: ms.content ?? '', color: ms.color ?? '' })
   }
 }
 
 async function handleSelect(id: string) {
-  if (!menu.value) return
+  if (!menu.value || !menuItems.value.some((item) => item.id === id)) return
   const { date, rowIndex, processId, taskId, milestoneId } = menu.value
   if (id === 'create-task') {
     if (processId == null || date == null) return
     const proc = planning.taskPlanning?.processes?.find((p: DtoDetailedProcess) => p.id === processId)
-    // A task is created within the bounds of the parent process keeping the default length:
-    // a click outside the bounds clamps the span to the parent start/end but does not shrink it.
-    const { start_date, end_date } = shiftSpanDates(
+    // A task starts exactly in the cell the user right-clicked and keeps the default
+    // length; near the process end the length is truncated by the process end (the
+    // start never slides left), and a click outside the process is clamped to it.
+    const { start_date, end_date } = fitSpanDates(
       date,
       addDaysISO(date, 7),
       proc?.start_date,
@@ -433,21 +472,14 @@ async function handleSelect(id: string) {
   }
 }
 
-// Task "Resource management" modal (assigning/removing resources)
-const resourcesModalTaskId = ref<number | null>(null)
+// Resource assignments in the open task card.
 const resourcesBusy = ref(false)
 const resourcesError = ref<string | null>(null)
 
-/** Task title for the modal header */
-const resourcesTaskTitle = computed(() => {
-  if (resourcesModalTaskId.value == null) return ''
-  return findTask(resourcesModalTaskId.value)?.title ?? ''
-})
-
 /** Resources assigned to the task from /planning/tasks (updated after a silent reload) */
 const assignedResources = computed<AssignedResource[]>(() => {
-  if (resourcesModalTaskId.value == null) return []
-  const task = findTask(resourcesModalTaskId.value)
+  if (taskEditorId.value == null) return []
+  const task = findTask(taskEditorId.value)
   return (task?.resources ?? []).map((r: DtoResource) => ({
     assignment_id: r.assignment_id,
     resource_id: r.id ?? 0,
@@ -457,33 +489,25 @@ const assignedResources = computed<AssignedResource[]>(() => {
   }))
 })
 
-/**
- * Resource catalog for choosing in the modal (only those with id). For non-admin
- * keep the resources of the task owners (process/project) — the server will
- * reject a foreign resource anyway (403). admin sees all; when owners are unknown
- * (cold cache) the list is not filtered — the server is the final arbiter.
- */
 const resourceOptions = computed(() => {
   const opts = resources.value.filter((r) => r.id != null)
-  const owners = planning.taskOwnerIds(resourcesModalTaskId.value ?? 0)
-  const allowed = seesAllResources.value || owners.length === 0 ? null : new Set(owners)
+  const process = taskPlanning.value?.processes?.find((p) => p.id === findTask(taskEditorId.value ?? 0)?.process_id)
   return opts
-    .filter((r) => allowed == null || (r.owner_id != null && allowed.has(r.owner_id)))
+    .filter((r) => process?.owner_id != null && r.owner_id === process.owner_id)
     .map((r) => ({ id: r.id as number, title: r.title, code: r.code }))
 })
 
 function openResources(taskId: number) {
-  resourcesModalTaskId.value = taskId
-  resourcesError.value = null
+  openTaskEdit(taskId, 'resources')
 }
 
 async function onAddResource(payload: AddResourcePayload) {
-  if (resourcesModalTaskId.value == null) return
+  if (taskEditorId.value == null || !canAssignTaskResources(findTask(taskEditorId.value)?.process_id, taskEditorId.value)) return
   resourcesBusy.value = true
   resourcesError.value = null
   // Mutation failures are reported by the global toast (http.ts) — no inline banner.
   await planning.assignResource(
-    resourcesModalTaskId.value,
+    taskEditorId.value,
     payload.resource_id,
     payload.quantity,
   )
@@ -491,48 +515,50 @@ async function onAddResource(payload: AddResourcePayload) {
 }
 
 async function onRemoveResource(payload: { resource_id: number }) {
-  if (resourcesModalTaskId.value == null) return
+  if (taskEditorId.value == null || !canAssignTaskResources(findTask(taskEditorId.value)?.process_id, taskEditorId.value, 'delete')) return
   resourcesBusy.value = true
   resourcesError.value = null
   // Mutation failures are reported by the global toast (http.ts) — no inline banner.
   await planning.removeResource(
-    resourcesModalTaskId.value,
+    taskEditorId.value,
     payload.resource_id,
   )
   resourcesBusy.value = false
 }
 
-// Task "Comments" modal: opens by clicking the bar or from the right-click menu
-// (available to everyone who can see the task; offline — viewing the cache without sending).
-const commentsTaskId = ref<number | null>(null)
-
-/** Task title for the modal header */
-const commentsTaskTitle = computed(() => {
-  if (commentsTaskId.value == null) return ''
-  return findTask(commentsTaskId.value)?.title ?? ''
-})
+// Discussion is available to task viewers; offline access uses cached comments.
 
 /** Task comments from the store cache (flat list; the tree is built by the component) */
 const taskComments = computed(() => {
-  if (commentsTaskId.value == null) return []
-  return planning.commentsByTask[commentsTaskId.value] ?? []
+  if (taskEditorId.value == null) return []
+  return planning.commentsByTask[taskEditorId.value] ?? []
 })
 
 function openComments(taskId: number) {
-  if (!canViewTasks.value) return
-  commentsTaskId.value = taskId
-  void planning.loadTaskComments(taskId)
+  openTaskEdit(taskId, 'discussion')
 }
 
-async function onSendComment(payload: SendCommentPayload) {
-  if (commentsTaskId.value == null) return
-  await planning.createTaskComment(commentsTaskId.value, payload.content, payload.parent_id)
+async function onSendComment(payload: SendCommentPayload, acknowledge?: (saved: boolean) => void) {
+  if (taskEditorId.value == null || isOffline.value || commentSending.value) {
+    acknowledge?.(false)
+    return
+  }
+  commentSending.value = true
+  try {
+    const saved = await planning.createTaskComment(taskEditorId.value, payload.content, payload.parent_id)
+    acknowledge?.(saved)
+  } catch {
+    acknowledge?.(false)
+  } finally {
+    commentSending.value = false
+  }
 }
 
 function onDeleteComment(payload: DeleteCommentPayload) {
-  if (commentsTaskId.value == null) return
+  const taskId = taskEditorId.value
+  if (taskId == null || isOffline.value) return
   ask(t('plannerViews.planner.confirm.deleteComment'), () => {
-    void planning.deleteTaskComment(commentsTaskId.value ?? 0, payload.comment_id)
+    void planning.deleteTaskComment(taskId, payload.comment_id)
   })
 }
 
@@ -573,17 +599,7 @@ const processesByPriority = computed(() => {
   for (const p of source) {
     if (p.id != null) prio.set(p.id, p.priority ?? Number.MAX_SAFE_INTEGER)
   }
-  let list = taskPlanning.value?.processes ?? []
-  // vp-like scope (task.view = parent): show only processes in projects where
-  // the user owns at least one process. The matrix is authoritative once loaded;
-  // the preset is only a cold-start fallback (rp keeps the ancestor view — the
-  // backend already scopes that list).
-  if ((permsReady.value ? ['parent', 'up1'].includes(rbac.perm('task', 'view')) : role.value === 'vp') && userId.value != null) {
-    const myProjects = new Set(
-      list.filter((p: DtoDetailedProcess) => p.owner_id === userId.value).map((p: DtoDetailedProcess) => p.project_id),
-    )
-    list = list.filter((p: DtoDetailedProcess) => myProjects.has(p.project_id))
-  }
+  const list = taskPlanning.value?.processes ?? []
   return [...list].sort((a, b) => {
     const pa = prio.get(a.project_id ?? -1) ?? Number.MAX_SAFE_INTEGER
     const pb = prio.get(b.project_id ?? -1) ?? Number.MAX_SAFE_INTEGER
@@ -607,7 +623,7 @@ const taskGroups = computed<PdfGanttGroup[]>(() =>
       title: t.title ?? '',
       start_date: t.start_date ?? '',
       end_date: t.end_date ?? '',
-      resources: (t.resources ?? []).map((r: DtoResource) => ({ id: r.id, code: r.code, title: r.title, quantity: r.quantity })),
+      resources: (t.resources ?? []).filter(r => resourceBadgeIds.value == null || (r.id != null && resourceBadgeIds.value.has(r.id))).map((r: DtoResource) => ({ id: r.id, code: r.code, title: r.title, quantity: r.quantity })),
     })),
     milestones: (p.milestones ?? []).map((m: DtoMilestone) => ({ id: m.id, title: m.title ?? '', date: m.date ?? '' })),
   })),
@@ -618,9 +634,16 @@ const taskGroups = computed<PdfGanttGroup[]>(() =>
   <section class="pp">
     <!-- Printing the diagram as PDF: the period and cell width come from the current page view -->
     <div class="pp-toolbar">
+      <label v-if="role === 'admin'">
+        {{ t('plannerViews.planner.viewAs') }}
+        <select v-model="resourceOwner">
+          <option value="">{{ t('plannerViews.planner.wholeSystem') }}</option>
+          <option v-for="user in resourceOwners" :key="user.id" :value="String(user.id)">{{ user.name }}</option>
+        </select>
+      </label>
       <PdfExport
         :groups="taskGroups"
-        :resources="resources"
+        :resources="headerResources"
         :calendar="calendar"
         :origin="origin"
         :unit="unit"
@@ -639,16 +662,18 @@ const taskGroups = computed<PdfGanttGroup[]>(() =>
          TaskPlanning receives it through props -->
     <TaskPlanning
       :processes="processesByPriority"
-      :resources="resources"
+      :resources="headerResources"
+      :resource-badge-ids="resourceBadgeIds"
       :calendar="calendar"
-      :absence-by-resource="absenceByResource"
+      :absence-by-resource="role === 'admin' ? null : absenceByResource"
       :users="app.users"
       :loading="loading"
       :error="error"
       :origin="origin"
       :unit="unit"
-      :can-manage="anyManageableTask"
-      :reorderable="anyManageableTask"
+      :can-manage="(id, processId) => canManageTask(processId, id)"
+      :can-manage-milestones="(processId) => canManageMilestone(processId)"
+      :reorderable="(processId) => canManageTask(processId)"
       :focus-date="focusDate"
       :focus-group-id="focusGroupId"
       :comments-by-task="planning.commentsByTask"
@@ -679,16 +704,28 @@ const taskGroups = computed<PdfGanttGroup[]>(() =>
     <ModalForm v-bind="editBind" @save="submitEdit" @close="closeEdit" />
 
     <TaskEditor
-      :open="taskEditorId != null"
+      v-if="taskEditorId != null"
+      :key="taskEditorId"
+      workspace
+      :open="true"
+      :section="taskSection"
+      :context="taskContext"
+      :schedule="taskSchedule"
+      :resource-count="assignedResources.length"
+      :comment-count="findTask(taskEditorId)?.comments_count ?? taskComments.length"
+      :has-related-drafts="commentDraftDirty || resourceDraftDirty"
+      @update:section="selectTaskSection"
       :task="taskEditorTask"
       :subtasks="taskEditorSubtasks"
       :owner-options="ownerOptions"
       :dependencies="taskEditorDependencies"
       :dependency-options="taskEditorDependencyOptions"
-      :can-manage="taskEditorTask ? canManageTask(taskEditorTask.process_id) : false"
-      :can-create-subtask="taskEditorTask ? canManageTask(taskEditorTask.process_id) : false"
-      :can-manage-dependencies="taskEditorTask ? canManageTask(taskEditorTask.process_id) : false"
-      :busy="taskEditorBusy"
+      :can-manage="taskEditorTask ? canManageTask(taskEditorTask.process_id, taskEditorTask.id) : false"
+      :can-create-subtask="taskEditorTask ? canCreateTask(taskEditorTask.process_id) : false"
+      :can-update-subtask="(id) => canManageTask(taskEditorTask?.process_id, id)"
+      :can-delete-subtask="(id) => canDeleteTask(taskEditorTask?.process_id, id)"
+      :can-manage-dependencies="taskEditorTask ? canManageTask(taskEditorTask.process_id, taskEditorTask.id) : false"
+      :busy="taskEditorBusy || resourcesBusy || commentSending"
       :error="taskEditorError"
       :disabled-reason="isOffline ? t('plannerViews.offline.disabled') : null"
       @save="onSaveTaskEditor"
@@ -699,36 +736,41 @@ const taskGroups = computed<PdfGanttGroup[]>(() =>
       @update-dependency="onChangeDependency"
       @delete-dependency="onDeleteDependency"
       @close="closeTaskEdit"
-    />
-
-    <ResourceManagerModal
-      :open="resourcesModalTaskId != null"
-      :task-id="resourcesModalTaskId ?? 0"
-      :task-title="resourcesTaskTitle"
-      :resources="resourceOptions"
-      :assigned="assignedResources"
-      :busy="resourcesBusy"
-      :error="resourcesError"
-      @add="onAddResource"
-      @remove="onRemoveResource"
-      @close="resourcesModalTaskId = null"
-    />
-
-    <TaskComments
-      :open="commentsTaskId != null"
-      :task-id="commentsTaskId ?? 0"
-      :task-title="commentsTaskTitle"
-      :comments="taskComments"
-      :users="app.users"
-      :busy="planning.commentsLoading"
-      :error="planning.commentsError"
-      :disabled-reason="isOffline ? t('plannerViews.offline.disabled') : null"
-      :can-manage="canDeleteOthersComments"
-      :user-id="userId"
-      @send="onSendComment"
-      @delete="onDeleteComment"
-      @close="commentsTaskId = null"
-    />
+    >
+      <template #resources>
+        <ResourceManagerModal
+          embedded
+          :open="taskEditorId != null"
+          :task-id="taskEditorId ?? 0"
+          :can-create="taskEditorId != null && canAssignTaskResources(findTask(taskEditorId)?.process_id, taskEditorId)"
+          :can-delete="taskEditorId != null && canAssignTaskResources(findTask(taskEditorId)?.process_id, taskEditorId, 'delete')"
+          :resources="resourceOptions"
+          :assigned="assignedResources"
+          :busy="resourcesBusy"
+          :error="resourcesError"
+          @add="onAddResource"
+          @remove="onRemoveResource"
+          @draft-change="resourceDraftDirty = $event"
+        />
+      </template>
+      <template #discussion>
+        <TaskComments
+          embedded
+          :open="taskEditorId != null"
+          :task-id="taskEditorId ?? 0"
+          :comments="taskComments"
+          :users="app.users"
+          :busy="planning.commentsLoading"
+          :error="planning.commentsError"
+          :disabled-reason="isOffline ? t('plannerViews.offline.disabled') : null"
+          :can-manage="taskEditorTask ? canManageTask(taskEditorTask.process_id, taskEditorTask.id) : false"
+          :user-id="userId"
+          @send="onSendComment"
+          @delete="onDeleteComment"
+          @draft-change="commentDraftDirty = $event"
+        />
+      </template>
+    </TaskEditor>
   </section>
 </template>
 

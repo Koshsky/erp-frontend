@@ -1,3 +1,4 @@
+import { ref } from 'vue'
 import type { Meta, StoryObj } from '@storybook/vue3'
 import { expect } from 'storybook/test'
 
@@ -76,7 +77,7 @@ export const NoPreset: Story = {
 
 /**
  * Test: the visible zone chips (Variant A) toggle a multi-move expression —
- * two selected moves stay active together, "запрет" is exclusive and clears
+ * two selected moves stay active together, No access is exclusive and clears
  * every other chip, and the two mounted instances stay isolated.
  */
 export const ChipMultiSelect: Story = {
@@ -105,9 +106,8 @@ export const ChipMultiSelect: Story = {
     })
 
     await step('clicking a chip toggles its move on and off', async () => {
-      // "Процессы" card — a resource with several ordinary moves.
-      const cards = document.querySelectorAll('.uped-res-card')
-      const row = cards[1]?.querySelector('.ur-row') as HTMLElement
+      // Resources provide two independent owner conditions without inherited planning access.
+      const row = document.querySelector('.uped-res-card[data-resource=resource] [data-action-group=view]') as HTMLElement
       const chips = [...row.querySelectorAll<HTMLButtonElement>('.ur-chip:not(.rev)')]
       const first = chips.find((c) => !c.classList.contains('on'))
       expect(first).toBeTruthy()
@@ -120,10 +120,9 @@ export const ChipMultiSelect: Story = {
     })
 
     await step('two moves compose one expression: both chips stay active', async () => {
-      const cards = document.querySelectorAll('.uped-res-card')
-      const row = cards[1]?.querySelector('.ur-row') as HTMLElement
+      const row = document.querySelector('.uped-res-card[data-resource=resource] [data-action-group=view]') as HTMLElement
       const chips = [...row.querySelectorAll<HTMLButtonElement>('.ur-chip:not(.rev)')].filter(
-        (c) => c.textContent !== 'Все',
+        (c) => c.dataset.scope !== 'all',
       )
       const inactive = chips.filter((c) => !c.classList.contains('on'))
       const a = inactive[0]
@@ -138,9 +137,8 @@ export const ChipMultiSelect: Story = {
       await wait(30)
     })
 
-    await step('«⛔ запрет» is exclusive: selecting it clears all other chips', async () => {
-      const cards = document.querySelectorAll('.uped-res-card')
-      const row = cards[1]?.querySelector('.ur-row') as HTMLElement
+    await step('No access is exclusive: selecting it clears all other chips', async () => {
+      const row = document.querySelector('.uped-res-card[data-resource=resource] [data-action-group=view]') as HTMLElement
       const chips = [...row.querySelectorAll<HTMLButtonElement>('.ur-chip:not(.rev)')]
       const rev = row.querySelector<HTMLButtonElement>('.ur-chip.rev')
       const inactive = chips.filter((c) => !c.classList.contains('on'))
@@ -149,10 +147,65 @@ export const ChipMultiSelect: Story = {
       await wait(30)
       expect(rev?.classList.contains('on')).toBe(true)
       expect(chips.every((c) => !c.classList.contains('on'))).toBe(true)
-      // Second click returns to the preset — the row restores its baseline.
       rev?.click()
+      await wait(30)
+      expect(rev?.classList.contains('on')).toBe(true)
+      row.querySelector<HTMLButtonElement>('.ur-revert')?.click()
       await wait(30)
       expect(rev?.classList.contains('on')).toBe(false)
     })
+  },
+}
+export const Administration: Story = {
+  render: () => ({
+    components: { UserPermissionsEditor },
+    setup() {
+      const model = sampleModel()
+      model.overrides = []
+      model.presetScope = [
+        { resource: 'auto_create', action: 'view', scope: 'all' },
+        { resource: 'user_admin', action: 'create', scope: 'all' },
+        { resource: 'user_admin', action: 'delete', scope: 'all' },
+      ]
+      return { model, overrides: ref([]) }
+    },
+    template: `<div><UserPermissionsEditor :user-id="101" :preview="model" @update:overrides="overrides = $event" /><output data-admin-overrides>{{ JSON.stringify(overrides) }}</output></div>`,
+  }),
+  play: async ({ canvasElement, step }) => {
+    const root = canvasElement
+    const wait = () => new Promise((resolve) => setTimeout(resolve, 40))
+    await step('one shared card exposes seven concrete capabilities', async () => {
+      expect(root.querySelectorAll('[data-resource="administration"]')).toHaveLength(1)
+      expect(root.querySelectorAll('[data-resource="administration"] .ur-row')).toHaveLength(7)
+      expect(root.querySelectorAll('[data-resource="state_admin"], [data-resource="rbac_config"], [data-resource="user_admin"]')).toHaveLength(0)
+    })
+    await step('partial account management and read-only template remain visibly mixed', async () => {
+      expect(root.querySelector('[data-action-group="accounts-manage"] .ur-mixed')).not.toBeNull()
+      expect(root.querySelector('[data-action-group="template"] .ur-mixed')).not.toBeNull()
+    })
+    const cases = [
+      ['accounts-view', 'user_admin', ['view']],
+      ['accounts-manage', 'user_admin', ['update']],
+      ['roles', 'rbac_config', ['update']],
+      ['template', 'auto_create', ['update']],
+      ['day-types', 'state', ['create', 'update', 'delete']],
+      ['structure', 'org_structure', ['view']],
+      ['audit', 'audit', ['view']],
+    ] as const
+    for (const [key, resource, actions] of cases) {
+      await step(`${key}: change only its own actions, toggle off, then revert`, async () => {
+        const row = root.querySelector(`[data-action-group="${key}"]`)!
+        const allow = row.querySelector<HTMLButtonElement>('[data-scope="all"]')!
+        allow.click(); await wait()
+        const rules = JSON.parse(root.querySelector('[data-admin-overrides]')!.textContent!) as Array<{ resource: string; action: string; granted: boolean }>
+        expect(rules.map((r) => `${r.resource}/${r.action}`).sort()).toEqual(actions.map((a) => `${resource}/${a}`).sort())
+        expect(rules.every((r) => r.granted)).toBe(true)
+        expect(row.querySelector('.ur-mixed')).toBeNull()
+        allow.click(); await wait()
+        expect(row.querySelector('[data-scope="none"]')?.getAttribute('aria-pressed')).toBe('true')
+        row.querySelector<HTMLButtonElement>('.ur-revert')?.click(); await wait()
+        expect(JSON.parse(root.querySelector('[data-admin-overrides]')!.textContent!)).toEqual([])
+      })
+    }
   },
 }
