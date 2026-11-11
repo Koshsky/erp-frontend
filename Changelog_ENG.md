@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 The web app and the desktop wrapper are versioned together.
 
-## [Unreleased]
+## [1.6.3] - 2026-11-11
 
 ### Fixed
 
@@ -18,7 +18,7 @@ The web app and the desktop wrapper are versioned together.
 
 - Cached profiles no longer masquerade as logged-out sessions; 401 responses reach login without redirect loops and preserve queued work.
 
-- Administrators see all resources; the owner filter affects only resource-header rows and offers resource owners only.
+- Administrators see all resources; the owner filter affects resource-header rows and resource badges, and offers resource owners only.
 
 ## [1.6.2] - 2026-11-11
 
