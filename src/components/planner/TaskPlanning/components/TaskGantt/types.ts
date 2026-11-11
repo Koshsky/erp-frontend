@@ -20,6 +20,7 @@ export interface TaskGanttProps {
   /** Parent process id (for creating tasks/milestones in the group) */
   processId?: number
   tasks: Task[]
+  resourceBadgeIds?: ReadonlySet<number>
   milestones?: Milestone[]
   groupStartDate?: string | Date | number | null
   groupEndDate?: string | Date | number | null

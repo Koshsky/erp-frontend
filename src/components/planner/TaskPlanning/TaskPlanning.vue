@@ -18,6 +18,7 @@ import { shortName } from '@/utils'
 const props = withDefaults(defineProps<{
   processes?: DtoDetailedProcess[] | null
   resources?: DtoResourceResponse[] | null
+  resourceBadgeIds?: ReadonlySet<number>
   /** Resource availability (periods from /timesheet/calendar), "today ± 1 year" window */
   calendar?: DtoResourceCalendar[] | null
   /** Resource-member absences (for the UsageCell tooltip) by resource id */
@@ -248,6 +249,7 @@ function onGridCtx(p: { clientX: number; clientY: number; date: string | null; r
           :projectCode="proc.project_code"
           :processId="proc.id"
           :tasks="proc.tasks || []"
+          :resource-badge-ids="resourceBadgeIds"
           :milestones="proc.milestones || []"
           :dependencies="proc.dependencies || []"
           :groupStartDate="proc.start_date"

@@ -115,6 +115,10 @@ const headerResources = computed(() => allResourceOwners.value && !resourceOwner
   ? availableResources.value
   : resourceHeaderRows(availableResources.value, allResourceOwners.value ? Number(resourceOwner.value) : userId.value))
 
+const resourceBadgeIds = computed(() => allResourceOwners.value && resourceOwner.value
+  ? new Set(headerResources.value.flatMap(resource => resource.id == null ? [] : [resource.id]))
+  : undefined)
+
 const { findTask, findMilestone } = useFindPlanningItem()
 
 // Right-click on an empty group area: create a task or milestone in the parent process.
@@ -619,7 +623,7 @@ const taskGroups = computed<PdfGanttGroup[]>(() =>
       title: t.title ?? '',
       start_date: t.start_date ?? '',
       end_date: t.end_date ?? '',
-      resources: (t.resources ?? []).map((r: DtoResource) => ({ id: r.id, code: r.code, title: r.title, quantity: r.quantity })),
+      resources: (t.resources ?? []).filter(r => resourceBadgeIds.value == null || (r.id != null && resourceBadgeIds.value.has(r.id))).map((r: DtoResource) => ({ id: r.id, code: r.code, title: r.title, quantity: r.quantity })),
     })),
     milestones: (p.milestones ?? []).map((m: DtoMilestone) => ({ id: m.id, title: m.title ?? '', date: m.date ?? '' })),
   })),
@@ -659,6 +663,7 @@ const taskGroups = computed<PdfGanttGroup[]>(() =>
     <TaskPlanning
       :processes="processesByPriority"
       :resources="headerResources"
+      :resource-badge-ids="resourceBadgeIds"
       :calendar="calendar"
       :absence-by-resource="role === 'admin' ? null : absenceByResource"
       :users="app.users"

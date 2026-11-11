@@ -6,6 +6,7 @@ import { useDragPreview } from '@/composables/useDragPreview'
 import { fmtDateTime } from '@/i18n/date'
 import { t } from '@/i18n'
 import { viewSettings } from '@/settings'
+import { resourceBadgeRows } from '@/utils/resourceAccess'
 import type { Task } from './types'
 import type { TimelineCtx } from '@/composables/timeline-context'
 import type { DtoCommentResponse, DtoUserInfo } from '@/api'
@@ -14,6 +15,7 @@ const props = withDefaults(
   defineProps<{
     timeline: TimelineCtx
     task: Task
+    resourceBadgeIds?: ReadonlySet<number>
     projectCode?: string
     /** Custom task color (#RRGGBB); empty — the standard token */
     color?: string
@@ -155,6 +157,8 @@ function badgeLabel(r: { code?: string; title?: string }): string {
   return r.code || r.title || '?'
 }
 
+const visibleResourceBadges = computed(() => resourceBadgeRows(props.task.resources, props.resourceBadgeIds))
+
 // === Badges: project code, owner, progress + a stack of resource badges ===
 // Enabled badges are ALWAYS rendered: the title is the only flexible element in
 // the row (`flex: 0 1 auto` + ellipsis), so it yields the space and the badges
@@ -200,7 +204,7 @@ onBeforeUnmount(() => {
 
 // After the resource set or the project code changes, recompute the layout
 watch(
-  () => props.task.resources,
+  () => visibleResourceBadges.value,
   () => requestAnimationFrame(updateStacked),
 )
 watch(
@@ -277,13 +281,13 @@ watch(
         :title="progressLabel"
       >{{ taskProgress }}%</span>
       <span
-        v-if="viewSettings.badgeResource"
+        v-if="viewSettings.badgeResource && visibleResourceBadges.length"
         ref="badgesRef"
         class="tb-badges"
         :class="{ 'is-stacked': stacked }"
       >
         <span
-          v-for="r in task.resources"
+          v-for="r in visibleResourceBadges"
           :key="r.resource_id"
           class="tb-badge"
           :style="r.color ? { background: r.color } : undefined"

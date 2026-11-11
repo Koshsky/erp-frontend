@@ -88,6 +88,7 @@ function onMilestoneEdit(id: number) {
         <TaskBar
           :timeline="timeline"
           :task="item"
+          :resource-badge-ids="resourceBadgeIds"
           :projectCode="projectCode"
           :groupStartDate="groupStartDate"
           :groupEndDate="groupEndDate"

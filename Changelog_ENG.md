@@ -10,6 +10,8 @@ The web app and the desktop wrapper are versioned together.
 
 ### Fixed
 
+- The task diagram resource-owner filter now also filters resource badges on bars.
+
 - Multiple tabs release idle storage connections, serialize queue delivery and safely coordinate session renewal without reverting tokens or losing pending references.
 
 - Blocked local storage no longer leaves login pending indefinitely; timed-out writes are cancelled and connections can recover.

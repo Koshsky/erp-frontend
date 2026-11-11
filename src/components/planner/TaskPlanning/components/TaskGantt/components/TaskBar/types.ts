@@ -42,6 +42,7 @@ export interface Task {
 export interface TaskBarProps {
   timeline: TimelineCtx
   task: Task
+  resourceBadgeIds?: ReadonlySet<number>
   /** Project code — displayed as a badge right after the task title */
   projectCode?: string
   /** Custom task color (#RRGGBB); empty — the standard token */
