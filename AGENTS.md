@@ -81,3 +81,10 @@ Frontend service of the MVS ERP monorepo (repo root is `../..`, sibling `service
 
 ## Running the full stack
 - `docker-compose.yml` here runs the frontend alone (port 3000). The full stack (nginx → frontend + Go `erp` + postgres + flyway) is in `../../docker-compose.yml`.
+
+## Branch workflow
+
+`main` is the only permanent branch. Create short-lived topic branches from the
+current `origin/main`, submit pull requests into `main`, and remove topic branches
+after merging. Do not recreate `dev` or `staging` Git branches. Preserve published
+release tags; Docker deployment tags are independent of Git branch names.
