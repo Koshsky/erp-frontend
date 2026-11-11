@@ -10,6 +10,8 @@ The web app and the desktop wrapper are versioned together.
 
 ### Fixed
 
+- Multiple tabs release idle storage connections, serialize queue delivery and safely coordinate session renewal without reverting tokens or losing pending references.
+
 - Blocked local storage no longer leaves login pending indefinitely; timed-out writes are cancelled and connections can recover.
 
 - Cached profiles no longer masquerade as logged-out sessions; 401 responses reach login without redirect loops and preserve queued work.

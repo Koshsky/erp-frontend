@@ -15,6 +15,7 @@
     "lint": "eslint src --max-warnings 0",
     "test:stories": "vitest run",
     "test:pdf": "node tests/pdf-snapshot.mjs",
+    "test:session:locks:http": "node tests/session-locks-http.mjs",
     "test:session:stale": "node tests/stale-session.mjs",
     "test:navigation": "node tests/navigation.mjs",
     "test:resource-header:admin": "node tests/admin-resource-header.mjs",

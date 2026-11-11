@@ -44,6 +44,7 @@ const DB_OPERATION_TIMEOUT_MS = 4000
 
 let dbPromise: Promise<IDBDatabase> | null = null
 let activeDb: IDBDatabase | null = null
+const transactions = new WeakMap<IDBDatabase, number>()
 
 /** Creates any missing object store (runs inside onupgradeneeded). */
 function ensureStores(db: IDBDatabase): void {
@@ -148,19 +149,28 @@ async function txAll(
   const db = await getDb()
   return new Promise((resolve, reject) => {
     const tx = db.transaction(store, mode)
+    transactions.set(db, (transactions.get(db) ?? 0) + 1)
+    const release = () => {
+      const remaining = (transactions.get(db) ?? 1) - 1
+      transactions.set(db, remaining)
+      if (remaining === 0) {
+        // An idle or suspended tab must not block another tab's schema upgrade.
+        resetDb(db)
+        db.close()
+      }
+    }
     let settled = false
     const fail = (error: unknown) => {
       if (settled) return
       settled = true
       clearTimeout(timer)
+      release()
       reject(error ?? new Error(t('offline.db.operationFailed')))
     }
     const timer = setTimeout(() => {
       fail(new Error(t('offline.db.timeout')))
       // Cancel pending writes as well as rejecting: a late refresh write could replace a newer token.
       try { tx.abort() } catch { /* The transaction may already have finished. */ }
-      resetDb(db)
-      db.close()
     }, DB_OPERATION_TIMEOUT_MS)
     tx.onabort = () => fail(tx.error)
     tx.onerror = () => fail(tx.error)
@@ -170,6 +180,7 @@ async function txAll(
         if (settled) return
         settled = true
         clearTimeout(timer)
+        release()
         resolve(req.result)
       }
       req.onerror = () => fail(req.error)

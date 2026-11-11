@@ -57,4 +57,16 @@ describe('cross-tab refresh ownership', () => {
     expect(await session.withRefreshLock(async () => true)).toBe(true)
     expect(storage.size).toBe(0)
   })
+
+  it.each([
+    JSON.stringify({ owner: 'other', ts: Date.now() + 60_000 }),
+    JSON.stringify({ owner: 'other', ts: 'not-a-timestamp' }),
+    JSON.stringify({ ts: Date.now() }),
+    '{broken',
+  ])('recovers invalid or future-dated legacy lock metadata: %s', async value => {
+    storage.set('mvs_erp_refresh_lock', value)
+    expect(await session.withRefreshLock(async () => true)).toBe(true)
+    expect(storage.size).toBe(0)
+  })
+
 })

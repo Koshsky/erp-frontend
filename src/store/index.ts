@@ -56,6 +56,7 @@ function permsKey(uid: number | null | undefined): string {
 /** How long before the token expires that proactive refresh kicks in */
 const REFRESH_MARGIN_MS = 120 * 1000
 const REFRESH_INTERVAL_MS = 30 * 1000
+const SIBLING_REFRESH_WAIT_MS = 6000
 
 /** Page size for listings (matches the backend default). */
 // Paged lists use the live UI setting (tablePageSize) — see the API calls below.
@@ -226,21 +227,22 @@ function accessTokenExpiring(): boolean {
 }
 
 /** Wait for a valid sibling token; timeout is a retry signal, never refresh success. */
-function waitForExternalToken(): Promise<boolean> {
-  if (!accessTokenExpired()) return Promise.resolve(true)
+function waitForExternalToken(previous: string): Promise<boolean> {
+  const renewed = () => getAccessToken() !== previous && !accessTokenExpired()
+  if (renewed()) return Promise.resolve(true)
   return new Promise((resolve) => {
     const timer = window.setTimeout(() => {
       unsub()
-      resolve(!accessTokenExpired())
+      resolve(renewed())
     }, 2000)
     const unsub = subscribeToken((token) => {
       const cur = decodeTokenExp(getAccessToken())
       const next = decodeTokenExp(token)
-      if (next == null || next <= Date.now()) return
-      if (cur == null || next > cur) setAccessToken(token)
+      if (isLoggedOut() || token === previous || next == null || next <= Date.now() || (cur != null && next < cur)) return
+      if (cur == null || next >= cur) setAccessToken(token)
       window.clearTimeout(timer)
       unsub()
-      resolve(true)
+      resolve(renewed())
     })
   })
 }
@@ -462,27 +464,31 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function doRefresh(): Promise<boolean> {
-    // The refresh token lives in the non-volatile IndexedDB 'session' store (offline/session).
-    // We send it in the body of /auth/refresh; if the store is empty we send no body and the
-    // backend falls back to the HttpOnly refresh cookie (legacy web path). The backend returns
-    // the rotated refresh token in the response body and we persist it for the next refresh.
-    // Offline refresh is impossible: we do not log out; the session lives until the network returns.
-    if (isOffline.value) return true
-    // After an explicit logout (logout) we do not call /auth/refresh: the cookie is already revoked,
-    // the request would return 401 and show a false "Session expired", and on the server reusing
-    // the revoked token would trigger reuse detection (revoking all of the
-    // user's sessions). We return false without the network — the caller is logged out.
-    if (isLoggedOut()) {
-      invalidateOnlineSession()
-      return false
+    const previous = getAccessToken()
+    const deadline = Date.now() + SIBLING_REFRESH_WAIT_MS
+    while (true) {
+      if (isOffline.value) return true
+      if (isLoggedOut()) {
+        invalidateOnlineSession()
+        return false
+      }
+      if (getAccessToken() !== previous && !accessTokenExpired()) return true
+      if (Date.now() >= deadline) {
+        error.value = t('auth.sessionBusy')
+        return false
+      }
+      const renewed = await withRefreshLock(async () => {
+        // A sibling may finish between the retry timer and lock acquisition.
+        if (getAccessToken() !== previous && !accessTokenExpired()) return true
+        return refreshOwnedSession()
+      })
+      if (renewed != null) return renewed
+      if (await waitForExternalToken(previous)) return true
     }
-    const renewed = await withRefreshLock(refreshOwnedSession)
-    if (renewed != null) return renewed
-    if (await waitForExternalToken()) return true
-    return doRefresh()
   }
 
   async function refreshOwnedSession(): Promise<boolean> {
+    let rotated = false
     loading.value = true
     error.value = null
     try {
@@ -497,11 +503,16 @@ export const useAuthStore = defineStore('auth', () => {
         invalidateOnlineSession()
         return false
       }
-      applySession(body?.data)
       // Rotate: persist the refresh token returned by the backend for the next refresh.
       if (body?.data?.refresh_token) {
+        rotated = true
         await saveRefreshToken(body.data.refresh_token)
       }
+      if (isLoggedOut()) {
+        invalidateOnlineSession()
+        return false
+      }
+      applySession(body?.data)
       const token = getAccessToken()
       if (token) {
         publishSession({ access: token, refresh: body?.data?.refresh_token })
@@ -517,7 +528,14 @@ export const useAuthStore = defineStore('auth', () => {
         return true
       }
       error.value = e instanceof Error ? e.message || String(e) : String(e)
-      logout()
+      // Storage failures and transient server errors do not revoke a shared session.
+      const status = (e as AxiosError)?.response?.status
+      if (status === 401 || status === 403) logout()
+      else if (rotated) {
+        // The stored token is now revoked; no tab may reuse it after a failed rotation commit.
+        invalidateOnlineSession()
+        setLoggedOut()
+      }
       return false
     } finally {
       loading.value = false
@@ -623,14 +641,14 @@ export const useAuthStore = defineStore('auth', () => {
   // sibling tabs (cross-tab refresh coordination in ALL environments — the
   // refresh token is shared and rotated once per family).
   let unsubscribeSessionToken: (() => void) | null = null
-  unsubscribeSessionToken = subscribeSession(({ access, refresh }) => {
+  unsubscribeSessionToken = subscribeSession(({ access }) => {
+    if (isLoggedOut()) return
     if (access) {
       const cur = decodeTokenExp(getAccessToken())
       const next = decodeTokenExp(access)
       if (next != null && (cur == null || next > cur)) setAccessToken(access)
     }
-    // Every tab keeps its IndexedDB refresh store in sync with the rotation.
-    if (refresh) void saveRefreshToken(refresh)
+    // The owner persisted the shared refresh token before broadcasting; replaying it here can roll it back.
   })
   onScopeDispose(() => unsubscribeSessionToken?.())
 

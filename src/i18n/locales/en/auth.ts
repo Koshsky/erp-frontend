@@ -2,6 +2,7 @@ import type ru from '../ru/auth'
 import type { Translation } from '../types'
 
 export default {
+  sessionBusy: 'Another tab is renewing the session. Try again in a few seconds.',
   subtitle: 'Project Planning System',
   login: 'Login',
   password: 'Password',

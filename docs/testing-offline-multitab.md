@@ -36,3 +36,30 @@ The test uses full browser offline mode only for previously loaded routes. Reloa
 ## Stale logged-out profile regression
 
 Run `npm run test:session:stale` against the same local stack. It reproduces a cached profile with the shared logout flag, no bearer token and an empty cache, while retaining one offline task creation. Real 401 responses must open login without refreshing or bouncing back to planning. A second tab with a still-valid in-memory token must also respect the logout flag. A verified same-account login restores server data, preserves the queued task through reload, flushes it once and restores the sibling tab. Unit tests also reject late refresh responses after logout and ensure the shared refresh token and logout marker are committed before publishing manual-login authentication.
+
+
+## Browser-free concurrency regression checks
+
+Run `npm run test:stories -- --project unit` and `npm run test:session:locks:http`.
+The latter requires Node.js with native Web Locks (verified with Node.js 26.13.0) and the local API; credentials
+are read from `../local/dev.env` or `RBAC_TEST_ADMIN_PASSWORD`. It uses isolated
+worker contexts, never a browser profile, and does not log out or revoke the
+user's existing sessions. It verifies nonblocking lock contention, owner
+termination, successive real refresh requests and planning reads.
+
+Unit coverage includes idle IndexedDB connection release, overlapping transactions,
+old-handle close events, frozen refresh owners, malformed legacy leases, rejected
+and delayed token broadcasts, local storage and temporary HTTP failures, logout
+during rotation, competing queue senders, late edits referencing completed offline
+creates and preservation of visible pending work when storage is temporarily unavailable.
+
+Queue sending uses nonblocking Web Locks on supported secure origins (HTTPS or
+localhost). A busy sender is retried by the next minute cycle; it never blocks
+navigation. Legacy environments without Web Locks retain the existing per-tab
+queue guard and server idempotency protection, not atomic cross-tab ownership.
+Refresh coordination similarly retains its legacy storage-lease fallback there.
+
+Only the refresh owner writes the rotated token to the shared IndexedDB store.
+Broadcast receivers adopt the access token without replaying old refresh writes.
+A successful server rotation whose new token cannot be persisted requires a new
+login: reusing its revoked predecessor would invalidate other sessions.

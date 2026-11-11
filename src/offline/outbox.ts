@@ -5,6 +5,7 @@ import { applyToCache } from './cacheApply'
 import { probeBackend } from './state'
 import { getApiUrl } from '@/config'
 import { getAccessToken } from '../token'
+import { isLoggedOut } from '../loggedOut'
 import { appLocale, t } from '../i18n'
 
 /**
@@ -303,7 +304,8 @@ watch(appLocale, () => {
 /** Re-reads the queue into queueItems. Only unsent and non-synced
  *  entries (!quarantined), in send order (FIFO). Quarantined ones are visible in the errors block. */
 export async function refreshQueue(): Promise<void> {
-  const entries = await idbAll<OutboxEntry>(OUTBOX_STORE).catch(() => [] as OutboxEntry[])
+  const entries = await idbAll<OutboxEntry>(OUTBOX_STORE).catch(() => null)
+  if (!entries) return
   queueItems.value = entries
     .filter((e) => !e.quarantined)
     .sort((a, b) => a.ts - b.ts)
@@ -311,7 +313,8 @@ export async function refreshQueue(): Promise<void> {
 }
 
 export async function refreshPendingCount(): Promise<void> {
-  const entries = await idbAll<OutboxEntry>(OUTBOX_STORE).catch(() => [] as OutboxEntry[])
+  const entries = await idbAll<OutboxEntry>(OUTBOX_STORE).catch(() => null)
+  if (!entries) return
   pendingCount.value = entries.filter((e) => !e.quarantined).length
   // Rebuild the "awaiting sync" mark set from all queued entries (quarantined
   // included — they still wait for a manual retry). Entries without a resolvable
@@ -551,8 +554,20 @@ function pause(): Promise<void> {
  * Sends the queue to the backend. One run at a time; when the network
  * returns again, the remaining entries go out with the next flush.
  */
+function emptyFlush(): FlushResult {
+  return { ok: 0, failed: 0, interrupted: false, entities: new Set<MutationEntity>(), failedEntries: [] }
+}
+
 export async function flushOutbox(): Promise<FlushResult> {
-  const empty = () => ({ ok: 0, failed: 0, interrupted: false, entities: new Set<MutationEntity>(), failedEntries: [] as FailedSyncItem[] })
+  if (typeof navigator !== 'undefined' && navigator.locks) {
+    // Never queue behind a suspended tab: the next minute cycle retries ownership.
+    return navigator.locks.request('mvs_erp_outbox', { ifAvailable: true }, lock => lock ? flushOwnedOutbox() : emptyFlush())
+  }
+  return flushOwnedOutbox()
+}
+
+async function flushOwnedOutbox(): Promise<FlushResult> {
+  const empty = emptyFlush
   if (flushing) return empty()
   flushing = true
   const result: FlushResult = { ok: 0, failed: 0, interrupted: false, entities: new Set(), failedEntries: [] }
@@ -573,6 +588,10 @@ export async function flushOutbox(): Promise<FlushResult> {
     let done = 0
 
     for (const entry of entries) {
+      if (isLoggedOut()) {
+        result.interrupted = true
+        break
+      }
       // Quarantine and backoff: don't touch entries the server just rejected.
       if (entry.quarantined) continue
       if (entry.failed && Date.now() - entry.failed.at < FAILED_BACKOFF_MS) continue
@@ -710,15 +729,8 @@ export async function flushOutbox(): Promise<FlushResult> {
     flushing = false
     pushProgress.value = null
     await refreshPendingCount()
-    // The queue was fully sent (no entries, no dependencies) — the mappings
-    // are no longer needed (reconcile returned real ids to the store). If the queue
-    // still has entries (interruption/errors) — keep the mapping: the next
-    // run will rewrite dependent URL/body with it.
-    const remaining = await idbAll<OutboxEntry>(OUTBOX_STORE).catch(() => [] as OutboxEntry[])
-    if (remaining.length === 0) {
-      const maps = await idbAll<IdMapEntry>(IDMAP_STORE_NAME).catch(() => [] as IdMapEntry[])
-      await Promise.all(maps.map((m) => idbDel(IDMAP_STORE_NAME, String(m.temp))))
-    }
+    // Keep temp-id mappings: another tab may still enqueue an edit of a completed create.
+    // Explicit queue clearing and account cleanup own their removal.
   }
   return result
 }

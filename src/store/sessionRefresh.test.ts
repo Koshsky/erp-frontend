@@ -5,14 +5,15 @@ import { watch } from 'vue'
 const fake = vi.hoisted(() => ({
   locked: vi.fn(), refresh: vi.fn(), login: vi.fn(), loggedOut: vi.fn(),
   listeners: new Set<(token: string) => void>(),
+  sessions: new Set<(payload: { access?: string; refresh?: string }) => void>(),
 }))
 vi.mock('@/sessionSync', () => ({
   withRefreshLock: fake.locked,
-  publishSession: vi.fn(), subscribeSession: () => () => {},
+  publishSession: vi.fn(), subscribeSession: (cb: (payload: { access?: string; refresh?: string }) => void) => { fake.sessions.add(cb); return () => fake.sessions.delete(cb) },
   subscribeToken: (cb: (token: string) => void) => { fake.listeners.add(cb); return () => fake.listeners.delete(cb) },
 }))
 vi.mock('@/loggedOut', () => ({ isLoggedOut: fake.loggedOut, clearLoggedOut: vi.fn(() => fake.loggedOut.mockReturnValue(false)), setLoggedOut: vi.fn() }))
-vi.mock('@/offline/session', () => ({ loadRefreshToken: async () => 'saved', saveRefreshToken: vi.fn(async () => {}), clearRefreshToken: vi.fn(async () => {}) }))
+vi.mock('@/offline/session', () => ({ loadRefreshToken: vi.fn(async () => 'saved'), saveRefreshToken: vi.fn(async () => {}), clearRefreshToken: vi.fn(async () => {}) }))
 vi.mock('@/api', async original => ({
   ...await original<typeof import('@/api')>(),
   AuthApi: class { authRefreshPost(...args: unknown[]) { return fake.refresh(...args) } authLoginPost(...args: unknown[]) { return fake.login(...args) } },
@@ -20,7 +21,8 @@ vi.mock('@/api', async original => ({
 import { useAuthStore, usePlanningStore } from './index'
 import { getAccessToken, setAccessToken } from '@/token'
 import { isOffline } from '@/offline/state'
-import { saveRefreshToken, clearRefreshToken } from '@/offline/session'
+import { setLoggedOut } from '@/loggedOut'
+import { saveRefreshToken, clearRefreshToken, loadRefreshToken } from '@/offline/session'
 
 const jwt = (offset: number) => `e30.${btoa(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + offset }))}.signature`
 
@@ -28,6 +30,7 @@ beforeEach(() => {
   vi.useFakeTimers()
   vi.clearAllMocks()
   fake.listeners.clear()
+  fake.sessions.clear()
   fake.loggedOut.mockReturnValue(false)
   fake.locked.mockResolvedValue(null)
   vi.stubGlobal('localStorage', { getItem: () => null, setItem: vi.fn(), removeItem: vi.fn() })
@@ -181,4 +184,111 @@ it('persists refresh state and clears logout before publishing a successful manu
   expect(auth.isAuthenticated).toBe(true)
   expect(logoutWhenAuthenticated).toEqual([false])
   stop()
+})
+
+
+describe('cross-tab session races', () => {
+  it('does not overwrite shared refresh state when a delayed broadcast arrives', () => {
+    useAuthStore()
+    const access = jwt(3600)
+    for (const listener of fake.sessions) listener({ access, refresh: 'already-rotated-old-refresh' })
+    expect(getAccessToken()).toBe(access)
+    expect(saveRefreshToken).not.toHaveBeenCalled()
+  })
+
+  it('ignores broadcasts after logout', () => {
+    useAuthStore()
+    setAccessToken(null)
+    fake.loggedOut.mockReturnValue(true)
+    for (const listener of fake.sessions) listener({ access: jwt(3600), refresh: 'old-session' })
+    expect(getAccessToken()).toBe('')
+    expect(saveRefreshToken).not.toHaveBeenCalled()
+  })
+
+  it('stops waiting for a frozen lock owner without deleting the session', async () => {
+    const auth = useAuthStore()
+    const pending = auth.refreshSession()
+    await vi.advanceTimersByTimeAsync(6500)
+    expect(await Promise.race([pending, Promise.resolve('still waiting')])).toBe(false)
+    expect(clearRefreshToken).not.toHaveBeenCalled()
+    expect(fake.refresh).not.toHaveBeenCalled()
+  })
+
+  it('does not mistake its existing rejected token for a new sibling token', async () => {
+    const rejected = jwt(3600)
+    setAccessToken(rejected)
+    const auth = useAuthStore()
+    let settled = false
+    const pending = auth.refreshSession().then(value => { settled = true; return value })
+    await vi.advanceTimersByTimeAsync(1)
+    expect(settled).toBe(false)
+    for (const listener of fake.listeners) listener(jwt(7200))
+    expect(await pending).toBe(true)
+  })
+
+  it('does not log out other tabs when local session storage is temporarily unavailable', async () => {
+    fake.locked.mockImplementation(async run => run())
+    vi.mocked(loadRefreshToken).mockRejectedValueOnce(new Error('Storage blocked'))
+    const auth = useAuthStore()
+    auth.isAuthenticated = true
+    setAccessToken(jwt(3600))
+    expect(await auth.refreshSession()).toBe(false)
+    expect(auth.isAuthenticated).toBe(true)
+    expect(clearRefreshToken).not.toHaveBeenCalled()
+    expect(fake.refresh).not.toHaveBeenCalled()
+  })
+
+  it('ignores an older valid broadcast when waiting to replace a rejected token', async () => {
+    setAccessToken(jwt(7200))
+    const auth = useAuthStore()
+    let settled = false
+    const pending = auth.refreshSession().then(value => { settled = true; return value })
+    await vi.advanceTimersByTimeAsync(1)
+    for (const listener of fake.listeners) listener(jwt(3600))
+    await vi.advanceTimersByTimeAsync(1)
+    expect(settled).toBe(false)
+    await vi.advanceTimersByTimeAsync(6500)
+    expect(await pending).toBe(false)
+  })
+
+  it('preserves the session on a temporary refresh server error', async () => {
+    fake.locked.mockImplementation(async run => run())
+    fake.refresh.mockRejectedValueOnce({ response: { status: 503 } })
+    const auth = useAuthStore()
+    auth.isAuthenticated = true
+    expect(await auth.refreshSession()).toBe(false)
+    expect(auth.isAuthenticated).toBe(true)
+    expect(setLoggedOut).not.toHaveBeenCalled()
+    expect(clearRefreshToken).not.toHaveBeenCalled()
+  })
+
+  it('prevents reuse in every tab when the server rotates but the new token cannot be saved', async () => {
+    fake.locked.mockImplementation(async run => run())
+    fake.refresh.mockResolvedValue({ data: { data: { access_token: jwt(3600), refresh_token: 'rotated' } } })
+    vi.mocked(saveRefreshToken).mockRejectedValueOnce(new Error('storage unavailable'))
+    const auth = useAuthStore()
+    auth.isAuthenticated = true
+    expect(await auth.refreshSession()).toBe(false)
+    expect(auth.isAuthenticated).toBe(false)
+    expect(setLoggedOut).toHaveBeenCalledTimes(1)
+    expect(clearRefreshToken).not.toHaveBeenCalled()
+    expect(getAccessToken()).toBe('')
+  })
+
+
+  it('does not restore authentication when logout occurs while persisting a rotation', async () => {
+    fake.locked.mockImplementation(async run => run())
+    fake.refresh.mockResolvedValue({ data: { data: { access_token: jwt(3600), refresh_token: 'rotated' } } })
+    let persisted!: () => void
+    vi.mocked(saveRefreshToken).mockImplementationOnce(() => new Promise(resolve => { persisted = resolve }))
+    const auth = useAuthStore()
+    const pending = auth.refreshSession()
+    await vi.advanceTimersByTimeAsync(1)
+    fake.loggedOut.mockReturnValue(true)
+    persisted()
+    expect(await pending).toBe(false)
+    expect(auth.isAuthenticated).toBe(false)
+    expect(getAccessToken()).toBe('')
+  })
+
 })

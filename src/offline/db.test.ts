@@ -111,12 +111,12 @@ describe('IndexedDB progress and recovery', () => {
 
   it('reopens after the browser unexpectedly closes the database', async () => {
     const { idbGet } = await import('./db')
-    const read = idbGet('session', 'refresh')
+    const read = idbGet('session', 'refresh').catch(error => error)
     requests[0].onsuccess?.()
     await tick()
-    requests[0].result.tx.oncomplete?.()
-    await read
     requests[0].result.onclose?.()
+    requests[0].result.tx.onabort?.()
+    expect(await read).toBeInstanceOf(Error)
     const next = idbGet('session', 'refresh')
     expect(requests).toHaveLength(2)
     requests[1].onsuccess?.()
@@ -135,14 +135,15 @@ describe('IndexedDB progress and recovery', () => {
     const second = idbGet('session', 'refresh')
     requests[1].onsuccess?.()
     await tick()
-    requests[1].result.tx.oncomplete?.()
-    await second
+    const completeSecond = requests[1].result.tx.oncomplete
     requests[0].result.onclose?.()
-    const third = idbGet('session', 'refresh')
+    const third = idbGet('cache', 'test')
     await tick()
     expect(requests).toHaveLength(2)
     requests[1].result.tx.oncomplete?.()
     await third
+    completeSecond?.()
+    await second
   })
 
   it('rejects an aborted transaction even when the browser supplies no error', async () => {
@@ -170,8 +171,36 @@ describe('IndexedDB progress and recovery', () => {
     requests[1].result.tx.oncomplete?.()
     await read
     requests[1].result.onversionchange?.()
-    expect(requests[1].result.close).toHaveBeenCalledTimes(1)
+    expect(requests[1].result.close).toHaveBeenCalledTimes(2)
     expect(factory.deleteDatabase).not.toHaveBeenCalled()
+  })
+
+
+  it('closes idle connections without waiting for another tab to request an upgrade', async () => {
+    const { idbGet } = await import('./db')
+    const read = idbGet('cache', 'test')
+    requests[0].onsuccess?.()
+    await tick()
+    expect(requests[0].result.close).not.toHaveBeenCalled()
+    requests[0].result.tx.oncomplete?.()
+    await read
+    expect(requests[0].result.close).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps the shared connection open until all current transactions complete', async () => {
+    const { idbGet } = await import('./db')
+    const first = idbGet('cache', 'first')
+    requests[0].onsuccess?.()
+    await tick()
+    const completeFirst = requests[0].result.tx.oncomplete
+    const second = idbGet('session', 'refresh')
+    await tick()
+    completeFirst?.()
+    await first
+    expect(requests[0].result.close).not.toHaveBeenCalled()
+    requests[0].result.tx.oncomplete?.()
+    await second
+    expect(requests[0].result.close).toHaveBeenCalledTimes(1)
   })
 
 })

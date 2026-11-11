@@ -172,9 +172,9 @@ describe('flushOutbox — temp-id → real-id mapping (idmap)', () => {
     const depCall = axiosCall.fn.mock.calls[1][0] as { url?: string; data?: unknown }
     expect(depCall?.url).toContain('/api/v1/user/42/days')
     expect((depCall?.data as { user_id?: number })?.user_id).toBe(42)
-    // Both entries are gone and the idmap is cleaned up after a full flush.
+    // Completed mappings remain available to later edits from sibling tabs.
     expect(fake.store('outbox').size).toBe(0)
-    expect(fake.store('idmap').size).toBe(0)
+    expect(fake.store('idmap').size).toBe(1)
   })
 
   it('reads the real id from the nested data.user shape of a user create', async () => {
@@ -370,4 +370,63 @@ describe('flushOutbox — expired authorization', () => {
     expect(fake.store('outbox').size).toBe(0)
     expect(axiosCall.fn.mock.calls[1][0].headers['Idempotency-Key']).toBe('stable-key')
   })
+})
+
+it('does not let a second tab send a queue already being flushed', async () => {
+  const held = new Set<string>()
+  vi.stubGlobal('navigator', { locks: { request: async (name: string, _options: unknown, run: (lock: object | null) => Promise<unknown>) => {
+    if (held.has(name)) return run(null)
+    held.add(name)
+    try { return await run({}) } finally { held.delete(name) }
+  } } })
+  let reply!: (result: unknown) => void
+  axiosCall.fn.mockImplementationOnce(() => new Promise(resolve => { reply = resolve }))
+  seed({ id: 'shared', ts: 1, method: 'PUT', url: '/task/7', entity: 'task', body: { title: 'updated' } })
+  const first = flushOutbox()
+  await vi.waitFor(() => expect(axiosCall.fn).toHaveBeenCalledTimes(1))
+  vi.resetModules()
+  const sibling = await import('./outbox')
+  const second = sibling.flushOutbox()
+  await new Promise(resolve => setTimeout(resolve, 10))
+  const calls = axiosCall.fn.mock.calls.length
+  reply(okResponse)
+  await Promise.all([first, second])
+  vi.unstubAllGlobals()
+  expect(calls).toBe(1)
+  expect(fake.store('outbox').size).toBe(0)
+})
+
+it('keeps completed id mappings for dependent edits enqueued later by another tab', async () => {
+  seed({ id: 'create', ts: 1, method: 'POST', url: '/task', entity: 'task', tempId: -20, body: { title: 'draft' } })
+  axiosCall.fn.mockResolvedValueOnce({ data: { data: { id: 200 } } })
+  await flushOutbox()
+  seed({ id: 'late-edit', ts: 2, method: 'PUT', url: '/task/-20', entity: 'task', body: { title: 'edited' } })
+  await flushOutbox()
+  expect(axiosCall.fn.mock.calls[1][0].url).toContain('/task/200')
+  expect(fake.store('outbox').size).toBe(0)
+})
+
+
+it('preserves visible pending work when a temporary storage error prevents reading the queue', async () => {
+  const { pendingCount, pendingRefs, refreshPendingCount } = await import('./outbox')
+  seed({ id: 'pending', ts: 1, method: 'PUT', url: '/task/7', entity: 'task' })
+  await refreshPendingCount()
+  expect(pendingCount.value).toBe(1)
+  const before = pendingRefs.value
+  vi.mocked(idbAll).mockRejectedValueOnce(new Error('temporarily blocked'))
+  await refreshPendingCount()
+  expect(pendingCount.value).toBe(1)
+  expect(pendingRefs.value).toBe(before)
+  expect(fake.store('outbox').size).toBe(1)
+})
+
+
+it('stops a sibling flush after shared logout without changing its queued work', async () => {
+  vi.stubGlobal('localStorage', { getItem: (key: string) => key === 'mvs_erp_logged_out' ? '1' : null })
+  try {
+    seed({ id: 'after-logout', ts: 1, method: 'PUT', url: '/task/7', entity: 'task' })
+    expect((await flushOutbox()).interrupted).toBe(true)
+    expect(axiosCall.fn).not.toHaveBeenCalled()
+    expect(fake.store('outbox').size).toBe(1)
+  } finally { vi.unstubAllGlobals() }
 })
